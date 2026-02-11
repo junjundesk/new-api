@@ -21,9 +21,6 @@
   <a href="https://github.com/Calcium-Ion/new-api/releases/latest">
     <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
   </a>
-  <a href="https://github.com/users/Calcium-Ion/packages/container/package/new-api">
-    <img src="https://img.shields.io/badge/docker-ghcr.io-blue" alt="docker">
-  </a>
   <a href="https://hub.docker.com/r/CalciumIon/new-api">
     <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
   </a>
@@ -56,9 +53,6 @@
 </div>
 
 ## 📝 項目說明
-
-> [!NOTE]
-> 本項目為開源項目，在 [One API](https://github.com/songquanpeng/one-api) 的基礎上進行二次開發
 
 > [!IMPORTANT]
 > - 本項目僅供個人學習使用，不保證穩定性，且不提供任何技術支援
@@ -449,6 +443,8 @@ docker run --name new-api -d --restart always \
 ## 📜 許可證
 
 本項目採用 [GNU Affero 通用公共許可證 v3.0 (AGPLv3)](./LICENSE) 授權。
+
+本項目為開源項目，在 [One API](https://github.com/songquanpeng/one-api)（MIT 許可證）的基礎上進行二次開發。
 
 如果您所在的組織政策不允許使用 AGPLv3 許可的軟體，或您希望規避 AGPLv3 的開源義務，請發送郵件至：[support@quantumnous.com](mailto:support@quantumnous.com)
 
