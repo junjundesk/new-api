@@ -57,9 +57,6 @@
 
 ## 📝 プロジェクト説明
 
-> [!NOTE]
-> 本プロジェクトは、[One API](https://github.com/songquanpeng/one-api)をベースに二次開発されたオープンソースプロジェクトです
-
 > [!IMPORTANT]
 > - 本プロジェクトは個人学習用のみであり、安定性の保証や技術サポートは提供しません。
 > - ユーザーは、OpenAIの[利用規約](https://openai.com/policies/terms-of-use)および**法律法規**を遵守する必要があり、違法な目的で使用してはいけません。
@@ -452,6 +449,8 @@ docker run --name new-api -d --restart always \
 ## 📜 ライセンス
 
 このプロジェクトは [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE) の下でライセンスされています。
+
+本プロジェクトは、[One API](https://github.com/songquanpeng/one-api)（MITライセンス）をベースに開発されたオープンソースプロジェクトです。
 
 お客様の組織のポリシーがAGPLv3ライセンスのソフトウェアの使用を許可していない場合、またはAGPLv3のオープンソース義務を回避したい場合は、こちらまでお問い合わせください：[support@quantumnous.com](mailto:support@quantumnous.com)
 

@@ -57,9 +57,6 @@
 
 ## 📝 Project Description
 
-> [!NOTE]
-> This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api)
-
 > [!IMPORTANT]
 > - This project is for personal learning purposes only, with no guarantee of stability or technical support
 > - Users must comply with OpenAI's [Terms of Use](https://openai.com/policies/terms-of-use) and **applicable laws and regulations**, and must not use it for illegal purposes
@@ -452,6 +449,8 @@ Welcome all forms of contribution!
 ## 📜 License
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE).
+
+This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api) (MIT License).
 
 If your organization's policies do not permit the use of AGPLv3-licensed software, or if you wish to avoid the open-source obligations of AGPLv3, please contact us at: [support@quantumnous.com](mailto:support@quantumnous.com)
 
