@@ -190,10 +190,12 @@ type ClaudeToolChoice struct {
 }
 
 type ClaudeRequest struct {
-	Model             string          `json:"model"`
-	Prompt            string          `json:"prompt,omitempty"`
-	System            any             `json:"system,omitempty"`
-	Messages          []ClaudeMessage `json:"messages,omitempty"`
+	Model    string          `json:"model"`
+	Prompt   string          `json:"prompt,omitempty"`
+	System   any             `json:"system,omitempty"`
+	Messages []ClaudeMessage `json:"messages,omitempty"`
+	// https://platform.claude.com/docs/en/build-with-claude/data-residency#inference-geo
+	// InferenceGeo      string          `json:"inference_geo,omitempty"`
 	MaxTokens         uint            `json:"max_tokens,omitempty"`
 	MaxTokensToSample uint            `json:"max_tokens_to_sample,omitempty"`
 	StopSequences     []string        `json:"stop_sequences,omitempty"`

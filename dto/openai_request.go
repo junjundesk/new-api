@@ -54,7 +54,9 @@ type GeneralOpenAIRequest struct {
 	ParallelTooCalls    *bool             `json:"parallel_tool_calls,omitempty"`
 	Tools               []ToolCallRequest `json:"tools,omitempty"`
 	ToolChoice          any               `json:"tool_choice,omitempty"`
+	FunctionCall        json.RawMessage   `json:"function_call,omitempty"`
 	User                string            `json:"user,omitempty"`
+	ServiceTier         string            `json:"service_tier,omitempty"`
 	LogProbs            bool              `json:"logprobs,omitempty"`
 	TopLogProbs         int               `json:"top_logprobs,omitempty"`
 	Dimensions          int               `json:"dimensions,omitempty"`
@@ -261,6 +263,8 @@ type FunctionRequest struct {
 
 type StreamOptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
+	// for /v1/responses
+	IncludeObfuscation bool `json:"include_obfuscation,omitempty"`
 }
 
 func (r *GeneralOpenAIRequest) GetMaxTokens() uint {
@@ -799,11 +803,16 @@ type WebSearchOptions struct {
 
 // https://platform.openai.com/docs/api-reference/responses/create
 type OpenAIResponsesRequest struct {
-	Model              string          `json:"model"`
-	Input              json.RawMessage `json:"input,omitempty"`
-	Include            json.RawMessage `json:"include,omitempty"`
+	Model   string          `json:"model"`
+	Input   json.RawMessage `json:"input,omitempty"`
+	Include json.RawMessage `json:"include,omitempty"`
+	// 在后台运行推理，暂时还不支持依赖的接口
+	// Background         json.RawMessage `json:"background,omitempty"`
+	Conversation       json.RawMessage `json:"conversation,omitempty"`
+	ContextManagement  json.RawMessage `json:"context_management,omitempty"`
 	Instructions       json.RawMessage `json:"instructions,omitempty"`
 	MaxOutputTokens    uint            `json:"max_output_tokens,omitempty"`
+	TopLogProbs        *int            `json:"top_logprobs,omitempty"`
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	ParallelToolCalls  json.RawMessage `json:"parallel_tool_calls,omitempty"`
 	PreviousResponseID string          `json:"previous_response_id,omitempty"`
@@ -813,7 +822,9 @@ type OpenAIResponsesRequest struct {
 	Store                json.RawMessage `json:"store,omitempty"`
 	PromptCacheKey       json.RawMessage `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage `json:"prompt_cache_retention,omitempty"`
+	SafetyIdentifier     string          `json:"safety_identifier,omitempty"`
 	Stream               bool            `json:"stream,omitempty"`
+	StreamOptions        *StreamOptions  `json:"stream_options,omitempty"`
 	Temperature          *float64        `json:"temperature,omitempty"`
 	Text                 json.RawMessage `json:"text,omitempty"`
 	ToolChoice           json.RawMessage `json:"tool_choice,omitempty"`

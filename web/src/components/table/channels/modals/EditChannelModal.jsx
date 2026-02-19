@@ -170,6 +170,7 @@ const EditChannelModal = (props) => {
     allow_service_tier: false,
     disable_store: false, // false = 允许透传（默认开启）
     allow_safety_identifier: false,
+    allow_include_obfuscation: false,
     claude_beta_query: false,
   };
   const [batch, setBatch] = useState(false);
@@ -634,6 +635,8 @@ const EditChannelModal = (props) => {
           data.disable_store = parsedSettings.disable_store || false;
           data.allow_safety_identifier =
             parsedSettings.allow_safety_identifier || false;
+          data.allow_include_obfuscation =
+            parsedSettings.allow_include_obfuscation || false;
           data.claude_beta_query = parsedSettings.claude_beta_query || false;
         } catch (error) {
           console.error('解析其他设置失败:', error);
@@ -645,6 +648,7 @@ const EditChannelModal = (props) => {
           data.allow_service_tier = false;
           data.disable_store = false;
           data.allow_safety_identifier = false;
+          data.allow_include_obfuscation = false;
           data.claude_beta_query = false;
         }
       } else {
@@ -655,6 +659,7 @@ const EditChannelModal = (props) => {
         data.allow_service_tier = false;
         data.disable_store = false;
         data.allow_safety_identifier = false;
+        data.allow_include_obfuscation = false;
         data.claude_beta_query = false;
       }
 
@@ -1392,11 +1397,13 @@ const EditChannelModal = (props) => {
     // type === 1 (OpenAI) 或 type === 14 (Claude): 设置字段透传控制（显式保存布尔值）
     if (localInputs.type === 1 || localInputs.type === 14) {
       settings.allow_service_tier = localInputs.allow_service_tier === true;
-      // 仅 OpenAI 渠道需要 store 和 safety_identifier
+      // 仅 OpenAI 渠道需要 store / safety_identifier / include_obfuscation
       if (localInputs.type === 1) {
         settings.disable_store = localInputs.disable_store === true;
         settings.allow_safety_identifier =
           localInputs.allow_safety_identifier === true;
+        settings.allow_include_obfuscation =
+          localInputs.allow_include_obfuscation === true;
       }
       if (localInputs.type === 14) {
         settings.claude_beta_query = localInputs.claude_beta_query === true;
@@ -1421,6 +1428,7 @@ const EditChannelModal = (props) => {
     delete localInputs.allow_service_tier;
     delete localInputs.disable_store;
     delete localInputs.allow_safety_identifier;
+    delete localInputs.allow_include_obfuscation;
     delete localInputs.claude_beta_query;
 
     let res;
@@ -3269,6 +3277,24 @@ const EditChannelModal = (props) => {
                           }
                           extraText={t(
                             'safety_identifier 字段用于帮助 OpenAI 识别可能违反使用政策的应用程序用户。默认关闭以保护用户隐私',
+                          )}
+                        />
+
+                        <Form.Switch
+                          field='allow_include_obfuscation'
+                          label={t(
+                            '允许 stream_options.include_obfuscation 透传',
+                          )}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'allow_include_obfuscation',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            'include_obfuscation 用于控制 Responses 流混淆字段。默认关闭以避免客户端关闭该安全保护',
                           )}
                         />
                       </>
