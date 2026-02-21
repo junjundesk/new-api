@@ -34,7 +34,7 @@ type ConditionOperation struct {
 
 type ParamOperation struct {
 	Path       string               `json:"path"`
-	Mode       string               `json:"mode"` // delete, set, move, copy, prepend, append, trim_prefix, trim_suffix, ensure_prefix, ensure_suffix, trim_space, to_lower, to_upper, replace, regex_replace, return_error, prune_objects, set_header, delete_header, copy_header, move_header
+	Mode       string               `json:"mode"` // delete, set, move, copy, prepend, append, trim_prefix, trim_suffix, ensure_prefix, ensure_suffix, trim_space, to_lower, to_upper, replace, regex_replace, return_error, prune_objects, set_header, delete_header, copy_header, move_header, sync_fields
 	Value      interface{}          `json:"value"`
 	KeepOrigin bool                 `json:"keep_origin"`
 	From       string               `json:"from,omitempty"`
@@ -494,6 +494,11 @@ func applyOperations(jsonStr string, operations []ParamOperation, conditionConte
 			if err == nil {
 				contextJSON, err = marshalContextJSON(context)
 			}
+		case "sync_fields":
+			result, err = syncFieldsBetweenTargets(result, context, op.From, op.To)
+			if err == nil {
+				contextJSON, err = marshalContextJSON(context)
+			}
 		default:
 			return "", fmt.Errorf("unknown operation: %s", op.Mode)
 		}
@@ -671,6 +676,119 @@ func deleteHeaderOverrideInContext(context map[string]interface{}, headerName st
 	normalizedHeaders := ensureMapKeyInContext(context, paramOverrideContextHeaderOverrideNormalized)
 	delete(normalizedHeaders, normalizeHeaderContextKey(headerName))
 	return nil
+}
+
+type syncTarget struct {
+	kind string
+	key  string
+}
+
+func parseSyncTarget(spec string) (syncTarget, error) {
+	raw := strings.TrimSpace(spec)
+	if raw == "" {
+		return syncTarget{}, fmt.Errorf("sync_fields target is required")
+	}
+
+	idx := strings.Index(raw, ":")
+	if idx < 0 {
+		// Backward compatibility: treat bare value as JSON path.
+		return syncTarget{
+			kind: "json",
+			key:  raw,
+		}, nil
+	}
+
+	kind := strings.ToLower(strings.TrimSpace(raw[:idx]))
+	key := strings.TrimSpace(raw[idx+1:])
+	if key == "" {
+		return syncTarget{}, fmt.Errorf("sync_fields target key is required: %s", raw)
+	}
+
+	switch kind {
+	case "json", "body":
+		return syncTarget{
+			kind: "json",
+			key:  key,
+		}, nil
+	case "header":
+		return syncTarget{
+			kind: "header",
+			key:  key,
+		}, nil
+	default:
+		return syncTarget{}, fmt.Errorf("sync_fields target prefix is invalid: %s", raw)
+	}
+}
+
+func readSyncTargetValue(jsonStr string, context map[string]interface{}, target syncTarget) (interface{}, bool, error) {
+	switch target.kind {
+	case "json":
+		path := processNegativeIndex(jsonStr, target.key)
+		value := gjson.Get(jsonStr, path)
+		if !value.Exists() || value.Type == gjson.Null {
+			return nil, false, nil
+		}
+		if value.Type == gjson.String && strings.TrimSpace(value.String()) == "" {
+			return nil, false, nil
+		}
+		return value.Value(), true, nil
+	case "header":
+		value, ok := getHeaderValueFromContext(context, target.key)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, false, nil
+		}
+		return value, true, nil
+	default:
+		return nil, false, fmt.Errorf("unsupported sync_fields target kind: %s", target.kind)
+	}
+}
+
+func writeSyncTargetValue(jsonStr string, context map[string]interface{}, target syncTarget, value interface{}) (string, error) {
+	switch target.kind {
+	case "json":
+		path := processNegativeIndex(jsonStr, target.key)
+		nextJSON, err := sjson.Set(jsonStr, path, value)
+		if err != nil {
+			return "", err
+		}
+		return nextJSON, nil
+	case "header":
+		if err := setHeaderOverrideInContext(context, target.key, value, false); err != nil {
+			return "", err
+		}
+		return jsonStr, nil
+	default:
+		return "", fmt.Errorf("unsupported sync_fields target kind: %s", target.kind)
+	}
+}
+
+func syncFieldsBetweenTargets(jsonStr string, context map[string]interface{}, fromSpec string, toSpec string) (string, error) {
+	fromTarget, err := parseSyncTarget(fromSpec)
+	if err != nil {
+		return "", err
+	}
+	toTarget, err := parseSyncTarget(toSpec)
+	if err != nil {
+		return "", err
+	}
+
+	fromValue, fromExists, err := readSyncTargetValue(jsonStr, context, fromTarget)
+	if err != nil {
+		return "", err
+	}
+	toValue, toExists, err := readSyncTargetValue(jsonStr, context, toTarget)
+	if err != nil {
+		return "", err
+	}
+
+	// If one side exists and the other side is missing, sync the missing side.
+	if fromExists && !toExists {
+		return writeSyncTargetValue(jsonStr, context, toTarget, fromValue)
+	}
+	if toExists && !fromExists {
+		return writeSyncTargetValue(jsonStr, context, fromTarget, toValue)
+	}
+	return jsonStr, nil
 }
 
 func ensureMapKeyInContext(context map[string]interface{}, key string) map[string]interface{} {

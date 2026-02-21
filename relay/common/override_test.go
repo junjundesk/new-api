@@ -1057,6 +1057,113 @@ func TestApplyParamOverrideCopyHeaderFromRequestHeaders(t *testing.T) {
 	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
 }
 
+func TestApplyParamOverrideSyncFieldsHeaderToJSON(t *testing.T) {
+	input := []byte(`{"model":"gpt-4"}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "sync_fields",
+				"from": "header:session_id",
+				"to":   "json:prompt_cache_key",
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"session_id": "sess-123",
+		},
+		"request_headers": map[string]interface{}{
+			"session_id": "sess-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"model":"gpt-4","prompt_cache_key":"sess-123"}`, string(out))
+}
+
+func TestApplyParamOverrideSyncFieldsJSONToHeader(t *testing.T) {
+	input := []byte(`{"model":"gpt-4","prompt_cache_key":"cache-abc"}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "sync_fields",
+				"from": "header:session_id",
+				"to":   "json:prompt_cache_key",
+			},
+		},
+	}
+	ctx := map[string]interface{}{}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"model":"gpt-4","prompt_cache_key":"cache-abc"}`, string(out))
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected header_override context map")
+	}
+	if headers["session_id"] != "cache-abc" {
+		t.Fatalf("expected session_id to be synced from prompt_cache_key, got: %v", headers["session_id"])
+	}
+}
+
+func TestApplyParamOverrideSyncFieldsNoChangeWhenBothExist(t *testing.T) {
+	input := []byte(`{"model":"gpt-4","prompt_cache_key":"cache-body"}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "sync_fields",
+				"from": "header:session_id",
+				"to":   "json:prompt_cache_key",
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"session_id": "cache-header",
+		},
+		"request_headers": map[string]interface{}{
+			"session_id": "cache-header",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"model":"gpt-4","prompt_cache_key":"cache-body"}`, string(out))
+
+	headers, _ := ctx["header_override"].(map[string]interface{})
+	if headers != nil {
+		if _, exists := headers["session_id"]; exists {
+			t.Fatalf("expected no override when both sides already have value")
+		}
+	}
+}
+
+func TestApplyParamOverrideSyncFieldsInvalidTarget(t *testing.T) {
+	input := []byte(`{"model":"gpt-4"}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "sync_fields",
+				"from": "foo:session_id",
+				"to":   "json:prompt_cache_key",
+			},
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, nil)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+}
+
 func TestApplyParamOverrideSetHeaderKeepOrigin(t *testing.T) {
 	input := []byte(`{"temperature":0.7}`)
 	override := map[string]interface{}{

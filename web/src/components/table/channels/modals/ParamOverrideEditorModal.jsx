@@ -58,6 +58,7 @@ const OPERATION_MODE_OPTIONS = [
   { label: 'JSON · to_upper', value: 'to_upper' },
   { label: 'Control · return_error', value: 'return_error' },
   { label: 'Control · prune_objects', value: 'prune_objects' },
+  { label: 'Control · sync_fields', value: 'sync_fields' },
   { label: 'Header · set_header', value: 'set_header' },
   { label: 'Header · delete_header', value: 'delete_header' },
   { label: 'Header · copy_header', value: 'copy_header' },
@@ -101,6 +102,7 @@ const MODE_META = {
   to_upper: { path: true },
   return_error: { value: true },
   prune_objects: { pathOptional: true, value: true },
+  sync_fields: { from: true, to: true },
   set_header: { path: true, value: true, keepOrigin: true },
   delete_header: { path: true },
   copy_header: { from: true, to: true, keepOrigin: true, pathAlias: true },
@@ -124,9 +126,16 @@ const FROM_REQUIRED_MODES = new Set([
   'regex_replace',
   'copy_header',
   'move_header',
+  'sync_fields',
 ]);
 
-const TO_REQUIRED_MODES = new Set(['copy', 'move', 'copy_header', 'move_header']);
+const TO_REQUIRED_MODES = new Set([
+  'copy',
+  'move',
+  'copy_header',
+  'move_header',
+  'sync_fields',
+]);
 
 const MODE_DESCRIPTIONS = {
   set: 'Set JSON value at path',
@@ -146,11 +155,17 @@ const MODE_DESCRIPTIONS = {
   to_upper: 'Convert string to upper case',
   return_error: 'Stop processing and return custom error',
   prune_objects: 'Remove objects matching conditions',
+  sync_fields: 'Sync two fields when one exists and the other is missing',
   set_header: 'Set runtime override header',
   delete_header: 'Delete runtime override header',
   copy_header: 'Copy header from from -> to',
   move_header: 'Move header from from -> to',
 };
+
+const SYNC_TARGET_TYPE_OPTIONS = [
+  { label: 'JSON', value: 'json' },
+  { label: 'Header', value: 'header' },
+];
 
 const OPERATION_PATH_SUGGESTIONS = [
   'model',
@@ -355,6 +370,13 @@ const PARAM_OVERRIDE_JSON_SCHEMA = {
           },
           {
             if: {
+              properties: { mode: { const: 'sync_fields' } },
+              required: ['mode'],
+            },
+            then: { required: ['from', 'to'] },
+          },
+          {
+            if: {
               properties: { mode: { const: 'set_header' } },
               required: ['mode'],
             },
@@ -413,6 +435,26 @@ const parseLooseValue = (valueText) => {
   } catch (error) {
     return raw;
   }
+};
+
+const parseSyncTargetSpec = (spec) => {
+  const raw = String(spec ?? '').trim();
+  if (!raw) return { type: 'json', key: '' };
+  const idx = raw.indexOf(':');
+  if (idx < 0) return { type: 'json', key: raw };
+  const prefix = raw.slice(0, idx).trim().toLowerCase();
+  const key = raw.slice(idx + 1).trim();
+  if (prefix === 'header') {
+    return { type: 'header', key };
+  }
+  return { type: 'json', key };
+};
+
+const buildSyncTargetSpec = (type, key) => {
+  const normalizedType = type === 'header' ? 'header' : 'json';
+  const normalizedKey = String(key ?? '').trim();
+  if (!normalizedKey) return '';
+  return `${normalizedType}:${normalizedKey}`;
 };
 
 const normalizeCondition = (condition = {}) => ({
@@ -1028,6 +1070,14 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                     const mode = operation.mode || 'set';
                     const meta = MODE_META[mode] || MODE_META.set;
                     const conditions = operation.conditions || [];
+                    const syncFromTarget =
+                      mode === 'sync_fields'
+                        ? parseSyncTargetSpec(operation.from)
+                        : null;
+                    const syncToTarget =
+                      mode === 'sync_fields'
+                        ? parseSyncTargetSpec(operation.to)
+                        : null;
                     return (
                       <Card key={operation.id} className='!rounded-xl border'>
                         <div className='flex items-center justify-between mb-2'>
@@ -1146,7 +1196,107 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                           </div>
                         ) : null}
 
-                        {meta.from || meta.to === false || meta.to ? (
+                        {mode === 'sync_fields' ? (
+                          <div className='mt-2'>
+                            <Text type='tertiary' size='small'>
+                              sync endpoints
+                            </Text>
+                            <Row gutter={12} style={{ marginTop: 6 }}>
+                              <Col xs={24} md={12}>
+                                <Text type='tertiary' size='small'>
+                                  from endpoint
+                                </Text>
+                                <div className='flex gap-2'>
+                                  <Select
+                                    value={syncFromTarget?.type || 'json'}
+                                    optionList={SYNC_TARGET_TYPE_OPTIONS}
+                                    style={{ width: 120 }}
+                                    onChange={(nextType) =>
+                                      updateOperation(operation.id, {
+                                        from: buildSyncTargetSpec(
+                                          nextType,
+                                          syncFromTarget?.key || '',
+                                        ),
+                                      })
+                                    }
+                                  />
+                                  <Input
+                                    value={syncFromTarget?.key || ''}
+                                    placeholder='session_id'
+                                    onChange={(nextKey) =>
+                                      updateOperation(operation.id, {
+                                        from: buildSyncTargetSpec(
+                                          syncFromTarget?.type || 'json',
+                                          nextKey,
+                                        ),
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </Col>
+                              <Col xs={24} md={12}>
+                                <Text type='tertiary' size='small'>
+                                  to endpoint
+                                </Text>
+                                <div className='flex gap-2'>
+                                  <Select
+                                    value={syncToTarget?.type || 'json'}
+                                    optionList={SYNC_TARGET_TYPE_OPTIONS}
+                                    style={{ width: 120 }}
+                                    onChange={(nextType) =>
+                                      updateOperation(operation.id, {
+                                        to: buildSyncTargetSpec(
+                                          nextType,
+                                          syncToTarget?.key || '',
+                                        ),
+                                      })
+                                    }
+                                  />
+                                  <Input
+                                    value={syncToTarget?.key || ''}
+                                    placeholder='prompt_cache_key'
+                                    onChange={(nextKey) =>
+                                      updateOperation(operation.id, {
+                                        to: buildSyncTargetSpec(
+                                          syncToTarget?.type || 'json',
+                                          nextKey,
+                                        ),
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </Col>
+                            </Row>
+                            <Space wrap style={{ marginTop: 8 }}>
+                              <Tag
+                                size='small'
+                                color='cyan'
+                                className='cursor-pointer'
+                                onClick={() =>
+                                  updateOperation(operation.id, {
+                                    from: 'header:session_id',
+                                    to: 'json:prompt_cache_key',
+                                  })
+                                }
+                              >
+                                {'header:session_id -> json:prompt_cache_key'}
+                              </Tag>
+                              <Tag
+                                size='small'
+                                color='cyan'
+                                className='cursor-pointer'
+                                onClick={() =>
+                                  updateOperation(operation.id, {
+                                    from: 'json:prompt_cache_key',
+                                    to: 'header:session_id',
+                                  })
+                                }
+                              >
+                                {'json:prompt_cache_key -> header:session_id'}
+                              </Tag>
+                            </Space>
+                          </div>
+                        ) : meta.from || meta.to === false || meta.to ? (
                           <Row gutter={12} style={{ marginTop: 8 }}>
                             {meta.from || meta.to === false ? (
                               <Col xs={24} md={12}>
