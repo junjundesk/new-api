@@ -59,6 +59,7 @@ import ModelSelectModal from './ModelSelectModal';
 import SingleModelSelectModal from './SingleModelSelectModal';
 import OllamaModelModal from './OllamaModelModal';
 import CodexOAuthModal from './CodexOAuthModal';
+import ParamOverrideEditorModal from './ParamOverrideEditorModal';
 import JSONEditor from '../../../common/ui/JSONEditor';
 import SecureVerificationModal from '../../../common/modals/SecureVerificationModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
@@ -143,6 +144,7 @@ const EditChannelModal = (props) => {
     base_url: '',
     other: '',
     model_mapping: '',
+    param_override: '',
     status_code_mapping: '',
     models: [],
     auto_ban: 1,
@@ -224,10 +226,68 @@ const EditChannelModal = (props) => {
       return [];
     }
   }, [inputs.model_mapping]);
+  const paramOverrideMeta = useMemo(() => {
+    const raw =
+      typeof inputs.param_override === 'string'
+        ? inputs.param_override.trim()
+        : '';
+    if (!raw) {
+      return {
+        tagLabel: t('不更改'),
+        tagColor: 'grey',
+        preview: t(
+          '此项可选，用于覆盖请求参数。不支持覆盖 stream 参数',
+        ),
+      };
+    }
+    if (!verifyJSON(raw)) {
+      return {
+        tagLabel: t('JSON格式错误'),
+        tagColor: 'red',
+        preview: raw,
+      };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const pretty = JSON.stringify(parsed, null, 2);
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        Array.isArray(parsed.operations)
+      ) {
+        return {
+          tagLabel: `${t('新格式模板')} (${parsed.operations.length})`,
+          tagColor: 'cyan',
+          preview: pretty,
+        };
+      }
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return {
+          tagLabel: `${t('旧格式模板')} (${Object.keys(parsed).length})`,
+          tagColor: 'blue',
+          preview: pretty,
+        };
+      }
+      return {
+        tagLabel: 'Custom JSON',
+        tagColor: 'orange',
+        preview: pretty,
+      };
+    } catch (error) {
+      return {
+        tagLabel: t('JSON格式错误'),
+        tagColor: 'red',
+        preview: raw,
+      };
+    }
+  }, [inputs.param_override, t]);
   const [isIonetChannel, setIsIonetChannel] = useState(false);
   const [ionetMetadata, setIonetMetadata] = useState(null);
   const [codexOAuthModalVisible, setCodexOAuthModalVisible] = useState(false);
   const [codexCredentialRefreshing, setCodexCredentialRefreshing] =
+    useState(false);
+  const [paramOverrideEditorVisible, setParamOverrideEditorVisible] =
     useState(false);
 
   // 密钥显示状态
@@ -1170,6 +1230,7 @@ const EditChannelModal = (props) => {
   const submit = async () => {
     const formValues = formApiRef.current ? formApiRef.current.getValues() : {};
     let localInputs = { ...formValues };
+    localInputs.param_override = inputs.param_override;
 
     if (localInputs.type === 57) {
       if (batch) {
@@ -3043,28 +3104,20 @@ const EditChannelModal = (props) => {
                       initValue={autoBan}
                     />
 
-                    <Form.TextArea
-                      field='param_override'
-                      label={t('参数覆盖')}
-                      placeholder={
-                        t(
-                          '此项可选，用于覆盖请求参数。不支持覆盖 stream 参数',
-                        ) +
-                        '\n' +
-                        t('旧格式（直接覆盖）：') +
-                        '\n{\n  "temperature": 0,\n  "max_tokens": 1000\n}' +
-                        '\n\n' +
-                        t('新格式（支持条件判断与json自定义）：') +
-                        '\n{\n  "operations": [\n    {\n      "path": "temperature",\n      "mode": "set",\n      "value": 0.7,\n      "conditions": [\n        {\n          "path": "model",\n          "mode": "prefix",\n          "value": "gpt"\n        }\n      ]\n    }\n  ]\n}'
-                      }
-                      autosize
-                      onChange={(value) =>
-                        handleInputChange('param_override', value)
-                      }
-                      extraText={
-                        <div className='flex gap-2 flex-wrap'>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
+                    <div className='mb-4'>
+                      <div className='flex items-center justify-between gap-2 mb-1'>
+                        <Text className='text-sm font-medium'>{t('参数覆盖')}</Text>
+                        <Space wrap>
+                          <Button
+                            size='small'
+                            type='primary'
+                            icon={<IconCode size={14} />}
+                            onClick={() => setParamOverrideEditorVisible(true)}
+                          >
+                            {t('可视化编辑')}
+                          </Button>
+                          <Button
+                            size='small'
                             onClick={() =>
                               handleInputChange(
                                 'param_override',
@@ -3073,9 +3126,9 @@ const EditChannelModal = (props) => {
                             }
                           >
                             {t('旧格式模板')}
-                          </Text>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
+                          </Button>
+                          <Button
+                            size='small'
                             onClick={() =>
                               handleInputChange(
                                 'param_override',
@@ -3104,17 +3157,40 @@ const EditChannelModal = (props) => {
                             }
                           >
                             {t('新格式模板')}
-                          </Text>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
-                            onClick={() => formatJsonField('param_override')}
+                          </Button>
+                          <Button
+                            size='small'
+                            type='tertiary'
+                            onClick={() => handleInputChange('param_override', '')}
                           >
-                            {t('格式化')}
-                          </Text>
+                            {t('不更改')}
+                          </Button>
+                        </Space>
+                      </div>
+                      <Text type='tertiary' size='small'>
+                        {t('此项可选，用于覆盖请求参数。不支持覆盖 stream 参数')}
+                      </Text>
+                      <div
+                        className='mt-2 rounded-lg border p-3'
+                        style={{ backgroundColor: 'var(--semi-color-fill-0)' }}
+                      >
+                        <div className='flex items-center justify-between mb-2'>
+                          <Tag color={paramOverrideMeta.tagColor}>
+                            {paramOverrideMeta.tagLabel}
+                          </Tag>
+                          <Button
+                            size='small'
+                            type='tertiary'
+                            onClick={() => setParamOverrideEditorVisible(true)}
+                          >
+                            {t('编辑')}
+                          </Button>
                         </div>
-                      }
-                      showClear
-                    />
+                        <pre className='mb-0 text-xs leading-5 whitespace-pre-wrap break-all max-h-56 overflow-auto'>
+                          {paramOverrideMeta.preview}
+                        </pre>
+                      </div>
+                    </div>
 
                     <Form.TextArea
                       field='header_override'
@@ -3493,6 +3569,16 @@ const EditChannelModal = (props) => {
           )}
         />
       </Modal>
+
+      <ParamOverrideEditorModal
+        visible={paramOverrideEditorVisible}
+        value={inputs.param_override || ''}
+        onCancel={() => setParamOverrideEditorVisible(false)}
+        onSave={(nextValue) => {
+          handleInputChange('param_override', nextValue);
+          setParamOverrideEditorVisible(false);
+        }}
+      />
 
       <ModelSelectModal
         visible={modelModalVisible}
