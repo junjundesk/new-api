@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/QuantumNous/new-api/types"
 )
 
 func TestApplyParamOverrideTrimPrefix(t *testing.T) {
@@ -770,6 +772,188 @@ func TestApplyParamOverrideToUpper(t *testing.T) {
 		t.Fatalf("ApplyParamOverride returned error: %v", err)
 	}
 	assertJSONEqual(t, `{"model":"GPT-4"}`, string(out))
+}
+
+func TestApplyParamOverrideReturnError(t *testing.T) {
+	input := []byte(`{"model":"gemini-2.5-pro"}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "return_error",
+				"value": map[string]interface{}{
+					"message":     "forced bad request by param override",
+					"status_code": 422,
+					"code":        "forced_bad_request",
+					"type":        "invalid_request_error",
+					"skip_retry":  true,
+				},
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"path":  "retry.is_retry",
+						"mode":  "full",
+						"value": true,
+					},
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"retry": map[string]interface{}{
+			"index":    1,
+			"is_retry": true,
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, ctx)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	returnErr, ok := AsParamOverrideReturnError(err)
+	if !ok {
+		t.Fatalf("expected ParamOverrideReturnError, got %T: %v", err, err)
+	}
+	if returnErr.StatusCode != 422 {
+		t.Fatalf("expected status 422, got %d", returnErr.StatusCode)
+	}
+	if returnErr.Code != "forced_bad_request" {
+		t.Fatalf("expected code forced_bad_request, got %s", returnErr.Code)
+	}
+	if !returnErr.SkipRetry {
+		t.Fatalf("expected skip_retry true")
+	}
+}
+
+func TestApplyParamOverridePruneObjectsByTypeString(t *testing.T) {
+	input := []byte(`{
+		"messages":[
+			{"role":"assistant","content":[
+				{"type":"output_text","text":"a"},
+				{"type":"redacted_thinking","text":"secret"},
+				{"type":"tool_call","name":"tool_a"}
+			]},
+			{"role":"assistant","content":[
+				{"type":"output_text","text":"b"},
+				{"type":"wrapper","parts":[
+					{"type":"redacted_thinking","text":"secret2"},
+					{"type":"output_text","text":"c"}
+				]}
+			]}
+		]
+	}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode":  "prune_objects",
+				"value": "redacted_thinking",
+			},
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, nil)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{
+		"messages":[
+			{"role":"assistant","content":[
+				{"type":"output_text","text":"a"},
+				{"type":"tool_call","name":"tool_a"}
+			]},
+			{"role":"assistant","content":[
+				{"type":"output_text","text":"b"},
+				{"type":"wrapper","parts":[
+					{"type":"output_text","text":"c"}
+				]}
+			]}
+		]
+	}`, string(out))
+}
+
+func TestApplyParamOverridePruneObjectsWhereAndPath(t *testing.T) {
+	input := []byte(`{
+		"a":{"items":[{"type":"redacted_thinking","id":1},{"type":"output_text","id":2}]},
+		"b":{"items":[{"type":"redacted_thinking","id":3},{"type":"output_text","id":4}]}
+	}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"path": "a",
+				"mode": "prune_objects",
+				"value": map[string]interface{}{
+					"where": map[string]interface{}{
+						"type": "redacted_thinking",
+					},
+				},
+			},
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, nil)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{
+		"a":{"items":[{"type":"output_text","id":2}]},
+		"b":{"items":[{"type":"redacted_thinking","id":3},{"type":"output_text","id":4}]}
+	}`, string(out))
+}
+
+func TestApplyParamOverrideNormalizeThinkingSignatureUnsupported(t *testing.T) {
+	input := []byte(`{"items":[{"type":"redacted_thinking"}]}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "normalize_thinking_signature",
+			},
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, nil)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestApplyParamOverrideConditionFromRetryAndLastErrorContext(t *testing.T) {
+	info := &RelayInfo{
+		RetryIndex: 1,
+		LastError: types.WithOpenAIError(types.OpenAIError{
+			Message: "invalid thinking signature",
+			Type:    "invalid_request_error",
+			Code:    "bad_thought_signature",
+		}, 400),
+	}
+	ctx := BuildParamOverrideContext(info)
+
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"path":  "temperature",
+				"mode":  "set",
+				"value": 0.1,
+				"logic": "AND",
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"path":  "is_retry",
+						"mode":  "full",
+						"value": true,
+					},
+					map[string]interface{}{
+						"path":  "last_error.code",
+						"mode":  "contains",
+						"value": "thought_signature",
+					},
+				},
+			},
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
 }
 
 func assertJSONEqual(t *testing.T, want, got string) {
