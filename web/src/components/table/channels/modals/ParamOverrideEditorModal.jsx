@@ -17,8 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MonacoEditor from '@monaco-editor/react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Banner,
@@ -36,7 +35,6 @@ import {
 } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
 import { showError, verifyJSON } from '../../../../helpers';
-import JSONEditor from '../../../common/ui/JSONEditor';
 
 const { Text } = Typography;
 
@@ -204,214 +202,6 @@ const OPERATION_TEMPLATE = {
       logic: 'AND',
     },
   ],
-};
-
-const MONACO_SCHEMA_URI = 'https://new-api.local/schemas/param-override.schema.json';
-const MONACO_MODEL_URI = 'inmemory://new-api/param-override.json';
-
-const JSON_SCALAR_SCHEMA = {
-  oneOf: [
-    { type: 'string' },
-    { type: 'number' },
-    { type: 'boolean' },
-    { type: 'null' },
-    { type: 'array' },
-    { type: 'object' },
-  ],
-};
-
-const PARAM_OVERRIDE_JSON_SCHEMA = {
-  $schema: 'http://json-schema.org/draft-07/schema#',
-  type: 'object',
-  properties: {
-    operations: {
-      type: 'array',
-      description: 'Operation pipeline for new param override format.',
-      items: {
-        type: 'object',
-        properties: {
-          mode: {
-            type: 'string',
-            enum: OPERATION_MODE_OPTIONS.map((item) => item.value),
-          },
-          path: { type: 'string' },
-          from: { type: 'string' },
-          to: { type: 'string' },
-          keep_origin: { type: 'boolean' },
-          value: JSON_SCALAR_SCHEMA,
-          logic: { type: 'string', enum: ['AND', 'OR'] },
-          conditions: {
-            oneOf: [
-              {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    path: { type: 'string' },
-                    mode: {
-                      type: 'string',
-                      enum: CONDITION_MODE_OPTIONS.map((item) => item.value),
-                    },
-                    value: JSON_SCALAR_SCHEMA,
-                    invert: { type: 'boolean' },
-                    pass_missing_key: { type: 'boolean' },
-                  },
-                  required: ['path', 'mode'],
-                  additionalProperties: false,
-                },
-              },
-              {
-                type: 'object',
-                additionalProperties: JSON_SCALAR_SCHEMA,
-              },
-            ],
-          },
-        },
-        required: ['mode'],
-        additionalProperties: false,
-        allOf: [
-          {
-            if: { properties: { mode: { const: 'set' } }, required: ['mode'] },
-            then: { required: ['path'] },
-          },
-          {
-            if: { properties: { mode: { const: 'delete' } }, required: ['mode'] },
-            then: { required: ['path'] },
-          },
-          {
-            if: { properties: { mode: { const: 'append' } }, required: ['mode'] },
-            then: { required: ['path'] },
-          },
-          {
-            if: { properties: { mode: { const: 'prepend' } }, required: ['mode'] },
-            then: { required: ['path'] },
-          },
-          {
-            if: { properties: { mode: { const: 'copy' } }, required: ['mode'] },
-            then: { required: ['from', 'to'] },
-          },
-          {
-            if: { properties: { mode: { const: 'move' } }, required: ['mode'] },
-            then: { required: ['from', 'to'] },
-          },
-          {
-            if: { properties: { mode: { const: 'replace' } }, required: ['mode'] },
-            then: { required: ['path', 'from'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'regex_replace' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'from'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'trim_prefix' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'trim_suffix' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'ensure_prefix' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'ensure_suffix' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'trim_space' } },
-              required: ['mode'],
-            },
-            then: { required: ['path'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'to_lower' } },
-              required: ['mode'],
-            },
-            then: { required: ['path'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'to_upper' } },
-              required: ['mode'],
-            },
-            then: { required: ['path'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'return_error' } },
-              required: ['mode'],
-            },
-            then: { required: ['value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'prune_objects' } },
-              required: ['mode'],
-            },
-            then: { required: ['value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'sync_fields' } },
-              required: ['mode'],
-            },
-            then: { required: ['from', 'to'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'set_header' } },
-              required: ['mode'],
-            },
-            then: { required: ['path', 'value'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'delete_header' } },
-              required: ['mode'],
-            },
-            then: { required: ['path'] },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'copy_header' } },
-              required: ['mode'],
-            },
-            then: {
-              anyOf: [{ required: ['path'] }, { required: ['from', 'to'] }],
-            },
-          },
-          {
-            if: {
-              properties: { mode: { const: 'move_header' } },
-              required: ['mode'],
-            },
-            then: {
-              anyOf: [{ required: ['path'] }, { required: ['from', 'to'] }],
-            },
-          },
-        ],
-      },
-    },
-  },
-  additionalProperties: true,
 };
 
 let localIdSeed = 0;
@@ -649,24 +439,6 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
   const [operations, setOperations] = useState([createDefaultOperation()]);
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState('');
-  const monacoConfiguredRef = useRef(false);
-
-  const configureMonaco = useCallback((monaco) => {
-    if (monacoConfiguredRef.current) return;
-    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-      validate: true,
-      allowComments: false,
-      enableSchemaRequest: false,
-      schemas: [
-        {
-          uri: MONACO_SCHEMA_URI,
-          fileMatch: [MONACO_MODEL_URI, '*param-override*.json'],
-          schema: PARAM_OVERRIDE_JSON_SCHEMA,
-        },
-      ],
-    });
-    monacoConfiguredRef.current = true;
-  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -1040,17 +812,19 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
             </Space>
 
             {visualMode === 'legacy' ? (
-              <JSONEditor
-                field='param_override_legacy'
-                label={t('旧格式（直接覆盖）：')}
-                placeholder={JSON.stringify(LEGACY_TEMPLATE, null, 2)}
-                value={legacyValue}
-                onChange={setLegacyValue}
-                template={LEGACY_TEMPLATE}
-                templateLabel={t('填入模板')}
-                editorType='keyValue'
-                showClear
-              />
+              <div>
+                <Text className='mb-2 block'>{t('旧格式（直接覆盖）：')}</Text>
+                <Input.TextArea
+                  value={legacyValue}
+                  autosize={{ minRows: 10, maxRows: 20 }}
+                  placeholder={JSON.stringify(LEGACY_TEMPLATE, null, 2)}
+                  onChange={(nextValue) => setLegacyValue(nextValue)}
+                  showClear
+                />
+                <Text type='tertiary' size='small' className='mt-2 block'>
+                  {t('这里直接编辑 JSON 对象，无需额外点开编辑器。')}
+                </Text>
+              </div>
             ) : (
               <div>
                 <div className='flex items-center justify-between mb-3'>
@@ -1519,32 +1293,17 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
           <div style={{ width: '100%' }}>
             <Space style={{ marginBottom: 8 }} wrap>
               <Button onClick={formatJson}>{t('格式化')}</Button>
-              <Tag color='cyan'>{t('JSON 智能提示')}</Tag>
+              <Tag color='grey'>{t('普通编辑')}</Tag>
             </Space>
-            <div className='border rounded-lg overflow-hidden'>
-              <MonacoEditor
-                beforeMount={configureMonaco}
-                path={MONACO_MODEL_URI}
-                language='json'
-                value={jsonText}
-                onChange={(nextValue) => handleJsonChange(nextValue ?? '')}
-                height='460px'
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: 'on',
-                  automaticLayout: true,
-                  scrollBeyondLastLine: false,
-                  tabSize: 2,
-                  insertSpaces: true,
-                  wordWrap: 'on',
-                  formatOnPaste: true,
-                  formatOnType: true,
-                }}
-              />
-            </div>
+            <Input.TextArea
+              value={jsonText}
+              autosize={{ minRows: 18, maxRows: 28 }}
+              onChange={(nextValue) => handleJsonChange(nextValue ?? '')}
+              placeholder={JSON.stringify(OPERATION_TEMPLATE, null, 2)}
+              showClear
+            />
             <Text type='tertiary' size='small' className='mt-2 block'>
-              {t('支持 mode/conditions 字段补全与 JSON Schema 校验')}
+              {t('直接编辑 JSON 文本，保存时会校验格式。')}
             </Text>
             {jsonError ? (
               <Text className='text-red-500 text-xs mt-2'>{jsonError}</Text>
