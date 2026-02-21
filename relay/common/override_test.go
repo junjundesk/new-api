@@ -956,6 +956,254 @@ func TestApplyParamOverrideConditionFromRetryAndLastErrorContext(t *testing.T) {
 	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
 }
 
+func TestApplyParamOverrideConditionFromRequestHeaders(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"path":  "temperature",
+				"mode":  "set",
+				"value": 0.1,
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"path":  "request_headers.authorization",
+						"mode":  "contains",
+						"value": "Bearer ",
+					},
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers": map[string]interface{}{
+			"authorization": "Bearer token-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
+}
+
+func TestApplyParamOverrideSetHeaderAndUseInLaterCondition(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode":  "set_header",
+				"path":  "X-Debug-Mode",
+				"value": "enabled",
+			},
+			map[string]interface{}{
+				"path":  "temperature",
+				"mode":  "set",
+				"value": 0.1,
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"path":  "header_override_normalized.x_debug_mode",
+						"mode":  "full",
+						"value": "enabled",
+					},
+				},
+			},
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, nil)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
+}
+
+func TestApplyParamOverrideCopyHeaderFromRequestHeaders(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "copy_header",
+				"from": "Authorization",
+				"to":   "X-Upstream-Auth",
+			},
+			map[string]interface{}{
+				"path":  "temperature",
+				"mode":  "set",
+				"value": 0.1,
+				"conditions": []interface{}{
+					map[string]interface{}{
+						"path":  "header_override_normalized.x_upstream_auth",
+						"mode":  "contains",
+						"value": "Bearer ",
+					},
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"Authorization": "Bearer token-123",
+		},
+		"request_headers": map[string]interface{}{
+			"authorization": "Bearer token-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
+}
+
+func TestApplyParamOverrideSetHeaderKeepOrigin(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode":        "set_header",
+				"path":        "X-Feature-Flag",
+				"value":       "new-value",
+				"keep_origin": true,
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"header_override": map[string]interface{}{
+			"X-Feature-Flag": "legacy-value",
+		},
+		"header_override_normalized": map[string]interface{}{
+			"x_feature_flag": "legacy-value",
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected header_override context map")
+	}
+	if headers["X-Feature-Flag"] != "legacy-value" {
+		t.Fatalf("expected keep_origin to preserve old value, got: %v", headers["X-Feature-Flag"])
+	}
+}
+
+func TestApplyParamOverrideConditionsObjectShorthand(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"path":  "temperature",
+				"mode":  "set",
+				"value": 0.1,
+				"logic": "AND",
+				"conditions": map[string]interface{}{
+					"is_retry":               true,
+					"last_error.status_code": 400.0,
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"is_retry": true,
+		"last_error": map[string]interface{}{
+			"status_code": 400.0,
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
+}
+
+func TestApplyParamOverrideWithRelayInfoSyncRuntimeHeaders(t *testing.T) {
+	info := &RelayInfo{
+		ChannelMeta: &ChannelMeta{
+			ParamOverride: map[string]interface{}{
+				"operations": []interface{}{
+					map[string]interface{}{
+						"mode":  "set_header",
+						"path":  "X-Injected-By-Param-Override",
+						"value": "enabled",
+					},
+					map[string]interface{}{
+						"mode": "delete_header",
+						"path": "X-Delete-Me",
+					},
+				},
+			},
+			HeadersOverride: map[string]interface{}{
+				"X-Delete-Me": "legacy",
+				"X-Keep-Me":   "keep",
+			},
+		},
+	}
+
+	input := []byte(`{"temperature":0.7}`)
+	out, err := ApplyParamOverrideWithRelayInfo(input, info)
+	if err != nil {
+		t.Fatalf("ApplyParamOverrideWithRelayInfo returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.7}`, string(out))
+
+	if !info.UseRuntimeHeadersOverride {
+		t.Fatalf("expected runtime header override to be enabled")
+	}
+	if info.RuntimeHeadersOverride["X-Keep-Me"] != "keep" {
+		t.Fatalf("expected X-Keep-Me header to be preserved, got: %v", info.RuntimeHeadersOverride["X-Keep-Me"])
+	}
+	if info.RuntimeHeadersOverride["X-Injected-By-Param-Override"] != "enabled" {
+		t.Fatalf("expected X-Injected-By-Param-Override header to be set, got: %v", info.RuntimeHeadersOverride["X-Injected-By-Param-Override"])
+	}
+	if _, exists := info.RuntimeHeadersOverride["X-Delete-Me"]; exists {
+		t.Fatalf("expected X-Delete-Me header to be deleted")
+	}
+}
+
+func TestApplyParamOverrideWithRelayInfoMoveAndCopyHeaders(t *testing.T) {
+	info := &RelayInfo{
+		ChannelMeta: &ChannelMeta{
+			ParamOverride: map[string]interface{}{
+				"operations": []interface{}{
+					map[string]interface{}{
+						"mode": "move_header",
+						"from": "X-Legacy-Trace",
+						"to":   "X-Trace",
+					},
+					map[string]interface{}{
+						"mode": "copy_header",
+						"from": "X-Trace",
+						"to":   "X-Trace-Backup",
+					},
+				},
+			},
+			HeadersOverride: map[string]interface{}{
+				"X-Legacy-Trace": "trace-123",
+			},
+		},
+	}
+
+	input := []byte(`{"temperature":0.7}`)
+	_, err := ApplyParamOverrideWithRelayInfo(input, info)
+	if err != nil {
+		t.Fatalf("ApplyParamOverrideWithRelayInfo returned error: %v", err)
+	}
+	if _, exists := info.RuntimeHeadersOverride["X-Legacy-Trace"]; exists {
+		t.Fatalf("expected source header to be removed after move")
+	}
+	if info.RuntimeHeadersOverride["X-Trace"] != "trace-123" {
+		t.Fatalf("expected X-Trace to be set, got: %v", info.RuntimeHeadersOverride["X-Trace"])
+	}
+	if info.RuntimeHeadersOverride["X-Trace-Backup"] != "trace-123" {
+		t.Fatalf("expected X-Trace-Backup to be copied, got: %v", info.RuntimeHeadersOverride["X-Trace-Backup"])
+	}
+}
+
 func assertJSONEqual(t *testing.T, want, got string) {
 	t.Helper()
 

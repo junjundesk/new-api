@@ -79,3 +79,34 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, "trace-123", headers["X-Upstream-Trace"])
 }
+
+func TestProcessHeaderOverride_RuntimeOverrideHasPriority(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	info := &relaycommon.RelayInfo{
+		IsChannelTest:             false,
+		UseRuntimeHeadersOverride: true,
+		RuntimeHeadersOverride: map[string]any{
+			"X-Static":  "runtime-value",
+			"X-Runtime": "runtime-only",
+		},
+		ChannelMeta: &relaycommon.ChannelMeta{
+			HeadersOverride: map[string]any{
+				"X-Static": "legacy-value",
+				"X-Legacy": "legacy-only",
+			},
+		},
+	}
+
+	headers, err := processHeaderOverride(info, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "runtime-value", headers["X-Static"])
+	require.Equal(t, "runtime-only", headers["X-Runtime"])
+	_, ok := headers["X-Legacy"]
+	require.False(t, ok)
+}
