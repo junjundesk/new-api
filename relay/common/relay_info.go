@@ -700,6 +700,7 @@ func FailTaskInfo(reason string) *TaskInfo {
 
 // RemoveDisabledFields 从请求 JSON 数据中移除渠道设置中禁用的字段
 // service_tier: 服务层级字段，可能导致额外计费（OpenAI、Claude、Responses API 支持）
+// inference_geo: Claude 数据驻留推理区域字段（仅 Claude 支持，默认过滤）
 // store: 数据存储授权字段，涉及用户隐私（仅 OpenAI、Responses API 支持，默认允许透传，禁用后可能导致 Codex 无法使用）
 // safety_identifier: 安全标识符，用于向 OpenAI 报告违规用户（仅 OpenAI 支持，涉及用户隐私）
 // stream_options.include_obfuscation: 响应流混淆控制字段（仅 OpenAI Responses API 支持）
@@ -718,6 +719,13 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 	if !channelOtherSettings.AllowServiceTier {
 		if _, exists := data["service_tier"]; exists {
 			delete(data, "service_tier")
+		}
+	}
+
+	// 默认移除 inference_geo，除非明确允许（避免在未授权情况下透传数据驻留区域）
+	if !channelOtherSettings.AllowInferenceGeo {
+		if _, exists := data["inference_geo"]; exists {
+			delete(data, "inference_geo")
 		}
 	}
 

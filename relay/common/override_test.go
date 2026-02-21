@@ -812,6 +812,39 @@ func TestRemoveDisabledFieldsSkipWhenGlobalPassThroughEnabled(t *testing.T) {
 	assertJSONEqual(t, input, string(out))
 }
 
+func TestRemoveDisabledFieldsDefaultFiltering(t *testing.T) {
+	input := `{
+		"service_tier":"flex",
+		"inference_geo":"eu",
+		"safety_identifier":"user-123",
+		"store":true,
+		"stream_options":{"include_obfuscation":false}
+	}`
+	settings := dto.ChannelOtherSettings{}
+
+	out, err := RemoveDisabledFields([]byte(input), settings, false)
+	if err != nil {
+		t.Fatalf("RemoveDisabledFields returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"store":true}`, string(out))
+}
+
+func TestRemoveDisabledFieldsAllowInferenceGeo(t *testing.T) {
+	input := `{
+		"inference_geo":"eu",
+		"store":true
+	}`
+	settings := dto.ChannelOtherSettings{
+		AllowInferenceGeo: true,
+	}
+
+	out, err := RemoveDisabledFields([]byte(input), settings, false)
+	if err != nil {
+		t.Fatalf("RemoveDisabledFields returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"inference_geo":"eu","store":true}`, string(out))
+}
+
 func assertJSONEqual(t *testing.T, want, got string) {
 	t.Helper()
 
