@@ -728,9 +728,15 @@ func FailTaskInfo(reason string) *TaskInfo {
 
 // RemoveDisabledFields 从请求 JSON 数据中移除渠道设置中禁用的字段
 // service_tier: 服务层级字段，可能导致额外计费（OpenAI、Claude、Responses API 支持）
+// inference_geo: Claude 数据驻留推理区域字段（仅 Claude 支持，默认过滤）
 // store: 数据存储授权字段，涉及用户隐私（仅 OpenAI、Responses API 支持，默认允许透传，禁用后可能导致 Codex 无法使用）
 // safety_identifier: 安全标识符，用于向 OpenAI 报告违规用户（仅 OpenAI 支持，涉及用户隐私）
-func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings) ([]byte, error) {
+// stream_options.include_obfuscation: 响应流混淆控制字段（仅 OpenAI Responses API 支持）
+func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings, channelPassThroughEnabled bool) ([]byte, error) {
+	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || channelPassThroughEnabled {
+		return jsonData, nil
+	}
+
 	var data map[string]interface{}
 	if err := common.Unmarshal(jsonData, &data); err != nil {
 		common.SysError("RemoveDisabledFields Unmarshal error :" + err.Error())
@@ -741,6 +747,13 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 	if !channelOtherSettings.AllowServiceTier {
 		if _, exists := data["service_tier"]; exists {
 			delete(data, "service_tier")
+		}
+	}
+
+	// 默认移除 inference_geo，除非明确允许（避免在未授权情况下透传数据驻留区域）
+	if !channelOtherSettings.AllowInferenceGeo {
+		if _, exists := data["inference_geo"]; exists {
+			delete(data, "inference_geo")
 		}
 	}
 
@@ -755,6 +768,22 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 	if !channelOtherSettings.AllowSafetyIdentifier {
 		if _, exists := data["safety_identifier"]; exists {
 			delete(data, "safety_identifier")
+		}
+	}
+
+	// 默认移除 stream_options.include_obfuscation，除非明确允许（避免关闭响应流混淆保护）
+	if !channelOtherSettings.AllowIncludeObfuscation {
+		if streamOptionsAny, exists := data["stream_options"]; exists {
+			if streamOptions, ok := streamOptionsAny.(map[string]interface{}); ok {
+				if _, includeExists := streamOptions["include_obfuscation"]; includeExists {
+					delete(streamOptions, "include_obfuscation")
+				}
+				if len(streamOptions) == 0 {
+					delete(data, "stream_options")
+				} else {
+					data["stream_options"] = streamOptions
+				}
+			}
 		}
 	}
 
