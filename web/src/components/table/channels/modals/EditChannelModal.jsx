@@ -65,7 +65,10 @@ import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
 import { createApiCalls } from '../../../../services/secureVerification';
-import { collectNewDisallowedStatusCodeRedirects } from './statusCodeRiskGuard';
+import {
+  collectInvalidStatusCodeEntries,
+  collectNewDisallowedStatusCodeRedirects,
+} from './statusCodeRiskGuard';
 import {
   IconSave,
   IconClose,
@@ -1375,6 +1378,16 @@ const EditChannelModal = (props) => {
           handleInputChange('models', updatedModels);
         }
       }
+    }
+
+    const invalidStatusCodeEntries = collectInvalidStatusCodeEntries(
+      localInputs.status_code_mapping,
+    );
+    if (invalidStatusCodeEntries.length > 0) {
+      showError(
+        `${t('状态码复写包含无效的状态码')}: ${invalidStatusCodeEntries.join(', ')}`,
+      );
+      return;
     }
 
     const riskyStatusCodeRedirects = collectNewDisallowedStatusCodeRedirects(

@@ -1650,6 +1650,7 @@
     "版权所有": "Tous droits réservés",
     "状态": "Statut",
     "状态码复写": "Remplacement du code d'état",
+    "状态码复写包含无效的状态码": "Le remplacement du code d'état contient des codes d'état invalides",
     "状态筛选": "Filtre d'état",
     "状态页面Slug": "Slug de la page d'état",
     "环境变量": "Environment Variables",

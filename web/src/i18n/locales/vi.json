@@ -1782,6 +1782,7 @@
     "状态": "Trạng thái",
     "状态更新时间": "Thời gian cập nhật trạng thái",
     "状态码复写": "Ghi đè mã trạng thái",
+    "状态码复写包含无效的状态码": "Ghi đè mã trạng thái chứa mã trạng thái không hợp lệ",
     "状态筛选": "Lọc trạng thái",
     "状态页面Slug": "Slug trang trạng thái",
     "环境变量": "Environment Variables",
