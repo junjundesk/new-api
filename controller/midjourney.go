@@ -181,8 +181,18 @@ func UpdateMidjourneyTaskBulk() {
 					if err != nil {
 						logger.LogError(ctx, "fail to increase user quota: "+err.Error())
 					}
-					logContent := fmt.Sprintf("构图失败 %s，补偿 %s", task.MjId, logger.LogQuota(task.Quota))
-					model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+					model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
+						UserId:    task.UserId,
+						LogType:   model.LogTypeRefund,
+						Content:   "",
+						ChannelId: task.ChannelId,
+						ModelName: service.CovertMjpActionToModelName(task.Action),
+						Quota:     task.Quota,
+						Other: map[string]interface{}{
+							"task_id": task.MjId,
+							"reason":  "构图失败",
+						},
+					})
 				}
 			}
 		}
