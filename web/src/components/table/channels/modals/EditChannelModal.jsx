@@ -71,6 +71,7 @@ import {
   IconServer,
   IconSetting,
   IconCode,
+  IconCopy,
   IconGlobe,
   IconBolt,
   IconSearch,
@@ -93,6 +94,28 @@ const REGION_EXAMPLE = {
   'gemini-1.5-pro-002': 'europe-west2',
   'gemini-1.5-flash-002': 'europe-west2',
   'claude-3-5-sonnet-20240620': 'europe-west1',
+};
+
+const PARAM_OVERRIDE_LEGACY_TEMPLATE = {
+  temperature: 0,
+};
+
+const PARAM_OVERRIDE_OPERATIONS_TEMPLATE = {
+  operations: [
+    {
+      path: 'temperature',
+      mode: 'set',
+      value: 0.7,
+      conditions: [
+        {
+          path: 'model',
+          mode: 'prefix',
+          value: 'openai/',
+        },
+      ],
+      logic: 'AND',
+    },
+  ],
 };
 
 // 支持并且已适配通过接口获取模型列表的渠道类型
@@ -270,7 +293,7 @@ const EditChannelModal = (props) => {
         };
       }
       return {
-        tagLabel: 'Custom JSON',
+        tagLabel: t('自定义 JSON'),
         tagColor: 'orange',
         preview: pretty,
       };
@@ -605,6 +628,100 @@ const EditChannelModal = (props) => {
       handleInputChange(fieldName, JSON.stringify(parsed, null, 2));
     } catch (error) {
       showError(`${t('JSON格式错误')}: ${error.message}`);
+    }
+  };
+
+  const copyParamOverrideJson = async () => {
+    const raw =
+      typeof inputs.param_override === 'string'
+        ? inputs.param_override.trim()
+        : '';
+    if (!raw) {
+      showInfo(t('暂无可复制 JSON'));
+      return;
+    }
+
+    let content = raw;
+    if (verifyJSON(raw)) {
+      try {
+        content = JSON.stringify(JSON.parse(raw), null, 2);
+      } catch (error) {
+        content = raw;
+      }
+    }
+
+    const ok = await copy(content);
+    if (ok) {
+      showSuccess(t('参数覆盖 JSON 已复制'));
+    } else {
+      showError(t('复制失败'));
+    }
+  };
+
+  const parseParamOverrideInput = () => {
+    const raw =
+      typeof inputs.param_override === 'string'
+        ? inputs.param_override.trim()
+        : '';
+    if (!raw) return null;
+    if (!verifyJSON(raw)) {
+      throw new Error(t('当前参数覆盖不是合法的 JSON'));
+    }
+    return JSON.parse(raw);
+  };
+
+  const applyParamOverrideTemplate = (
+    templateType = 'operations',
+    applyMode = 'fill',
+  ) => {
+    try {
+      const parsedCurrent = parseParamOverrideInput();
+      if (templateType === 'legacy') {
+        if (applyMode === 'fill') {
+          handleInputChange(
+            'param_override',
+            JSON.stringify(PARAM_OVERRIDE_LEGACY_TEMPLATE, null, 2),
+          );
+          return;
+        }
+        const currentLegacy =
+          parsedCurrent &&
+          typeof parsedCurrent === 'object' &&
+          !Array.isArray(parsedCurrent) &&
+          !Array.isArray(parsedCurrent.operations)
+            ? parsedCurrent
+            : {};
+        const merged = {
+          ...PARAM_OVERRIDE_LEGACY_TEMPLATE,
+          ...currentLegacy,
+        };
+        handleInputChange('param_override', JSON.stringify(merged, null, 2));
+        return;
+      }
+
+      if (applyMode === 'fill') {
+        handleInputChange(
+          'param_override',
+          JSON.stringify(PARAM_OVERRIDE_OPERATIONS_TEMPLATE, null, 2),
+        );
+        return;
+      }
+      const currentOperations =
+        parsedCurrent &&
+        typeof parsedCurrent === 'object' &&
+        !Array.isArray(parsedCurrent) &&
+        Array.isArray(parsedCurrent.operations)
+          ? parsedCurrent.operations
+          : [];
+      const merged = {
+        operations: [
+          ...currentOperations,
+          ...PARAM_OVERRIDE_OPERATIONS_TEMPLATE.operations,
+        ],
+      };
+      handleInputChange('param_override', JSON.stringify(merged, null, 2));
+    } catch (error) {
+      showError(error.message || t('模板应用失败'));
     }
   };
 
@@ -3119,51 +3236,18 @@ const EditChannelModal = (props) => {
                           <Button
                             size='small'
                             onClick={() =>
-                              handleInputChange(
-                                'param_override',
-                                JSON.stringify({ temperature: 0 }, null, 2),
-                              )
+                              applyParamOverrideTemplate('operations', 'fill')
                             }
                           >
-                            {t('旧格式模板')}
+                            {t('填充新模板')}
                           </Button>
                           <Button
                             size='small'
                             onClick={() =>
-                              handleInputChange(
-                                'param_override',
-                                JSON.stringify(
-                                  {
-                                    operations: [
-                                      {
-                                        path: 'temperature',
-                                        mode: 'set',
-                                        value: 0.7,
-                                        conditions: [
-                                          {
-                                            path: 'model',
-                                            mode: 'prefix',
-                                            value: 'gpt',
-                                          },
-                                        ],
-                                        logic: 'AND',
-                                      },
-                                    ],
-                                  },
-                                  null,
-                                  2,
-                                ),
-                              )
+                              applyParamOverrideTemplate('legacy', 'fill')
                             }
                           >
-                            {t('新格式模板')}
-                          </Button>
-                          <Button
-                            size='small'
-                            type='tertiary'
-                            onClick={() => handleInputChange('param_override', '')}
-                          >
-                            {t('不更改')}
+                            {t('填充旧模板')}
                           </Button>
                         </Space>
                       </div>
@@ -3171,20 +3255,33 @@ const EditChannelModal = (props) => {
                         {t('此项可选，用于覆盖请求参数。不支持覆盖 stream 参数')}
                       </Text>
                       <div
-                        className='mt-2 rounded-lg border p-3'
-                        style={{ backgroundColor: 'var(--semi-color-fill-0)' }}
+                        className='mt-2 rounded-xl p-3'
+                        style={{
+                          backgroundColor: 'var(--semi-color-fill-0)',
+                          border: '1px solid var(--semi-color-fill-2)',
+                        }}
                       >
                         <div className='flex items-center justify-between mb-2'>
                           <Tag color={paramOverrideMeta.tagColor}>
                             {paramOverrideMeta.tagLabel}
                           </Tag>
-                          <Button
-                            size='small'
-                            type='tertiary'
-                            onClick={() => setParamOverrideEditorVisible(true)}
-                          >
-                            {t('编辑')}
-                          </Button>
+                          <Space spacing={8}>
+                            <Button
+                              size='small'
+                              icon={<IconCopy />}
+                              type='tertiary'
+                              onClick={copyParamOverrideJson}
+                            >
+                              {t('复制')}
+                            </Button>
+                            <Button
+                              size='small'
+                              type='tertiary'
+                              onClick={() => setParamOverrideEditorVisible(true)}
+                            >
+                              {t('编辑')}
+                            </Button>
+                          </Space>
                         </div>
                         <pre className='mb-0 text-xs leading-5 whitespace-pre-wrap break-all max-h-56 overflow-auto'>
                           {paramOverrideMeta.preview}

@@ -34,7 +34,7 @@ type ConditionOperation struct {
 
 type ParamOperation struct {
 	Path       string               `json:"path"`
-	Mode       string               `json:"mode"` // delete, set, move, copy, prepend, append, trim_prefix, trim_suffix, ensure_prefix, ensure_suffix, trim_space, to_lower, to_upper, replace, regex_replace, return_error, prune_objects, set_header, delete_header, copy_header, move_header, sync_fields
+	Mode       string               `json:"mode"` // delete, set, move, copy, prepend, append, trim_prefix, trim_suffix, ensure_prefix, ensure_suffix, trim_space, to_lower, to_upper, replace, regex_replace, return_error, prune_objects, set_header, delete_header, copy_header, move_header, pass_headers, sync_fields
 	Value      interface{}          `json:"value"`
 	KeepOrigin bool                 `json:"keep_origin"`
 	From       string               `json:"from,omitempty"`
@@ -494,6 +494,19 @@ func applyOperations(jsonStr string, operations []ParamOperation, conditionConte
 			if err == nil {
 				contextJSON, err = marshalContextJSON(context)
 			}
+		case "pass_headers":
+			headerNames, parseErr := parseHeaderPassThroughNames(op.Value)
+			if parseErr != nil {
+				return "", parseErr
+			}
+			for _, headerName := range headerNames {
+				if err = copyHeaderInContext(context, headerName, headerName, op.KeepOrigin); err != nil {
+					break
+				}
+			}
+			if err == nil {
+				contextJSON, err = marshalContextJSON(context)
+			}
 		case "sync_fields":
 			result, err = syncFieldsBetweenTargets(result, context, op.From, op.To)
 			if err == nil {
@@ -676,6 +689,80 @@ func deleteHeaderOverrideInContext(context map[string]interface{}, headerName st
 	normalizedHeaders := ensureMapKeyInContext(context, paramOverrideContextHeaderOverrideNormalized)
 	delete(normalizedHeaders, normalizeHeaderContextKey(headerName))
 	return nil
+}
+
+func parseHeaderPassThroughNames(value interface{}) ([]string, error) {
+	normalizeNames := func(values []string) []string {
+		names := lo.FilterMap(values, func(item string, _ int) (string, bool) {
+			headerName := strings.TrimSpace(item)
+			if headerName == "" {
+				return "", false
+			}
+			return headerName, true
+		})
+		return lo.Uniq(names)
+	}
+
+	switch raw := value.(type) {
+	case nil:
+		return nil, fmt.Errorf("pass_headers value is required")
+	case string:
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return nil, fmt.Errorf("pass_headers value is required")
+		}
+		if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+			var parsed interface{}
+			if err := common.UnmarshalJsonStr(trimmed, &parsed); err == nil {
+				return parseHeaderPassThroughNames(parsed)
+			}
+		}
+		names := normalizeNames(strings.Split(trimmed, ","))
+		if len(names) == 0 {
+			return nil, fmt.Errorf("pass_headers value is invalid")
+		}
+		return names, nil
+	case []interface{}:
+		names := lo.FilterMap(raw, func(item interface{}, _ int) (string, bool) {
+			headerName := strings.TrimSpace(fmt.Sprintf("%v", item))
+			if headerName == "" {
+				return "", false
+			}
+			return headerName, true
+		})
+		names = lo.Uniq(names)
+		if len(names) == 0 {
+			return nil, fmt.Errorf("pass_headers value is invalid")
+		}
+		return names, nil
+	case map[string]interface{}:
+		candidates := make([]string, 0, 8)
+		if headersRaw, ok := raw["headers"]; ok {
+			names, err := parseHeaderPassThroughNames(headersRaw)
+			if err == nil {
+				candidates = append(candidates, names...)
+			}
+		}
+		if namesRaw, ok := raw["names"]; ok {
+			names, err := parseHeaderPassThroughNames(namesRaw)
+			if err == nil {
+				candidates = append(candidates, names...)
+			}
+		}
+		if headerRaw, ok := raw["header"]; ok {
+			names, err := parseHeaderPassThroughNames(headerRaw)
+			if err == nil {
+				candidates = append(candidates, names...)
+			}
+		}
+		names := normalizeNames(candidates)
+		if len(names) == 0 {
+			return nil, fmt.Errorf("pass_headers value is invalid")
+		}
+		return names, nil
+	default:
+		return nil, fmt.Errorf("pass_headers value must be string, array or object")
+	}
 }
 
 type syncTarget struct {
