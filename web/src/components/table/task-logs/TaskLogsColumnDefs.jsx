@@ -84,8 +84,8 @@ function renderDuration(submit_time, finishTime) {
 
   // 返回带有样式的颜色标签
   return (
-    <Tag color={color} shape='circle' prefixIcon={<Clock size={14} />}>
-      {durationSec} 秒
+    <Tag color={color} shape='circle'>
+      {durationSec} s
     </Tag>
   );
 }
@@ -149,7 +149,7 @@ const renderPlatform = (platform, t) => {
   );
   if (option) {
     return (
-      <Tag color={option.color} shape='circle' prefixIcon={<Video size={14} />}>
+      <Tag color={option.color} shape='circle'>
         {option.label}
       </Tag>
     );
@@ -157,13 +157,13 @@ const renderPlatform = (platform, t) => {
   switch (platform) {
     case 'suno':
       return (
-        <Tag color='green' shape='circle' prefixIcon={<Music size={14} />}>
+        <Tag color='green' shape='circle'>
           Suno
         </Tag>
       );
     default:
       return (
-        <Tag color='white' shape='circle' prefixIcon={<HelpCircle size={14} />}>
+        <Tag color='white' shape='circle'>
           {t('未知')}
         </Tag>
       );
@@ -240,7 +240,6 @@ export const getTaskLogsColumns = ({
   openContentModal,
   isAdminUser,
   openVideoModal,
-  showUserInfoFunc,
 }) => {
   return [
     {
@@ -278,7 +277,6 @@ export const getTaskLogsColumns = ({
               color={colors[parseInt(text) % colors.length]}
               size='large'
               shape='circle'
-              prefixIcon={<Hash size={14} />}
               onClick={() => {
                 copyText(text);
               }}
@@ -294,7 +292,7 @@ export const getTaskLogsColumns = ({
     {
       key: COLUMN_KEYS.USERNAME,
       title: t('用户'),
-      dataIndex: 'user_id',
+      dataIndex: 'username',
       render: (userId, record, index) => {
         if (!isAdminUser) {
           return <></>;
@@ -302,22 +300,14 @@ export const getTaskLogsColumns = ({
         const displayText = String(record.username || userId || '?');
         return (
           <Space>
-            <Tooltip content={displayText}>
-              <Avatar
-                size='extra-small'
-                color={stringToColor(displayText)}
-                style={{ cursor: 'pointer' }}
-                onClick={() => showUserInfoFunc && showUserInfoFunc(userId)}
-              >
-                {displayText.slice(0, 1)}
-              </Avatar>
-            </Tooltip>
-            <Typography.Text
-              ellipsis={{ showTooltip: true }}
-              style={{ cursor: 'pointer', color: 'var(--semi-color-primary)' }}
-              onClick={() => showUserInfoFunc && showUserInfoFunc(userId)}
+            <Avatar
+              size='extra-small'
+              color={stringToColor(displayText)}
             >
-              {userId}
+              {displayText.slice(0, 1)}
+            </Avatar>
+            <Typography.Text>
+              {displayText}
             </Typography.Text>
           </Space>
         );
