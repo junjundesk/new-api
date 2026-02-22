@@ -20,10 +20,10 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Banner,
   Button,
   Card,
   Col,
+  Collapse,
   Input,
   Modal,
   Row,
@@ -31,6 +31,7 @@ import {
   Space,
   Switch,
   Tag,
+  TextArea,
   Typography,
 } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
@@ -204,6 +205,11 @@ const OPERATION_TEMPLATE = {
   ],
 };
 
+const TEMPLATE_LIBRARY_OPTIONS = [
+  { label: 'Template · Operations', value: 'operations' },
+  { label: 'Template · Legacy Object', value: 'legacy' },
+];
+
 let localIdSeed = 0;
 const nextLocalId = () => `param_override_${Date.now()}_${localIdSeed++}`;
 
@@ -273,6 +279,28 @@ const normalizeOperation = (operation = {}) => ({
 });
 
 const createDefaultOperation = () => normalizeOperation({ mode: 'set' });
+
+const getOperationSummary = (operation = {}, index = 0) => {
+  const mode = operation.mode || 'set';
+  if (mode === 'sync_fields') {
+    const from = String(operation.from || '').trim();
+    const to = String(operation.to || '').trim();
+    return `${index + 1}. ${mode} · ${from || to || '-'}`;
+  }
+  const path = String(operation.path || '').trim();
+  const from = String(operation.from || '').trim();
+  const to = String(operation.to || '').trim();
+  return `${index + 1}. ${mode} · ${path || from || to || '-'}`;
+};
+
+const getOperationModeTagColor = (mode = 'set') => {
+  if (mode.includes('header')) return 'cyan';
+  if (mode.includes('replace') || mode.includes('trim')) return 'violet';
+  if (mode.includes('copy') || mode.includes('move')) return 'blue';
+  if (mode.includes('error') || mode.includes('prune')) return 'red';
+  if (mode.includes('sync')) return 'green';
+  return 'grey';
+};
 
 const parseInitialState = (rawValue) => {
   const text = typeof rawValue === 'string' ? rawValue : '';
@@ -439,6 +467,10 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
   const [operations, setOperations] = useState([createDefaultOperation()]);
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState('');
+  const [operationSearch, setOperationSearch] = useState('');
+  const [selectedOperationId, setSelectedOperationId] = useState('');
+  const [expandedConditionMap, setExpandedConditionMap] = useState({});
+  const [templateLibraryKey, setTemplateLibraryKey] = useState('operations');
 
   useEffect(() => {
     if (!visible) return;
@@ -449,12 +481,72 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
     setOperations(nextState.operations);
     setJsonText(nextState.jsonText);
     setJsonError(nextState.jsonError);
+    setOperationSearch('');
+    setSelectedOperationId(nextState.operations[0]?.id || '');
+    setExpandedConditionMap({});
+    setTemplateLibraryKey(
+      nextState.visualMode === 'legacy' ? 'legacy' : 'operations',
+    );
   }, [visible, value]);
+
+  useEffect(() => {
+    if (operations.length === 0) {
+      setSelectedOperationId('');
+      return;
+    }
+    if (!operations.some((item) => item.id === selectedOperationId)) {
+      setSelectedOperationId(operations[0].id);
+    }
+  }, [operations, selectedOperationId]);
+
+  useEffect(() => {
+    setTemplateLibraryKey(visualMode === 'legacy' ? 'legacy' : 'operations');
+  }, [visualMode]);
 
   const operationCount = useMemo(
     () => operations.filter((item) => !isOperationBlank(item)).length,
     [operations],
   );
+
+  const filteredOperations = useMemo(() => {
+    const keyword = operationSearch.trim().toLowerCase();
+    if (!keyword) return operations;
+    return operations.filter((operation) => {
+      const searchableText = [
+        operation.mode,
+        operation.path,
+        operation.from,
+        operation.to,
+        operation.value_text,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return searchableText.includes(keyword);
+    });
+  }, [operationSearch, operations]);
+
+  const selectedOperation = useMemo(
+    () => operations.find((operation) => operation.id === selectedOperationId),
+    [operations, selectedOperationId],
+  );
+
+  const selectedOperationIndex = useMemo(
+    () =>
+      operations.findIndex((operation) => operation.id === selectedOperationId),
+    [operations, selectedOperationId],
+  );
+
+  const topOperationModes = useMemo(() => {
+    const counts = operations.reduce((acc, operation) => {
+      const mode = operation.mode || 'set';
+      acc[mode] = (acc[mode] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4);
+  }, [operations]);
 
   const buildVisualJson = useCallback(() => {
     if (visualMode === 'legacy') {
@@ -545,8 +637,10 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
     if (editMode === 'visual') return;
     const trimmed = jsonText.trim();
     if (!trimmed) {
+      const fallback = createDefaultOperation();
       setVisualMode('operations');
-      setOperations([createDefaultOperation()]);
+      setOperations([fallback]);
+      setSelectedOperationId(fallback.id);
       setLegacyValue('');
       setJsonError('');
       setEditMode('visual');
@@ -563,21 +657,24 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
       !Array.isArray(parsed) &&
       Array.isArray(parsed.operations)
     ) {
-      setVisualMode('operations');
-      setOperations(
+      const nextOperations =
         parsed.operations.length > 0
           ? parsed.operations.map(normalizeOperation)
-          : [createDefaultOperation()],
-      );
+          : [createDefaultOperation()];
+      setVisualMode('operations');
+      setOperations(nextOperations);
+      setSelectedOperationId(nextOperations[0]?.id || '');
       setLegacyValue('');
       setJsonError('');
       setEditMode('visual');
       return;
     }
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const fallback = createDefaultOperation();
       setVisualMode('legacy');
       setLegacyValue(JSON.stringify(parsed, null, 2));
-      setOperations([createDefaultOperation()]);
+      setOperations([fallback]);
+      setSelectedOperationId(fallback.id);
       setJsonError('');
       setEditMode('visual');
       return;
@@ -587,27 +684,54 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
 
   const setOldTemplate = () => {
     const text = JSON.stringify(LEGACY_TEMPLATE, null, 2);
+    const fallback = createDefaultOperation();
     setVisualMode('legacy');
     setLegacyValue(text);
+    setOperations([fallback]);
+    setSelectedOperationId(fallback.id);
+    setExpandedConditionMap({});
     setJsonText(text);
     setJsonError('');
     setEditMode('visual');
+    setTemplateLibraryKey('legacy');
   };
 
   const setNewTemplate = () => {
+    const nextOperations =
+      OPERATION_TEMPLATE.operations.map(normalizeOperation);
     setVisualMode('operations');
-    setOperations(OPERATION_TEMPLATE.operations.map(normalizeOperation));
+    setOperations(nextOperations);
+    setSelectedOperationId(nextOperations[0]?.id || '');
+    setExpandedConditionMap({});
     setJsonText(JSON.stringify(OPERATION_TEMPLATE, null, 2));
     setJsonError('');
     setEditMode('visual');
+    setTemplateLibraryKey('operations');
   };
 
   const clearValue = () => {
+    const fallback = createDefaultOperation();
     setVisualMode('operations');
     setLegacyValue('');
-    setOperations([createDefaultOperation()]);
+    setOperations([fallback]);
+    setSelectedOperationId(fallback.id);
+    setExpandedConditionMap({});
     setJsonText('');
     setJsonError('');
+    setTemplateLibraryKey('operations');
+  };
+
+  const applyTemplateFromLibrary = () => {
+    if (templateLibraryKey === 'legacy') {
+      setOldTemplate();
+      return;
+    }
+    setNewTemplate();
+  };
+
+  const resetEditorState = () => {
+    clearValue();
+    setEditMode('visual');
   };
 
   const updateOperation = (operationId, patch) => {
@@ -619,10 +743,13 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
   };
 
   const addOperation = () => {
-    setOperations((prev) => [...prev, createDefaultOperation()]);
+    const created = createDefaultOperation();
+    setOperations((prev) => [...prev, created]);
+    setSelectedOperationId(created.id);
   };
 
   const duplicateOperation = (operationId) => {
+    let insertedId = '';
     setOperations((prev) => {
       const index = prev.findIndex((item) => item.id === operationId);
       if (index < 0) return prev;
@@ -643,10 +770,14 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
           pass_missing_key: condition.pass_missing_key,
         })),
       });
+      insertedId = cloned.id;
       const next = [...prev];
       next.splice(index + 1, 0, cloned);
       return next;
     });
+    if (insertedId) {
+      setSelectedOperationId(insertedId);
+    }
   };
 
   const removeOperation = (operationId) => {
@@ -654,19 +785,32 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
       if (prev.length <= 1) return [createDefaultOperation()];
       return prev.filter((item) => item.id !== operationId);
     });
+    setExpandedConditionMap((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, operationId)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[operationId];
+      return next;
+    });
   };
 
   const addCondition = (operationId) => {
+    const createdCondition = createDefaultCondition();
     setOperations((prev) =>
       prev.map((operation) =>
         operation.id === operationId
           ? {
               ...operation,
-              conditions: [...(operation.conditions || []), createDefaultCondition()],
+              conditions: [...(operation.conditions || []), createdCondition],
             }
           : operation,
       ),
     );
+    setExpandedConditionMap((prev) => ({
+      ...prev,
+      [operationId]: [...(prev[operationId] || []), createdCondition.id],
+    }));
   };
 
   const updateCondition = (operationId, conditionId, patch) => {
@@ -697,7 +841,49 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
         };
       }),
     );
+    setExpandedConditionMap((prev) => ({
+      ...prev,
+      [operationId]: (prev[operationId] || []).filter(
+        (id) => id !== conditionId,
+      ),
+    }));
   };
+
+  const selectedConditionKeys = useMemo(
+    () => expandedConditionMap[selectedOperationId] || [],
+    [expandedConditionMap, selectedOperationId],
+  );
+
+  const handleConditionCollapseChange = useCallback(
+    (operationId, activeKeys) => {
+      const keys = (
+        Array.isArray(activeKeys) ? activeKeys : [activeKeys]
+      ).filter(Boolean);
+      setExpandedConditionMap((prev) => ({
+        ...prev,
+        [operationId]: keys,
+      }));
+    },
+    [],
+  );
+
+  const expandAllSelectedConditions = useCallback(() => {
+    if (!selectedOperationId || !selectedOperation) return;
+    setExpandedConditionMap((prev) => ({
+      ...prev,
+      [selectedOperationId]: (selectedOperation.conditions || []).map(
+        (condition) => condition.id,
+      ),
+    }));
+  }, [selectedOperation, selectedOperationId]);
+
+  const collapseAllSelectedConditions = useCallback(() => {
+    if (!selectedOperationId) return;
+    setExpandedConditionMap((prev) => ({
+      ...prev,
+      [selectedOperationId]: [],
+    }));
+  }, [selectedOperationId]);
 
   const handleJsonChange = (nextValue) => {
     setJsonText(nextValue);
@@ -761,21 +947,13 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
     <Modal
       title={t('参数覆盖')}
       visible={visible}
-      width={980}
+      width={1120}
       onCancel={onCancel}
       onOk={handleSave}
       okText={t('保存')}
       cancelText={t('取消')}
     >
       <Space vertical align='start' spacing={12} style={{ width: '100%' }}>
-        <Banner
-          fullMode={false}
-          type='info'
-          description={t(
-            '支持旧格式直接覆盖，也支持新格式 operations 条件编辑；可在可视化和 JSON 之间双向切换。',
-          )}
-        />
-
         <Space wrap>
           <Button
             type={editMode === 'visual' ? 'primary' : 'tertiary'}
@@ -789,32 +967,24 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
           >
             {t('JSON 模式')}
           </Button>
-          <Button onClick={setOldTemplate}>{t('旧格式模板')}</Button>
-          <Button onClick={setNewTemplate}>{t('新格式模板')}</Button>
-          <Button onClick={clearValue}>{t('不更改')}</Button>
+          <Select
+            value={templateLibraryKey}
+            optionList={TEMPLATE_LIBRARY_OPTIONS}
+            onChange={(nextValue) =>
+              setTemplateLibraryKey(nextValue || 'operations')
+            }
+            style={{ width: 240 }}
+          />
+          <Button onClick={applyTemplateFromLibrary}>{t('应用模板')}</Button>
+          <Button onClick={resetEditorState}>{t('重置')}</Button>
         </Space>
 
         {editMode === 'visual' ? (
           <div style={{ width: '100%' }}>
-            <Space wrap style={{ marginBottom: 12 }}>
-              <Button
-                type={visualMode === 'operations' ? 'primary' : 'tertiary'}
-                onClick={() => setVisualMode('operations')}
-              >
-                {t('新格式模板')}
-              </Button>
-              <Button
-                type={visualMode === 'legacy' ? 'primary' : 'tertiary'}
-                onClick={() => setVisualMode('legacy')}
-              >
-                {t('旧格式模板')}
-              </Button>
-            </Space>
-
             {visualMode === 'legacy' ? (
               <div>
                 <Text className='mb-2 block'>{t('旧格式（直接覆盖）：')}</Text>
-                <Input.TextArea
+                <TextArea
                   value={legacyValue}
                   autosize={{ minRows: 10, maxRows: 20 }}
                   placeholder={JSON.stringify(LEGACY_TEMPLATE, null, 2)}
@@ -830,462 +1000,731 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                 <div className='flex items-center justify-between mb-3'>
                   <Space>
                     <Text>{t('新格式（支持条件判断与json自定义）：')}</Text>
-                    <Tag color='cyan'>
-                      {`${t('规则')}: ${operationCount}`}
-                    </Tag>
+                    <Tag color='cyan'>{`${t('规则')}: ${operationCount}`}</Tag>
                   </Space>
                   <Button icon={<IconPlus />} onClick={addOperation}>
                     {t('新增规则')}
                   </Button>
                 </div>
 
-                <Space vertical spacing={8} style={{ width: '100%' }}>
-                  {operations.map((operation, index) => {
-                    const mode = operation.mode || 'set';
-                    const meta = MODE_META[mode] || MODE_META.set;
-                    const conditions = operation.conditions || [];
-                    const syncFromTarget =
-                      mode === 'sync_fields'
-                        ? parseSyncTargetSpec(operation.from)
-                        : null;
-                    const syncToTarget =
-                      mode === 'sync_fields'
-                        ? parseSyncTargetSpec(operation.to)
-                        : null;
-                    return (
-                      <Card key={operation.id} className='!rounded-xl border'>
-                        <div className='flex items-center justify-between mb-2'>
-                          <Space>
-                            <Tag>{`#${index + 1}`}</Tag>
-                            <Text>{mode}</Text>
-                          </Space>
-                          <Space>
-                            <Button
+                <Row gutter={12}>
+                  <Col xs={24} md={8}>
+                    <Card
+                      className='!rounded-2xl !border-0 h-full'
+                      bodyStyle={{
+                        padding: 12,
+                        background: 'var(--semi-color-fill-0)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        minHeight: 520,
+                      }}
+                    >
+                      <div className='flex items-center justify-between'>
+                        <Text strong>{t('规则导航')}</Text>
+                        <Tag color='grey'>{`${operationCount}/${operations.length}`}</Tag>
+                      </div>
+
+                      {topOperationModes.length > 0 ? (
+                        <Space wrap spacing={6}>
+                          {topOperationModes.map(([mode, count]) => (
+                            <Tag
+                              key={`mode_stat_${mode}`}
                               size='small'
-                              type='tertiary'
-                              onClick={() => duplicateOperation(operation.id)}
+                              color={getOperationModeTagColor(mode)}
                             >
-                              {t('复制')}
-                            </Button>
-                            <Button
-                              theme='borderless'
-                              type='danger'
-                              icon={<IconDelete />}
-                              onClick={() => removeOperation(operation.id)}
-                            />
-                          </Space>
-                        </div>
+                              {`${mode} · ${count}`}
+                            </Tag>
+                          ))}
+                        </Space>
+                      ) : null}
 
-                        <Row gutter={12}>
-                          <Col xs={24} md={8}>
-                            <Text type='tertiary' size='small'>
-                              mode
-                            </Text>
-                            <Select
-                              value={mode}
-                              optionList={OPERATION_MODE_OPTIONS}
-                              onChange={(nextMode) =>
-                                updateOperation(operation.id, { mode: nextMode })
-                              }
-                              style={{ width: '100%' }}
-                            />
-                          </Col>
-                          {meta.path || meta.pathOptional ? (
-                            <Col xs={24} md={16}>
-                              <Text type='tertiary' size='small'>
-                                {meta.pathOptional ? 'path (optional)' : 'path'}
-                              </Text>
-                              <Input
-                                value={operation.path}
-                                placeholder={
-                                  mode.includes('header')
-                                    ? 'X-Debug-Mode'
-                                    : mode === 'prune_objects'
-                                      ? 'messages (optional)'
-                                      : 'temperature'
-                                }
-                                onChange={(nextValue) =>
-                                  updateOperation(operation.id, {
-                                    path: nextValue,
-                                  })
-                                }
-                              />
-                              <Space wrap style={{ marginTop: 6 }}>
-                                {OPERATION_PATH_SUGGESTIONS.map((pathItem) => (
-                                  <Tag
-                                    key={`${operation.id}_${pathItem}`}
-                                    size='small'
-                                    color='grey'
-                                    className='cursor-pointer'
-                                    onClick={() =>
-                                      updateOperation(operation.id, {
-                                        path: pathItem,
-                                      })
-                                    }
-                                  >
-                                    {pathItem}
-                                  </Tag>
-                                ))}
-                              </Space>
-                            </Col>
-                          ) : null}
-                        </Row>
-                        <Text type='tertiary' size='small' className='mt-1 block'>
-                          {MODE_DESCRIPTIONS[mode] || ''}
-                        </Text>
+                      <Input
+                        value={operationSearch}
+                        placeholder={t('搜索规则（mode/path/from/to）')}
+                        onChange={(nextValue) =>
+                          setOperationSearch(nextValue || '')
+                        }
+                        showClear
+                      />
 
-                        {meta.value ? (
-                          <div className='mt-2'>
-                            <Text type='tertiary' size='small'>
-                              value (JSON or plain text)
-                            </Text>
-                            <Input.TextArea
-                              value={operation.value_text}
-                              autosize={{ minRows: 1, maxRows: 4 }}
-                              placeholder='0.7'
-                              onChange={(nextValue) =>
-                                updateOperation(operation.id, {
-                                  value_text: nextValue,
-                                })
-                              }
-                            />
-                          </div>
-                        ) : null}
-
-                        {meta.keepOrigin ? (
-                          <div className='mt-2'>
-                            <Switch
-                              checked={operation.keep_origin}
-                              checkedText={t('开')}
-                              uncheckedText={t('关')}
-                              onChange={(nextValue) =>
-                                updateOperation(operation.id, {
-                                  keep_origin: nextValue,
-                                })
-                              }
-                            />
-                            <Text type='tertiary' size='small' className='ml-2'>
-                              keep_origin
-                            </Text>
-                          </div>
-                        ) : null}
-
-                        {mode === 'sync_fields' ? (
-                          <div className='mt-2'>
-                            <Text type='tertiary' size='small'>
-                              sync endpoints
-                            </Text>
-                            <Row gutter={12} style={{ marginTop: 6 }}>
-                              <Col xs={24} md={12}>
-                                <Text type='tertiary' size='small'>
-                                  from endpoint
-                                </Text>
-                                <div className='flex gap-2'>
-                                  <Select
-                                    value={syncFromTarget?.type || 'json'}
-                                    optionList={SYNC_TARGET_TYPE_OPTIONS}
-                                    style={{ width: 120 }}
-                                    onChange={(nextType) =>
-                                      updateOperation(operation.id, {
-                                        from: buildSyncTargetSpec(
-                                          nextType,
-                                          syncFromTarget?.key || '',
-                                        ),
-                                      })
-                                    }
-                                  />
-                                  <Input
-                                    value={syncFromTarget?.key || ''}
-                                    placeholder='session_id'
-                                    onChange={(nextKey) =>
-                                      updateOperation(operation.id, {
-                                        from: buildSyncTargetSpec(
-                                          syncFromTarget?.type || 'json',
-                                          nextKey,
-                                        ),
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </Col>
-                              <Col xs={24} md={12}>
-                                <Text type='tertiary' size='small'>
-                                  to endpoint
-                                </Text>
-                                <div className='flex gap-2'>
-                                  <Select
-                                    value={syncToTarget?.type || 'json'}
-                                    optionList={SYNC_TARGET_TYPE_OPTIONS}
-                                    style={{ width: 120 }}
-                                    onChange={(nextType) =>
-                                      updateOperation(operation.id, {
-                                        to: buildSyncTargetSpec(
-                                          nextType,
-                                          syncToTarget?.key || '',
-                                        ),
-                                      })
-                                    }
-                                  />
-                                  <Input
-                                    value={syncToTarget?.key || ''}
-                                    placeholder='prompt_cache_key'
-                                    onChange={(nextKey) =>
-                                      updateOperation(operation.id, {
-                                        to: buildSyncTargetSpec(
-                                          syncToTarget?.type || 'json',
-                                          nextKey,
-                                        ),
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </Col>
-                            </Row>
-                            <Space wrap style={{ marginTop: 8 }}>
-                              <Tag
-                                size='small'
-                                color='cyan'
-                                className='cursor-pointer'
-                                onClick={() =>
-                                  updateOperation(operation.id, {
-                                    from: 'header:session_id',
-                                    to: 'json:prompt_cache_key',
-                                  })
-                                }
-                              >
-                                {'header:session_id -> json:prompt_cache_key'}
-                              </Tag>
-                              <Tag
-                                size='small'
-                                color='cyan'
-                                className='cursor-pointer'
-                                onClick={() =>
-                                  updateOperation(operation.id, {
-                                    from: 'json:prompt_cache_key',
-                                    to: 'header:session_id',
-                                  })
-                                }
-                              >
-                                {'json:prompt_cache_key -> header:session_id'}
-                              </Tag>
-                            </Space>
-                          </div>
-                        ) : meta.from || meta.to === false || meta.to ? (
-                          <Row gutter={12} style={{ marginTop: 8 }}>
-                            {meta.from || meta.to === false ? (
-                              <Col xs={24} md={12}>
-                                <Text type='tertiary' size='small'>
-                                  from
-                                </Text>
-                                <Input
-                                  value={operation.from}
-                                  placeholder={
-                                    mode.includes('header')
-                                      ? 'Authorization'
-                                      : 'model'
+                      <div
+                        className='overflow-auto'
+                        style={{ flex: 1, minHeight: 320, paddingRight: 2 }}
+                      >
+                        {filteredOperations.length === 0 ? (
+                          <Text type='tertiary' size='small'>
+                            {t('没有匹配的规则')}
+                          </Text>
+                        ) : (
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 8,
+                              width: '100%',
+                            }}
+                          >
+                            {filteredOperations.map((operation) => {
+                              const index = operations.findIndex(
+                                (item) => item.id === operation.id,
+                              );
+                              const isActive =
+                                operation.id === selectedOperationId;
+                              return (
+                                <div
+                                  key={operation.id}
+                                  role='button'
+                                  tabIndex={0}
+                                  onClick={() =>
+                                    setSelectedOperationId(operation.id)
                                   }
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.key === 'Enter' ||
+                                      event.key === ' '
+                                    ) {
+                                      event.preventDefault();
+                                      setSelectedOperationId(operation.id);
+                                    }
+                                  }}
+                                  className='w-full rounded-xl px-3 py-3 cursor-pointer transition-colors'
+                                  style={{
+                                    background: isActive
+                                      ? 'var(--semi-color-primary-light-default)'
+                                      : 'var(--semi-color-bg-2)',
+                                    border: isActive
+                                      ? '1px solid var(--semi-color-primary)'
+                                      : '1px solid var(--semi-color-border)',
+                                  }}
+                                >
+                                  <div className='flex items-start justify-between gap-2'>
+                                    <div>
+                                      <Text strong>{`#${index + 1}`}</Text>
+                                      <Text
+                                        type='tertiary'
+                                        size='small'
+                                        className='block mt-1'
+                                      >
+                                        {getOperationSummary(operation, index)}
+                                      </Text>
+                                    </div>
+                                    <Tag size='small' color='grey'>
+                                      {(operation.conditions || []).length}
+                                    </Tag>
+                                  </div>
+                                  <Space spacing={6} style={{ marginTop: 8 }}>
+                                    <Tag
+                                      size='small'
+                                      color={getOperationModeTagColor(
+                                        operation.mode || 'set',
+                                      )}
+                                    >
+                                      {operation.mode || 'set'}
+                                    </Tag>
+                                    <Text type='tertiary' size='small'>
+                                      {t('条件')}
+                                    </Text>
+                                  </Space>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={16}>
+                    {selectedOperation ? (
+                      (() => {
+                        const mode = selectedOperation.mode || 'set';
+                        const meta = MODE_META[mode] || MODE_META.set;
+                        const conditions = selectedOperation.conditions || [];
+                        const syncFromTarget =
+                          mode === 'sync_fields'
+                            ? parseSyncTargetSpec(selectedOperation.from)
+                            : null;
+                        const syncToTarget =
+                          mode === 'sync_fields'
+                            ? parseSyncTargetSpec(selectedOperation.to)
+                            : null;
+                        return (
+                          <Card
+                            className='!rounded-2xl !border-0'
+                            bodyStyle={{
+                              padding: 14,
+                              background: 'var(--semi-color-fill-0)',
+                            }}
+                          >
+                            <div className='flex items-center justify-between mb-3'>
+                              <Space>
+                                <Tag color='blue'>{`#${selectedOperationIndex + 1}`}</Tag>
+                                <Text strong>
+                                  {getOperationSummary(
+                                    selectedOperation,
+                                    selectedOperationIndex,
+                                  )}
+                                </Text>
+                              </Space>
+                              <Space>
+                                <Button
+                                  size='small'
+                                  type='tertiary'
+                                  onClick={() =>
+                                    duplicateOperation(selectedOperation.id)
+                                  }
+                                >
+                                  {t('复制')}
+                                </Button>
+                                <Button
+                                  size='small'
+                                  type='danger'
+                                  theme='borderless'
+                                  icon={<IconDelete />}
+                                  onClick={() =>
+                                    removeOperation(selectedOperation.id)
+                                  }
+                                />
+                              </Space>
+                            </div>
+
+                            <Row gutter={12}>
+                              <Col xs={24} md={8}>
+                                <Text type='tertiary' size='small'>
+                                  mode
+                                </Text>
+                                <Select
+                                  value={mode}
+                                  optionList={OPERATION_MODE_OPTIONS}
+                                  onChange={(nextMode) =>
+                                    updateOperation(selectedOperation.id, {
+                                      mode: nextMode,
+                                    })
+                                  }
+                                  style={{ width: '100%' }}
+                                />
+                              </Col>
+                              {meta.path || meta.pathOptional ? (
+                                <Col xs={24} md={16}>
+                                  <Text type='tertiary' size='small'>
+                                    {meta.pathOptional
+                                      ? 'path (optional)'
+                                      : 'path'}
+                                  </Text>
+                                  <Input
+                                    value={selectedOperation.path}
+                                    placeholder={
+                                      mode.includes('header')
+                                        ? 'X-Debug-Mode'
+                                        : mode === 'prune_objects'
+                                          ? 'messages (optional)'
+                                          : 'temperature'
+                                    }
+                                    onChange={(nextValue) =>
+                                      updateOperation(selectedOperation.id, {
+                                        path: nextValue,
+                                      })
+                                    }
+                                  />
+                                  <Space wrap style={{ marginTop: 6 }}>
+                                    {OPERATION_PATH_SUGGESTIONS.map(
+                                      (pathItem) => (
+                                        <Tag
+                                          key={`${selectedOperation.id}_${pathItem}`}
+                                          size='small'
+                                          color='grey'
+                                          className='cursor-pointer'
+                                          onClick={() =>
+                                            updateOperation(
+                                              selectedOperation.id,
+                                              {
+                                                path: pathItem,
+                                              },
+                                            )
+                                          }
+                                        >
+                                          {pathItem}
+                                        </Tag>
+                                      ),
+                                    )}
+                                  </Space>
+                                </Col>
+                              ) : null}
+                            </Row>
+
+                            <Text
+                              type='tertiary'
+                              size='small'
+                              className='mt-1 block'
+                            >
+                              {MODE_DESCRIPTIONS[mode] || ''}
+                            </Text>
+
+                            {meta.value ? (
+                              <div className='mt-2'>
+                                <Text type='tertiary' size='small'>
+                                  value (JSON or plain text)
+                                </Text>
+                                <TextArea
+                                  value={selectedOperation.value_text}
+                                  autosize={{ minRows: 1, maxRows: 4 }}
+                                  placeholder='0.7'
                                   onChange={(nextValue) =>
-                                    updateOperation(operation.id, {
-                                      from: nextValue,
+                                    updateOperation(selectedOperation.id, {
+                                      value_text: nextValue,
                                     })
                                   }
                                 />
-                              </Col>
+                              </div>
                             ) : null}
-                            {meta.to || meta.to === false ? (
-                              <Col xs={24} md={12}>
-                                <Text type='tertiary' size='small'>
-                                  to
-                                </Text>
-                                <Input
-                                  value={operation.to}
-                                  placeholder={
-                                    mode.includes('header')
-                                      ? 'X-Upstream-Auth'
-                                      : 'original_model'
-                                  }
+
+                            {meta.keepOrigin ? (
+                              <div className='mt-2'>
+                                <Switch
+                                  checked={Boolean(
+                                    selectedOperation.keep_origin,
+                                  )}
+                                  checkedText={t('开')}
+                                  uncheckedText={t('关')}
                                   onChange={(nextValue) =>
-                                    updateOperation(operation.id, { to: nextValue })
+                                    updateOperation(selectedOperation.id, {
+                                      keep_origin: nextValue,
+                                    })
                                   }
                                 />
-                              </Col>
-                            ) : null}
-                          </Row>
-                        ) : null}
-
-                        <div className='mt-3 border rounded-lg p-2'>
-                          <div className='flex items-center justify-between mb-2'>
-                            <Space>
-                              <Text>{t('条件')}</Text>
-                              <Select
-                                value={operation.logic || 'OR'}
-                                optionList={[
-                                  { label: 'OR', value: 'OR' },
-                                  { label: 'AND', value: 'AND' },
-                                ]}
-                                style={{ width: 96 }}
-                                onChange={(nextValue) =>
-                                  updateOperation(operation.id, {
-                                    logic: nextValue,
-                                  })
-                                }
-                              />
-                            </Space>
-                            <Button
-                              icon={<IconPlus />}
-                              size='small'
-                              onClick={() => addCondition(operation.id)}
-                            >
-                              {t('新增条件')}
-                            </Button>
-                          </div>
-
-                          {conditions.length === 0 ? (
-                            <Text type='tertiary' size='small'>
-                              {t('没有条件时，默认总是执行该操作。')}
-                            </Text>
-                          ) : (
-                            <Space vertical spacing={8} style={{ width: '100%' }}>
-                              {conditions.map((condition, conditionIndex) => (
-                                <Card
-                                  key={condition.id}
-                                  bodyStyle={{ padding: 10 }}
-                                  className='!rounded-lg'
+                                <Text
+                                  type='tertiary'
+                                  size='small'
+                                  className='ml-2'
                                 >
-                                  <div className='flex items-center justify-between mb-2'>
-                                    <Tag size='small'>{`C${conditionIndex + 1}`}</Tag>
-                                    <Button
-                                      theme='borderless'
-                                      type='danger'
-                                      icon={<IconDelete />}
-                                      size='small'
-                                      onClick={() =>
-                                        removeCondition(operation.id, condition.id)
-                                      }
-                                    />
-                                  </div>
-                                  <Row gutter={12}>
-                                    <Col xs={24} md={10}>
-                                      <Text type='tertiary' size='small'>
-                                        path
-                                      </Text>
-                                      <Input
-                                        value={condition.path}
-                                        placeholder='model'
-                                        onChange={(nextValue) =>
-                                          updateCondition(
-                                            operation.id,
-                                            condition.id,
-                                            { path: nextValue },
+                                  keep_origin
+                                </Text>
+                              </div>
+                            ) : null}
+
+                            {mode === 'sync_fields' ? (
+                              <div className='mt-2'>
+                                <Text type='tertiary' size='small'>
+                                  sync endpoints
+                                </Text>
+                                <Row gutter={12} style={{ marginTop: 6 }}>
+                                  <Col xs={24} md={12}>
+                                    <Text type='tertiary' size='small'>
+                                      from endpoint
+                                    </Text>
+                                    <div className='flex gap-2'>
+                                      <Select
+                                        value={syncFromTarget?.type || 'json'}
+                                        optionList={SYNC_TARGET_TYPE_OPTIONS}
+                                        style={{ width: 120 }}
+                                        onChange={(nextType) =>
+                                          updateOperation(
+                                            selectedOperation.id,
+                                            {
+                                              from: buildSyncTargetSpec(
+                                                nextType,
+                                                syncFromTarget?.key || '',
+                                              ),
+                                            },
                                           )
                                         }
                                       />
-                                      <Space wrap style={{ marginTop: 6 }}>
-                                        {CONDITION_PATH_SUGGESTIONS.map(
-                                          (pathItem) => (
-                                            <Tag
-                                              key={`${condition.id}_${pathItem}`}
+                                      <Input
+                                        value={syncFromTarget?.key || ''}
+                                        placeholder='session_id'
+                                        onChange={(nextKey) =>
+                                          updateOperation(
+                                            selectedOperation.id,
+                                            {
+                                              from: buildSyncTargetSpec(
+                                                syncFromTarget?.type || 'json',
+                                                nextKey,
+                                              ),
+                                            },
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </Col>
+                                  <Col xs={24} md={12}>
+                                    <Text type='tertiary' size='small'>
+                                      to endpoint
+                                    </Text>
+                                    <div className='flex gap-2'>
+                                      <Select
+                                        value={syncToTarget?.type || 'json'}
+                                        optionList={SYNC_TARGET_TYPE_OPTIONS}
+                                        style={{ width: 120 }}
+                                        onChange={(nextType) =>
+                                          updateOperation(
+                                            selectedOperation.id,
+                                            {
+                                              to: buildSyncTargetSpec(
+                                                nextType,
+                                                syncToTarget?.key || '',
+                                              ),
+                                            },
+                                          )
+                                        }
+                                      />
+                                      <Input
+                                        value={syncToTarget?.key || ''}
+                                        placeholder='prompt_cache_key'
+                                        onChange={(nextKey) =>
+                                          updateOperation(
+                                            selectedOperation.id,
+                                            {
+                                              to: buildSyncTargetSpec(
+                                                syncToTarget?.type || 'json',
+                                                nextKey,
+                                              ),
+                                            },
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </Col>
+                                </Row>
+                                <Space wrap style={{ marginTop: 8 }}>
+                                  <Tag
+                                    size='small'
+                                    color='cyan'
+                                    className='cursor-pointer'
+                                    onClick={() =>
+                                      updateOperation(selectedOperation.id, {
+                                        from: 'header:session_id',
+                                        to: 'json:prompt_cache_key',
+                                      })
+                                    }
+                                  >
+                                    {
+                                      'header:session_id -> json:prompt_cache_key'
+                                    }
+                                  </Tag>
+                                  <Tag
+                                    size='small'
+                                    color='cyan'
+                                    className='cursor-pointer'
+                                    onClick={() =>
+                                      updateOperation(selectedOperation.id, {
+                                        from: 'json:prompt_cache_key',
+                                        to: 'header:session_id',
+                                      })
+                                    }
+                                  >
+                                    {
+                                      'json:prompt_cache_key -> header:session_id'
+                                    }
+                                  </Tag>
+                                </Space>
+                              </div>
+                            ) : meta.from || meta.to === false || meta.to ? (
+                              <Row gutter={12} style={{ marginTop: 8 }}>
+                                {meta.from || meta.to === false ? (
+                                  <Col xs={24} md={12}>
+                                    <Text type='tertiary' size='small'>
+                                      from
+                                    </Text>
+                                    <Input
+                                      value={selectedOperation.from}
+                                      placeholder={
+                                        mode.includes('header')
+                                          ? 'Authorization'
+                                          : 'model'
+                                      }
+                                      onChange={(nextValue) =>
+                                        updateOperation(selectedOperation.id, {
+                                          from: nextValue,
+                                        })
+                                      }
+                                    />
+                                  </Col>
+                                ) : null}
+                                {meta.to || meta.to === false ? (
+                                  <Col xs={24} md={12}>
+                                    <Text type='tertiary' size='small'>
+                                      to
+                                    </Text>
+                                    <Input
+                                      value={selectedOperation.to}
+                                      placeholder={
+                                        mode.includes('header')
+                                          ? 'X-Upstream-Auth'
+                                          : 'original_model'
+                                      }
+                                      onChange={(nextValue) =>
+                                        updateOperation(selectedOperation.id, {
+                                          to: nextValue,
+                                        })
+                                      }
+                                    />
+                                  </Col>
+                                ) : null}
+                              </Row>
+                            ) : null}
+
+                            <div
+                              className='mt-3 rounded-xl p-2'
+                              style={{
+                                background: 'rgba(127, 127, 127, 0.08)',
+                              }}
+                            >
+                              <div className='flex items-center justify-between mb-2'>
+                                <Space>
+                                  <Text>{t('条件')}</Text>
+                                  <Select
+                                    value={selectedOperation.logic || 'OR'}
+                                    optionList={[
+                                      { label: 'OR', value: 'OR' },
+                                      { label: 'AND', value: 'AND' },
+                                    ]}
+                                    style={{ width: 96 }}
+                                    onChange={(nextValue) =>
+                                      updateOperation(selectedOperation.id, {
+                                        logic: nextValue,
+                                      })
+                                    }
+                                  />
+                                </Space>
+                                <Space spacing={6}>
+                                  <Button
+                                    size='small'
+                                    type='tertiary'
+                                    onClick={expandAllSelectedConditions}
+                                  >
+                                    {t('全部展开')}
+                                  </Button>
+                                  <Button
+                                    size='small'
+                                    type='tertiary'
+                                    onClick={collapseAllSelectedConditions}
+                                  >
+                                    {t('全部收起')}
+                                  </Button>
+                                  <Button
+                                    icon={<IconPlus />}
+                                    size='small'
+                                    onClick={() =>
+                                      addCondition(selectedOperation.id)
+                                    }
+                                  >
+                                    {t('新增条件')}
+                                  </Button>
+                                </Space>
+                              </div>
+
+                              {conditions.length === 0 ? (
+                                <Text type='tertiary' size='small'>
+                                  {t('没有条件时，默认总是执行该操作。')}
+                                </Text>
+                              ) : (
+                                <Collapse
+                                  keepDOM
+                                  activeKey={selectedConditionKeys}
+                                  onChange={(activeKeys) =>
+                                    handleConditionCollapseChange(
+                                      selectedOperation.id,
+                                      activeKeys,
+                                    )
+                                  }
+                                >
+                                  {conditions.map(
+                                    (condition, conditionIndex) => (
+                                      <Collapse.Panel
+                                        key={condition.id}
+                                        itemKey={condition.id}
+                                        header={
+                                          <Space spacing={8}>
+                                            <Tag size='small'>
+                                              {`C${conditionIndex + 1}`}
+                                            </Tag>
+                                            <Text type='tertiary' size='small'>
+                                              {condition.path ||
+                                                t('未设置 path')}
+                                            </Text>
+                                          </Space>
+                                        }
+                                      >
+                                        <div>
+                                          <div className='flex justify-end mb-2'>
+                                            <Button
+                                              theme='borderless'
+                                              type='danger'
+                                              icon={<IconDelete />}
                                               size='small'
-                                              color='grey'
-                                              className='cursor-pointer'
                                               onClick={() =>
-                                                updateCondition(
-                                                  operation.id,
+                                                removeCondition(
+                                                  selectedOperation.id,
                                                   condition.id,
-                                                  { path: pathItem },
                                                 )
                                               }
-                                            >
-                                              {pathItem}
-                                            </Tag>
-                                          ),
-                                        )}
-                                      </Space>
-                                    </Col>
-                                    <Col xs={24} md={8}>
-                                      <Text type='tertiary' size='small'>
-                                        mode
-                                      </Text>
-                                      <Select
-                                        value={condition.mode}
-                                        optionList={CONDITION_MODE_OPTIONS}
-                                        onChange={(nextValue) =>
-                                          updateCondition(
-                                            operation.id,
-                                            condition.id,
-                                            { mode: nextValue },
-                                          )
-                                        }
-                                        style={{ width: '100%' }}
-                                      />
-                                    </Col>
-                                    <Col xs={24} md={6}>
-                                      <Text type='tertiary' size='small'>
-                                        value
-                                      </Text>
-                                      <Input
-                                        value={condition.value_text}
-                                        placeholder='gpt'
-                                        onChange={(nextValue) =>
-                                          updateCondition(
-                                            operation.id,
-                                            condition.id,
-                                            { value_text: nextValue },
-                                          )
-                                        }
-                                      />
-                                    </Col>
-                                  </Row>
-                                  <Space style={{ marginTop: 8 }}>
-                                    <Switch
-                                      checked={condition.invert}
-                                      checkedText={t('开')}
-                                      uncheckedText={t('关')}
-                                      onChange={(nextValue) =>
-                                        updateCondition(
-                                          operation.id,
-                                          condition.id,
-                                          { invert: nextValue },
-                                        )
-                                      }
-                                    />
-                                    <Text type='tertiary' size='small'>
-                                      invert
-                                    </Text>
-                                    <Switch
-                                      checked={condition.pass_missing_key}
-                                      checkedText={t('开')}
-                                      uncheckedText={t('关')}
-                                      onChange={(nextValue) =>
-                                        updateCondition(
-                                          operation.id,
-                                          condition.id,
-                                          { pass_missing_key: nextValue },
-                                        )
-                                      }
-                                    />
-                                    <Text type='tertiary' size='small'>
-                                      pass_missing_key
-                                    </Text>
-                                  </Space>
-                                </Card>
-                              ))}
-                            </Space>
-                          )}
-                        </div>
+                                            />
+                                          </div>
+                                          <Row gutter={12}>
+                                            <Col xs={24} md={10}>
+                                              <Text
+                                                type='tertiary'
+                                                size='small'
+                                              >
+                                                path
+                                              </Text>
+                                              <Input
+                                                value={condition.path}
+                                                placeholder='model'
+                                                onChange={(nextValue) =>
+                                                  updateCondition(
+                                                    selectedOperation.id,
+                                                    condition.id,
+                                                    { path: nextValue },
+                                                  )
+                                                }
+                                              />
+                                              <Space
+                                                wrap
+                                                style={{ marginTop: 6 }}
+                                              >
+                                                {CONDITION_PATH_SUGGESTIONS.map(
+                                                  (pathItem) => (
+                                                    <Tag
+                                                      key={`${condition.id}_${pathItem}`}
+                                                      size='small'
+                                                      color='grey'
+                                                      className='cursor-pointer'
+                                                      onClick={() =>
+                                                        updateCondition(
+                                                          selectedOperation.id,
+                                                          condition.id,
+                                                          { path: pathItem },
+                                                        )
+                                                      }
+                                                    >
+                                                      {pathItem}
+                                                    </Tag>
+                                                  ),
+                                                )}
+                                              </Space>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                              <Text
+                                                type='tertiary'
+                                                size='small'
+                                              >
+                                                mode
+                                              </Text>
+                                              <Select
+                                                value={condition.mode}
+                                                optionList={
+                                                  CONDITION_MODE_OPTIONS
+                                                }
+                                                onChange={(nextValue) =>
+                                                  updateCondition(
+                                                    selectedOperation.id,
+                                                    condition.id,
+                                                    { mode: nextValue },
+                                                  )
+                                                }
+                                                style={{ width: '100%' }}
+                                              />
+                                            </Col>
+                                            <Col xs={24} md={6}>
+                                              <Text
+                                                type='tertiary'
+                                                size='small'
+                                              >
+                                                value
+                                              </Text>
+                                              <Input
+                                                value={condition.value_text}
+                                                placeholder='gpt'
+                                                onChange={(nextValue) =>
+                                                  updateCondition(
+                                                    selectedOperation.id,
+                                                    condition.id,
+                                                    { value_text: nextValue },
+                                                  )
+                                                }
+                                              />
+                                            </Col>
+                                          </Row>
+                                          <Space style={{ marginTop: 8 }}>
+                                            <Switch
+                                              checked={Boolean(
+                                                condition.invert,
+                                              )}
+                                              checkedText={t('开')}
+                                              uncheckedText={t('关')}
+                                              onChange={(nextValue) =>
+                                                updateCondition(
+                                                  selectedOperation.id,
+                                                  condition.id,
+                                                  { invert: nextValue },
+                                                )
+                                              }
+                                            />
+                                            <Text type='tertiary' size='small'>
+                                              invert
+                                            </Text>
+                                            <Switch
+                                              checked={Boolean(
+                                                condition.pass_missing_key,
+                                              )}
+                                              checkedText={t('开')}
+                                              uncheckedText={t('关')}
+                                              onChange={(nextValue) =>
+                                                updateCondition(
+                                                  selectedOperation.id,
+                                                  condition.id,
+                                                  {
+                                                    pass_missing_key: nextValue,
+                                                  },
+                                                )
+                                              }
+                                            />
+                                            <Text type='tertiary' size='small'>
+                                              pass_missing_key
+                                            </Text>
+                                          </Space>
+                                        </div>
+                                      </Collapse.Panel>
+                                    ),
+                                  )}
+                                </Collapse>
+                              )}
+                            </div>
+                          </Card>
+                        );
+                      })()
+                    ) : (
+                      <Card
+                        className='!rounded-2xl !border-0'
+                        bodyStyle={{
+                          padding: 14,
+                          background: 'var(--semi-color-fill-0)',
+                        }}
+                      >
+                        <Text type='tertiary'>
+                          {t('请选择一条规则进行编辑。')}
+                        </Text>
                       </Card>
-                    );
-                  })}
-                </Space>
-                <Card className='!rounded-xl border mt-3'>
-                  <div className='flex items-center justify-between mb-2'>
-                    <Text>{t('实时 JSON 预览')}</Text>
-                    <Tag color='grey'>{t('预览')}</Tag>
-                  </div>
-                  <pre className='mb-0 text-xs leading-5 whitespace-pre-wrap break-all max-h-64 overflow-auto'>
-                    {visualPreview || '{}'}
-                  </pre>
-                </Card>
+                    )}
+
+                    <Card
+                      className='!rounded-2xl !border-0 mt-3'
+                      bodyStyle={{
+                        padding: 12,
+                        background: 'var(--semi-color-fill-0)',
+                      }}
+                    >
+                      <div className='flex items-center justify-between mb-2'>
+                        <Text>{t('实时 JSON 预览')}</Text>
+                        <Tag color='grey'>{t('预览')}</Tag>
+                      </div>
+                      <pre className='mb-0 text-xs leading-5 whitespace-pre-wrap break-all max-h-64 overflow-auto'>
+                        {visualPreview || '{}'}
+                      </pre>
+                    </Card>
+                  </Col>
+                </Row>
               </div>
             )}
           </div>
@@ -1295,7 +1734,7 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
               <Button onClick={formatJson}>{t('格式化')}</Button>
               <Tag color='grey'>{t('普通编辑')}</Tag>
             </Space>
-            <Input.TextArea
+            <TextArea
               value={jsonText}
               autosize={{ minRows: 18, maxRows: 28 }}
               onChange={(nextValue) => handleJsonChange(nextValue ?? '')}
