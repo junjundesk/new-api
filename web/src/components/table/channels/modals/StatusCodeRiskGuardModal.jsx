@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import RiskAcknowledgementModal from '../../../common/modals/RiskAcknowledgementModal';
 import {
@@ -6,13 +6,17 @@ import {
   STATUS_CODE_RISK_CHECKLIST_KEYS,
 } from './statusCodeRiskGuard';
 
-const StatusCodeRiskGuardModal = ({
+const StatusCodeRiskGuardModal = React.memo(function StatusCodeRiskGuardModal({
   visible,
   detailItems,
   onCancel,
   onConfirm,
-}) => {
-  const { t } = useTranslation();
+}) {
+  const { t, i18n } = useTranslation();
+  const checklist = useMemo(
+    () => STATUS_CODE_RISK_CHECKLIST_KEYS.map((item) => t(item)),
+    [t, i18n.language],
+  );
 
   return (
     <RiskAcknowledgementModal
@@ -21,7 +25,7 @@ const StatusCodeRiskGuardModal = ({
       markdownContent={t(STATUS_CODE_RISK_I18N_KEYS.markdown)}
       detailTitle={t(STATUS_CODE_RISK_I18N_KEYS.detailTitle)}
       detailItems={detailItems}
-      checklist={STATUS_CODE_RISK_CHECKLIST_KEYS.map((item) => t(item))}
+      checklist={checklist}
       inputPrompt={t(STATUS_CODE_RISK_I18N_KEYS.inputPrompt)}
       requiredText={t(STATUS_CODE_RISK_I18N_KEYS.confirmText)}
       inputPlaceholder={t(STATUS_CODE_RISK_I18N_KEYS.inputPlaceholder)}
@@ -32,6 +36,6 @@ const StatusCodeRiskGuardModal = ({
       onConfirm={onConfirm}
     />
   );
-};
+});
 
 export default StatusCodeRiskGuardModal;

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Button,
@@ -32,7 +32,30 @@ import MarkdownRenderer from '../markdown/MarkdownRenderer';
 
 const { Text } = Typography;
 
-const RiskAcknowledgementModal = ({
+const RiskMarkdownBlock = React.memo(function RiskMarkdownBlock({
+  markdownContent,
+}) {
+  if (!markdownContent) {
+    return null;
+  }
+
+  return (
+    <div
+      className='rounded-lg'
+      style={{
+        border: '1px solid var(--semi-color-warning-light-hover)',
+        background:
+          'linear-gradient(180deg, var(--semi-color-warning-light-default) 0%, var(--semi-color-fill-0) 100%)',
+        padding: '12px',
+        contentVisibility: 'auto',
+      }}
+    >
+      <MarkdownRenderer content={markdownContent} />
+    </div>
+  );
+});
+
+const RiskAcknowledgementModal = React.memo(function RiskAcknowledgementModal({
   visible,
   title,
   markdownContent = '',
@@ -47,7 +70,7 @@ const RiskAcknowledgementModal = ({
   confirmText = '',
   onCancel,
   onConfirm,
-}) => {
+}) {
   const isMobile = useIsMobile();
   const [checkedItems, setCheckedItems] = useState([]);
   const [typedText, setTypedText] = useState('');
@@ -68,6 +91,17 @@ const RiskAcknowledgementModal = ({
     return typedText.trim() === requiredText.trim();
   }, [typedText, requiredText]);
 
+  const detailText = useMemo(() => detailItems.join(', '), [detailItems]);
+  const canConfirm = allChecked && typedMatched;
+
+  const handleChecklistChange = useCallback((index, checked) => {
+    setCheckedItems((previous) => {
+      const next = [...previous];
+      next[index] = checked;
+      return next;
+    });
+  }, []);
+
   return (
     <Modal
       visible={visible}
@@ -85,7 +119,7 @@ const RiskAcknowledgementModal = ({
       bodyStyle={{
         maxHeight: isMobile ? '70vh' : '72vh',
         overflowY: 'auto',
-        padding: isMobile ? '12px 16px' : '16px 20px',
+        padding: isMobile ? '12px 16px' : '18px 22px',
       }}
       footer={
         <Space>
@@ -93,7 +127,7 @@ const RiskAcknowledgementModal = ({
           <Button
             theme='solid'
             type='danger'
-            disabled={!allChecked || !typedMatched}
+            disabled={!canConfirm}
             onClick={onConfirm}
           >
             {confirmText}
@@ -102,31 +136,49 @@ const RiskAcknowledgementModal = ({
       }
     >
       <div className='flex flex-col gap-4'>
-        {markdownContent ? (
-          <div className='border border-warning-200 bg-warning-50 rounded-md px-3 py-2'>
-            <MarkdownRenderer content={markdownContent} />
-          </div>
-        ) : null}
+        <div
+          className='rounded-lg'
+          style={{
+            border: '1px solid var(--semi-color-warning-light-hover)',
+            background: 'var(--semi-color-warning-light-default)',
+            padding: isMobile ? '10px 12px' : '12px 14px',
+          }}
+        >
+        </div>
+
+        <RiskMarkdownBlock markdownContent={markdownContent} />
 
         {detailItems.length > 0 ? (
-          <div className='flex flex-col gap-2'>
+          <div
+            className='flex flex-col gap-2 rounded-lg'
+            style={{
+              border: '1px solid var(--semi-color-warning-light-hover)',
+              background: 'var(--semi-color-fill-0)',
+              padding: isMobile ? '10px 12px' : '12px 14px',
+            }}
+          >
             {detailTitle ? <Text strong>{detailTitle}</Text> : null}
             <div className='font-mono text-xs break-all bg-orange-50 border border-orange-200 rounded-md p-2'>
-              {detailItems.join(', ')}
+              {detailText}
             </div>
           </div>
         ) : null}
 
         {checklist.length > 0 ? (
-          <div className='flex flex-col gap-2'>
+          <div
+            className='flex flex-col gap-2 rounded-lg'
+            style={{
+              border: '1px solid var(--semi-color-border)',
+              background: 'var(--semi-color-fill-0)',
+              padding: isMobile ? '10px 12px' : '12px 14px',
+            }}
+          >
             {checklist.map((item, index) => (
               <Checkbox
                 key={`risk-check-${index}`}
                 checked={!!checkedItems[index]}
                 onChange={(event) => {
-                  const next = [...checkedItems];
-                  next[index] = event.target.checked;
-                  setCheckedItems(next);
+                  handleChecklistChange(index, event.target.checked);
                 }}
               >
                 {item}
@@ -136,15 +188,23 @@ const RiskAcknowledgementModal = ({
         ) : null}
 
         {requiredText ? (
-          <div className='flex flex-col gap-2'>
+          <div
+            className='flex flex-col gap-2 rounded-lg'
+            style={{
+              border: '1px solid var(--semi-color-danger-light-hover)',
+              background: 'var(--semi-color-danger-light-default)',
+              padding: isMobile ? '10px 12px' : '12px 14px',
+            }}
+          >
             {inputPrompt ? <Text strong>{inputPrompt}</Text> : null}
-            <div className='font-mono text-xs break-all bg-gray-50 border border-gray-200 rounded-md p-2'>
+            <div className='font-mono text-xs break-all rounded-md p-2 bg-gray-50 border border-gray-200'>
               {requiredText}
             </div>
             <Input
               value={typedText}
               onChange={setTypedText}
               placeholder={inputPlaceholder}
+              autoFocus={visible}
               onCopy={(event) => event.preventDefault()}
               onCut={(event) => event.preventDefault()}
               onPaste={(event) => event.preventDefault()}
@@ -160,6 +220,6 @@ const RiskAcknowledgementModal = ({
       </div>
     </Modal>
   );
-};
+});
 
 export default RiskAcknowledgementModal;
