@@ -207,7 +207,7 @@ const EditUserModal = (props) => {
             onSubmit={submit}
           >
             {({ values }) => (
-              <div className='p-2'>
+              <div className='p-2 space-y-3'>
                 {/* 基本信息 */}
                 <Card className='!rounded-2xl shadow-sm border-0'>
                   <div className='flex items-center mb-2'>
@@ -344,7 +344,7 @@ const EditUserModal = (props) => {
                             {t('绑定信息')}
                           </Text>
                           <div className='text-xs text-gray-600'>
-                            {t('第三方账户绑定状态（只读）')}
+                            {t('管理用户已绑定的第三方账户，支持筛选与解绑')}
                           </div>
                         </div>
                       </div>
@@ -353,7 +353,7 @@ const EditUserModal = (props) => {
                         theme='outline'
                         onClick={openBindingModal}
                       >
-                        {t('修改绑定')}
+                        {t('管理绑定')}
                       </Button>
                     </div>
                   </Card>

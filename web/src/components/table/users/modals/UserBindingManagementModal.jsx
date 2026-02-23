@@ -53,7 +53,7 @@ const UserBindingManagementModal = ({
 }) => {
   const { t } = useTranslation();
   const [bindingLoading, setBindingLoading] = React.useState(false);
-  const [showUnboundOnly, setShowUnboundOnly] = React.useState(false);
+  const [showBoundOnly, setShowBoundOnly] = React.useState(true);
   const [statusInfo, setStatusInfo] = React.useState({});
   const [customOAuthBindings, setCustomOAuthBindings] = React.useState([]);
   const [bindingActionLoading, setBindingActionLoading] = React.useState({});
@@ -90,7 +90,7 @@ const UserBindingManagementModal = ({
 
   React.useEffect(() => {
     if (!visible) return;
-    setShowUnboundOnly(false);
+    setShowBoundOnly(true);
     setBindingActionLoading({});
     loadBindingData();
   }, [visible, loadBindingData]);
@@ -294,8 +294,12 @@ const UserBindingManagementModal = ({
     ...customBindingItems.map((item) => ({ ...item, type: 'custom' })),
   ];
 
-  const visibleBindingItems = showUnboundOnly
-    ? allBindingItems.filter((item) => !item.value)
+  const boundCount = allBindingItems.filter((item) =>
+    Boolean(item.value),
+  ).length;
+
+  const visibleBindingItems = showBoundOnly
+    ? allBindingItems.filter((item) => Boolean(item.value))
     : allBindingItems;
 
   return (
@@ -308,86 +312,96 @@ const UserBindingManagementModal = ({
       title={
         <div className='flex items-center'>
           <IconLink className='mr-2' />
-          {t('绑定信息')}
+          {t('账户绑定管理')}
         </div>
       }
     >
       <Spin spinning={bindingLoading}>
-        <div className='flex items-center justify-between mb-4 gap-3 flex-wrap'>
-          <Checkbox
-            checked={showUnboundOnly}
-            onChange={(e) => setShowUnboundOnly(Boolean(e.target.checked))}
-          >
-            {`${t('筛选')} ${t('未绑定')}`}
-          </Checkbox>
-          <Text type='tertiary'>
-            {t('筛选')} · {visibleBindingItems.length}
-          </Text>
-        </div>
-
-        {visibleBindingItems.length === 0 ? (
-          <Card className='!rounded-xl border-dashed'>
-            <Text type='tertiary'>{t('暂无自定义 OAuth 提供商')}</Text>
-          </Card>
-        ) : (
-          <div className='grid grid-cols-1 lg:grid-cols-2 gap-3'>
-            {visibleBindingItems.map((item) => {
-              const isBound = Boolean(item.value);
-              const loadingKey =
-                item.type === 'builtin'
-                  ? `builtin-${item.key}`
-                  : `custom-${item.providerId}`;
-              const statusText = isBound
-                ? item.value
-                : item.enabled
-                  ? t('未绑定')
-                  : t('未启用');
-
-              return (
-                <Card key={item.key} className='!rounded-xl'>
-                  <div className='flex items-center justify-between gap-3'>
-                    <div className='flex items-center flex-1 min-w-0'>
-                      <div className='w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mr-3 flex-shrink-0'>
-                        {item.icon}
-                      </div>
-                      <div className='min-w-0 flex-1'>
-                        <div className='font-medium text-gray-900 flex items-center gap-2'>
-                          <span>{item.name}</span>
-                          <Tag size='small' color='white'>
-                            {item.type === 'builtin' ? 'Built-in' : 'Custom'}
-                          </Tag>
-                        </div>
-                        <div className='text-sm text-gray-500 truncate'>
-                          {statusText}
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      type='danger'
-                      theme='borderless'
-                      icon={<IconDelete />}
-                      size='small'
-                      disabled={!isBound}
-                      loading={Boolean(bindingActionLoading[loadingKey])}
-                      onClick={() => {
-                        if (item.type === 'builtin') {
-                          handleUnbindBuiltInAccount(item);
-                          return;
-                        }
-                        handleUnbindCustomOAuthAccount({
-                          id: item.providerId,
-                          name: item.name,
-                        });
-                      }}
-                    >
-                      {t('解绑')}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
+        <div className='max-h-[68vh] overflow-y-auto pr-1 pb-2'>
+          <div className='flex items-center justify-between mb-4 gap-3 flex-wrap'>
+            <Checkbox
+              checked={showBoundOnly}
+              onChange={(e) => setShowBoundOnly(Boolean(e.target.checked))}
+            >
+              {t('仅显示已绑定')}
+            </Checkbox>
+            <Text type='tertiary'>
+              {t('已绑定')} {boundCount} / {allBindingItems.length}
+            </Text>
           </div>
-        )}
+
+          {visibleBindingItems.length === 0 ? (
+            <Card className='!rounded-xl border-dashed'>
+              <Text type='tertiary'>{t('暂无已绑定项')}</Text>
+            </Card>
+          ) : (
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+              {visibleBindingItems.map((item, index) => {
+                const isBound = Boolean(item.value);
+                const loadingKey =
+                  item.type === 'builtin'
+                    ? `builtin-${item.key}`
+                    : `custom-${item.providerId}`;
+                const statusText = isBound
+                  ? item.value
+                  : item.enabled
+                    ? t('未绑定')
+                    : t('未启用');
+                const shouldSpanTwoColsOnDesktop =
+                  visibleBindingItems.length % 2 === 1 &&
+                  index === visibleBindingItems.length - 1;
+
+                return (
+                  <Card
+                    key={item.key}
+                    className={`!rounded-xl ${shouldSpanTwoColsOnDesktop ? 'lg:col-span-2' : ''}`}
+                  >
+                    <div className='flex items-center justify-between gap-3 min-h-[92px]'>
+                      <div className='flex items-center flex-1 min-w-0'>
+                        <div className='w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mr-3 flex-shrink-0'>
+                          {item.icon}
+                        </div>
+                        <div className='min-w-0 flex-1'>
+                          <div className='font-medium text-gray-900 flex items-center gap-2'>
+                            <span>{item.name}</span>
+                            <Tag size='small' color='white'>
+                              {item.type === 'builtin'
+                                ? t('内置')
+                                : t('自定义')}
+                            </Tag>
+                          </div>
+                          <div className='text-sm text-gray-500 truncate'>
+                            {statusText}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type='danger'
+                        theme='borderless'
+                        icon={<IconDelete />}
+                        size='small'
+                        disabled={!isBound}
+                        loading={Boolean(bindingActionLoading[loadingKey])}
+                        onClick={() => {
+                          if (item.type === 'builtin') {
+                            handleUnbindBuiltInAccount(item);
+                            return;
+                          }
+                          handleUnbindCustomOAuthAccount({
+                            id: item.providerId,
+                            name: item.name,
+                          });
+                        }}
+                      >
+                        {t('解绑')}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Spin>
     </Modal>
   );
