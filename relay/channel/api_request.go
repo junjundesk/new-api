@@ -179,7 +179,7 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 	var passthroughRegex []*regexp.Regexp
 	if !info.IsChannelTest {
 		for k := range headerOverrideSource {
-			key := strings.TrimSpace(k)
+			key := strings.TrimSpace(strings.ToLower(k))
 			if key == "" {
 				continue
 			}
@@ -188,12 +188,11 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 				continue
 			}
 
-			lower := strings.ToLower(key)
 			var pattern string
 			switch {
-			case strings.HasPrefix(lower, headerPassthroughRegexPrefix):
+			case strings.HasPrefix(key, headerPassthroughRegexPrefix):
 				pattern = strings.TrimSpace(key[len(headerPassthroughRegexPrefix):])
-			case strings.HasPrefix(lower, headerPassthroughRegexPrefixV2):
+			case strings.HasPrefix(key, headerPassthroughRegexPrefixV2):
 				pattern = strings.TrimSpace(key[len(headerPassthroughRegexPrefixV2):])
 			default:
 				continue
@@ -234,7 +233,7 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 			if value == "" {
 				continue
 			}
-			headerOverride[name] = value
+			headerOverride[strings.ToLower(strings.TrimSpace(name))] = value
 		}
 	}
 
@@ -242,7 +241,7 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 		if isHeaderPassthroughRuleKey(k) {
 			continue
 		}
-		key := strings.TrimSpace(k)
+		key := strings.TrimSpace(strings.ToLower(k))
 		if key == "" {
 			continue
 		}

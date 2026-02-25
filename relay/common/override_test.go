@@ -1005,7 +1005,7 @@ func TestApplyParamOverrideSetHeaderAndUseInLaterCondition(t *testing.T) {
 				"value": 0.1,
 				"conditions": []interface{}{
 					map[string]interface{}{
-						"path":  "header_override_normalized.x_debug_mode",
+						"path":  "header_override.x-debug-mode",
 						"mode":  "full",
 						"value": "enabled",
 					},
@@ -1036,7 +1036,7 @@ func TestApplyParamOverrideCopyHeaderFromRequestHeaders(t *testing.T) {
 				"value": 0.1,
 				"conditions": []interface{}{
 					map[string]interface{}{
-						"path":  "header_override_normalized.x_upstream_auth",
+						"path":  "header_override.x-upstream-auth",
 						"mode":  "contains",
 						"value": "Bearer ",
 					},
@@ -1045,9 +1045,6 @@ func TestApplyParamOverrideCopyHeaderFromRequestHeaders(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"Authorization": "Bearer token-123",
-		},
 		"request_headers": map[string]interface{}{
 			"authorization": "Bearer token-123",
 		},
@@ -1071,9 +1068,6 @@ func TestApplyParamOverridePassHeadersSkipsMissingHeaders(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"Session_id": "sess-123",
-		},
 		"request_headers": map[string]interface{}{
 			"session_id": "sess-123",
 		},
@@ -1089,10 +1083,10 @@ func TestApplyParamOverridePassHeadersSkipsMissingHeaders(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected header_override context map")
 	}
-	if headers["Session_id"] != "sess-123" {
-		t.Fatalf("expected Session_id to be passed, got: %v", headers["Session_id"])
+	if headers["session_id"] != "sess-123" {
+		t.Fatalf("expected session_id to be passed, got: %v", headers["session_id"])
 	}
-	if _, exists := headers["X-Codex-Beta-Features"]; exists {
+	if _, exists := headers["x-codex-beta-features"]; exists {
 		t.Fatalf("expected missing header to be skipped")
 	}
 }
@@ -1109,9 +1103,6 @@ func TestApplyParamOverrideCopyHeaderSkipsMissingSource(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"Authorization": "Bearer token-123",
-		},
 		"request_headers": map[string]interface{}{
 			"authorization": "Bearer token-123",
 		},
@@ -1127,7 +1118,7 @@ func TestApplyParamOverrideCopyHeaderSkipsMissingSource(t *testing.T) {
 	if !ok {
 		return
 	}
-	if _, exists := headers["X-Upstream-Auth"]; exists {
+	if _, exists := headers["x-upstream-auth"]; exists {
 		t.Fatalf("expected X-Upstream-Auth to be skipped when source header is missing")
 	}
 }
@@ -1144,9 +1135,6 @@ func TestApplyParamOverrideMoveHeaderSkipsMissingSource(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"Authorization": "Bearer token-123",
-		},
 		"request_headers": map[string]interface{}{
 			"authorization": "Bearer token-123",
 		},
@@ -1162,7 +1150,7 @@ func TestApplyParamOverrideMoveHeaderSkipsMissingSource(t *testing.T) {
 	if !ok {
 		return
 	}
-	if _, exists := headers["X-Upstream-Auth"]; exists {
+	if _, exists := headers["x-upstream-auth"]; exists {
 		t.Fatalf("expected X-Upstream-Auth to be skipped when source header is missing")
 	}
 }
@@ -1179,9 +1167,6 @@ func TestApplyParamOverrideSyncFieldsHeaderToJSON(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"session_id": "sess-123",
-		},
 		"request_headers": map[string]interface{}{
 			"session_id": "sess-123",
 		},
@@ -1234,9 +1219,6 @@ func TestApplyParamOverrideSyncFieldsNoChangeWhenBothExist(t *testing.T) {
 		},
 	}
 	ctx := map[string]interface{}{
-		"request_headers_raw": map[string]interface{}{
-			"session_id": "cache-header",
-		},
 		"request_headers": map[string]interface{}{
 			"session_id": "cache-header",
 		},
@@ -1288,10 +1270,7 @@ func TestApplyParamOverrideSetHeaderKeepOrigin(t *testing.T) {
 	}
 	ctx := map[string]interface{}{
 		"header_override": map[string]interface{}{
-			"X-Feature-Flag": "legacy-value",
-		},
-		"header_override_normalized": map[string]interface{}{
-			"x_feature_flag": "legacy-value",
+			"x-feature-flag": "legacy-value",
 		},
 	}
 
@@ -1303,8 +1282,8 @@ func TestApplyParamOverrideSetHeaderKeepOrigin(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected header_override context map")
 	}
-	if headers["X-Feature-Flag"] != "legacy-value" {
-		t.Fatalf("expected keep_origin to preserve old value, got: %v", headers["X-Feature-Flag"])
+	if headers["x-feature-flag"] != "legacy-value" {
+		t.Fatalf("expected keep_origin to preserve old value, got: %v", headers["x-feature-flag"])
 	}
 }
 
@@ -1371,14 +1350,14 @@ func TestApplyParamOverrideWithRelayInfoSyncRuntimeHeaders(t *testing.T) {
 	if !info.UseRuntimeHeadersOverride {
 		t.Fatalf("expected runtime header override to be enabled")
 	}
-	if info.RuntimeHeadersOverride["X-Keep-Me"] != "keep" {
-		t.Fatalf("expected X-Keep-Me header to be preserved, got: %v", info.RuntimeHeadersOverride["X-Keep-Me"])
+	if info.RuntimeHeadersOverride["x-keep-me"] != "keep" {
+		t.Fatalf("expected x-keep-me header to be preserved, got: %v", info.RuntimeHeadersOverride["x-keep-me"])
 	}
-	if info.RuntimeHeadersOverride["X-Injected-By-Param-Override"] != "enabled" {
-		t.Fatalf("expected X-Injected-By-Param-Override header to be set, got: %v", info.RuntimeHeadersOverride["X-Injected-By-Param-Override"])
+	if info.RuntimeHeadersOverride["x-injected-by-param-override"] != "enabled" {
+		t.Fatalf("expected x-injected-by-param-override header to be set, got: %v", info.RuntimeHeadersOverride["x-injected-by-param-override"])
 	}
-	if _, exists := info.RuntimeHeadersOverride["X-Delete-Me"]; exists {
-		t.Fatalf("expected X-Delete-Me header to be deleted")
+	if _, exists := info.RuntimeHeadersOverride["x-delete-me"]; exists {
+		t.Fatalf("expected x-delete-me header to be deleted")
 	}
 }
 
@@ -1410,25 +1389,22 @@ func TestApplyParamOverrideWithRelayInfoMoveAndCopyHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyParamOverrideWithRelayInfo returned error: %v", err)
 	}
-	if _, exists := info.RuntimeHeadersOverride["X-Legacy-Trace"]; exists {
+	if _, exists := info.RuntimeHeadersOverride["x-legacy-trace"]; exists {
 		t.Fatalf("expected source header to be removed after move")
 	}
-	if info.RuntimeHeadersOverride["X-Trace"] != "trace-123" {
-		t.Fatalf("expected X-Trace to be set, got: %v", info.RuntimeHeadersOverride["X-Trace"])
+	if info.RuntimeHeadersOverride["x-trace"] != "trace-123" {
+		t.Fatalf("expected x-trace to be set, got: %v", info.RuntimeHeadersOverride["x-trace"])
 	}
-	if info.RuntimeHeadersOverride["X-Trace-Backup"] != "trace-123" {
-		t.Fatalf("expected X-Trace-Backup to be copied, got: %v", info.RuntimeHeadersOverride["X-Trace-Backup"])
+	if info.RuntimeHeadersOverride["x-trace-backup"] != "trace-123" {
+		t.Fatalf("expected x-trace-backup to be copied, got: %v", info.RuntimeHeadersOverride["x-trace-backup"])
 	}
 }
 
-func TestGetEffectiveHeaderOverrideMergesRuntimeAndChannelOverrides(t *testing.T) {
+func TestGetEffectiveHeaderOverrideUsesRuntimeOverrideAsFinalResult(t *testing.T) {
 	info := &RelayInfo{
 		UseRuntimeHeadersOverride: true,
 		RuntimeHeadersOverride: map[string]interface{}{
-			"X-Runtime": "runtime-only",
-		},
-		RuntimeHeadersDeletedNormalized: map[string]bool{
-			"x-deleted": true,
+			"x-runtime": "runtime-only",
 		},
 		ChannelMeta: &ChannelMeta{
 			HeadersOverride: map[string]interface{}{
@@ -1439,14 +1415,11 @@ func TestGetEffectiveHeaderOverrideMergesRuntimeAndChannelOverrides(t *testing.T
 	}
 
 	effective := GetEffectiveHeaderOverride(info)
-	if effective["X-Static"] != "static-value" {
-		t.Fatalf("expected X-Static from channel override, got: %v", effective["X-Static"])
+	if effective["x-runtime"] != "runtime-only" {
+		t.Fatalf("expected x-runtime from runtime override, got: %v", effective["x-runtime"])
 	}
-	if effective["X-Runtime"] != "runtime-only" {
-		t.Fatalf("expected X-Runtime from runtime override, got: %v", effective["X-Runtime"])
-	}
-	if _, exists := effective["X-Deleted"]; exists {
-		t.Fatalf("expected deleted headers to stay deleted in effective override")
+	if _, exists := effective["x-static"]; exists {
+		t.Fatalf("expected runtime override to be final and not merge channel headers")
 	}
 }
 

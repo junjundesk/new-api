@@ -53,7 +53,7 @@ func TestProcessHeaderOverride_ChannelTestSkipsClientHeaderPlaceholder(t *testin
 
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
-	_, ok := headers["X-Upstream-Trace"]
+	_, ok := headers["x-upstream-trace"]
 	require.False(t, ok)
 }
 
@@ -77,10 +77,10 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
-	require.Equal(t, "trace-123", headers["X-Upstream-Trace"])
+	require.Equal(t, "trace-123", headers["x-upstream-trace"])
 }
 
-func TestProcessHeaderOverride_RuntimeOverrideMergesWithChannelOverride(t *testing.T) {
+func TestProcessHeaderOverride_RuntimeOverrideIsFinalHeaderMap(t *testing.T) {
 	t.Parallel()
 
 	gin.SetMode(gin.TestMode)
@@ -92,8 +92,8 @@ func TestProcessHeaderOverride_RuntimeOverrideMergesWithChannelOverride(t *testi
 		IsChannelTest:             false,
 		UseRuntimeHeadersOverride: true,
 		RuntimeHeadersOverride: map[string]any{
-			"X-Static":  "runtime-value",
-			"X-Runtime": "runtime-only",
+			"x-static":  "runtime-value",
+			"x-runtime": "runtime-only",
 		},
 		ChannelMeta: &relaycommon.ChannelMeta{
 			HeadersOverride: map[string]any{
@@ -105,9 +105,10 @@ func TestProcessHeaderOverride_RuntimeOverrideMergesWithChannelOverride(t *testi
 
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
-	require.Equal(t, "runtime-value", headers["X-Static"])
-	require.Equal(t, "runtime-only", headers["X-Runtime"])
-	require.Equal(t, "legacy-only", headers["X-Legacy"])
+	require.Equal(t, "runtime-value", headers["x-static"])
+	require.Equal(t, "runtime-only", headers["x-runtime"])
+	_, exists := headers["x-legacy"]
+	require.False(t, exists)
 }
 
 func TestProcessHeaderOverride_PassthroughSkipsAcceptEncoding(t *testing.T) {
@@ -131,9 +132,9 @@ func TestProcessHeaderOverride_PassthroughSkipsAcceptEncoding(t *testing.T) {
 
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
-	require.Equal(t, "trace-123", headers["X-Trace-Id"])
+	require.Equal(t, "trace-123", headers["x-trace-id"])
 
-	_, hasAcceptEncoding := headers["Accept-Encoding"]
+	_, hasAcceptEncoding := headers["accept-encoding"]
 	require.False(t, hasAcceptEncoding)
 }
 
@@ -171,16 +172,17 @@ func TestProcessHeaderOverride_PassHeadersTemplateSetsRuntimeHeaders(t *testing.
 	_, err := relaycommon.ApplyParamOverrideWithRelayInfo([]byte(`{"model":"gpt-4.1"}`), info)
 	require.NoError(t, err)
 	require.True(t, info.UseRuntimeHeadersOverride)
-	require.Equal(t, "Codex CLI", info.RuntimeHeadersOverride["Originator"])
-	require.Equal(t, "sess-123", info.RuntimeHeadersOverride["Session_id"])
-	_, exists := info.RuntimeHeadersOverride["X-Codex-Beta-Features"]
+	require.Equal(t, "Codex CLI", info.RuntimeHeadersOverride["originator"])
+	require.Equal(t, "sess-123", info.RuntimeHeadersOverride["session_id"])
+	_, exists := info.RuntimeHeadersOverride["x-codex-beta-features"]
 	require.False(t, exists)
+	require.Equal(t, "legacy-value", info.RuntimeHeadersOverride["x-static"])
 
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
-	require.Equal(t, "Codex CLI", headers["Originator"])
-	require.Equal(t, "sess-123", headers["Session_id"])
-	_, exists = headers["X-Codex-Beta-Features"]
+	require.Equal(t, "Codex CLI", headers["originator"])
+	require.Equal(t, "sess-123", headers["session_id"])
+	_, exists = headers["x-codex-beta-features"]
 	require.False(t, exists)
 
 	upstreamReq := httptest.NewRequest(http.MethodPost, "https://example.com/v1/responses", nil)
