@@ -36,6 +36,10 @@ import {
 } from '@douyinfe/semi-ui';
 import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
 import { copy, showError, showSuccess, verifyJSON } from '../../../../helpers';
+import {
+  CLAUDE_CLI_HEADER_PASSTHROUGH_TEMPLATE,
+  CODEX_CLI_HEADER_PASSTHROUGH_TEMPLATE,
+} from '../../../../constants/channel-affinity-template.constants';
 
 const { Text } = Typography;
 
@@ -328,6 +332,18 @@ const TEMPLATE_PRESET_CONFIG = {
     label: 'Gemini 图片 4K',
     kind: 'operations',
     payload: GEMINI_IMAGE_4K_TEMPLATE,
+  },
+  claude_cli_headers_passthrough: {
+    group: 'scenario',
+    label: 'Claude CLI 请求头透传',
+    kind: 'operations',
+    payload: CLAUDE_CLI_HEADER_PASSTHROUGH_TEMPLATE,
+  },
+  codex_cli_headers_passthrough: {
+    group: 'scenario',
+    label: 'Codex CLI 请求头透传',
+    kind: 'operations',
+    payload: CODEX_CLI_HEADER_PASSTHROUGH_TEMPLATE,
   },
 };
 
