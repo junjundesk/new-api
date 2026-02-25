@@ -24,6 +24,8 @@ const (
 	paramOverrideContextHeaderOverrideNormalized = "header_override_normalized"
 )
 
+var errSourceHeaderNotFound = errors.New("source header does not exist")
+
 type ConditionOperation struct {
 	Path           string      `json:"path"`             // JSON路径
 	Mode           string      `json:"mode"`             // full, prefix, suffix, contains, gt, gte, lt, lte
@@ -501,6 +503,10 @@ func applyOperations(jsonStr string, operations []ParamOperation, conditionConte
 			}
 			for _, headerName := range headerNames {
 				if err = copyHeaderInContext(context, headerName, headerName, op.KeepOrigin); err != nil {
+					if errors.Is(err, errSourceHeaderNotFound) {
+						err = nil
+						continue
+					}
 					break
 				}
 			}
@@ -654,7 +660,7 @@ func copyHeaderInContext(context map[string]interface{}, fromHeader, toHeader st
 	}
 	value, exists := getHeaderValueFromContext(context, fromHeader)
 	if !exists {
-		return fmt.Errorf("source header does not exist: %s", fromHeader)
+		return fmt.Errorf("%w: %s", errSourceHeaderNotFound, fromHeader)
 	}
 	return setHeaderOverrideInContext(context, toHeader, value, keepOrigin)
 }

@@ -137,3 +137,56 @@ func TestProcessHeaderOverride_PassthroughSkipsAcceptEncoding(t *testing.T) {
 	_, hasAcceptEncoding := headers["Accept-Encoding"]
 	require.False(t, hasAcceptEncoding)
 }
+
+func TestProcessHeaderOverride_PassHeadersTemplateSetsRuntimeHeaders(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ctx.Request.Header.Set("Originator", "Codex CLI")
+	ctx.Request.Header.Set("Session_id", "sess-123")
+
+	info := &relaycommon.RelayInfo{
+		IsChannelTest: false,
+		RequestHeaders: map[string]string{
+			"Originator": "Codex CLI",
+			"Session_id": "sess-123",
+		},
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ParamOverride: map[string]any{
+				"operations": []any{
+					map[string]any{
+						"mode":  "pass_headers",
+						"value": []any{"Originator", "Session_id", "X-Codex-Beta-Features"},
+					},
+				},
+			},
+			HeadersOverride: map[string]any{
+				"X-Static": "legacy-value",
+			},
+		},
+	}
+
+	_, err := relaycommon.ApplyParamOverrideWithRelayInfo([]byte(`{"model":"gpt-4.1"}`), info)
+	require.NoError(t, err)
+	require.True(t, info.UseRuntimeHeadersOverride)
+	require.Equal(t, "Codex CLI", info.RuntimeHeadersOverride["Originator"])
+	require.Equal(t, "sess-123", info.RuntimeHeadersOverride["Session_id"])
+	_, exists := info.RuntimeHeadersOverride["X-Codex-Beta-Features"]
+	require.False(t, exists)
+
+	headers, err := processHeaderOverride(info, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "Codex CLI", headers["Originator"])
+	require.Equal(t, "sess-123", headers["Session_id"])
+	_, exists = headers["X-Codex-Beta-Features"]
+	require.False(t, exists)
+
+	upstreamReq := httptest.NewRequest(http.MethodPost, "https://example.com/v1/responses", nil)
+	applyHeaderOverrideToRequest(upstreamReq, headers)
+	require.Equal(t, "Codex CLI", upstreamReq.Header.Get("Originator"))
+	require.Equal(t, "sess-123", upstreamReq.Header.Get("Session_id"))
+	require.Empty(t, upstreamReq.Header.Get("X-Codex-Beta-Features"))
+}

@@ -1060,6 +1060,43 @@ func TestApplyParamOverrideCopyHeaderFromRequestHeaders(t *testing.T) {
 	assertJSONEqual(t, `{"temperature":0.1}`, string(out))
 }
 
+func TestApplyParamOverridePassHeadersSkipsMissingHeaders(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode":  "pass_headers",
+				"value": []interface{}{"X-Codex-Beta-Features", "Session_id"},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"Session_id": "sess-123",
+		},
+		"request_headers": map[string]interface{}{
+			"session_id": "sess-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.7}`, string(out))
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected header_override context map")
+	}
+	if headers["Session_id"] != "sess-123" {
+		t.Fatalf("expected Session_id to be passed, got: %v", headers["Session_id"])
+	}
+	if _, exists := headers["X-Codex-Beta-Features"]; exists {
+		t.Fatalf("expected missing header to be skipped")
+	}
+}
+
 func TestApplyParamOverrideSyncFieldsHeaderToJSON(t *testing.T) {
 	input := []byte(`{"model":"gpt-4"}`)
 	override := map[string]interface{}{
