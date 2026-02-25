@@ -80,7 +80,7 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	require.Equal(t, "trace-123", headers["X-Upstream-Trace"])
 }
 
-func TestProcessHeaderOverride_RuntimeOverrideHasPriority(t *testing.T) {
+func TestProcessHeaderOverride_RuntimeOverrideMergesWithChannelOverride(t *testing.T) {
 	t.Parallel()
 
 	gin.SetMode(gin.TestMode)
@@ -107,8 +107,7 @@ func TestProcessHeaderOverride_RuntimeOverrideHasPriority(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "runtime-value", headers["X-Static"])
 	require.Equal(t, "runtime-only", headers["X-Runtime"])
-	_, ok := headers["X-Legacy"]
-	require.False(t, ok)
+	require.Equal(t, "legacy-only", headers["X-Legacy"])
 }
 
 func TestProcessHeaderOverride_PassthroughSkipsAcceptEncoding(t *testing.T) {

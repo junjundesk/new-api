@@ -1097,6 +1097,76 @@ func TestApplyParamOverridePassHeadersSkipsMissingHeaders(t *testing.T) {
 	}
 }
 
+func TestApplyParamOverrideCopyHeaderSkipsMissingSource(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "copy_header",
+				"from": "X-Missing-Header",
+				"to":   "X-Upstream-Auth",
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"Authorization": "Bearer token-123",
+		},
+		"request_headers": map[string]interface{}{
+			"authorization": "Bearer token-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.7}`, string(out))
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	if _, exists := headers["X-Upstream-Auth"]; exists {
+		t.Fatalf("expected X-Upstream-Auth to be skipped when source header is missing")
+	}
+}
+
+func TestApplyParamOverrideMoveHeaderSkipsMissingSource(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "move_header",
+				"from": "X-Missing-Header",
+				"to":   "X-Upstream-Auth",
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers_raw": map[string]interface{}{
+			"Authorization": "Bearer token-123",
+		},
+		"request_headers": map[string]interface{}{
+			"authorization": "Bearer token-123",
+		},
+	}
+
+	out, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+	assertJSONEqual(t, `{"temperature":0.7}`, string(out))
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	if _, exists := headers["X-Upstream-Auth"]; exists {
+		t.Fatalf("expected X-Upstream-Auth to be skipped when source header is missing")
+	}
+}
+
 func TestApplyParamOverrideSyncFieldsHeaderToJSON(t *testing.T) {
 	input := []byte(`{"model":"gpt-4"}`)
 	override := map[string]interface{}{
@@ -1348,6 +1418,35 @@ func TestApplyParamOverrideWithRelayInfoMoveAndCopyHeaders(t *testing.T) {
 	}
 	if info.RuntimeHeadersOverride["X-Trace-Backup"] != "trace-123" {
 		t.Fatalf("expected X-Trace-Backup to be copied, got: %v", info.RuntimeHeadersOverride["X-Trace-Backup"])
+	}
+}
+
+func TestGetEffectiveHeaderOverrideMergesRuntimeAndChannelOverrides(t *testing.T) {
+	info := &RelayInfo{
+		UseRuntimeHeadersOverride: true,
+		RuntimeHeadersOverride: map[string]interface{}{
+			"X-Runtime": "runtime-only",
+		},
+		RuntimeHeadersDeletedNormalized: map[string]bool{
+			"x-deleted": true,
+		},
+		ChannelMeta: &ChannelMeta{
+			HeadersOverride: map[string]interface{}{
+				"X-Static":  "static-value",
+				"X-Deleted": "should-not-exist",
+			},
+		},
+	}
+
+	effective := GetEffectiveHeaderOverride(info)
+	if effective["X-Static"] != "static-value" {
+		t.Fatalf("expected X-Static from channel override, got: %v", effective["X-Static"])
+	}
+	if effective["X-Runtime"] != "runtime-only" {
+		t.Fatalf("expected X-Runtime from runtime override, got: %v", effective["X-Runtime"])
+	}
+	if _, exists := effective["X-Deleted"]; exists {
+		t.Fatalf("expected deleted headers to stay deleted in effective override")
 	}
 }
 

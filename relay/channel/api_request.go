@@ -173,10 +173,7 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 		return headerOverride, nil
 	}
 
-	headerOverrideSource := info.HeadersOverride
-	if info.UseRuntimeHeadersOverride {
-		headerOverrideSource = info.RuntimeHeadersOverride
-	}
+	headerOverrideSource := common.GetEffectiveHeaderOverride(info)
 
 	passAll := false
 	var passthroughRegex []*regexp.Regexp
