@@ -163,7 +163,7 @@ const MODE_DESCRIPTIONS = {
   prune_objects: '按条件清理对象中的子项',
   pass_headers: '把指定请求头透传到上游请求',
   sync_fields: '在一个字段有值、另一个缺失时自动补齐',
-  set_header: '设置运行期请求头',
+  set_header: '设置运行期请求头（支持整值覆盖，或用 JSON 映射按逗号 token 替换/删除）',
   delete_header: '删除运行期请求头',
   copy_header: '复制请求头',
   move_header: '移动请求头',
@@ -214,7 +214,7 @@ const getModeToPlaceholder = (mode) => {
 };
 
 const getModeValueLabel = (mode) => {
-  if (mode === 'set_header') return '请求头值';
+  if (mode === 'set_header') return '请求头值（支持字符串或 JSON 映射）';
   if (mode === 'pass_headers') return '透传请求头（支持逗号分隔或 JSON 数组）';
   if (
     mode === 'trim_prefix' ||
@@ -231,7 +231,18 @@ const getModeValueLabel = (mode) => {
 };
 
 const getModeValuePlaceholder = (mode) => {
-  if (mode === 'set_header') return 'Bearer sk-xxx';
+  if (mode === 'set_header') {
+    return [
+      'String example:',
+      'Bearer sk-xxx',
+      '',
+      'JSON map example:',
+      '{"advanced-tool-use-2025-11-20": null, "computer-use-2025-01-24": "computer-use-2025-01-24"}',
+      '',
+      'JSON map wildcard:',
+      '{"*": null, "computer-use-2025-11-24": "computer-use-2025-11-24"}',
+    ].join('\n');
+  }
   if (mode === 'pass_headers') return 'Authorization, X-Request-Id';
   if (
     mode === 'trim_prefix' ||
@@ -245,6 +256,11 @@ const getModeValuePlaceholder = (mode) => {
     return '{"type":"redacted_thinking"}';
   }
   return '0.7';
+};
+
+const getModeValueHelp = (mode) => {
+  if (mode !== 'set_header') return '';
+  return '字符串：整条请求头直接覆盖。JSON 映射：按逗号分隔 token 逐项处理，null 表示删除，string/array 表示替换，* 表示兜底规则。';
 };
 
 const SYNC_TARGET_TYPE_OPTIONS = [
@@ -303,6 +319,45 @@ const GEMINI_IMAGE_4K_TEMPLATE = {
   ],
 };
 
+const AWS_BEDROCK_ANTHROPIC_BETA_OVERRIDE_TEMPLATE = {
+  operations: [
+    {
+      mode: 'set_header',
+      path: 'anthropic-beta',
+      value: {
+        'advanced-tool-use-2025-11-20': 'tool-search-tool-2025-10-19',
+        bash_20241022: null,
+        bash_20250124: null,
+        'code-execution-2025-08-25': null,
+        'compact-2026-01-12': 'compact-2026-01-12',
+        'computer-use-2025-01-24': 'computer-use-2025-01-24',
+        'computer-use-2025-11-24': 'computer-use-2025-11-24',
+        'context-1m-2025-08-07': 'context-1m-2025-08-07',
+        'context-management-2025-06-27': 'context-management-2025-06-27',
+        'effort-2025-11-24': null,
+        'fast-mode-2026-02-01': null,
+        'files-api-2025-04-14': null,
+        'fine-grained-tool-streaming-2025-05-14': null,
+        'interleaved-thinking-2025-05-14': 'interleaved-thinking-2025-05-14',
+        'mcp-client-2025-11-20': null,
+        'mcp-client-2025-04-04': null,
+        'mcp-servers-2025-12-04': null,
+        'output-128k-2025-02-19': null,
+        'structured-output-2024-03-01': null,
+        'prompt-caching-scope-2026-01-05': null,
+        'skills-2025-10-02': null,
+        'structured-outputs-2025-11-13': null,
+        text_editor_20241022: null,
+        text_editor_20250124: null,
+        'token-efficient-tools-2025-02-19': null,
+        'tool-search-tool-2025-10-19': 'tool-search-tool-2025-10-19',
+        'web-fetch-2025-09-10': null,
+        'web-search-2025-03-05': null,
+      },
+    },
+  ],
+};
+
 const TEMPLATE_GROUP_OPTIONS = [
   { label: '基础模板', value: 'basic' },
   { label: '场景模板', value: 'scenario' },
@@ -344,6 +399,12 @@ const TEMPLATE_PRESET_CONFIG = {
     label: 'Codex CLI 请求头透传',
     kind: 'operations',
     payload: CODEX_CLI_HEADER_PASSTHROUGH_TEMPLATE,
+  },
+  aws_bedrock_anthropic_beta_override: {
+    group: 'scenario',
+    label: 'AWS Bedrock anthropic-beta覆盖',
+    kind: 'operations',
+    payload: AWS_BEDROCK_ANTHROPIC_BETA_OVERRIDE_TEMPLATE,
   },
 };
 
@@ -2560,6 +2621,11 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                                       })
                                     }
                                   />
+                                  {getModeValueHelp(mode) ? (
+                                    <Text type='tertiary' size='small'>
+                                      {t(getModeValueHelp(mode))}
+                                    </Text>
+                                  ) : null}
                                 </div>
                               )
                             ) : null}

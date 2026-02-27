@@ -1287,6 +1287,74 @@ func TestApplyParamOverrideSetHeaderKeepOrigin(t *testing.T) {
 	}
 }
 
+func TestApplyParamOverrideSetHeaderMapRewritesCommaSeparatedHeader(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "set_header",
+				"path": "anthropic-beta",
+				"value": map[string]interface{}{
+					"advanced-tool-use-2025-11-20": nil,
+					"computer-use-2025-01-24":      "computer-use-2025-01-24",
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"request_headers": map[string]interface{}{
+			"anthropic-beta": "advanced-tool-use-2025-11-20, computer-use-2025-01-24",
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected header_override context map")
+	}
+	if headers["anthropic-beta"] != "computer-use-2025-01-24" {
+		t.Fatalf("expected anthropic-beta to keep only mapped value, got: %v", headers["anthropic-beta"])
+	}
+}
+
+func TestApplyParamOverrideSetHeaderMapDeleteWholeHeaderWhenAllTokensCleared(t *testing.T) {
+	input := []byte(`{"temperature":0.7}`)
+	override := map[string]interface{}{
+		"operations": []interface{}{
+			map[string]interface{}{
+				"mode": "set_header",
+				"path": "anthropic-beta",
+				"value": map[string]interface{}{
+					"advanced-tool-use-2025-11-20": nil,
+					"computer-use-2025-01-24":      nil,
+				},
+			},
+		},
+	}
+	ctx := map[string]interface{}{
+		"header_override": map[string]interface{}{
+			"anthropic-beta": "advanced-tool-use-2025-11-20,computer-use-2025-01-24",
+		},
+	}
+
+	_, err := ApplyParamOverride(input, override, ctx)
+	if err != nil {
+		t.Fatalf("ApplyParamOverride returned error: %v", err)
+	}
+
+	headers, ok := ctx["header_override"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected header_override context map")
+	}
+	if _, exists := headers["anthropic-beta"]; exists {
+		t.Fatalf("expected anthropic-beta to be deleted when all mapped values are null")
+	}
+}
+
 func TestApplyParamOverrideConditionsObjectShorthand(t *testing.T) {
 	input := []byte(`{"temperature":0.7}`)
 	override := map[string]interface{}{
@@ -1397,6 +1465,40 @@ func TestApplyParamOverrideWithRelayInfoMoveAndCopyHeaders(t *testing.T) {
 	}
 	if info.RuntimeHeadersOverride["x-trace-backup"] != "trace-123" {
 		t.Fatalf("expected x-trace-backup to be copied, got: %v", info.RuntimeHeadersOverride["x-trace-backup"])
+	}
+}
+
+func TestApplyParamOverrideWithRelayInfoSetHeaderMapRewritesAnthropicBeta(t *testing.T) {
+	info := &RelayInfo{
+		ChannelMeta: &ChannelMeta{
+			ParamOverride: map[string]interface{}{
+				"operations": []interface{}{
+					map[string]interface{}{
+						"mode": "set_header",
+						"path": "anthropic-beta",
+						"value": map[string]interface{}{
+							"advanced-tool-use-2025-11-20": nil,
+							"computer-use-2025-01-24":      "computer-use-2025-01-24",
+						},
+					},
+				},
+			},
+			HeadersOverride: map[string]interface{}{
+				"anthropic-beta": "advanced-tool-use-2025-11-20, computer-use-2025-01-24",
+			},
+		},
+	}
+
+	_, err := ApplyParamOverrideWithRelayInfo([]byte(`{"temperature":0.7}`), info)
+	if err != nil {
+		t.Fatalf("ApplyParamOverrideWithRelayInfo returned error: %v", err)
+	}
+
+	if !info.UseRuntimeHeadersOverride {
+		t.Fatalf("expected runtime header override to be enabled")
+	}
+	if info.RuntimeHeadersOverride["anthropic-beta"] != "computer-use-2025-01-24" {
+		t.Fatalf("expected anthropic-beta to be rewritten, got: %v", info.RuntimeHeadersOverride["anthropic-beta"])
 	}
 }
 

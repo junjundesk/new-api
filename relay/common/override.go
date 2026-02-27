@@ -690,13 +690,6 @@ func setHeaderOverrideInContext(context map[string]interface{}, headerName strin
 	if headerName == "" {
 		return fmt.Errorf("header name is required")
 	}
-	if value == nil {
-		return fmt.Errorf("header value is required")
-	}
-	headerValue := strings.TrimSpace(fmt.Sprintf("%v", value))
-	if headerValue == "" {
-		return fmt.Errorf("header value is required")
-	}
 
 	rawHeaders := ensureMapKeyInContext(context, paramOverrideContextHeaderOverride)
 	if keepOrigin {
@@ -707,8 +700,125 @@ func setHeaderOverrideInContext(context map[string]interface{}, headerName strin
 			}
 		}
 	}
+
+	headerValue, hasValue, err := resolveHeaderOverrideValue(context, headerName, value)
+	if err != nil {
+		return err
+	}
+	if !hasValue {
+		delete(rawHeaders, headerName)
+		return nil
+	}
+
 	rawHeaders[headerName] = headerValue
 	return nil
+}
+
+func resolveHeaderOverrideValue(context map[string]interface{}, headerName string, value interface{}) (string, bool, error) {
+	if value == nil {
+		return "", false, fmt.Errorf("header value is required")
+	}
+
+	if mapping, ok := value.(map[string]interface{}); ok {
+		return resolveHeaderOverrideValueByMapping(context, headerName, mapping)
+	}
+	if mapping, ok := value.(map[string]string); ok {
+		converted := make(map[string]interface{}, len(mapping))
+		for key, item := range mapping {
+			converted[key] = item
+		}
+		return resolveHeaderOverrideValueByMapping(context, headerName, converted)
+	}
+
+	headerValue := strings.TrimSpace(fmt.Sprintf("%v", value))
+	if headerValue == "" {
+		return "", false, nil
+	}
+	return headerValue, true, nil
+}
+
+func resolveHeaderOverrideValueByMapping(context map[string]interface{}, headerName string, mapping map[string]interface{}) (string, bool, error) {
+	if len(mapping) == 0 {
+		return "", false, fmt.Errorf("header value mapping cannot be empty")
+	}
+
+	sourceValue, exists := getHeaderValueFromContext(context, headerName)
+	if !exists {
+		return "", false, nil
+	}
+	sourceTokens := splitHeaderListValue(sourceValue)
+	if len(sourceTokens) == 0 {
+		return "", false, nil
+	}
+
+	wildcardValue, hasWildcard := mapping["*"]
+	resultTokens := make([]string, 0, len(sourceTokens))
+	for _, token := range sourceTokens {
+		replacementRaw, hasReplacement := mapping[token]
+		if !hasReplacement && hasWildcard {
+			replacementRaw = wildcardValue
+			hasReplacement = true
+		}
+		if !hasReplacement {
+			resultTokens = append(resultTokens, token)
+			continue
+		}
+		replacementTokens, err := parseHeaderReplacementTokens(replacementRaw)
+		if err != nil {
+			return "", false, err
+		}
+		resultTokens = append(resultTokens, replacementTokens...)
+	}
+
+	resultTokens = lo.Uniq(resultTokens)
+	if len(resultTokens) == 0 {
+		return "", false, nil
+	}
+	return strings.Join(resultTokens, ","), true, nil
+}
+
+func parseHeaderReplacementTokens(value interface{}) ([]string, error) {
+	switch raw := value.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		return splitHeaderListValue(raw), nil
+	case []string:
+		tokens := make([]string, 0, len(raw))
+		for _, item := range raw {
+			tokens = append(tokens, splitHeaderListValue(item)...)
+		}
+		return lo.Uniq(tokens), nil
+	case []interface{}:
+		tokens := make([]string, 0, len(raw))
+		for _, item := range raw {
+			itemTokens, err := parseHeaderReplacementTokens(item)
+			if err != nil {
+				return nil, err
+			}
+			tokens = append(tokens, itemTokens...)
+		}
+		return lo.Uniq(tokens), nil
+	case map[string]interface{}, map[string]string:
+		return nil, fmt.Errorf("header replacement value must be string, array or null")
+	default:
+		token := strings.TrimSpace(fmt.Sprintf("%v", raw))
+		if token == "" {
+			return nil, nil
+		}
+		return []string{token}, nil
+	}
+}
+
+func splitHeaderListValue(raw string) []string {
+	items := strings.Split(raw, ",")
+	return lo.FilterMap(items, func(item string, _ int) (string, bool) {
+		token := strings.TrimSpace(item)
+		if token == "" {
+			return "", false
+		}
+		return token, true
+	})
 }
 
 func copyHeaderInContext(context map[string]interface{}, fromHeader, toHeader string, keepOrigin bool) error {
