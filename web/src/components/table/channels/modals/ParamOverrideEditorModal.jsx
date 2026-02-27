@@ -1485,6 +1485,24 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
     );
   };
 
+  const formatSelectedOperationValueAsJson = useCallback(() => {
+    if (!selectedOperation) return;
+    const raw = String(selectedOperation.value_text || '').trim();
+    if (!raw) return;
+    if (!verifyJSON(raw)) {
+      showError(t('当前值不是合法 JSON，无法格式化'));
+      return;
+    }
+    try {
+      updateOperation(selectedOperation.id, {
+        value_text: JSON.stringify(JSON.parse(raw), null, 2),
+      });
+      showSuccess(t('JSON 已格式化'));
+    } catch (error) {
+      showError(t('当前值不是合法 JSON，无法格式化'));
+    }
+  }, [selectedOperation, t, updateOperation]);
+
   const updateReturnErrorDraft = (operationId, draftPatch = {}) => {
     const current = operations.find((item) => item.id === operationId);
     if (!current) return;
@@ -2608,9 +2626,20 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                                 </div>
                               ) : (
                                 <div className='mt-2'>
-                                  <Text type='tertiary' size='small'>
-                                    {t(getModeValueLabel(mode))}
-                                  </Text>
+                                  <div className='flex items-center justify-between gap-2'>
+                                    <Text type='tertiary' size='small'>
+                                      {t(getModeValueLabel(mode))}
+                                    </Text>
+                                    {mode === 'set_header' ? (
+                                      <Button
+                                        size='small'
+                                        type='tertiary'
+                                        onClick={formatSelectedOperationValueAsJson}
+                                      >
+                                        {t('格式化 JSON')}
+                                      </Button>
+                                    ) : null}
+                                  </div>
                                   <TextArea
                                     value={selectedOperation.value_text}
                                     autosize={{ minRows: 1, maxRows: 4 }}
