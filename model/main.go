@@ -250,6 +250,8 @@ func InitLogDB() (err error) {
 func migrateDB() error {
 	// Migrate price_amount column from float/double to decimal for existing tables
 	migrateSubscriptionPlanPriceAmount()
+	// Migrate model_limits column from varchar to text for existing tables
+	migrateTokenModelLimitsToText()
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -443,6 +445,56 @@ PRIMARY KEY (` + "`id`" + `)
 		}
 	}
 	return nil
+}
+
+// migrateTokenModelLimitsToText migrates model_limits column from varchar(1024) to text
+// This is safe to run multiple times - it checks the column type first
+func migrateTokenModelLimitsToText() {
+	// SQLite uses type affinity, so TEXT and VARCHAR are effectively the same — no migration needed
+	if common.UsingSQLite {
+		return
+	}
+
+	tableName := "tokens"
+	columnName := "model_limits"
+
+	if !DB.Migrator().HasTable(tableName) {
+		return
+	}
+
+	if !DB.Migrator().HasColumn(&Token{}, columnName) {
+		return
+	}
+
+	var alterSQL string
+	if common.UsingPostgreSQL {
+		var dataType string
+		DB.Raw(`SELECT data_type FROM information_schema.columns
+			WHERE table_name = ? AND column_name = ?`, tableName, columnName).Scan(&dataType)
+		if dataType == "text" {
+			return
+		}
+		alterSQL = fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN %s TYPE text`, tableName, columnName)
+	} else if common.UsingMySQL {
+		var columnType string
+		DB.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
+			WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+			tableName, columnName).Scan(&columnType)
+		if strings.ToLower(columnType) == "text" {
+			return
+		}
+		alterSQL = fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s text", tableName, columnName)
+	} else {
+		return
+	}
+
+	if alterSQL != "" {
+		if err := DB.Exec(alterSQL).Error; err != nil {
+			common.SysLog(fmt.Sprintf("Warning: failed to migrate %s.%s to text: %v", tableName, columnName, err))
+		} else {
+			common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to text", tableName, columnName))
+		}
+	}
 }
 
 // migrateSubscriptionPlanPriceAmount migrates price_amount column from float/double to decimal(10,6)
