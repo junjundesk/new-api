@@ -23,64 +23,6 @@ import (
 )
 
 // ============================
-// Request / Response structures
-// ============================
-
-// GeminiVideoGenerationConfig represents the video generation configuration
-// Based on: https://ai.google.dev/gemini-api/docs/video
-type GeminiVideoGenerationConfig struct {
-	AspectRatio      string  `json:"aspectRatio,omitempty"`      // "16:9" or "9:16"
-	DurationSeconds  float64 `json:"durationSeconds,omitempty"`  // 4, 6, or 8 (as number)
-	NegativePrompt   string  `json:"negativePrompt,omitempty"`   // unwanted elements
-	PersonGeneration string  `json:"personGeneration,omitempty"` // "allow_all" for text-to-video, "allow_adult" for image-to-video
-	Resolution       string  `json:"resolution,omitempty"`       // video resolution
-}
-
-// GeminiVideoRequest represents a single video generation instance
-type GeminiVideoRequest struct {
-	Prompt string `json:"prompt"`
-}
-
-// GeminiVideoPayload represents the complete video generation request payload
-type GeminiVideoPayload struct {
-	Instances  []GeminiVideoRequest        `json:"instances"`
-	Parameters GeminiVideoGenerationConfig `json:"parameters,omitempty"`
-}
-
-type submitResponse struct {
-	Name string `json:"name"`
-}
-
-type operationVideo struct {
-	MimeType           string `json:"mimeType"`
-	BytesBase64Encoded string `json:"bytesBase64Encoded"`
-	Encoding           string `json:"encoding"`
-}
-
-type operationResponse struct {
-	Name     string `json:"name"`
-	Done     bool   `json:"done"`
-	Response struct {
-		Type                  string           `json:"@type"`
-		RaiMediaFilteredCount int              `json:"raiMediaFilteredCount"`
-		Videos                []operationVideo `json:"videos"`
-		BytesBase64Encoded    string           `json:"bytesBase64Encoded"`
-		Encoding              string           `json:"encoding"`
-		Video                 string           `json:"video"`
-		GenerateVideoResponse struct {
-			GeneratedSamples []struct {
-				Video struct {
-					URI string `json:"uri"`
-				} `json:"video"`
-			} `json:"generatedSamples"`
-		} `json:"generateVideoResponse"`
-	} `json:"response"`
-	Error struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// ============================
 // Adaptor implementation
 // ============================
 
@@ -99,17 +41,16 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 
 // ValidateRequestAndSetAction parses body, validates fields and sets default action.
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
-	// Use the standard validation method for TaskSubmitReq
 	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionTextGenerate)
 }
 
-// BuildRequestURL constructs the upstream URL.
+// BuildRequestURL constructs the Gemini API generateVideos endpoint.
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	modelName := info.UpstreamModelName
 	version := model_setting.GetGeminiVersionSetting(modelName)
 
 	return fmt.Sprintf(
-		"%s/%s/models/%s:predictLongRunning",
+		"%s/%s/models/%s:generateVideos",
 		a.baseURL,
 		version,
 		modelName,
@@ -124,7 +65,7 @@ func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info
 	return nil
 }
 
-// BuildRequestBody converts request into Gemini specific format.
+// BuildRequestBody converts request into the Gemini API generateVideos format.
 func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
 	v, ok := c.Get("task_request")
 	if !ok {
@@ -135,18 +76,34 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, fmt.Errorf("unexpected task_request type")
 	}
 
-	// Create structured video generation request
 	body := GeminiVideoPayload{
-		Instances: []GeminiVideoRequest{
-			{Prompt: req.Prompt},
-		},
-		Parameters: GeminiVideoGenerationConfig{},
+		Prompt: req.Prompt,
+		Config: &GeminiVideoGenerationConfig{},
 	}
 
-	metadata := req.Metadata
-	if err := taskcommon.UnmarshalMetadata(metadata, &body.Parameters); err != nil {
+	if img := ExtractMultipartImage(c, info); img != nil {
+		body.Image = img
+	} else if len(req.Images) > 0 {
+		if parsed := ParseImageInput(req.Images[0]); parsed != nil {
+			body.Image = parsed
+			info.Action = constant.TaskActionGenerate
+		}
+	}
+
+	if err := taskcommon.UnmarshalMetadata(req.Metadata, body.Config); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
 	}
+	if body.Config.DurationSeconds == 0 && req.Duration > 0 {
+		body.Config.DurationSeconds = req.Duration
+	}
+	if body.Config.Resolution == "" && req.Size != "" {
+		body.Config.Resolution = SizeToVeoResolution(req.Size)
+	}
+	if body.Config.AspectRatio == "" && req.Size != "" {
+		body.Config.AspectRatio = SizeToVeoAspectRatio(req.Size)
+	}
+	body.Config.Resolution = strings.ToLower(body.Config.Resolution)
+	body.Config.NumberOfVideos = 1
 
 	data, err := common.Marshal(body)
 	if err != nil {
@@ -186,14 +143,40 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 }
 
 func (a *TaskAdaptor) GetModelList() []string {
-	return []string{"veo-3.0-generate-001", "veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"}
+	return []string{
+		"veo-3.0-generate-001",
+		"veo-3.0-fast-generate-001",
+		"veo-3.1-generate-preview",
+		"veo-3.1-fast-generate-preview",
+	}
 }
 
 func (a *TaskAdaptor) GetChannelName() string {
 	return "gemini"
 }
 
-// FetchTask fetch task status
+// EstimateBilling returns OtherRatios based on durationSeconds and resolution.
+func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
+	v, ok := c.Get("task_request")
+	if !ok {
+		return nil
+	}
+	req, ok := v.(relaycommon.TaskSubmitReq)
+	if !ok {
+		return nil
+	}
+
+	seconds := ResolveVeoDuration(req.Metadata, req.Duration, req.Seconds)
+	resolution := ResolveVeoResolution(req.Metadata, req.Size)
+	resRatio := VeoResolutionRatio(info.UpstreamModelName, resolution)
+
+	return map[string]float64{
+		"seconds":    float64(seconds),
+		"resolution": resRatio,
+	}
+}
+
+// FetchTask polls task status via the Gemini operations GET endpoint.
 func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy string) (*http.Response, error) {
 	taskID, ok := body["task_id"].(string)
 	if !ok {
@@ -205,7 +188,6 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("decode task_id failed: %w", err)
 	}
 
-	// For Gemini API, we use GET request to the operations endpoint
 	version := model_setting.GetGeminiVersionSetting("default")
 	url := fmt.Sprintf("%s/%s/%s", baseUrl, version, upstreamName)
 
@@ -249,11 +231,9 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	ti.Progress = "100%"
 
 	ti.TaskID = taskcommon.EncodeLocalTaskID(op.Name)
-	// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
 
-	// Extract URL from generateVideoResponse if available
-	if len(op.Response.GenerateVideoResponse.GeneratedSamples) > 0 {
-		if uri := op.Response.GenerateVideoResponse.GeneratedSamples[0].Video.URI; uri != "" {
+	if len(op.Response.GenerateVideoResponse.GeneratedVideos) > 0 {
+		if uri := op.Response.GenerateVideoResponse.GeneratedVideos[0].Video.URI; uri != "" {
 			ti.RemoteUrl = uri
 		}
 	}
@@ -262,8 +242,6 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 }
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {
-	// Use GetUpstreamTaskID() to get the real upstream operation name for model extraction.
-	// task.TaskID is now a public task_xxxx ID, no longer a base64-encoded upstream name.
 	upstreamTaskID := task.GetUpstreamTaskID()
 	upstreamName, err := taskcommon.DecodeLocalTaskID(upstreamTaskID)
 	if err != nil {
