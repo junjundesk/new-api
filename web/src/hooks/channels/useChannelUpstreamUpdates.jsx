@@ -131,10 +131,10 @@ export const useChannelUpstreamUpdates = ({ t, refresh }) => {
 
       const addedCount = data?.added_models?.length || 0;
       const removedCount = data?.removed_models?.length || 0;
-      const ignoredCount = data?.ignored_models?.length || 0;
       const totalIgnoredCount = getManualIgnoredModelCountFromSettings(
         data?.settings,
       );
+      const ignoredCount = normalizeModelList(ignoreModels).length;
       showSuccess(
         t(
           '已处理上游模型更新：加入 {{added}} 个，删除 {{removed}} 个，本次忽略 {{ignored}} 个，当前已忽略模型 {{totalIgnored}} 个',
