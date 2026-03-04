@@ -34,36 +34,34 @@ func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.Re
 
 	isOpenRouter := info.ChannelType == constant.ChannelTypeOpenRouter
 
-	if claudeRequest.Thinking != nil && (claudeRequest.Thinking.Type == "enabled" || claudeRequest.Thinking.Type == "adaptive") {
-		if isOpenRouter {
-			if effort := claudeRequest.GetEfforts(); effort != "" {
-				effortBytes, _ := json.Marshal(effort)
-				openAIRequest.Verbosity = effortBytes
-			}
-			if claudeRequest.Thinking != nil {
-				var reasoning openrouter.RequestReasoning
-				if claudeRequest.Thinking.Type == "enabled" {
-					reasoning = openrouter.RequestReasoning{
-						Enabled:   true,
-						MaxTokens: claudeRequest.Thinking.GetBudgetTokens(),
-					}
-				} else if claudeRequest.Thinking.Type == "adaptive" {
-					reasoning = openrouter.RequestReasoning{
-						Enabled: true,
-					}
+	if isOpenRouter {
+		if effort := claudeRequest.GetEfforts(); effort != "" {
+			effortBytes, _ := json.Marshal(effort)
+			openAIRequest.Verbosity = effortBytes
+		}
+		if claudeRequest.Thinking != nil {
+			var reasoning openrouter.RequestReasoning
+			if claudeRequest.Thinking.Type == "enabled" {
+				reasoning = openrouter.RequestReasoning{
+					Enabled:   true,
+					MaxTokens: claudeRequest.Thinking.GetBudgetTokens(),
 				}
-				reasoningJSON, err := json.Marshal(reasoning)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal reasoning: %w", err)
+			} else if claudeRequest.Thinking.Type == "adaptive" {
+				reasoning = openrouter.RequestReasoning{
+					Enabled: true,
 				}
-				openAIRequest.Reasoning = reasoningJSON
 			}
-		} else {
-			thinkingSuffix := "-thinking"
-			if strings.HasSuffix(info.OriginModelName, thinkingSuffix) &&
-				!strings.HasSuffix(openAIRequest.Model, thinkingSuffix) {
-				openAIRequest.Model = openAIRequest.Model + thinkingSuffix
+			reasoningJSON, err := json.Marshal(reasoning)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal reasoning: %w", err)
 			}
+			openAIRequest.Reasoning = reasoningJSON
+		}
+	} else {
+		thinkingSuffix := "-thinking"
+		if strings.HasSuffix(info.OriginModelName, thinkingSuffix) &&
+			!strings.HasSuffix(openAIRequest.Model, thinkingSuffix) {
+			openAIRequest.Model = openAIRequest.Model + thinkingSuffix
 		}
 	}
 
