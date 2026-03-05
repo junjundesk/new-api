@@ -1840,14 +1840,6 @@ const ParamOverrideEditorModal = ({ visible, value, onSave, onCancel }) => {
                 {t('重置')}
               </Button>
             </Space>
-            <Text
-              type='tertiary'
-              size='small'
-              className='cursor-pointer select-none mt-1 whitespace-nowrap'
-              onClick={() => openFieldGuide('path')}
-            >
-              {t('字段速查')}
-            </Text>
           </div>
         </Card>
 
