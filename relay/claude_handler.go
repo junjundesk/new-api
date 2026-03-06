@@ -59,7 +59,9 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			Type: "adaptive",
 		}
 		request.OutputConfig = json.RawMessage(fmt.Sprintf(`{"effort":"%s"}`, effortLevel))
-		request.TopP = common.GetPointer[float64](0)
+		if request.TopP == nil {
+			request.TopP = common.GetPointer[float64](1)
+		}
 		request.Temperature = common.GetPointer[float64](1.0)
 		info.UpstreamModelName = request.Model
 	} else if model_setting.GetClaudeSettings().ThinkingAdapterEnabled &&
