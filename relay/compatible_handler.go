@@ -238,17 +238,13 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	}
 
 	// Tiered billing: only determines quota, logging continues through normal path
+	isClaudeUsageSemantic := relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatClaude
+	var tieredUsedVars map[string]bool
+	if snap := relayInfo.TieredBillingSnapshot; snap != nil {
+		tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
+	}
 	var tieredResult *billingexpr.TieredResult
-	tieredOk, tieredQuota, tieredRes := service.TryTieredSettle(relayInfo, billingexpr.TokenParams{
-		P:    float64(usage.PromptTokens),
-		C:    float64(usage.CompletionTokens),
-		CR:   float64(usage.PromptTokensDetails.CachedTokens),
-		CC:   float64(usage.PromptTokensDetails.CachedCreationTokens - usage.ClaudeCacheCreation1hTokens),
-		CC1h: float64(usage.ClaudeCacheCreation1hTokens),
-		Img:  float64(usage.PromptTokensDetails.ImageTokens),
-		AI:   float64(usage.PromptTokensDetails.AudioTokens),
-		AO:   float64(usage.CompletionTokenDetails.AudioTokens),
-	})
+	tieredOk, tieredQuota, tieredRes := service.TryTieredSettle(relayInfo, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, tieredUsedVars))
 	if tieredOk {
 		tieredResult = tieredRes
 	}
@@ -354,7 +350,6 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 
 	var audioInputQuota decimal.Decimal
 	var audioInputPrice float64
-	isClaudeUsageSemantic := relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatClaude
 	if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
 		// 减去 cached tokens
