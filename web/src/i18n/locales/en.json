@@ -3421,6 +3421,23 @@
     "新年促销": "New Year promo",
     "第 {{n}} 组": "Group {{n}}",
     "0=周日 1=周一 2=周二 3=周三 4=周四 5=周五 6=周六": "0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat",
-    "1=一月 ... 12=十二月": "1=Jan ... 12=Dec"
+    "1=一月 ... 12=十二月": "1=Jan ... 12=Dec",
+    "动态计费": "Dynamic pricing",
+    "价格根据用量档位和请求条件动态调整": "Price adjusts dynamically based on usage tiers and request conditions",
+    "分档价格表": "Tiered price table",
+    "条件乘数": "Condition multipliers",
+    "分组倍率": "Group ratio",
+    "将额外乘以上述价格": "will additionally multiply the above prices",
+    "默认": "Default",
+    "缓存读取": "Cache read",
+    "缓存创建": "Cache create",
+    "缓存创建-1h": "Cache create (1h)",
+    "见上方动态计费详情": "See dynamic pricing details above",
+    "分组倍率": "Group ratio",
+    "含时间条件": "Time rules",
+    "含请求条件": "Request rules",
+    "输入": "Input",
+    "输出": "Output",
+    "档": "tiers"
   }
 }

@@ -1620,37 +1620,38 @@ function renderPriceSimpleCore({
   return result;
 }
 
-export function renderModelPrice(
-  inputTokens,
-  completionTokens,
-  modelRatio,
-  modelPrice = -1,
-  completionRatio,
-  groupRatio,
-  user_group_ratio,
-  cacheTokens = 0,
-  cacheRatio = 1.0,
-  image = false,
-  imageRatio = 1.0,
-  imageOutputTokens = 0,
-  webSearch = false,
-  webSearchCallCount = 0,
-  webSearchPrice = 0,
-  fileSearch = false,
-  fileSearchCallCount = 0,
-  fileSearchPrice = 0,
-  audioInputSeperatePrice = false,
-  audioInputTokens = 0,
-  audioInputPrice = 0,
-  imageGenerationCall = false,
-  imageGenerationCallPrice = 0,
-  displayMode = 'price',
-) {
+export function renderModelPrice(opts) {
+  const {
+    prompt_tokens: inputTokens = 0,
+    completion_tokens: completionTokens = 0,
+    model_ratio: modelRatio = 0,
+    model_price: modelPrice = -1,
+    completion_ratio: completionRatio,
+    group_ratio: _groupRatio,
+    user_group_ratio,
+    cache_tokens: cacheTokens = 0,
+    cache_ratio: cacheRatio = 1.0,
+    image = false,
+    image_ratio: imageRatio = 1.0,
+    image_output: imageOutputTokens = 0,
+    web_search: webSearch = false,
+    web_search_call_count: webSearchCallCount = 0,
+    web_search_price: webSearchPrice = 0,
+    file_search: fileSearch = false,
+    file_search_call_count: fileSearchCallCount = 0,
+    file_search_price: fileSearchPrice = 0,
+    audio_input_seperate_price: audioInputSeperatePrice = false,
+    audio_input_token_count: audioInputTokens = 0,
+    audio_input_price: audioInputPrice = 0,
+    image_generation_call: imageGenerationCall = false,
+    image_generation_call_price: imageGenerationCallPrice = 0,
+    displayMode = 'price',
+  } = opts;
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
-    groupRatio,
+    _groupRatio,
     user_group_ratio,
   );
-  groupRatio = effectiveGroupRatio;
+  let groupRatio = effectiveGroupRatio;
 
   const { symbol, rate } = getCurrencyConfig();
 
@@ -2078,21 +2079,22 @@ export function renderModelPrice(
   ]);
 }
 
-export function renderLogContent(
-  modelRatio,
-  completionRatio,
-  modelPrice = -1,
-  groupRatio,
-  user_group_ratio,
-  cacheRatio = 1.0,
-  image = false,
-  imageRatio = 1.0,
-  webSearch = false,
-  webSearchCallCount = 0,
-  fileSearch = false,
-  fileSearchCallCount = 0,
-  displayMode = 'price',
-) {
+export function renderLogContent(opts) {
+  const {
+    model_ratio: modelRatio,
+    completion_ratio: completionRatio,
+    model_price: modelPrice = -1,
+    group_ratio: groupRatio,
+    user_group_ratio,
+    cache_ratio: cacheRatio = 1.0,
+    image = false,
+    image_ratio: imageRatio = 1.0,
+    web_search: webSearch = false,
+    web_search_call_count: webSearchCallCount = 0,
+    file_search: fileSearch = false,
+    file_search_call_count: fileSearchCallCount = 0,
+    displayMode = 'price',
+  } = opts;
   const {
     ratio,
     label: ratioLabel,
@@ -2208,26 +2210,193 @@ export function renderLogContent(
   }
 }
 
-export function renderModelPriceSimple(
-  modelRatio,
-  modelPrice = -1,
-  groupRatio,
-  user_group_ratio,
-  cacheTokens = 0,
-  cacheRatio = 1.0,
-  cacheCreationTokens = 0,
-  cacheCreationRatio = 1.0,
-  cacheCreationTokens5m = 0,
-  cacheCreationRatio5m = 1.0,
-  cacheCreationTokens1h = 0,
-  cacheCreationRatio1h = 1.0,
-  image = false,
-  imageRatio = 1.0,
-  isSystemPromptOverride = false,
-  provider = 'openai',
-  displayMode = 'price',
-  outputMode = 'text',
-) {
+function parseTiersFromExpr(exprStr) {
+  if (!exprStr) return [];
+  try {
+    const cacheVars = ['cr', 'cc', 'cc1h'];
+    const optCache = cacheVars.map((v) => `(?:\\s*\\+\\s*${v}\\s*\\*\\s*([\\d.eE+-]+))?`).join('');
+    const bodyPat = `p\\s*\\*\\s*([\\d.eE+-]+)\\s*\\+\\s*c\\s*\\*\\s*([\\d.eE+-]+)${optCache}`;
+    const tierRe = new RegExp(`tier\\("([^"]*)",\\s*${bodyPat}\\)`, 'g');
+    const tiers = [];
+    let m;
+    while ((m = tierRe.exec(exprStr)) !== null) {
+      tiers.push({
+        label: m[1],
+        inputPrice: Number(m[2]) * 2,
+        outputPrice: Number(m[3]) * 2,
+        cacheReadPrice: m[4] ? Number(m[4]) * 2 : 0,
+        cacheCreatePrice: m[5] ? Number(m[5]) * 2 : 0,
+        cacheCreate1hPrice: m[6] ? Number(m[6]) * 2 : 0,
+      });
+    }
+    return tiers;
+  } catch {
+    return [];
+  }
+}
+
+export function renderTieredModelPrice(opts) {
+  const {
+    prompt_tokens: inputTokens = 0,
+    completion_tokens: completionTokens = 0,
+    expr_b64: exprB64,
+    matched_tier: matchedTier,
+    group_ratio: groupRatio,
+    cache_tokens: cacheTokens = 0,
+    cache_creation_tokens: cacheCreationTokens = 0,
+    cache_creation_tokens_5m: cacheCreationTokens5m = 0,
+    cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+  } = opts;
+  let exprStr = '';
+  try { exprStr = atob(exprB64); } catch { /* ignore */ }
+  const tiers = parseTiersFromExpr(exprStr);
+  if (tiers.length === 0) {
+    return i18next.t('阶梯计费（表达式解析失败）');
+  }
+
+  const tier = tiers.find((t) => t.label === matchedTier) || tiers[0];
+  const { symbol, rate } = getCurrencyConfig();
+  const gr = groupRatio || 1;
+
+  const inputCost = (inputTokens / 1000000) * tier.inputPrice;
+  const outputCost = (completionTokens / 1000000) * tier.outputPrice;
+  const cacheReadCost = (cacheTokens / 1000000) * tier.cacheReadPrice;
+  const hasSplitCacheCreation = cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0;
+  let cacheCreateCost = 0;
+  if (hasSplitCacheCreation) {
+    cacheCreateCost = (cacheCreationTokens5m / 1000000) * tier.cacheCreatePrice
+      + (cacheCreationTokens1h / 1000000) * tier.cacheCreate1hPrice;
+  } else if (cacheCreationTokens > 0) {
+    cacheCreateCost = (cacheCreationTokens / 1000000) * tier.cacheCreatePrice;
+  }
+  const totalBeforeGroup = inputCost + outputCost + cacheReadCost + cacheCreateCost;
+  const total = totalBeforeGroup * gr;
+
+  const lines = [
+    buildBillingText('命中档位：{{tier}}', { tier: matchedTier || tier.label }),
+    buildBillingPriceText('输入价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.inputPrice, rate }),
+    buildBillingPriceText('输出价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.outputPrice, rate }),
+    cacheTokens > 0 && tier.cacheReadPrice > 0
+      ? buildBillingPriceText('缓存读取价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.cacheReadPrice, rate })
+      : null,
+    hasSplitCacheCreation && cacheCreationTokens5m > 0 && tier.cacheCreatePrice > 0
+      ? buildBillingPriceText('5m缓存创建价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.cacheCreatePrice, rate })
+      : null,
+    hasSplitCacheCreation && cacheCreationTokens1h > 0 && tier.cacheCreate1hPrice > 0
+      ? buildBillingPriceText('1h缓存创建价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.cacheCreate1hPrice, rate })
+      : null,
+    !hasSplitCacheCreation && cacheCreationTokens > 0 && tier.cacheCreatePrice > 0
+      ? buildBillingPriceText('缓存创建价格：{{symbol}}{{price}} / 1M tokens', { symbol, usdAmount: tier.cacheCreatePrice, rate })
+      : null,
+    buildBillingText(
+      '(输入 {{input}} tokens / 1M tokens * {{symbol}}{{inputPrice}} + 输出 {{output}} tokens / 1M tokens * {{symbol}}{{outputPrice}}) * 分组倍率 {{ratio}} = {{symbol}}{{total}}',
+      {
+        input: inputTokens, output: completionTokens, symbol,
+        inputPrice: formatBillingDisplayPrice(tier.inputPrice, rate),
+        outputPrice: formatBillingDisplayPrice(tier.outputPrice, rate),
+        ratio: gr, total: formatBillingDisplayPrice(total, rate),
+      },
+    ),
+  ];
+
+  return renderBillingArticle(lines);
+}
+
+export function renderTieredModelPriceSimple(opts) {
+  const {
+    expr_b64: exprB64,
+    matched_tier: matchedTier,
+    group_ratio: groupRatio,
+    user_group_ratio,
+    cache_tokens: cacheTokens = 0,
+    cache_creation_tokens_5m: cacheCreationTokens5m = 0,
+    cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_tokens: cacheCreationTokens = 0,
+    displayMode = 'price',
+    outputMode = 'segments',
+  } = opts;
+  let exprStr = '';
+  try { exprStr = atob(exprB64); } catch { /* ignore */ }
+  const tiers = parseTiersFromExpr(exprStr);
+  const tier = tiers.find((t) => t.label === matchedTier) || tiers[0];
+
+  if (outputMode === 'segments') {
+    const segments = [
+      {
+        tone: 'primary',
+        text: getGroupRatioText(groupRatio, user_group_ratio),
+      },
+    ];
+
+    if (tier && isPriceDisplayMode(displayMode)) {
+      segments.push({
+        tone: 'secondary',
+        text: i18next.t('输入 {{price}} / 1M tokens', {
+          price: formatCompactDisplayPrice(tier.inputPrice),
+        }),
+      });
+      if (cacheTokens > 0 && tier.cacheReadPrice > 0) {
+        segments.push({
+          tone: 'secondary',
+          text: i18next.t('缓存读 {{price}} / 1M tokens', {
+            price: formatCompactDisplayPrice(tier.cacheReadPrice),
+          }),
+        });
+      }
+      const hasSplitCacheCreation = cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0;
+      if (hasSplitCacheCreation && cacheCreationTokens5m > 0 && tier.cacheCreatePrice > 0) {
+        segments.push({
+          tone: 'secondary',
+          text: i18next.t('5m缓存创建 {{price}} / 1M tokens', {
+            price: formatCompactDisplayPrice(tier.cacheCreatePrice),
+          }),
+        });
+      }
+      if (hasSplitCacheCreation && cacheCreationTokens1h > 0 && tier.cacheCreate1hPrice > 0) {
+        segments.push({
+          tone: 'secondary',
+          text: i18next.t('1h缓存创建 {{price}} / 1M tokens', {
+            price: formatCompactDisplayPrice(tier.cacheCreate1hPrice),
+          }),
+        });
+      }
+      if (!hasSplitCacheCreation && cacheCreationTokens > 0 && tier.cacheCreatePrice > 0) {
+        segments.push({
+          tone: 'secondary',
+          text: i18next.t('缓存创建 {{price}} / 1M tokens', {
+            price: formatCompactDisplayPrice(tier.cacheCreatePrice),
+          }),
+        });
+      }
+    }
+
+    return segments;
+  }
+
+  return [];
+}
+
+export function renderModelPriceSimple(opts) {
+  const {
+    model_ratio: modelRatio,
+    model_price: modelPrice = -1,
+    group_ratio: groupRatio,
+    user_group_ratio,
+    cache_tokens: cacheTokens = 0,
+    cache_ratio: cacheRatio = 1.0,
+    cache_creation_tokens: cacheCreationTokens = 0,
+    cache_creation_ratio: cacheCreationRatio = 1.0,
+    cache_creation_tokens_5m: cacheCreationTokens5m = 0,
+    cache_creation_ratio_5m: cacheCreationRatio5m = 1.0,
+    cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_ratio_1h: cacheCreationRatio1h = 1.0,
+    image = false,
+    image_ratio: imageRatio = 1.0,
+    is_system_prompt_overwritten: isSystemPromptOverride = false,
+    provider = 'openai',
+    displayMode = 'price',
+    outputMode = 'text',
+  } = opts;
   return renderPriceSimpleCore({
     modelRatio,
     modelPrice,
@@ -2249,27 +2418,28 @@ export function renderModelPriceSimple(
   });
 }
 
-export function renderAudioModelPrice(
-  inputTokens,
-  completionTokens,
-  modelRatio,
-  modelPrice = -1,
-  completionRatio,
-  audioInputTokens,
-  audioCompletionTokens,
-  audioRatio,
-  audioCompletionRatio,
-  groupRatio,
-  user_group_ratio,
-  cacheTokens = 0,
-  cacheRatio = 1.0,
-  displayMode = 'price',
-) {
+export function renderAudioModelPrice(opts) {
+  const {
+    prompt_tokens: inputTokens = 0,
+    completion_tokens: completionTokens = 0,
+    model_ratio: modelRatio = 0,
+    model_price: modelPrice = -1,
+    completion_ratio: completionRatio,
+    audio_input: audioInputTokens = 0,
+    audio_output: audioCompletionTokens = 0,
+    audio_ratio: audioRatio,
+    audio_completion_ratio: audioCompletionRatio,
+    group_ratio: _groupRatio,
+    user_group_ratio,
+    cache_tokens: cacheTokens = 0,
+    cache_ratio: cacheRatio = 1.0,
+    displayMode = 'price',
+  } = opts;
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
-    groupRatio,
+    _groupRatio,
     user_group_ratio,
   );
-  groupRatio = effectiveGroupRatio;
+  let groupRatio = effectiveGroupRatio;
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
@@ -2535,29 +2705,30 @@ export function renderQuotaWithPrompt(quota, digits) {
   return '';
 }
 
-export function renderClaudeModelPrice(
-  inputTokens,
-  completionTokens,
-  modelRatio,
-  modelPrice = -1,
-  completionRatio,
-  groupRatio,
-  user_group_ratio,
-  cacheTokens = 0,
-  cacheRatio = 1.0,
-  cacheCreationTokens = 0,
-  cacheCreationRatio = 1.0,
-  cacheCreationTokens5m = 0,
-  cacheCreationRatio5m = 1.0,
-  cacheCreationTokens1h = 0,
-  cacheCreationRatio1h = 1.0,
-  displayMode = 'price',
-) {
+export function renderClaudeModelPrice(opts) {
+  const {
+    prompt_tokens: inputTokens = 0,
+    completion_tokens: completionTokens = 0,
+    model_ratio: modelRatio = 0,
+    model_price: modelPrice = -1,
+    completion_ratio: completionRatio,
+    group_ratio: _groupRatio,
+    user_group_ratio,
+    cache_tokens: cacheTokens = 0,
+    cache_ratio: cacheRatio = 1.0,
+    cache_creation_tokens: cacheCreationTokens = 0,
+    cache_creation_ratio: cacheCreationRatio = 1.0,
+    cache_creation_tokens_5m: cacheCreationTokens5m = 0,
+    cache_creation_ratio_5m: cacheCreationRatio5m = 1.0,
+    cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_ratio_1h: cacheCreationRatio1h = 1.0,
+    displayMode = 'price',
+  } = opts;
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
-    groupRatio,
+    _groupRatio,
     user_group_ratio,
   );
-  groupRatio = effectiveGroupRatio;
+  let groupRatio = effectiveGroupRatio;
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
@@ -2944,25 +3115,26 @@ export function renderClaudeModelPrice(
   ]);
 }
 
-export function renderClaudeLogContent(
-  modelRatio,
-  completionRatio,
-  modelPrice = -1,
-  groupRatio,
-  user_group_ratio,
-  cacheRatio = 1.0,
-  cacheCreationRatio = 1.0,
-  cacheCreationTokens5m = 0,
-  cacheCreationRatio5m = 1.0,
-  cacheCreationTokens1h = 0,
-  cacheCreationRatio1h = 1.0,
-  displayMode = 'price',
-) {
+export function renderClaudeLogContent(opts) {
+  const {
+    model_ratio: modelRatio,
+    completion_ratio: completionRatio,
+    model_price: modelPrice = -1,
+    group_ratio: _groupRatio,
+    user_group_ratio,
+    cache_ratio: cacheRatio = 1.0,
+    cache_creation_ratio: cacheCreationRatio = 1.0,
+    cache_creation_tokens_5m: cacheCreationTokens5m = 0,
+    cache_creation_ratio_5m: cacheCreationRatio5m = 1.0,
+    cache_creation_tokens_1h: cacheCreationTokens1h = 0,
+    cache_creation_ratio_1h: cacheCreationRatio1h = 1.0,
+    displayMode = 'price',
+  } = opts;
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
-    groupRatio,
+    _groupRatio,
     user_group_ratio,
   );
-  groupRatio = effectiveGroupRatio;
+  let groupRatio = effectiveGroupRatio;
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
