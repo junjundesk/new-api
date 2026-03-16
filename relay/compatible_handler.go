@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -234,6 +235,18 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 
 	if originUsage != nil {
 		service.ObserveChannelAffinityUsageCacheByRelayFormat(ctx, usage, relayInfo.GetFinalRequestRelayFormat())
+	}
+
+	// Tiered billing early return
+	if ok, tieredQuota, tieredResult := service.TryTieredSettle(relayInfo, billingexpr.TokenParams{
+		P:    float64(usage.PromptTokens),
+		C:    float64(usage.CompletionTokens),
+		CR:   float64(usage.PromptTokensDetails.CachedTokens),
+		CC:   float64(usage.PromptTokensDetails.CachedCreationTokens - usage.ClaudeCacheCreation1hTokens),
+		CC1h: float64(usage.ClaudeCacheCreation1hTokens),
+	}); ok {
+		postConsumeQuotaTiered(ctx, relayInfo, usage, tieredQuota, tieredResult, extraContent...)
+		return
 	}
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
@@ -495,6 +508,54 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
+		ModelName:        logModel,
+		TokenName:        tokenName,
+		Quota:            quota,
+		Content:          logContent,
+		TokenId:          relayInfo.TokenId,
+		UseTimeSeconds:   int(useTimeSeconds),
+		IsStream:         relayInfo.IsStream,
+		Group:            relayInfo.UsingGroup,
+		Other:            other,
+	})
+}
+
+func postConsumeQuotaTiered(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, quota int, tieredResult *service.TieredResultWrapper, extraContent ...string) {
+	_ = tieredResult // will be used for log enrichment
+
+	useTimeSeconds := time.Now().Unix() - relayInfo.StartTime.Unix()
+	modelName := relayInfo.OriginModelName
+	tokenName := ctx.GetString("token_name")
+	groupRatio := relayInfo.PriceData.GroupRatioInfo.GroupRatio
+
+	totalTokens := usage.PromptTokens + usage.CompletionTokens
+
+	if totalTokens == 0 {
+		quota = 0
+		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
+		logger.LogError(ctx, fmt.Sprintf("tiered billing: total tokens is 0, userId %d, channelId %d, tokenId %d, model %s, pre-consumed %d",
+			relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, modelName, relayInfo.FinalPreConsumedQuota))
+	} else {
+		if groupRatio != 0 && quota == 0 {
+			quota = 1
+		}
+		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, quota)
+		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
+	}
+
+	if err := service.SettleBilling(ctx, relayInfo, quota); err != nil {
+		logger.LogError(ctx, "error settling tiered billing: "+err.Error())
+	}
+
+	logModel := modelName
+	logContent := strings.Join(extraContent, ", ")
+
+	other := service.GenerateTieredOtherInfo(ctx, relayInfo, tieredResult)
+
+	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
+		ChannelId:        relayInfo.ChannelId,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
 		ModelName:        logModel,
 		TokenName:        tokenName,
 		Quota:            quota,
