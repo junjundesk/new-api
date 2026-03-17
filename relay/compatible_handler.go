@@ -288,62 +288,27 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 
 	ratio := dModelRatio.Mul(dGroupRatio)
 
-	// openai web search 工具计费
-	var dWebSearchQuota decimal.Decimal
-	var webSearchPrice float64
-	// response api 格式工具计费
+	// Collect tool call usage from context and relayInfo
+	toolUsage := service.ToolCallUsage{
+		WebSearchModelName:     modelName,
+		ClaudeWebSearchCalls:   ctx.GetInt("claude_web_search_requests"),
+		ImageGenerationCall:    ctx.GetBool("image_generation_call"),
+		ImageGenerationQuality: ctx.GetString("image_generation_call_quality"),
+		ImageGenerationSize:    ctx.GetString("image_generation_call_size"),
+	}
 	if relayInfo.ResponsesUsageInfo != nil {
-		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool.CallCount > 0 {
-			// 计算 web search 调用的配额 (配额 = 价格 * 调用次数 / 1000 * 分组倍率)
-			webSearchPrice = operation_setting.GetWebSearchPricePerThousand(modelName, webSearchTool.SearchContextSize)
-			dWebSearchQuota = decimal.NewFromFloat(webSearchPrice).
-				Mul(decimal.NewFromInt(int64(webSearchTool.CallCount))).
-				Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-			extraContent = append(extraContent, fmt.Sprintf("Web Search 调用 %d 次，上下文大小 %s，调用花费 %s",
-				webSearchTool.CallCount, webSearchTool.SearchContextSize, dWebSearchQuota.String()))
+		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists {
+			toolUsage.WebSearchCalls = webSearchTool.CallCount
+		}
+		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists {
+			toolUsage.FileSearchCalls = fileSearchTool.CallCount
 		}
 	} else if strings.HasSuffix(modelName, "search-preview") {
-		// search-preview 模型不支持 response api
-		searchContextSize := ctx.GetString("chat_completion_web_search_context_size")
-		if searchContextSize == "" {
-			searchContextSize = "medium"
-		}
-		webSearchPrice = operation_setting.GetWebSearchPricePerThousand(modelName, searchContextSize)
-		dWebSearchQuota = decimal.NewFromFloat(webSearchPrice).
-			Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-		extraContent = append(extraContent, fmt.Sprintf("Web Search 调用 1 次，上下文大小 %s，调用花费 %s",
-			searchContextSize, dWebSearchQuota.String()))
+		toolUsage.WebSearchCalls = 1
 	}
-	// claude web search tool 计费
-	var dClaudeWebSearchQuota decimal.Decimal
-	var claudeWebSearchPrice float64
-	claudeWebSearchCallCount := ctx.GetInt("claude_web_search_requests")
-	if claudeWebSearchCallCount > 0 {
-		claudeWebSearchPrice = operation_setting.GetClaudeWebSearchPricePerThousand()
-		dClaudeWebSearchQuota = decimal.NewFromFloat(claudeWebSearchPrice).
-			Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit).Mul(decimal.NewFromInt(int64(claudeWebSearchCallCount)))
-		extraContent = append(extraContent, fmt.Sprintf("Claude Web Search 调用 %d 次，调用花费 %s",
-			claudeWebSearchCallCount, dClaudeWebSearchQuota.String()))
-	}
-	// file search tool 计费
-	var dFileSearchQuota decimal.Decimal
-	var fileSearchPrice float64
-	if relayInfo.ResponsesUsageInfo != nil {
-		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists && fileSearchTool.CallCount > 0 {
-			fileSearchPrice = operation_setting.GetFileSearchPricePerThousand()
-			dFileSearchQuota = decimal.NewFromFloat(fileSearchPrice).
-				Mul(decimal.NewFromInt(int64(fileSearchTool.CallCount))).
-				Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-			extraContent = append(extraContent, fmt.Sprintf("File Search 调用 %d 次，调用花费 %s",
-				fileSearchTool.CallCount, dFileSearchQuota.String()))
-		}
-	}
-	var dImageGenerationCallQuota decimal.Decimal
-	var imageGenerationCallPrice float64
-	if ctx.GetBool("image_generation_call") {
-		imageGenerationCallPrice = operation_setting.GetGPTImage1PriceOnceCall(ctx.GetString("image_generation_call_quality"), ctx.GetString("image_generation_call_size"))
-		dImageGenerationCallQuota = decimal.NewFromFloat(imageGenerationCallPrice).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", dImageGenerationCallQuota.String()))
+	toolResult := service.ComputeToolCallQuota(toolUsage, groupRatio)
+	for _, item := range toolResult.Items {
+		extraContent = append(extraContent, fmt.Sprintf("%s 调用 %d 次，花费 %d", item.Name, item.CallCount, item.Quota))
 	}
 
 	var quotaCalculateDecimal decimal.Decimal
@@ -401,13 +366,8 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	} else {
 		quotaCalculateDecimal = dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
 	}
-	// 添加 responses tools call 调用的配额
-	quotaCalculateDecimal = quotaCalculateDecimal.Add(dWebSearchQuota)
-	quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
-	// 添加 audio input 独立计费
+	// 添加 audio input 独立计费（Gemini 音频按 token 计价，不属于工具调用）
 	quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-	// 添加 image generation call 计费
-	quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
 
 	if len(relayInfo.PriceData.OtherRatios) > 0 {
 		for key, otherRatio := range relayInfo.PriceData.OtherRatios {
@@ -420,6 +380,10 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	quota := int(quotaCalculateDecimal.Round(0).IntPart())
 	if tieredOk {
 		quota = tieredQuota
+	}
+	// Tool call fees: add for per-token and tiered billing; skip for per-call (price includes everything)
+	if !relayInfo.PriceData.UsePrice && toolResult.TotalQuota > 0 {
+		quota += toolResult.TotalQuota
 	}
 	totalTokens := promptTokens + completionTokens
 
@@ -471,38 +435,25 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 		other["cache_creation_tokens"] = cachedCreationTokens
 		other["cache_creation_ratio"] = cachedCreationRatio
 	}
-	if !dWebSearchQuota.IsZero() {
-		if relayInfo.ResponsesUsageInfo != nil {
-			if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists {
-				other["web_search"] = true
-				other["web_search_call_count"] = webSearchTool.CallCount
-				other["web_search_price"] = webSearchPrice
-			}
-		} else if strings.HasSuffix(modelName, "search-preview") {
+	for _, item := range toolResult.Items {
+		switch item.Name {
+		case "web_search", "claude_web_search":
 			other["web_search"] = true
-			other["web_search_call_count"] = 1
-			other["web_search_price"] = webSearchPrice
-		}
-	} else if !dClaudeWebSearchQuota.IsZero() {
-		other["web_search"] = true
-		other["web_search_call_count"] = claudeWebSearchCallCount
-		other["web_search_price"] = claudeWebSearchPrice
-	}
-	if !dFileSearchQuota.IsZero() && relayInfo.ResponsesUsageInfo != nil {
-		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists {
+			other["web_search_call_count"] = item.CallCount
+			other["web_search_price"] = item.PricePer1K
+		case "file_search":
 			other["file_search"] = true
-			other["file_search_call_count"] = fileSearchTool.CallCount
-			other["file_search_price"] = fileSearchPrice
+			other["file_search_call_count"] = item.CallCount
+			other["file_search_price"] = item.PricePer1K
+		case "image_generation":
+			other["image_generation_call"] = true
+			other["image_generation_call_price"] = item.TotalPrice
 		}
 	}
 	if !audioInputQuota.IsZero() {
 		other["audio_input_seperate_price"] = true
 		other["audio_input_token_count"] = audioTokens
 		other["audio_input_price"] = audioInputPrice
-	}
-	if !dImageGenerationCallQuota.IsZero() {
-		other["image_generation_call"] = true
-		other["image_generation_call_price"] = imageGenerationCallPrice
 	}
 	if tieredResult != nil {
 		service.InjectTieredBillingInfo(other, relayInfo, tieredResult)
