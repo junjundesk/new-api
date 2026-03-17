@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Avatar, Tag, Table, Typography } from '@douyinfe/semi-ui';
+import { Avatar, Tag, Table, Typography } from '@douyinfe/semi-ui';
 import { IconPriceTag } from '@douyinfe/semi-icons';
 import { parseTiersFromExpr } from '../../../../../helpers';
 import { BILLING_VARS } from '../../../../../constants';
@@ -100,7 +100,7 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
 
   if (!hasTiers && !hasRules) {
     return (
-      <Card className='!rounded-2xl shadow-sm border-0'>
+      <div>
         <div className='flex items-center mb-3'>
           <Avatar size='small' color='amber' className='mr-2 shadow-md'>
             <IconPriceTag size={16} />
@@ -110,7 +110,7 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
         <div className='text-sm text-gray-500'>
           <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{billingExpr}</code>
         </div>
-      </Card>
+      </div>
     );
   }
 
@@ -148,7 +148,7 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
     : [];
 
   return (
-    <Card className='!rounded-2xl shadow-sm border-0'>
+    <div>
       <div className='flex items-center mb-4'>
         <Avatar size='small' color='amber' className='mr-2 shadow-md'>
           <IconPriceTag size={16} />
@@ -202,6 +202,6 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
         </div>
       )}
 
-    </Card>
+    </div>
   );
 }

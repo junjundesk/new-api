@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Avatar, Typography, Table, Tag } from '@douyinfe/semi-ui';
+import { Avatar, Typography, Table, Tag } from '@douyinfe/semi-ui';
 import { IconCoinMoneyStroked } from '@douyinfe/semi-icons';
 import { calculateModelPrice, getModelPriceItems } from '../../../../../helpers';
 
@@ -166,7 +166,7 @@ const ModelPricingTable = ({
   };
 
   return (
-    <Card className='!rounded-2xl shadow-sm border-0'>
+    <div>
       <div className='flex items-center mb-4'>
         <Avatar size='small' color='orange' className='mr-2 shadow-md'>
           <IconCoinMoneyStroked size={16} />
@@ -194,7 +194,7 @@ const ModelPricingTable = ({
         </div>
       )}
       {renderGroupPriceTable()}
-    </Card>
+    </div>
   );
 };
 
