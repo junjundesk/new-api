@@ -290,21 +290,26 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 
 	// Collect tool call usage from context and relayInfo
 	toolUsage := service.ToolCallUsage{
-		WebSearchModelName:     modelName,
-		ClaudeWebSearchCalls:   ctx.GetInt("claude_web_search_requests"),
+		ModelName:              modelName,
 		ImageGenerationCall:    ctx.GetBool("image_generation_call"),
 		ImageGenerationQuality: ctx.GetString("image_generation_call_quality"),
 		ImageGenerationSize:    ctx.GetString("image_generation_call_size"),
 	}
 	if relayInfo.ResponsesUsageInfo != nil {
-		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists {
+		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool.CallCount > 0 {
 			toolUsage.WebSearchCalls = webSearchTool.CallCount
+			toolUsage.WebSearchToolName = dto.BuildInToolWebSearchPreview
 		}
 		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists {
 			toolUsage.FileSearchCalls = fileSearchTool.CallCount
 		}
 	} else if strings.HasSuffix(modelName, "search-preview") {
 		toolUsage.WebSearchCalls = 1
+		toolUsage.WebSearchToolName = dto.BuildInToolWebSearchPreview
+	}
+	if claudeSearchCalls := ctx.GetInt("claude_web_search_requests"); claudeSearchCalls > 0 {
+		toolUsage.WebSearchCalls = claudeSearchCalls
+		toolUsage.WebSearchToolName = "web_search"
 	}
 	toolResult := service.ComputeToolCallQuota(toolUsage, groupRatio)
 	for _, item := range toolResult.Items {
