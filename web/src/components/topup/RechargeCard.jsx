@@ -291,11 +291,11 @@ const RechargeCard = ({
                       style={{ width: '100%' }}
                     />
                   </Col>
+                  {payMethods && payMethods.filter(m => m.type !== 'waffo').length > 0 && (
                   <Col xs={24} sm={24} md={24} lg={14} xl={14}>
                     <Form.Slot label={t('选择支付方式')}>
-                      {payMethods && payMethods.length > 0 ? (
                         <Space wrap>
-                          {payMethods.map((payMethod) => {
+                          {payMethods.filter(m => m.type !== 'waffo').map((payMethod) => {
                             const minTopupVal = Number(payMethod.min_topup) || 0;
                             const isStripe = payMethod.type === 'stripe';
                             const disabled =
@@ -355,13 +355,9 @@ const RechargeCard = ({
                             );
                           })}
                         </Space>
-                      ) : (
-                        <div className='text-gray-500 text-sm p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300'>
-                          {t('暂无可用的支付方式，请联系管理员配置')}
-                        </div>
-                      )}
                     </Form.Slot>
                   </Col>
+                  )}
                 </Row>
               )}
 
