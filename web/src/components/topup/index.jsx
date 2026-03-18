@@ -74,6 +74,7 @@ const TopUp = () => {
   // Waffo 相关状态
   const [enableWaffoTopUp, setEnableWaffoTopUp] = useState(false);
   const [waffoPayMethods, setWaffoPayMethods] = useState([]);
+  const [waffoMinTopUp, setWaffoMinTopUp] = useState(1);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -316,8 +317,8 @@ const TopUp = () => {
 
   const waffoTopUp = async (payMethodIndex) => {
     try {
-        if (topUpCount < minTopUp) {
-            showError(t('充值数量不能小于') + minTopUp);
+        if (topUpCount < waffoMinTopUp) {
+            showError(t('充值数量不能小于') + waffoMinTopUp);
             return;
         }
         setPaymentLoading(true);
@@ -493,6 +494,7 @@ const TopUp = () => {
           const enableWaffoTopUp = data.enable_waffo_topup || false;
           setEnableWaffoTopUp(enableWaffoTopUp);
           setWaffoPayMethods(data.waffo_pay_methods || []);
+          setWaffoMinTopUp(data.waffo_min_topup || 1);
           setMinTopUp(minTopUpValue);
           setTopUpCount(minTopUpValue);
 
