@@ -255,17 +255,6 @@ func RequestWaffoPay(c *gin.Context) {
 	orderData := resp.GetData()
 	log.Printf("Waffo 订单创建成功 - 用户: %d, 订单: %s, 金额: %.2f", id, merchantOrderId, payMoney)
 
-	// 存储 gatewayOrderId，退款时直接使用；保存失败则中止，避免付款后无法退款
-	if orderData.AcquiringOrderID != "" {
-		if err := topUp.Update(); err != nil {
-			log.Printf("Waffo 保存 gatewayOrderId 失败: %v, 订单: %s", err, merchantOrderId)
-			topUp.Status = common.TopUpStatusFailed
-			_ = topUp.Update()
-			c.JSON(200, gin.H{"message": "error", "data": "创建订单失败，请重试"})
-			return
-		}
-	}
-
 	paymentUrl := orderData.FetchRedirectURL()
 	if paymentUrl == "" {
 		paymentUrl = orderData.OrderAction
