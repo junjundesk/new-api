@@ -704,9 +704,7 @@ func extractLlamaCachedTokensFromBody(body []byte) (int, bool) {
 
 	var payload struct {
 		Timings struct {
-			Usage struct {
-				CachedTokens *int `json:"cache_n"`
-			} `json:"usage"`
+			CachedTokens *int `json:"cache_n"`
 		} `json:"timings"`
 	}
 
@@ -714,8 +712,8 @@ func extractLlamaCachedTokensFromBody(body []byte) (int, bool) {
 		return 0, false
 	}
 
-	if payload.Timings.Usage.CachedTokens == nil {
+	if payload.Timings.CachedTokens == nil {
 		return 0, false
 	}
-	return *payload.Timings.Usage.CachedTokens, true
+	return *payload.Timings.CachedTokens, true
 }
