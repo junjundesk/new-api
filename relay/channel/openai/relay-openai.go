@@ -703,13 +703,19 @@ func extractLlamaCachedTokensFromBody(body []byte) (int, bool) {
 	}
 
 	var payload struct {
-		Usage struct {
-			CachedTokens *int `json:"cache_n"`
+		Timings struct {
+			Usage struct {
+				CachedTokens *int `json:"cache_n"`
+			} `json:"usage"`
 		} `json:"timings"`
 	}
 
 	if err := common.Unmarshal(body, &payload); err != nil {
 		return 0, false
 	}
-	return *payload.Usage.CachedTokens, true
+
+	if payload.Timings.Usage.CachedTokens == nil {
+		return 0, false
+	}
+	return *payload.Timings.Usage.CachedTokens, true
 }
