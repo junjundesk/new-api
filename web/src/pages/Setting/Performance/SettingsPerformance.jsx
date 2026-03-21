@@ -203,10 +203,10 @@ export default function SettingsPerformance(props) {
             size: formatBytes(freed_bytes),
           }),
         );
-        fetchLogInfo();
       } else {
         showError(res.data.message || t('清理失败'));
       }
+      fetchLogInfo();
     } catch (error) {
       showError(t('清理失败'));
     } finally {
