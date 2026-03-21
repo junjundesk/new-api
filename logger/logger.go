@@ -29,6 +29,15 @@ const maxLogCount = 1000000
 var logCount int
 var setupLogLock sync.Mutex
 var setupLogWorking bool
+var currentLogPath string
+var currentLogPathMu sync.RWMutex
+var currentLogFile *os.File
+
+func GetCurrentLogPath() string {
+	currentLogPathMu.RLock()
+	defer currentLogPathMu.RUnlock()
+	return currentLogPath
+}
 
 func SetupLogger() {
 	defer func() {
@@ -48,8 +57,16 @@ func SetupLogger() {
 		if err != nil {
 			log.Fatal("failed to open log file")
 		}
+		currentLogPathMu.Lock()
+		oldFile := currentLogFile
+		currentLogPath = logPath
+		currentLogFile = fd
 		gin.DefaultWriter = io.MultiWriter(os.Stdout, fd)
 		gin.DefaultErrorWriter = io.MultiWriter(os.Stderr, fd)
+		currentLogPathMu.Unlock()
+		if oldFile != nil {
+			_ = oldFile.Close()
+		}
 	}
 }
 
