@@ -2772,7 +2772,7 @@
     "请输入新的部署名称": "Please enter new deployment name",
     "请输入显示名称": "Please enter display name",
     "请输入有效的JSON格式的请求体。您可以参考预览面板中的默认请求体格式。": "Please enter a valid JSON format request body. You can refer to the default request body format in the preview panel.",
-    "请输入有效的数值": "Please enter a valid value",
+    "请输入有效的数值": "Please enter a valid number",
     "请输入有效的数字": "Please enter a valid number",
     "请输入有效的镜像地址": "Please enter a valid image address",
     "请输入标签名称": "Please enter the tag name",

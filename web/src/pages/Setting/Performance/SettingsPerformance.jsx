@@ -408,7 +408,7 @@ export default function SettingsPerformance(props) {
           )}
           style={{ marginBottom: 16 }}
         />
-        {logInfo && logInfo.enabled ? (
+        {logInfo === null ? null : logInfo.enabled ? (
           <>
             <Descriptions
               data={[

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -329,14 +330,25 @@ func CleanupLogFiles(c *gin.Context) {
 		freedBytes += f.Size
 	}
 
+	result := gin.H{
+		"deleted_count": deletedCount,
+		"freed_bytes":   freedBytes,
+		"failed_files":  failedFiles,
+	}
+
+	if len(failedFiles) > 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("部分文件删除失败（%d/%d）", len(failedFiles), len(toDelete)),
+			"data":    result,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data": gin.H{
-			"deleted_count": deletedCount,
-			"freed_bytes":   freedBytes,
-			"failed_files":  failedFiles,
-		},
+		"data":    result,
 	})
 }
 
