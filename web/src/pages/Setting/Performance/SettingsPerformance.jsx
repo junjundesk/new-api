@@ -463,16 +463,18 @@ export default function SettingsPerformance(props) {
                   />
                 </div>
               </Col>
-              <Col
-                xs={24}
-                sm={12}
-                md={8}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  paddingBottom: 12,
-                }}
-              >
+              <Col xs={24} sm={12} md={8}>
+                <div style={{ marginBottom: 12 }}>
+                  <Text
+                    strong
+                    style={{
+                      display: 'block',
+                      marginBottom: 8,
+                      visibility: 'hidden',
+                    }}
+                  >
+                    &nbsp;
+                  </Text>
                 <Popconfirm
                   title={t('确认清理日志文件？')}
                   content={
@@ -491,6 +493,7 @@ export default function SettingsPerformance(props) {
                     {t('清理日志文件')}
                   </Button>
                 </Popconfirm>
+                </div>
               </Col>
             </Row>
           </>
