@@ -187,14 +187,14 @@ const AccountInfoCard = ({ t, label, value, onCopy, monospace = false }) => {
   const hasValue = text !== '';
 
   return (
-    <div className='rounded-xl border border-semi-color-border bg-semi-color-fill-0 p-3'>
-      <div className='text-[11px] uppercase tracking-[0.18em] text-semi-color-text-2'>
+    <div className='rounded-md bg-semi-color-fill-0 px-2.5 py-2'>
+      <div className='text-[11px] text-semi-color-text-2'>
         {label}
       </div>
-      <div className='mt-2 flex items-start justify-between gap-3'>
+      <div className='mt-1 flex items-start justify-between gap-2'>
         <div
-          className={`min-w-0 flex-1 break-all text-sm text-semi-color-text-0 ${
-            monospace ? 'font-mono' : 'font-medium'
+          className={`min-w-0 flex-1 break-all text-xs leading-5 text-semi-color-text-1 ${
+            monospace ? 'font-mono' : ''
           }`}
         >
           {hasValue ? text : '-'}
@@ -203,6 +203,7 @@ const AccountInfoCard = ({ t, label, value, onCopy, monospace = false }) => {
           size='small'
           type='tertiary'
           theme='borderless'
+          className='px-1 text-xs'
           disabled={!hasValue}
           onClick={() => onCopy?.(text)}
         >
@@ -266,6 +267,7 @@ const RateLimitWindowCard = ({ t, title, windowData }) => {
 
 const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
   const tt = typeof t === 'function' ? t : (v) => v;
+  const [showRawJson, setShowRawJson] = useState(false);
   const data = payload?.data ?? null;
   const rateLimit = data?.rate_limit ?? {};
   const { fiveHourWindow, weeklyWindow } = resolveRateLimitWindows(data);
@@ -291,37 +293,35 @@ const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
         </div>
       )}
 
-      <div className='overflow-hidden rounded-2xl border border-semi-color-border bg-semi-color-bg-0 shadow-sm'>
-        <div className='bg-slate-900 px-4 py-4 text-white'>
-          <div className='flex flex-wrap items-start justify-between gap-3'>
-            <div className='min-w-0'>
-              <div className='text-[11px] uppercase tracking-[0.22em] text-white/60'>
-                {tt('Codex 帐号')}
-              </div>
-              <div className='mt-2 flex flex-wrap items-center gap-2'>
-                <Tag
-                  color={accountTypeTagColor}
-                  type='light'
-                  shape='circle'
-                  size='large'
-                  className='font-semibold'
-                >
-                  {accountTypeLabel}
-                </Tag>
-                {statusTag}
-                <div className='inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/80'>
-                  {tt('上游状态码：')}
-                  {upstreamStatus ?? '-'}
-                </div>
-              </div>
+      <div className='rounded-xl border border-semi-color-border bg-semi-color-bg-0 p-3'>
+        <div className='flex flex-wrap items-start justify-between gap-2'>
+          <div className='min-w-0'>
+            <div className='text-xs font-medium text-semi-color-text-2'>
+              {tt('Codex 帐号')}
             </div>
-            <Button type='primary' theme='solid' onClick={onRefresh}>
-              {tt('刷新')}
-            </Button>
+            <div className='mt-2 flex flex-wrap items-center gap-2'>
+              <Tag
+                color={accountTypeTagColor}
+                type='light'
+                shape='circle'
+                size='large'
+                className='font-semibold'
+              >
+                {accountTypeLabel}
+              </Tag>
+              {statusTag}
+              <Tag color='grey' type='light' shape='circle'>
+                {tt('上游状态码：')}
+                {upstreamStatus ?? '-'}
+              </Tag>
+            </div>
           </div>
+          <Button size='small' type='tertiary' theme='outline' onClick={onRefresh}>
+            {tt('刷新')}
+          </Button>
         </div>
 
-        <div className='grid grid-cols-1 gap-3 p-4 md:grid-cols-3'>
+        <div className='mt-2 grid grid-cols-1 gap-2 md:grid-cols-3'>
           <AccountInfoCard
             t={tt}
             label='User ID'
@@ -339,7 +339,7 @@ const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
           />
         </div>
 
-        <div className='border-t border-semi-color-border px-4 py-3 text-xs text-semi-color-text-2'>
+        <div className='mt-2 text-xs text-semi-color-text-2'>
           {tt('渠道：')}
           {record?.name || '-'} ({tt('编号：')}
           {record?.id || '-'})
@@ -373,19 +373,33 @@ const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
       <div>
         <div className='mb-1 flex items-center justify-between gap-2'>
           <div className='text-sm font-medium'>{tt('原始 JSON')}</div>
-          <Button
-            size='small'
-            type='primary'
-            theme='outline'
-            onClick={() => onCopy?.(rawText)}
-            disabled={!rawText}
-          >
-            {tt('复制')}
-          </Button>
+          <div className='flex items-center gap-2'>
+            <Button
+              size='small'
+              type='tertiary'
+              theme='outline'
+              onClick={() => setShowRawJson((prev) => !prev)}
+            >
+              {showRawJson ? tt('收起') : tt('展开')}
+            </Button>
+            {showRawJson && (
+              <Button
+                size='small'
+                type='primary'
+                theme='outline'
+                onClick={() => onCopy?.(rawText)}
+                disabled={!rawText}
+              >
+                {tt('复制')}
+              </Button>
+            )}
+          </div>
         </div>
-        <pre className='max-h-[50vh] overflow-auto rounded-lg bg-semi-color-fill-0 p-3 text-xs text-semi-color-text-0'>
-          {rawText}
-        </pre>
+        {showRawJson && (
+          <pre className='max-h-[50vh] overflow-y-auto rounded-lg bg-semi-color-fill-0 p-3 text-xs text-semi-color-text-0'>
+            {rawText}
+          </pre>
+        )}
       </div>
     </div>
   );
