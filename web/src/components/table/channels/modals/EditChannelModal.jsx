@@ -3311,7 +3311,12 @@ const EditChannelModal = (props) => {
                         <Form.Input
                           field='upstream_model_update_ignored_models'
                           label={t('已忽略模型')}
-                          placeholder={t('例如：gpt-4.1-nano,gpt-4o-mini')}
+                          placeholder={t(
+                            '例如：gpt-4.1-nano,regex:^claude-.*$,regex:^sora-.*$',
+                          )}
+                          extraText={t(
+                            '支持精确匹配；使用 regex: 开头可按正则匹配。',
+                          )}
                           onChange={(value) =>
                             handleInputChange(
                               'upstream_model_update_ignored_models',
