@@ -25,6 +25,8 @@ import {
   Typography,
   Spin,
   Tag,
+  Descriptions,
+  Collapse,
 } from '@douyinfe/semi-ui';
 import { API, showError } from '../../../../helpers';
 
@@ -181,35 +183,30 @@ const resolveUsageStatusTag = (t, rateLimit) => {
   return <Tag color='red'>{tt('受限')}</Tag>;
 };
 
-const AccountInfoCard = ({ t, label, value, onCopy, monospace = false }) => {
+const AccountInfoValue = ({ t, value, onCopy, monospace = false }) => {
   const tt = typeof t === 'function' ? t : (v) => v;
   const text = getDisplayText(value);
   const hasValue = text !== '';
 
   return (
-    <div className='rounded-md bg-semi-color-fill-0 px-2.5 py-2'>
-      <div className='text-[11px] text-semi-color-text-2'>
-        {label}
+    <div className='flex min-w-0 items-start justify-between gap-2'>
+      <div
+        className={`min-w-0 flex-1 break-all text-xs leading-5 text-semi-color-text-1 ${
+          monospace ? 'font-mono' : ''
+        }`}
+      >
+        {hasValue ? text : '-'}
       </div>
-      <div className='mt-1 flex items-start justify-between gap-2'>
-        <div
-          className={`min-w-0 flex-1 break-all text-xs leading-5 text-semi-color-text-1 ${
-            monospace ? 'font-mono' : ''
-          }`}
-        >
-          {hasValue ? text : '-'}
-        </div>
-        <Button
-          size='small'
-          type='tertiary'
-          theme='borderless'
-          className='px-1 text-xs'
-          disabled={!hasValue}
-          onClick={() => onCopy?.(text)}
-        >
-          {tt('复制')}
-        </Button>
-      </div>
+      <Button
+        size='small'
+        type='tertiary'
+        theme='borderless'
+        className='shrink-0 px-1 text-xs'
+        disabled={!hasValue}
+        onClick={() => onCopy?.(text)}
+      >
+        {tt('复制')}
+      </Button>
     </div>
   );
 };
@@ -321,22 +318,28 @@ const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
           </Button>
         </div>
 
-        <div className='mt-2 grid grid-cols-1 gap-2 md:grid-cols-3'>
-          <AccountInfoCard
-            t={tt}
-            label='User ID'
-            value={userId}
-            onCopy={onCopy}
-            monospace={true}
-          />
-          <AccountInfoCard t={tt} label={tt('邮箱')} value={email} onCopy={onCopy} />
-          <AccountInfoCard
-            t={tt}
-            label='Account ID'
-            value={accountId}
-            onCopy={onCopy}
-            monospace={true}
-          />
+        <div className='mt-2 rounded-lg bg-semi-color-fill-0 px-3 py-2'>
+          <Descriptions>
+            <Descriptions.Item itemKey='User ID'>
+              <AccountInfoValue
+                t={tt}
+                value={userId}
+                onCopy={onCopy}
+                monospace={true}
+              />
+            </Descriptions.Item>
+            <Descriptions.Item itemKey={tt('邮箱')}>
+              <AccountInfoValue t={tt} value={email} onCopy={onCopy} />
+            </Descriptions.Item>
+            <Descriptions.Item itemKey='Account ID'>
+              <AccountInfoValue
+                t={tt}
+                value={accountId}
+                onCopy={onCopy}
+                monospace={true}
+              />
+            </Descriptions.Item>
+          </Descriptions>
         </div>
 
         <div className='mt-2 text-xs text-semi-color-text-2'>
@@ -370,37 +373,30 @@ const CodexUsageView = ({ t, record, payload, onCopy, onRefresh }) => {
         />
       </div>
 
-      <div>
-        <div className='mb-1 flex items-center justify-between gap-2'>
-          <div className='text-sm font-medium'>{tt('原始 JSON')}</div>
-          <div className='flex items-center gap-2'>
+      <Collapse
+        activeKey={showRawJson ? ['raw-json'] : []}
+        onChange={(activeKey) => {
+          const keys = Array.isArray(activeKey) ? activeKey : [activeKey];
+          setShowRawJson(keys.includes('raw-json'));
+        }}
+      >
+        <Collapse.Panel header={tt('原始 JSON')} itemKey='raw-json'>
+          <div className='mb-2 flex justify-end'>
             <Button
               size='small'
-              type='tertiary'
+              type='primary'
               theme='outline'
-              onClick={() => setShowRawJson((prev) => !prev)}
+              onClick={() => onCopy?.(rawText)}
+              disabled={!rawText}
             >
-              {showRawJson ? tt('收起') : tt('展开')}
+              {tt('复制')}
             </Button>
-            {showRawJson && (
-              <Button
-                size='small'
-                type='primary'
-                theme='outline'
-                onClick={() => onCopy?.(rawText)}
-                disabled={!rawText}
-              >
-                {tt('复制')}
-              </Button>
-            )}
           </div>
-        </div>
-        {showRawJson && (
           <pre className='max-h-[50vh] overflow-y-auto rounded-lg bg-semi-color-fill-0 p-3 text-xs text-semi-color-text-0'>
             {rawText}
           </pre>
-        )}
-      </div>
+        </Collapse.Panel>
+      </Collapse>
     </div>
   );
 };
