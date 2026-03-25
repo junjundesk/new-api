@@ -206,7 +206,7 @@ func TestCalculateTextQuotaSummaryHandlesLegacyClaudeDerivedOpenAIUsage(t *testi
 	require.Equal(t, 1624, summary.Quota)
 }
 
-func TestCalculateTextQuotaSummaryDoesNotSubtractOpenRouterCacheTokensFromPrompt(t *testing.T) {
+func TestCalculateTextQuotaSummarySeparatesOpenRouterCacheReadFromPromptBilling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
@@ -236,13 +236,14 @@ func TestCalculateTextQuotaSummaryDoesNotSubtractOpenRouterCacheTokensFromPrompt
 
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
 
-	// OpenRouter usage is already normalized. prompt_tokens should stay intact.
-	// quota = 2604 + 2432*0.1 + 383 = 3230.2 => 3230
+	// OpenRouter OpenAI-format display keeps prompt_tokens as total input,
+	// but billing still separates normal input from cache read tokens.
+	// quota = (2604 - 2432) + 2432*0.1 + 383 = 798.2 => 798
 	require.Equal(t, 2604, summary.PromptTokens)
-	require.Equal(t, 3230, summary.Quota)
+	require.Equal(t, 798, summary.Quota)
 }
 
-func TestCalculateTextQuotaSummaryDoesNotSubtractOpenRouterCacheCreationTokensFromPrompt(t *testing.T) {
+func TestCalculateTextQuotaSummarySeparatesOpenRouterCacheCreationFromPromptBilling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
@@ -271,10 +272,10 @@ func TestCalculateTextQuotaSummaryDoesNotSubtractOpenRouterCacheCreationTokensFr
 
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
 
-	// OpenRouter usage is already normalized. prompt_tokens should stay intact.
-	// quota = 2604 + 100*1.25 + 383 = 3112
+	// prompt_tokens is still logged as total input, but cache creation is billed separately.
+	// quota = (2604 - 100) + 100*1.25 + 383 = 3012
 	require.Equal(t, 2604, summary.PromptTokens)
-	require.Equal(t, 3112, summary.Quota)
+	require.Equal(t, 3012, summary.Quota)
 }
 
 func TestCalculateTextQuotaSummaryKeepsPrePRClaudeOpenRouterBilling(t *testing.T) {
