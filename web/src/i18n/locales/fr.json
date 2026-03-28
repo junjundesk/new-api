@@ -397,6 +397,8 @@
     "作废后该订阅将立即失效，历史记录不受影响。是否继续？": "Après invalidation, l'abonnement devient immédiatement invalide. L'historique n'est pas affecté. Continuer ?",
     "作用域": "Portée",
     "作用域：包含分组": "Portée : inclure le groupe",
+    "作用域：包含模型名称": "Portée : inclure le nom du modèle",
+    "开启后，模型名称会参与 cache key（不同模型隔离）。": "Lorsque activé, le nom du modèle est inclus dans la clé de cache (isole les différents modèles).",
     "作用域：包含规则名称": "Portée : inclure le nom de la règle",
     "你似乎并没有修改什么": "Vous ne semblez rien avoir modifié",
     "你可以在“自定义模型名称”处手动添加它们，然后点击填入后再提交，或者直接使用下方操作自动处理。": "Vous pouvez les ajouter manuellement dans « Noms de modèles personnalisés », cliquer sur Remplir puis soumettre, ou utiliser directement les actions ci-dessous pour les traiter automatiquement.",
