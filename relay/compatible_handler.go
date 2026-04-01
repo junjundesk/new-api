@@ -6,25 +6,19 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/samber/lo"
-
-	"github.com/shopspring/decimal"
 
 	"github.com/gin-gonic/gin"
 )
@@ -94,7 +88,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		if containAudioTokens && containsAudioRatios {
 			service.PostAudioConsumeQuota(c, info, usage, "")
 		} else {
-			postConsumeQuota(c, info, usage)
+			service.PostTextConsumeQuota(c, info, usage, nil)
 		}
 		return nil
 	}
@@ -217,264 +211,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	if containAudioTokens && containsAudioRatios {
 		service.PostAudioConsumeQuota(c, info, usage.(*dto.Usage), "")
 	} else {
-		postConsumeQuota(c, info, usage.(*dto.Usage))
+		service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
 	}
 	return nil
-}
-
-func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent ...string) {
-	originUsage := usage
-	if usage == nil {
-		usage = &dto.Usage{
-			PromptTokens:     relayInfo.GetEstimatePromptTokens(),
-			CompletionTokens: 0,
-			TotalTokens:      relayInfo.GetEstimatePromptTokens(),
-		}
-		extraContent = append(extraContent, "上游无计费信息")
-	}
-
-	if originUsage != nil {
-		service.ObserveChannelAffinityUsageCacheByRelayFormat(ctx, usage, relayInfo.GetFinalRequestRelayFormat())
-	}
-
-	// Tiered billing: only determines quota, logging continues through normal path
-	isClaudeUsageSemantic := relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatClaude
-	var tieredUsedVars map[string]bool
-	if snap := relayInfo.TieredBillingSnapshot; snap != nil {
-		tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
-	}
-	var tieredResult *billingexpr.TieredResult
-	tieredOk, tieredQuota, tieredRes := service.TryTieredSettle(relayInfo, service.BuildTieredTokenParams(usage, isClaudeUsageSemantic, tieredUsedVars))
-	if tieredOk {
-		tieredResult = tieredRes
-	}
-
-	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
-
-	useTimeSeconds := time.Now().Unix() - relayInfo.StartTime.Unix()
-	promptTokens := usage.PromptTokens
-	cacheTokens := usage.PromptTokensDetails.CachedTokens
-	imageTokens := usage.PromptTokensDetails.ImageTokens
-	audioTokens := usage.PromptTokensDetails.AudioTokens
-	completionTokens := usage.CompletionTokens
-	cachedCreationTokens := usage.PromptTokensDetails.CachedCreationTokens
-
-	modelName := relayInfo.OriginModelName
-
-	tokenName := ctx.GetString("token_name")
-	completionRatio := relayInfo.PriceData.CompletionRatio
-	cacheRatio := relayInfo.PriceData.CacheRatio
-	imageRatio := relayInfo.PriceData.ImageRatio
-	modelRatio := relayInfo.PriceData.ModelRatio
-	groupRatio := relayInfo.PriceData.GroupRatioInfo.GroupRatio
-	modelPrice := relayInfo.PriceData.ModelPrice
-	cachedCreationRatio := relayInfo.PriceData.CacheCreationRatio
-
-	// Convert values to decimal for precise calculation
-	dPromptTokens := decimal.NewFromInt(int64(promptTokens))
-	dCacheTokens := decimal.NewFromInt(int64(cacheTokens))
-	dImageTokens := decimal.NewFromInt(int64(imageTokens))
-	dAudioTokens := decimal.NewFromInt(int64(audioTokens))
-	dCompletionTokens := decimal.NewFromInt(int64(completionTokens))
-	dCachedCreationTokens := decimal.NewFromInt(int64(cachedCreationTokens))
-	dCompletionRatio := decimal.NewFromFloat(completionRatio)
-	dCacheRatio := decimal.NewFromFloat(cacheRatio)
-	dImageRatio := decimal.NewFromFloat(imageRatio)
-	dModelRatio := decimal.NewFromFloat(modelRatio)
-	dGroupRatio := decimal.NewFromFloat(groupRatio)
-	dModelPrice := decimal.NewFromFloat(modelPrice)
-	dCachedCreationRatio := decimal.NewFromFloat(cachedCreationRatio)
-	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-
-	ratio := dModelRatio.Mul(dGroupRatio)
-
-	// Collect tool call usage from context and relayInfo
-	toolUsage := service.ToolCallUsage{
-		ModelName:              modelName,
-		ImageGenerationCall:    ctx.GetBool("image_generation_call"),
-		ImageGenerationQuality: ctx.GetString("image_generation_call_quality"),
-		ImageGenerationSize:    ctx.GetString("image_generation_call_size"),
-	}
-	if relayInfo.ResponsesUsageInfo != nil {
-		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool.CallCount > 0 {
-			toolUsage.WebSearchCalls = webSearchTool.CallCount
-			toolUsage.WebSearchToolName = dto.BuildInToolWebSearchPreview
-		}
-		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists {
-			toolUsage.FileSearchCalls = fileSearchTool.CallCount
-		}
-	} else if strings.HasSuffix(modelName, "search-preview") {
-		toolUsage.WebSearchCalls = 1
-		toolUsage.WebSearchToolName = dto.BuildInToolWebSearchPreview
-	}
-	if claudeSearchCalls := ctx.GetInt("claude_web_search_requests"); claudeSearchCalls > 0 {
-		toolUsage.WebSearchCalls = claudeSearchCalls
-		toolUsage.WebSearchToolName = "web_search"
-	}
-	toolResult := service.ComputeToolCallQuota(toolUsage, groupRatio)
-	for _, item := range toolResult.Items {
-		extraContent = append(extraContent, fmt.Sprintf("%s 调用 %d 次，花费 %d", item.Name, item.CallCount, item.Quota))
-	}
-
-	var quotaCalculateDecimal decimal.Decimal
-
-	var audioInputQuota decimal.Decimal
-	var audioInputPrice float64
-	if !relayInfo.PriceData.UsePrice {
-		baseTokens := dPromptTokens
-		// 减去 cached tokens
-		// Anthropic API 的 input_tokens 已经不包含缓存 tokens，不需要减去
-		// OpenAI/OpenRouter 等 API 的 prompt_tokens 包含缓存 tokens，需要减去
-		var cachedTokensWithRatio decimal.Decimal
-		if !dCacheTokens.IsZero() {
-			if !isClaudeUsageSemantic {
-				baseTokens = baseTokens.Sub(dCacheTokens)
-			}
-			cachedTokensWithRatio = dCacheTokens.Mul(dCacheRatio)
-		}
-		var dCachedCreationTokensWithRatio decimal.Decimal
-		if !dCachedCreationTokens.IsZero() {
-			if !isClaudeUsageSemantic {
-				baseTokens = baseTokens.Sub(dCachedCreationTokens)
-			}
-			dCachedCreationTokensWithRatio = dCachedCreationTokens.Mul(dCachedCreationRatio)
-		}
-
-		// 减去 image tokens
-		var imageTokensWithRatio decimal.Decimal
-		if !dImageTokens.IsZero() {
-			baseTokens = baseTokens.Sub(dImageTokens)
-			imageTokensWithRatio = dImageTokens.Mul(dImageRatio)
-		}
-
-		// 减去 Gemini audio tokens
-		if !dAudioTokens.IsZero() {
-			audioInputPrice = operation_setting.GetGeminiInputAudioPricePerMillionTokens(modelName)
-			if audioInputPrice > 0 {
-				// 重新计算 base tokens
-				baseTokens = baseTokens.Sub(dAudioTokens)
-				audioInputQuota = decimal.NewFromFloat(audioInputPrice).Div(decimal.NewFromInt(1000000)).Mul(dAudioTokens).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-				extraContent = append(extraContent, fmt.Sprintf("Audio Input 花费 %s", audioInputQuota.String()))
-			}
-		}
-		promptQuota := baseTokens.Add(cachedTokensWithRatio).
-			Add(imageTokensWithRatio).
-			Add(dCachedCreationTokensWithRatio)
-
-		completionQuota := dCompletionTokens.Mul(dCompletionRatio)
-
-		quotaCalculateDecimal = promptQuota.Add(completionQuota).Mul(ratio)
-
-		if !ratio.IsZero() && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
-			quotaCalculateDecimal = decimal.NewFromInt(1)
-		}
-	} else {
-		quotaCalculateDecimal = dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
-	}
-	// 添加 audio input 独立计费（Gemini 音频按 token 计价，不属于工具调用）
-	quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-
-	if len(relayInfo.PriceData.OtherRatios) > 0 {
-		for key, otherRatio := range relayInfo.PriceData.OtherRatios {
-			dOtherRatio := decimal.NewFromFloat(otherRatio)
-			quotaCalculateDecimal = quotaCalculateDecimal.Mul(dOtherRatio)
-			extraContent = append(extraContent, fmt.Sprintf("其他倍率 %s: %f", key, otherRatio))
-		}
-	}
-
-	quota := int(quotaCalculateDecimal.Round(0).IntPart())
-	if tieredOk {
-		quota = tieredQuota
-	}
-	// Tool call fees: add for per-token and tiered billing; skip for per-call (price includes everything)
-	if !relayInfo.PriceData.UsePrice && toolResult.TotalQuota > 0 {
-		quota += toolResult.TotalQuota
-	}
-	totalTokens := promptTokens + completionTokens
-
-	// record all the consume log even if quota is 0
-	if totalTokens == 0 {
-		// in this case, must be some error happened
-		// we cannot just return, because we may have to return the pre-consumed quota
-		quota = 0
-		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
-		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, "+
-			"tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, modelName, relayInfo.FinalPreConsumedQuota))
-	} else {
-		if !ratio.IsZero() && quota == 0 {
-			quota = 1
-		}
-		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, quota)
-		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
-	}
-
-	if err := service.SettleBilling(ctx, relayInfo, quota); err != nil {
-		logger.LogError(ctx, "error settling billing: "+err.Error())
-	}
-
-	logModel := modelName
-	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
-		logModel = "gpt-4-gizmo-*"
-		extraContent = append(extraContent, fmt.Sprintf("模型 %s", modelName))
-	}
-	if strings.HasPrefix(logModel, "gpt-4o-gizmo") {
-		logModel = "gpt-4o-gizmo-*"
-		extraContent = append(extraContent, fmt.Sprintf("模型 %s", modelName))
-	}
-	logContent := strings.Join(extraContent, ", ")
-	other := service.GenerateTextOtherInfo(ctx, relayInfo, modelRatio, groupRatio, completionRatio, cacheTokens, cacheRatio, modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
-	if adminRejectReason != "" {
-		other["reject_reason"] = adminRejectReason
-	}
-	// For chat-based calls to the Claude model, tagging is required. Using Claude's rendering logs, the two approaches handle input rendering differently.
-	if isClaudeUsageSemantic {
-		other["claude"] = true
-		other["usage_semantic"] = "anthropic"
-	}
-	if imageTokens != 0 {
-		other["image"] = true
-		other["image_ratio"] = imageRatio
-		other["image_output"] = imageTokens
-	}
-	if cachedCreationTokens != 0 {
-		other["cache_creation_tokens"] = cachedCreationTokens
-		other["cache_creation_ratio"] = cachedCreationRatio
-	}
-	for _, item := range toolResult.Items {
-		switch item.Name {
-		case "web_search", "claude_web_search":
-			other["web_search"] = true
-			other["web_search_call_count"] = item.CallCount
-			other["web_search_price"] = item.PricePer1K
-		case "file_search":
-			other["file_search"] = true
-			other["file_search_call_count"] = item.CallCount
-			other["file_search_price"] = item.PricePer1K
-		case "image_generation":
-			other["image_generation_call"] = true
-			other["image_generation_call_price"] = item.TotalPrice
-		}
-	}
-	if !audioInputQuota.IsZero() {
-		other["audio_input_seperate_price"] = true
-		other["audio_input_token_count"] = audioTokens
-		other["audio_input_price"] = audioInputPrice
-	}
-	if tieredResult != nil {
-		service.InjectTieredBillingInfo(other, relayInfo, tieredResult)
-	}
-	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
-		ChannelId:        relayInfo.ChannelId,
-		PromptTokens:     promptTokens,
-		CompletionTokens: completionTokens,
-		ModelName:        logModel,
-		TokenName:        tokenName,
-		Quota:            quota,
-		Content:          logContent,
-		TokenId:          relayInfo.TokenId,
-		UseTimeSeconds:   int(useTimeSeconds),
-		IsStream:         relayInfo.IsStream,
-		Group:            relayInfo.UsingGroup,
-		Other:            other,
-	})
 }
