@@ -21,6 +21,7 @@ import {
   STORAGE_KEYS,
   DEFAULT_CONFIG,
 } from '../../constants/playground.constants';
+import { sanitizePlaygroundInputs } from '../../helpers/playgroundMaxTokens';
 
 const MESSAGES_STORAGE_KEY = 'playground_messages';
 
@@ -67,10 +68,10 @@ export const loadConfig = () => {
       const parsedConfig = JSON.parse(savedConfig);
 
       const mergedConfig = {
-        inputs: {
+        inputs: sanitizePlaygroundInputs({
           ...DEFAULT_CONFIG.inputs,
           ...parsedConfig.inputs,
-        },
+        }),
         parameterEnabled: {
           ...DEFAULT_CONFIG.parameterEnabled,
           ...parsedConfig.parameterEnabled,
