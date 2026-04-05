@@ -32,11 +32,7 @@ import {
   loadMessages,
   saveMessages,
 } from '../../components/playground/configStorage';
-import {
-  processIncompleteThinkTags,
-  normalizePlaygroundInputValue,
-  sanitizePlaygroundInputs,
-} from '../../helpers';
+import { processIncompleteThinkTags } from '../../helpers';
 
 export const usePlaygroundState = () => {
   const { t } = useTranslation();
@@ -125,10 +121,7 @@ export const usePlaygroundState = () => {
 
   // 配置更新函数
   const handleInputChange = useCallback((name, value) => {
-    setInputs((prev) => ({
-      ...prev,
-      [name]: normalizePlaygroundInputValue(name, value),
-    }));
+    setInputs((prev) => ({ ...prev, [name]: value }));
   }, []);
 
   const handleParameterToggle = useCallback((paramName) => {
@@ -174,9 +167,14 @@ export const usePlaygroundState = () => {
   // 配置导入/重置
   const handleConfigImport = useCallback((importedConfig) => {
     if (importedConfig.inputs) {
-      setInputs((prev) =>
-        sanitizePlaygroundInputs({ ...prev, ...importedConfig.inputs }),
-      );
+      const parsedMaxTokens = parseInt(importedConfig.inputs.max_tokens, 10);
+      setInputs((prev) => ({
+        ...prev,
+        ...importedConfig.inputs,
+        max_tokens: Number.isNaN(parsedMaxTokens)
+          ? importedConfig.inputs.max_tokens
+          : parsedMaxTokens,
+      }));
     }
     if (importedConfig.parameterEnabled) {
       setParameterEnabled((prev) => ({
