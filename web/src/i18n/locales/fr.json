@@ -3332,6 +3332,8 @@
     "从剪贴板粘贴配置": "Coller la config",
     "剪贴板中未检测到连接信息": "Aucune info de connexion trouvée dans le presse-papiers",
     "连接信息已填入": "Informations de connexion appliquées",
-    "无法读取剪贴板": "Impossible de lire le presse-papiers"
+    "无法读取剪贴板": "Impossible de lire le presse-papiers",
+    "页面渲染出错，请刷新页面重试": "Une erreur est survenue lors du rendu de la page. Veuillez rafraîchir et réessayer.",
+    "刷新页面": "Recharger la page"
   }
 }

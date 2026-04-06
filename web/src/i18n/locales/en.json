@@ -3376,6 +3376,8 @@
     "从剪贴板粘贴配置": "Paste Config",
     "剪贴板中未检测到连接信息": "No connection info found in clipboard",
     "连接信息已填入": "Connection info applied",
-    "无法读取剪贴板": "Cannot read clipboard"
+    "无法读取剪贴板": "Cannot read clipboard",
+    "页面渲染出错，请刷新页面重试": "An error occurred while rendering the page. Please refresh and try again.",
+    "刷新页面": "Reload Page"
   }
 }

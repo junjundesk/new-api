@@ -3882,6 +3882,8 @@
     "从剪贴板粘贴配置": "Dán cấu hình",
     "剪贴板中未检测到连接信息": "Không tìm thấy thông tin kết nối trong bộ nhớ tạm",
     "连接信息已填入": "Đã áp dụng thông tin kết nối",
-    "无法读取剪贴板": "Không thể đọc bộ nhớ tạm"
+    "无法读取剪贴板": "Không thể đọc bộ nhớ tạm",
+    "页面渲染出错，请刷新页面重试": "Đã xảy ra lỗi khi hiển thị trang. Vui lòng tải lại trang và thử lại.",
+    "刷新页面": "Tải lại trang"
   }
 }
