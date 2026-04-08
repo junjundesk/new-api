@@ -443,6 +443,8 @@
     "作废后该订阅将立即失效，历史记录不受影响。是否继续？": "After invalidation, the subscription becomes invalid immediately. History is not affected. Continue?",
     "作用域": "Scope",
     "作用域：包含分组": "Scope: Include Group",
+    "作用域：包含模型名称": "Scope: Include Model Name",
+    "开启后，模型名称会参与 cache key（不同模型隔离）。": "When enabled, the model name is included in the cache key (isolates different models).",
     "作用域：包含规则名称": "Scope: Include Rule Name",
     "你似乎并没有修改什么": "You seem to have not modified anything",
     "你可以在“自定义模型名称”处手动添加它们，然后点击填入后再提交，或者直接使用下方操作自动处理。": "You can manually add them under “Custom model names”, click Fill and submit, or use the actions below to handle them automatically.",
