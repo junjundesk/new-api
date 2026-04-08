@@ -319,6 +319,12 @@ export const useDashboardCharts = (
       text: t('用户消耗趋势'),
       subtext: '',
     },
+    axes: [{
+      orient: 'left',
+      label: {
+        formatMethod: (value) => renderQuota(value, 2),
+      },
+    }],
     area: { style: { fillOpacity: 0.15 } },
     line: { style: { lineWidth: 2 } },
     point: { visible: false },
@@ -513,7 +519,7 @@ export const useDashboardCharts = (
         User: item.User,
         rawQuota: item.Quota,
         Quota: getQuotaWithUnit(item.Quota, 4),
-      })).sort((a, b) => a.rawQuota - b.rawQuota);
+      })).sort((a, b) => b.rawQuota - a.rawQuota);
 
       const totalUserQuota = rankingData.reduce((s, i) => s + i.Quota, 0);
 
