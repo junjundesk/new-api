@@ -37,6 +37,7 @@ import {
   renderClaudeModelPrice,
   renderModelPrice,
   renderTieredModelPrice,
+  renderTaskBillingProcess,
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -475,7 +476,10 @@ export const useLogsData = () => {
             completion_tokens: logs[i].completion_tokens,
             displayMode: billingDisplayMode,
           };
-          if (other?.ws || other?.audio) {
+          const isTaskLog = other?.is_task === true || other?.task_id != null;
+          if (isTaskLog && other?.model_price === -1) {
+            content = renderTaskBillingProcess(other, logs[i].content);
+          } else if (other?.ws || other?.audio) {
             content = renderAudioModelPrice(logOpts);
           } else if (other?.claude) {
             content = renderClaudeModelPrice(logOpts);
