@@ -52,6 +52,7 @@ type textQuotaSummary struct {
 	FileSearchCallCount      int
 	AudioInputPrice          float64
 	ImageGenerationCallPrice float64
+	ToolCallSurchargeQuota   decimal.Decimal
 }
 
 func cacheWriteTokensTotal(summary textQuotaSummary) int {
@@ -76,6 +77,89 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 		return false
 	}
 	return usage.ClaudeCacheCreation5mTokens > 0 || usage.ClaudeCacheCreation1hTokens > 0
+}
+
+func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
+	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
+	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
+
+	var surcharge decimal.Decimal
+
+	if relayInfo.ResponsesUsageInfo != nil {
+		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool.CallCount > 0 {
+			summary.WebSearchCallCount = webSearchTool.CallCount
+			summary.WebSearchPrice = operation_setting.GetToolPriceForModel("web_search_preview", summary.ModelName)
+			surcharge = surcharge.Add(decimal.NewFromFloat(summary.WebSearchPrice).
+				Mul(decimal.NewFromInt(int64(webSearchTool.CallCount))).
+				Div(decimal.NewFromInt(1000)).
+				Mul(dGroupRatio).
+				Mul(dQuotaPerUnit))
+		}
+	} else if strings.HasSuffix(summary.ModelName, "search-preview") {
+		summary.WebSearchCallCount = 1
+		summary.WebSearchPrice = operation_setting.GetToolPriceForModel("web_search_preview", summary.ModelName)
+		surcharge = surcharge.Add(decimal.NewFromFloat(summary.WebSearchPrice).
+			Div(decimal.NewFromInt(1000)).
+			Mul(dGroupRatio).
+			Mul(dQuotaPerUnit))
+	}
+
+	summary.ClaudeWebSearchCallCount = ctx.GetInt("claude_web_search_requests")
+	if summary.ClaudeWebSearchCallCount > 0 {
+		summary.ClaudeWebSearchPrice = operation_setting.GetToolPrice("web_search")
+		surcharge = surcharge.Add(decimal.NewFromFloat(summary.ClaudeWebSearchPrice).
+			Div(decimal.NewFromInt(1000)).
+			Mul(dGroupRatio).
+			Mul(dQuotaPerUnit).
+			Mul(decimal.NewFromInt(int64(summary.ClaudeWebSearchCallCount))))
+	}
+
+	if relayInfo.ResponsesUsageInfo != nil {
+		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists && fileSearchTool.CallCount > 0 {
+			summary.FileSearchCallCount = fileSearchTool.CallCount
+			summary.FileSearchPrice = operation_setting.GetToolPrice("file_search")
+			surcharge = surcharge.Add(decimal.NewFromFloat(summary.FileSearchPrice).
+				Mul(decimal.NewFromInt(int64(fileSearchTool.CallCount))).
+				Div(decimal.NewFromInt(1000)).
+				Mul(dGroupRatio).
+				Mul(dQuotaPerUnit))
+		}
+	}
+
+	if ctx.GetBool("image_generation_call") {
+		summary.ImageGenerationCallPrice = operation_setting.GetGPTImage1PriceOnceCall(ctx.GetString("image_generation_call_quality"), ctx.GetString("image_generation_call_size"))
+		surcharge = surcharge.Add(decimal.NewFromFloat(summary.ImageGenerationCallPrice).
+			Mul(dGroupRatio).
+			Mul(dQuotaPerUnit))
+	}
+
+	return surcharge
+}
+
+func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaSummary, tieredQuota int, tieredResult *billingexpr.TieredResult) int {
+	if summary.ToolCallSurchargeQuota.IsZero() {
+		return tieredQuota
+	}
+
+	if tieredResult != nil {
+		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
+			return int(decimal.NewFromFloat(tieredResult.ActualQuotaBeforeGroup).
+				Mul(decimal.NewFromFloat(snap.GroupRatio)).
+				Add(summary.ToolCallSurchargeQuota).
+				Round(0).
+				IntPart())
+		}
+	}
+
+	if snap := relayInfo.TieredBillingSnapshot; snap != nil {
+		return int(decimal.NewFromFloat(snap.EstimatedQuotaBeforeGroup).
+			Mul(decimal.NewFromFloat(snap.GroupRatio)).
+			Add(summary.ToolCallSurchargeQuota).
+			Round(0).
+			IntPart())
+	}
+
+	return tieredQuota + int(summary.ToolCallSurchargeQuota.Round(0).IntPart())
 }
 
 func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage) textQuotaSummary {
@@ -148,52 +232,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 
 	ratio := dModelRatio.Mul(dGroupRatio)
-
-	var dWebSearchQuota decimal.Decimal
-	if relayInfo.ResponsesUsageInfo != nil {
-		if webSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && webSearchTool.CallCount > 0 {
-			summary.WebSearchCallCount = webSearchTool.CallCount
-			summary.WebSearchPrice = operation_setting.GetToolPriceForModel("web_search_preview", summary.ModelName)
-			dWebSearchQuota = decimal.NewFromFloat(summary.WebSearchPrice).
-				Mul(decimal.NewFromInt(int64(webSearchTool.CallCount))).
-				Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-		}
-	} else if strings.HasSuffix(summary.ModelName, "search-preview") {
-		searchContextSize := ctx.GetString("chat_completion_web_search_context_size")
-		if searchContextSize == "" {
-			searchContextSize = "medium"
-		}
-		summary.WebSearchCallCount = 1
-		summary.WebSearchPrice = operation_setting.GetToolPriceForModel("web_search_preview", summary.ModelName)
-		dWebSearchQuota = decimal.NewFromFloat(summary.WebSearchPrice).
-			Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-	}
-
-	var dClaudeWebSearchQuota decimal.Decimal
-	summary.ClaudeWebSearchCallCount = ctx.GetInt("claude_web_search_requests")
-	if summary.ClaudeWebSearchCallCount > 0 {
-		summary.ClaudeWebSearchPrice = operation_setting.GetToolPrice("web_search")
-		dClaudeWebSearchQuota = decimal.NewFromFloat(summary.ClaudeWebSearchPrice).
-			Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit).
-			Mul(decimal.NewFromInt(int64(summary.ClaudeWebSearchCallCount)))
-	}
-
-	var dFileSearchQuota decimal.Decimal
-	if relayInfo.ResponsesUsageInfo != nil {
-		if fileSearchTool, exists := relayInfo.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolFileSearch]; exists && fileSearchTool.CallCount > 0 {
-			summary.FileSearchCallCount = fileSearchTool.CallCount
-			summary.FileSearchPrice = operation_setting.GetToolPrice("file_search")
-			dFileSearchQuota = decimal.NewFromFloat(summary.FileSearchPrice).
-				Mul(decimal.NewFromInt(int64(fileSearchTool.CallCount))).
-				Div(decimal.NewFromInt(1000)).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-		}
-	}
-
-	var dImageGenerationCallQuota decimal.Decimal
-	if ctx.GetBool("image_generation_call") {
-		summary.ImageGenerationCallPrice = operation_setting.GetGPTImage1PriceOnceCall(ctx.GetString("image_generation_call_quality"), ctx.GetString("image_generation_call_size"))
-		dImageGenerationCallQuota = decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(dGroupRatio).Mul(dQuotaPerUnit)
-	}
+	summary.ToolCallSurchargeQuota = calculateTextToolCallSurcharge(ctx, relayInfo, &summary)
 
 	var audioInputQuota decimal.Decimal
 	if !relayInfo.PriceData.UsePrice {
@@ -242,11 +281,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		promptQuota := baseTokens.Add(cachedTokensWithRatio).Add(imageTokensWithRatio).Add(cachedCreationTokensWithRatio)
 		completionQuota := dCompletionTokens.Mul(dCompletionRatio)
 		quotaCalculateDecimal := promptQuota.Add(completionQuota).Mul(ratio)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dClaudeWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
 
 		if len(relayInfo.PriceData.OtherRatios) > 0 {
 			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
@@ -260,11 +296,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
 	} else {
 		quotaCalculateDecimal := dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dClaudeWebSearchQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
 		if len(relayInfo.PriceData.OtherRatios) > 0 {
 			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
 				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
@@ -313,7 +346,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, tieredUsedVars))
 		if tieredOk {
 			tieredResult = tieredRes
-			summary.Quota = tieredQuota
+			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
 		}
 	}
 
