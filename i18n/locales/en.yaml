@@ -2,7 +2,7 @@
 
 # Common messages
 common.invalid_params: "Invalid parameters"
-common.database_error: "Database error, please try again later"
+common.database_error: "Database error, please contact the administrator"
 common.retry_later: "Please try again later"
 common.generate_failed: "Generation failed"
 common.not_found: "Not found"

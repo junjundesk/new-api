@@ -18,6 +18,12 @@ import (
 
 const UserNameMaxLength = 20
 
+var (
+	ErrDatabase              = errors.New("database error")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrUserEmptyCredentials  = errors.New("empty credentials")
+)
+
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
@@ -597,13 +603,19 @@ func (user *User) ValidateAndFill() (err error) {
 	password := user.Password
 	username := strings.TrimSpace(user.Username)
 	if username == "" || password == "" {
-		return errors.New("用户名或密码为空")
+		return ErrUserEmptyCredentials
 	}
-	// find buy username or email
-	DB.Where("username = ? OR email = ?", username, username).First(user)
+	// find by username or email
+	err = DB.Where("username = ? OR email = ?", username, username).First(user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInvalidCredentials
+		}
+		return fmt.Errorf("%w: %v", ErrDatabase, err)
+	}
 	okay := common.ValidatePasswordAndHash(password, user.Password)
 	if !okay || user.Status != common.UserStatusEnabled {
-		return errors.New("用户名或密码错误，或用户已被封禁")
+		return ErrInvalidCredentials
 	}
 	return nil
 }

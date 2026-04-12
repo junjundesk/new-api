@@ -3,7 +3,7 @@
 
 # Common messages
 common.invalid_params: "無效的參數"
-common.database_error: "資料庫錯誤，請稍後重試"
+common.database_error: "資料庫出錯，請聯繫管理員"
 common.retry_later: "請稍後重試"
 common.generate_failed: "生成失敗"
 common.not_found: "未找到"
