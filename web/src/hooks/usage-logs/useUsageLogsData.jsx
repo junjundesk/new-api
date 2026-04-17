@@ -746,6 +746,31 @@ export const useLogsData = () => {
           });
         }
       }
+      if (isAdminUser && logs[i].type === 3 && other?.admin_info) {
+        const adminInfo = other.admin_info;
+        const hasUsername =
+          adminInfo.admin_username !== undefined &&
+          adminInfo.admin_username !== null &&
+          adminInfo.admin_username !== '';
+        const hasId =
+          adminInfo.admin_id !== undefined &&
+          adminInfo.admin_id !== null &&
+          adminInfo.admin_id !== '';
+        if (hasUsername || hasId) {
+          let operatorValue = '';
+          if (hasUsername && hasId) {
+            operatorValue = `${adminInfo.admin_username} (ID: ${adminInfo.admin_id})`;
+          } else if (hasUsername) {
+            operatorValue = String(adminInfo.admin_username);
+          } else {
+            operatorValue = `ID: ${adminInfo.admin_id}`;
+          }
+          expandDataLocal.push({
+            key: t('操作管理员'),
+            value: operatorValue,
+          });
+        }
+      }
       expandDatesLocal[logs[i].key] = expandDataLocal;
     }
 
