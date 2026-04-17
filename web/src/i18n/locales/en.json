@@ -1957,6 +1957,7 @@
     "服务可用性": "Service Status",
     "服务商": "Service Provider",
     "服务器IP": "Server IP",
+    "节点名称": "Node Name",
     "服务器地址": "Server Address",
     "服务器日志功能未启用（未配置日志目录）": "Server logging is not enabled (log directory not configured)",
     "服务器日志管理": "Server Log Management",

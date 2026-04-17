@@ -1950,6 +1950,7 @@
     "服务可用性": "État du service",
     "服务商": "Service Provider",
     "服务器IP": "IP du serveur",
+    "节点名称": "Nom du nœud",
     "服务器地址": "Adresse du serveur",
     "服务器日志功能未启用（未配置日志目录）": "La journalisation du serveur n'est pas activée (répertoire de journaux non configuré)",
     "服务器日志管理": "Gestion des journaux du serveur",
