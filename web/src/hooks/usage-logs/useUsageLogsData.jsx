@@ -695,13 +695,13 @@ export const useLogsData = () => {
           ),
         });
       }
-      if (isAdminUser && logs[i].type !== 6) {
+      if (isAdminUser && logs[i].type !== 6 && logs[i].type !== 1) {
         expandDataLocal.push({
           key: t('请求转换'),
           value: requestConversionDisplayValue(other?.request_conversion),
         });
       }
-      if (isAdminUser && logs[i].type !== 6) {
+      if (isAdminUser && logs[i].type !== 6 && logs[i].type !== 1) {
         let localCountMode = '';
         if (other?.admin_info?.local_count_tokens) {
           localCountMode = t('本地计费');
@@ -712,6 +712,39 @@ export const useLogsData = () => {
           key: t('计费模式'),
           value: localCountMode,
         });
+      }
+      if (isAdminUser && logs[i].type === 1 && other?.admin_info) {
+        const adminInfo = other.admin_info;
+        if (adminInfo.payment_method) {
+          expandDataLocal.push({
+            key: t('订单支付方式'),
+            value: adminInfo.payment_method,
+          });
+        }
+        if (adminInfo.callback_payment_method) {
+          expandDataLocal.push({
+            key: t('回调支付方式'),
+            value: adminInfo.callback_payment_method,
+          });
+        }
+        if (adminInfo.caller_ip) {
+          expandDataLocal.push({
+            key: t('回调调用者IP'),
+            value: adminInfo.caller_ip,
+          });
+        }
+        if (adminInfo.server_ip) {
+          expandDataLocal.push({
+            key: t('服务器IP'),
+            value: adminInfo.server_ip,
+          });
+        }
+        if (adminInfo.version) {
+          expandDataLocal.push({
+            key: t('系统版本'),
+            value: adminInfo.version,
+          });
+        }
       }
       expandDatesLocal[logs[i].key] = expandDataLocal;
     }
