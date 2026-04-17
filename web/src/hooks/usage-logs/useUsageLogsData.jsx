@@ -713,36 +713,49 @@ export const useLogsData = () => {
           value: localCountMode,
         });
       }
-      if (isAdminUser && logs[i].type === 1 && other?.admin_info) {
-        const adminInfo = other.admin_info;
-        if (adminInfo.payment_method) {
+      if (isAdminUser && logs[i].type === 1) {
+        const adminInfo = other?.admin_info;
+        if (adminInfo) {
+          if (adminInfo.payment_method) {
+            expandDataLocal.push({
+              key: t('订单支付方式'),
+              value: adminInfo.payment_method,
+            });
+          }
+          if (adminInfo.callback_payment_method) {
+            expandDataLocal.push({
+              key: t('回调支付方式'),
+              value: adminInfo.callback_payment_method,
+            });
+          }
+          if (adminInfo.caller_ip) {
+            expandDataLocal.push({
+              key: t('回调调用者IP'),
+              value: adminInfo.caller_ip,
+            });
+          }
+          if (adminInfo.server_ip) {
+            expandDataLocal.push({
+              key: t('服务器IP'),
+              value: adminInfo.server_ip,
+            });
+          }
+          if (adminInfo.version) {
+            expandDataLocal.push({
+              key: t('系统版本'),
+              value: adminInfo.version,
+            });
+          }
+        } else {
           expandDataLocal.push({
-            key: t('订单支付方式'),
-            value: adminInfo.payment_method,
-          });
-        }
-        if (adminInfo.callback_payment_method) {
-          expandDataLocal.push({
-            key: t('回调支付方式'),
-            value: adminInfo.callback_payment_method,
-          });
-        }
-        if (adminInfo.caller_ip) {
-          expandDataLocal.push({
-            key: t('回调调用者IP'),
-            value: adminInfo.caller_ip,
-          });
-        }
-        if (adminInfo.server_ip) {
-          expandDataLocal.push({
-            key: t('服务器IP'),
-            value: adminInfo.server_ip,
-          });
-        }
-        if (adminInfo.version) {
-          expandDataLocal.push({
-            key: t('系统版本'),
-            value: adminInfo.version,
+            key: t('审计信息'),
+            value: (
+              <span style={{ color: 'var(--semi-color-warning)' }}>
+                {t(
+                  '该记录由旧版本实例写入，缺少审计信息，建议将实例升级至最新版本以便记录服务器IP、回调IP、支付方式与系统版本等审计字段。',
+                )}
+              </span>
+            ),
           });
         }
       }
