@@ -1041,12 +1041,12 @@ export function useModelPricingEditorState({
 
       for (const model of models) {
         if (model.billingMode === 'tiered_expr') {
-          tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
           const finalBillingExpr = combineBillingExpr(
             model.billingExpr,
             model.requestRuleExpr,
           );
           if (finalBillingExpr) {
+            tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
             tieredOutput['billing_setting.billing_expr'][model.name] = finalBillingExpr;
           }
         }
