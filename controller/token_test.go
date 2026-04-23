@@ -38,6 +38,11 @@ type tokenKeyResponse struct {
 	Key string `json:"key"`
 }
 
+type sqliteColumnInfo struct {
+	Name string `gorm:"column:name"`
+	Type string `gorm:"column:type"`
+}
+
 func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -122,6 +127,26 @@ func decodeAPIResponse(t *testing.T, recorder *httptest.ResponseRecorder) tokenA
 		t.Fatalf("failed to decode api response: %v", err)
 	}
 	return response
+}
+
+func TestTokenAutoMigrateUsesVarchar128KeyColumn(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+
+	var columns []sqliteColumnInfo
+	if err := db.Raw("PRAGMA table_info(tokens)").Scan(&columns).Error; err != nil {
+		t.Fatalf("failed to inspect token table schema: %v", err)
+	}
+
+	for _, column := range columns {
+		if column.Name == "key" {
+			if strings.ToLower(column.Type) != "varchar(128)" {
+				t.Fatalf("expected key column type varchar(128), got %q", column.Type)
+			}
+			return
+		}
+	}
+
+	t.Fatal("key column not found in token table schema")
 }
 
 func TestGetAllTokensMasksKeyInResponse(t *testing.T) {
