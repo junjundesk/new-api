@@ -102,7 +102,7 @@ export default function ToolPriceSettings({ options }) {
     setJsonText(text);
     try {
       const parsed = JSON.parse(text);
-      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+      if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
         setJsonError(t('JSON 必须是对象'));
         return;
       }
