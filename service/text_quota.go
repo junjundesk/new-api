@@ -151,14 +151,6 @@ func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaS
 		}
 	}
 
-	if snap := relayInfo.TieredBillingSnapshot; snap != nil {
-		return int(decimal.NewFromFloat(snap.EstimatedQuotaBeforeGroup).
-			Mul(decimal.NewFromFloat(snap.GroupRatio)).
-			Add(summary.ToolCallSurchargeQuota).
-			Round(0).
-			IntPart())
-	}
-
 	return tieredQuota + int(summary.ToolCallSurchargeQuota.Round(0).IntPart())
 }
 

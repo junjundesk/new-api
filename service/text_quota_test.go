@@ -400,3 +400,42 @@ func TestComposeTieredTextQuotaFallbackKeepsToolCallSurcharges(t *testing.T) {
 	require.Equal(t, int64(12500), summary.ToolCallSurchargeQuota.Round(0).IntPart())
 	require.Equal(t, 13750, quota)
 }
+
+func TestComposeTieredTextQuotaErrorFallbackUsesPreConsumedQuota(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Set("claude_web_search_requests", 2)
+
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "claude-3-7-sonnet",
+		PriceData: types.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 1,
+			GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1.25},
+		},
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode:               "tiered_expr",
+			GroupRatio:                1.25,
+			EstimatedQuotaBeforeGroup: 1000,
+		},
+		StartTime: time.Now(),
+	}
+
+	usage := &dto.Usage{
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		TotalTokens:      150,
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+
+	// tieredResult=nil simulates a settlement error where TryTieredSettle
+	// falls back to FinalPreConsumedQuota (2000), which differs from
+	// EstimatedQuotaBeforeGroup * GroupRatio (1250).
+	preConsumedFallback := 2000
+	quota := composeTieredTextQuota(relayInfo, summary, preConsumedFallback, nil)
+
+	require.Equal(t, int64(12500), summary.ToolCallSurchargeQuota.Round(0).IntPart())
+	require.Equal(t, 14500, quota)
+}
