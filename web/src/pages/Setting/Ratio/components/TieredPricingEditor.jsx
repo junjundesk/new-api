@@ -49,6 +49,7 @@ import {
   MATCH_EXISTS,
   MATCH_CONTAINS,
   MATCH_RANGE,
+  MATCH_GTE,
   SOURCE_HEADER,
   SOURCE_PARAM,
   SOURCE_TIME,
@@ -164,7 +165,12 @@ function generateExprFromVisualConfig(config) {
   if (tiers.length === 1) {
     const t = tiers[0];
     const label = t.label || 'default';
-    return `tier("${label}", ${buildTierBodyExpr(t)})`;
+    const body = `tier("${label}", ${buildTierBodyExpr(t)})`;
+    const cond = buildConditionStr(t.conditions);
+    if (cond) {
+      return `${cond} ? ${body} : p * 0 + c * 0`;
+    }
+    return body;
   }
 
   const parts = [];
@@ -884,12 +890,6 @@ function RawExprEditor({ exprString, onChange, t }) {
               <code>ceil(x)</code>, <code>floor(x)</code>,{' '}
               <code>abs(x)</code>, <code>header(name)</code>,{' '}
               <code>param(path)</code>, <code>has(source, text)</code>
-            </div>
-            <div>
-              {t('也支持更好懂的别名')}: <code>prompt_tokens</code>,{' '}
-              <code>completion_tokens</code>, <code>cache_read_tokens</code>,{' '}
-              <code>cache_create_tokens</code>,{' '}
-              <code>cache_create_1h_tokens</code>
             </div>
           </div>
         }
