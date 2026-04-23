@@ -43,7 +43,31 @@ type sqliteColumnInfo struct {
 	Type string `gorm:"column:type"`
 }
 
-func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
+type legacyToken struct {
+	Id                 int            `gorm:"primaryKey"`
+	UserId             int            `gorm:"index"`
+	Key                string         `gorm:"column:key;type:char(48);uniqueIndex"`
+	Status             int            `gorm:"default:1"`
+	Name               string         `gorm:"index"`
+	CreatedTime        int64          `gorm:"bigint"`
+	AccessedTime       int64          `gorm:"bigint"`
+	ExpiredTime        int64          `gorm:"bigint;default:-1"`
+	RemainQuota        int            `gorm:"default:0"`
+	UnlimitedQuota     bool
+	ModelLimitsEnabled bool
+	ModelLimits        string         `gorm:"type:text"`
+	AllowIps           *string        `gorm:"default:''"`
+	UsedQuota          int            `gorm:"default:0"`
+	Group              string         `gorm:"column:group;default:''"`
+	CrossGroupRetry    bool
+	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+func (legacyToken) TableName() string {
+	return "tokens"
+}
+
+func openTokenControllerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
@@ -60,10 +84,6 @@ func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
 	model.DB = db
 	model.LOG_DB = db
 
-	if err := db.AutoMigrate(&model.Token{}); err != nil {
-		t.Fatalf("failed to migrate token table: %v", err)
-	}
-
 	t.Cleanup(func() {
 		sqlDB, err := db.DB()
 		if err == nil {
@@ -71,6 +91,22 @@ func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
 		}
 	})
 
+	return db
+}
+
+func migrateTokenControllerTestDB(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	if err := db.AutoMigrate(&model.Token{}); err != nil {
+		t.Fatalf("failed to migrate token table: %v", err)
+	}
+}
+
+func setupTokenControllerTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	db := openTokenControllerTestDB(t)
+	migrateTokenControllerTestDB(t, db)
 	return db
 }
 
@@ -129,24 +165,80 @@ func decodeAPIResponse(t *testing.T, recorder *httptest.ResponseRecorder) tokenA
 	return response
 }
 
-func TestTokenAutoMigrateUsesVarchar128KeyColumn(t *testing.T) {
-	db := setupTokenControllerTestDB(t)
+func getSQLiteColumnType(t *testing.T, db *gorm.DB, tableName string, columnName string) string {
+	t.Helper()
 
 	var columns []sqliteColumnInfo
-	if err := db.Raw("PRAGMA table_info(tokens)").Scan(&columns).Error; err != nil {
-		t.Fatalf("failed to inspect token table schema: %v", err)
+	if err := db.Raw("PRAGMA table_info(" + tableName + ")").Scan(&columns).Error; err != nil {
+		t.Fatalf("failed to inspect %s schema: %v", tableName, err)
 	}
 
 	for _, column := range columns {
-		if column.Name == "key" {
-			if strings.ToLower(column.Type) != "varchar(128)" {
-				t.Fatalf("expected key column type varchar(128), got %q", column.Type)
-			}
-			return
+		if column.Name == columnName {
+			return strings.ToLower(column.Type)
 		}
 	}
 
-	t.Fatal("key column not found in token table schema")
+	t.Fatalf("column %s not found in %s schema", columnName, tableName)
+	return ""
+}
+
+func TestTokenAutoMigrateUsesVarchar128KeyColumn(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+
+	if got := getSQLiteColumnType(t, db, "tokens", "key"); got != "varchar(128)" {
+		t.Fatalf("expected key column type varchar(128), got %q", got)
+	}
+}
+
+func TestTokenMigrationFromChar48ToVarchar128(t *testing.T) {
+	db := openTokenControllerTestDB(t)
+	legacyKey := strings.Repeat("a", 48)
+
+	if err := db.AutoMigrate(&legacyToken{}); err != nil {
+		t.Fatalf("failed to create legacy token schema: %v", err)
+	}
+	if err := db.Create(&legacyToken{
+		Id:                 1,
+		UserId:             7,
+		Key:                legacyKey,
+		Status:             common.TokenStatusEnabled,
+		Name:               "legacy-token",
+		CreatedTime:        1,
+		AccessedTime:       1,
+		ExpiredTime:        -1,
+		RemainQuota:        100,
+		UnlimitedQuota:     true,
+		ModelLimitsEnabled: false,
+		ModelLimits:        "",
+		AllowIps:           common.GetPointer(""),
+		UsedQuota:          0,
+		Group:              "default",
+		CrossGroupRetry:    false,
+	}).Error; err != nil {
+		t.Fatalf("failed to seed legacy token row: %v", err)
+	}
+
+	if got := getSQLiteColumnType(t, db, "tokens", "key"); got != "char(48)" {
+		t.Fatalf("expected legacy key column type char(48), got %q", got)
+	}
+
+	migrateTokenControllerTestDB(t, db)
+
+	if got := getSQLiteColumnType(t, db, "tokens", "key"); got != "varchar(128)" {
+		t.Fatalf("expected migrated key column type varchar(128), got %q", got)
+	}
+
+	var migratedToken model.Token
+	if err := db.First(&migratedToken, "id = ?", 1).Error; err != nil {
+		t.Fatalf("failed to load migrated token row: %v", err)
+	}
+	if migratedToken.Key != legacyKey {
+		t.Fatalf("expected migrated token key %q, got %q", legacyKey, migratedToken.Key)
+	}
+	if migratedToken.Name != "legacy-token" {
+		t.Fatalf("expected migrated token name to be preserved, got %q", migratedToken.Name)
+	}
 }
 
 func TestGetAllTokensMasksKeyInResponse(t *testing.T) {
