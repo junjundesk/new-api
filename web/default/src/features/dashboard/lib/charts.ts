@@ -158,7 +158,6 @@ export function processChartData(
         title: {
           visible: true,
           text: tt('Call Trend'),
-          subtext: `${tt('Total:')} ${formatInt(0)}`,
         },
       },
       spec_rank_bar: {
@@ -171,10 +170,10 @@ export function processChartData(
         title: {
           visible: true,
           text: tt('Call Count Ranking'),
-          subtext: `${tt('Total:')} ${formatInt(0)}`,
         },
       },
       totalQuotaDisplay: formatQuotaTotal(0),
+      totalCountDisplay: formatInt(0),
     }
   }
 
@@ -426,7 +425,6 @@ export function processChartData(
       title: {
         visible: true,
         text: tt('Call Count Distribution'),
-        subtext: `${tt('Total:')} ${formatInt(totalTimes)}`,
       },
       legends: { visible: true, orient: 'left' },
       label: { visible: true },
@@ -541,7 +539,6 @@ export function processChartData(
       title: {
         visible: true,
         text: tt('Call Trend'),
-        subtext: `${tt('Total:')} ${formatInt(totalTimes)}`,
       },
       tooltip: {
         mark: {
@@ -611,7 +608,6 @@ export function processChartData(
       title: {
         visible: true,
         text: tt('Call Count Ranking'),
-        subtext: `${tt('Total:')} ${formatInt(totalTimes)}`,
       },
       bar: {
         state: {
@@ -633,6 +629,7 @@ export function processChartData(
       animation: true,
     },
     totalQuotaDisplay: formatQuotaTotal(totalQuotaRaw),
+    totalCountDisplay: formatInt(totalTimes),
   }
 }
 
@@ -796,6 +793,21 @@ export function processUserChartData(
                 formatVal(Number(datum?.rawQuota) || 0),
             },
           ],
+          updateContent: (
+            array: Array<{
+              key: string
+              value: string | number
+              datum?: Record<string, unknown>
+            }>
+          ) => {
+            for (let i = 0; i < array.length; i++) {
+              const rawQuota = array[i].datum?.rawQuota
+              const value =
+                rawQuota === undefined ? array[i].value : Number(rawQuota)
+              array[i].value = formatVal(Number(value) || 0)
+            }
+            return array
+          },
         },
       },
       color: { specified: userColorMap },

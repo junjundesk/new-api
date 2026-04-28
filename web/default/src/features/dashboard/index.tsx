@@ -86,8 +86,8 @@ const SECTION_META: Record<
     descriptionKey: 'View dashboard overview and statistics',
   },
   models: {
-    titleKey: 'Models',
-    descriptionKey: 'View model statistics and charts',
+    titleKey: 'Model Call Analytics',
+    descriptionKey: 'View model call count analytics and charts',
   },
   users: {
     titleKey: 'User Analytics',

@@ -78,7 +78,12 @@ export function ModelCharts(props: ModelChartsProps) {
       <div className='flex w-full flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between'>
         <div className='flex items-center gap-2'>
           <PieChartIcon className='text-muted-foreground/60 size-4' />
-          <div className='text-sm font-semibold'>{t('Model Analytics')}</div>
+          <div className='text-sm font-semibold'>
+            {t('Model Call Analytics')}
+          </div>
+          <span className='text-muted-foreground text-xs'>
+            {t('Total:')} {chartData.totalCountDisplay}
+          </span>
         </div>
 
         <div className='bg-muted/60 inline-flex h-8 rounded-md border p-0.5'>

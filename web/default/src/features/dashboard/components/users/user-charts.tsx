@@ -41,6 +41,8 @@ const USER_CHARTS: {
   },
 ]
 
+const TOP_USER_LIMIT_OPTIONS = [5, 10, 20, 50]
+
 export function UserCharts() {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
@@ -55,6 +57,7 @@ export function UserCharts() {
   const [selectedRange, setSelectedRange] = useState<number>(() =>
     getDefaultDays(timeGranularity)
   )
+  const [topUserLimit, setTopUserLimit] = useState(10)
   const [timeRange, setTimeRange] = useState(() => {
     const days = getDefaultDays(timeGranularity)
     const { start, end } = getNormalizedDateRange(days)
@@ -113,9 +116,10 @@ export function UserCharts() {
       processUserChartData(
         isLoading ? [] : (userData ?? []),
         timeGranularity,
-        t
+        t,
+        topUserLimit
       ),
-    [userData, isLoading, timeGranularity, t]
+    [userData, isLoading, timeGranularity, t, topUserLimit]
   )
 
   return (
@@ -158,6 +162,26 @@ export function UserCharts() {
           ))}
         </div>
 
+        <div className='flex items-center gap-1.5 rounded-md border p-0.5'>
+          <span className='text-muted-foreground px-2 text-xs font-medium'>
+            {t('Top Users')}
+          </span>
+          {TOP_USER_LIMIT_OPTIONS.map((limit) => (
+            <button
+              key={limit}
+              type='button'
+              onClick={() => setTopUserLimit(limit)}
+              className={`rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors ${
+                topUserLimit === limit
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {t('Top {{count}}', { count: limit })}
+            </button>
+          ))}
+        </div>
+
         {isLoading && (
           <Loader2 className='text-muted-foreground size-4 animate-spin' />
         )}
@@ -184,7 +208,7 @@ export function UserCharts() {
                   themeReady &&
                   spec && (
                     <VChart
-                      key={`user-${chart.value}-${resolvedTheme}`}
+                      key={`user-${chart.value}-${topUserLimit}-${resolvedTheme}`}
                       spec={{
                         ...spec,
                         theme: resolvedTheme === 'dark' ? 'dark' : 'light',

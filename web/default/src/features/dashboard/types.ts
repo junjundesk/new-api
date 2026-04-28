@@ -75,6 +75,7 @@ export interface ProcessedChartData {
   spec_model_line: VChartSpec
   spec_rank_bar: VChartSpec
   totalQuotaDisplay: string
+  totalCountDisplay: string
 }
 
 export interface ProcessedUserChartData {
