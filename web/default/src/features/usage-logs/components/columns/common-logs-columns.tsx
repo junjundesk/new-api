@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Route, CircleAlert, Sparkles } from 'lucide-react'
+import { Route, CircleAlert, Sparkles, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import {
@@ -10,7 +10,6 @@ import {
 } from '@/lib/format'
 import { getAvatarColorClass } from '@/lib/colors'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import {
   Popover,
   PopoverContent,
@@ -371,7 +370,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           } = useUsageLogsContext()
           const log = row.original
 
-          if (!isDisplayableLogType(log.type) || !log.username) return null
+          if (!log.username) return null
 
           return (
             <button
@@ -385,7 +384,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             >
               <span
                 className={cn(
-                  'flex size-5 items-center justify-center rounded-full text-[11px] font-bold',
+                  'flex size-6 items-center justify-center rounded-full text-xs font-bold ring-1 ring-border/60 saturate-[1.2] brightness-95 dark:brightness-110',
                   sensitiveVisible
                     ? getAvatarColorClass(log.username)
                     : 'bg-muted text-muted-foreground'
@@ -404,6 +403,39 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     )
   }
 
+  columns.push({
+    accessorKey: 'token_name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title={t('Token')} />
+    ),
+    cell: function TokenNameCell({ row }) {
+      const { sensitiveVisible } = useUsageLogsContext()
+      const log = row.original
+      if (!isDisplayableLogType(log.type)) return null
+
+      const tokenName = log.token_name
+      if (!tokenName) return null
+
+      const displayName = sensitiveVisible ? tokenName : '••••'
+
+      return (
+        <div className='max-w-[120px]'>
+          <StatusBadge
+            label={displayName}
+            icon={KeyRound}
+            autoColor={tokenName}
+            copyText={sensitiveVisible ? tokenName : undefined}
+            size='sm'
+            showDot={false}
+            className='max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/30 px-1.5 py-0.5 font-mono'
+          />
+        </div>
+      )
+    },
+    meta: { label: t('Token') },
+    size: 130,
+  })
+
   columns.push(
     {
       accessorKey: 'model_name',
@@ -416,30 +448,29 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (!isDisplayableLogType(log.type)) return null
 
         const modelInfo = formatModelName(log)
-        const tokenName = log.token_name
         const other = parseLogOther(log.other)
         let group = log.group
         if (!group) group = other?.group || ''
 
+        const badgeClass =
+          'truncate rounded-md border border-border/60 bg-muted/30 px-1.5 py-0.5 font-mono'
+
         const modelBadge = modelInfo.isMapped ? (
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant='ghost'
-                size='sm'
-                className='h-auto p-0 hover:bg-transparent'
+              <button
+                type='button'
+                className='inline-flex items-center gap-1'
               >
-                <span className='flex items-center gap-1'>
-                  <StatusBadge
-                    label={modelInfo.name}
-                    autoColor={modelInfo.name}
-                    copyText={modelInfo.name}
-                    size='sm'
-                    className='truncate font-mono'
-                  />
-                  <Route className='text-muted-foreground size-3 shrink-0' />
-                </span>
-              </Button>
+                <StatusBadge
+                  label={modelInfo.name}
+                  autoColor={modelInfo.name}
+                  copyText={modelInfo.name}
+                  size='sm'
+                  className={badgeClass}
+                />
+                <Route className='text-muted-foreground size-3 shrink-0' />
+              </button>
             </PopoverTrigger>
             <PopoverContent className='w-72'>
               <div className='space-y-2'>
@@ -468,12 +499,11 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             autoColor={modelInfo.name}
             copyText={modelInfo.name}
             size='sm'
-            className='truncate font-mono'
+            className={badgeClass}
           />
         )
 
         const metaParts: string[] = []
-        if (tokenName) metaParts.push(sensitiveVisible ? tokenName : '••••')
         if (group) metaParts.push(sensitiveVisible ? group : '••••')
 
         return (
@@ -505,41 +535,65 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const timeVariant = getTimeColor(useTime)
         const frtVariant = frt ? getTimeColor(frt / 1000) : null
 
+        const pillBg: Record<string, string> = {
+          success:
+            'border border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-800/50 dark:bg-emerald-950/20',
+          info: 'border border-sky-200/60 bg-sky-50/50 dark:border-sky-800/50 dark:bg-sky-950/20',
+          warning:
+            'border border-amber-200/60 bg-amber-50/50 dark:border-amber-800/50 dark:bg-amber-950/20',
+        }
+
         return (
-          <div className='flex flex-col gap-0.5'>
-            <div className='flex items-center gap-1 text-xs'>
+          <div className='flex flex-col gap-1'>
+            <div className='flex items-center gap-1.5'>
               <span
                 className={cn(
-                  'size-1.5 shrink-0 rounded-full',
-                  dotColorMap[timeVariant]
-                )}
-                aria-hidden='true'
-              />
-              <span
-                className={cn(
-                  'font-mono font-medium',
+                  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-xs font-medium',
+                  pillBg[timeVariant],
                   textColorMap[timeVariant]
                 )}
               >
+                <span
+                  className={cn(
+                    'size-1.5 shrink-0 rounded-full',
+                    dotColorMap[timeVariant]
+                  )}
+                  aria-hidden='true'
+                />
                 {formatUseTime(useTime)}
               </span>
-              {log.is_stream && frt != null && frt > 0 && (
-                <>
-                  <span className='text-muted-foreground/30'>·</span>
-                  <span
-                    className={cn(
-                      'font-mono font-medium',
-                      textColorMap[frtVariant!]
-                    )}
-                  >
-                    {formatUseTime(frt / 1000)}
-                  </span>
-                </>
-              )}
+              {log.is_stream && (frt != null && frt > 0 ? (
+                <span
+                  className={cn(
+                    'inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-xs font-medium',
+                    pillBg[frtVariant!],
+                    textColorMap[frtVariant!]
+                  )}
+                >
+                  {formatUseTime(frt / 1000)}
+                </span>
+              ) : (
+                <span className='inline-flex items-center rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] text-muted-foreground/50'>
+                  N/A
+                </span>
+              ))}
             </div>
             <div className='flex items-center gap-1 text-[11px]'>
               <span className='text-muted-foreground/60'>
                 {log.is_stream ? t('Stream') : t('Non-stream')}
+                {useTime > 0 && (log.prompt_tokens + log.completion_tokens) > 0 && (
+                  <>
+                    {' · '}
+                    <span className='font-mono tabular-nums'>
+                      {Math.round(
+                        (log.is_stream
+                          ? log.completion_tokens
+                          : log.prompt_tokens + log.completion_tokens) / useTime
+                      )}
+                    </span>
+                    {' t/s'}
+                  </>
+                )}
               </span>
               {log.is_stream &&
                 other?.stream_status &&
@@ -583,9 +637,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (!isDisplayableLogType(log.type)) return null
 
         const other = parseLogOther(log.other)
-        if (isPerCallBilling(other?.model_price)) {
-          return <span className='text-muted-foreground text-xs'>-</span>
-        }
 
         const promptTokens = log.prompt_tokens || 0
         const completionTokens = log.completion_tokens || 0
@@ -600,24 +651,25 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const cacheWriteTokens = hasSplitCache
           ? cacheWrite5m + cacheWrite1h
           : other?.cache_creation_tokens || 0
-        const cacheSegments = [
-          cacheReadTokens > 0
-            ? `${t('Cache')}读 ${cacheReadTokens.toLocaleString()}`
-            : null,
-          cacheWriteTokens > 0
-            ? `写 ${cacheWriteTokens.toLocaleString()}`
-            : null,
-        ].filter(Boolean)
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs font-medium'>
+            <span className='font-mono text-xs font-medium tabular-nums'>
               {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
             </span>
-            {cacheSegments.length > 0 && (
-              <span className='text-muted-foreground/60 text-[11px]'>
-                {cacheSegments.join(' · ')}
-              </span>
+            {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
+              <div className='flex items-center gap-1 text-[11px]'>
+                {cacheReadTokens > 0 && (
+                  <span className='text-muted-foreground/60'>
+                    {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
+                  </span>
+                )}
+                {cacheWriteTokens > 0 && (
+                  <span className='text-muted-foreground/60'>
+                    ↑ {cacheWriteTokens.toLocaleString()}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         )
@@ -643,14 +695,10 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div>
-                    <StatusBadge
-                      label={t('Subscription')}
-                      variant='green'
-                      size='sm'
-                      copyable={false}
-                    />
-                  </div>
+                  <span className='inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'>
+                    <span className='size-1.5 rounded-full bg-emerald-500' aria-hidden='true' />
+                    {t('Subscription')}
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent>
                   <span>
@@ -662,10 +710,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           )
         }
 
+        const quotaStr = formatLogQuota(quota)
+
         return (
-          <div className='flex flex-col'>
-            <span className='font-mono text-xs font-medium tabular-nums'>
-              {formatLogQuota(quota)}
+          <div className='flex flex-col gap-0.5'>
+            <span className='border-border/80 inline-flex w-fit items-center rounded-md border bg-muted/60 px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
+              {quotaStr}
             </span>
             {(() => {
               const userGroupRatio = other?.user_group_ratio
@@ -705,39 +755,43 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const other = parseLogOther(log.other)
 
         const segments = buildDetailSegments(log, other, t)
+        const primary = segments[0]
+        const hasMore = segments.length > 1
 
         return (
           <>
-            <Button
-              variant='ghost'
-              className='h-auto max-w-[220px] justify-start p-0 text-left text-xs font-normal hover:underline'
+            <button
+              type='button'
+              className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
               onClick={() => setDialogOpen(true)}
               title={t('Click to view full details')}
             >
-              {segments.length > 0 ? (
-                <div className='flex flex-col gap-px'>
-                  {segments.map((seg, i) => (
-                    <span
-                      key={i}
-                      className={cn(
-                        'leading-snug',
-                        seg.muted
-                          ? 'text-muted-foreground/60'
-                          : seg.danger
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-foreground'
-                      )}
-                    >
-                      {seg.text}
+              {primary ? (
+                <span
+                  className={cn(
+                    'truncate leading-snug group-hover:underline',
+                    primary.muted
+                      ? 'text-muted-foreground/60'
+                      : primary.danger
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-foreground'
+                  )}
+                >
+                  {primary.text}
+                  {hasMore && (
+                    <span className='text-muted-foreground/40 ml-0.5'>
+                      +{segments.length - 1}
                     </span>
-                  ))}
-                </div>
+                  )}
+                </span>
               ) : log.content ? (
-                <span className='line-clamp-2'>{log.content}</span>
+                <span className='text-muted-foreground truncate group-hover:underline'>
+                  {log.content}
+                </span>
               ) : (
-                <span className='text-muted-foreground'>-</span>
+                <span className='text-muted-foreground/40'>—</span>
               )}
-            </Button>
+            </button>
             <DetailsDialog
               log={log}
               isAdmin={isAdmin}
@@ -748,8 +802,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         )
       },
       meta: { label: t('Details'), mobileHidden: true },
-      size: 200,
-      maxSize: 220,
+      size: 180,
+      maxSize: 200,
     }
   )
 

@@ -42,19 +42,19 @@ export function CommonLogsStats() {
 
   if (isLoading) {
     return (
-      <div className='flex items-center gap-1.5'>
-        <Skeleton className='h-6 w-[126px] rounded-md' />
-        <Skeleton className='h-6 w-[76px] rounded-md' />
-        <Skeleton className='h-6 w-[92px] rounded-md' />
+      <div className='flex items-center gap-2'>
+        <Skeleton className='h-7 w-[150px] rounded-md' />
+        <Skeleton className='h-7 w-[100px] rounded-md' />
+        <Skeleton className='h-7 w-[120px] rounded-md' />
       </div>
     )
   }
 
   const tagClass =
-    'inline-flex h-6 items-center rounded-md border px-2.5 text-xs font-medium shadow-xs'
+    'inline-flex h-7 items-center rounded-md border px-3 py-1 text-xs font-medium shadow-xs'
 
   return (
-    <div className='flex flex-wrap items-center gap-1.5'>
+    <div className='flex flex-wrap items-center gap-2'>
       <span
         className={cn(
           tagClass,
