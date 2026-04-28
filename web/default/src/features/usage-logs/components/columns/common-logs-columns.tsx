@@ -33,6 +33,7 @@ import {
   getTimeColor,
   formatModelName,
   getTieredBillingSummary,
+  hasAnyCacheTokens,
   parseLogOther,
   isViolationFeeLog,
 } from '../../lib/format'
@@ -45,7 +46,6 @@ import {
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { useUsageLogsContext } from '../usage-logs-provider'
-import { CacheTooltip } from './column-helpers'
 
 interface DetailSegment {
   text: string
@@ -90,33 +90,60 @@ function buildDetailSegments(
 
   const segments: DetailSegment[] = []
 
-  const userGroupRatio = other.user_group_ratio
-  const groupRatio = other.group_ratio
-  const isUserGroup =
-    userGroupRatio != null &&
-    Number.isFinite(userGroupRatio) &&
-    userGroupRatio !== -1
-  const effectiveRatio = isUserGroup ? userGroupRatio : groupRatio
-  const ratioLabel = isUserGroup ? t('User Exclusive Ratio') : t('Group Ratio')
-
-  if (effectiveRatio != null && Number.isFinite(effectiveRatio)) {
-    segments.push({
-      text: `${ratioLabel} ${formatRatioCompact(effectiveRatio)}x`,
-    })
-  }
-
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
+  const formatPrice = (price: number) =>
+    `${formatBillingCurrencyFromUSD(price, priceOpts)}/M`
+  const formatPriceCompact = (price: number) =>
+    formatBillingCurrencyFromUSD(price, priceOpts)
+  const formatPriceList = (prices: string[], showUnit: boolean) => {
+    const text = prices.join(' / ')
+    return showUnit ? `${text}/M` : text
+  }
   const tieredSummary = getTieredBillingSummary(other)
   if (tieredSummary) {
-    if (tieredSummary.tier.label) {
+    const baseEntries = tieredSummary.priceEntries
+      .filter((entry) => ['inputPrice', 'outputPrice'].includes(entry.field))
+      .map((entry) => formatPriceCompact(entry.price))
+    if (baseEntries.length > 0) {
+      const tierLabel = tieredSummary.tier.label || t('Default')
       segments.push({
-        text: `${t('Tier')} ${tieredSummary.tier.label}`,
+        text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
+      })
+    }
+
+    const cacheEntries = tieredSummary.priceEntries
+      .filter((entry) =>
+        [
+          'cacheReadPrice',
+          'cacheCreatePrice',
+          'cacheCreate1hPrice',
+        ].includes(entry.field)
+      )
+      .map((entry) => {
+        return formatPriceCompact(entry.price)
+      })
+    if (cacheEntries.length > 0) {
+      segments.push({
+        text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
         muted: true,
       })
     }
-    for (const entry of tieredSummary.priceEntries) {
+
+    const otherEntries = tieredSummary.priceEntries
+      .filter(
+        (entry) =>
+          ![
+            'inputPrice',
+            'outputPrice',
+            'cacheReadPrice',
+            'cacheCreatePrice',
+            'cacheCreate1hPrice',
+          ].includes(entry.field)
+      )
+      .map((entry) => `${t(entry.shortLabel)} ${formatPrice(entry.price)}`)
+    if (otherEntries.length > 0) {
       segments.push({
-        text: `${t(entry.shortLabel)} ${formatBillingCurrencyFromUSD(entry.price, priceOpts)}/M`,
+        text: otherEntries.join(' · '),
         muted: true,
       })
     }
@@ -124,15 +151,59 @@ function buildDetailSegments(
     const isPerCall = isPerCallBilling(other.model_price)
     if (isPerCall) {
       segments.push({
-        text: `${t('Model Price')} ${formatBillingCurrencyFromUSD(other.model_price!, priceOpts)}`,
-        muted: true,
+        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(other.model_price!, priceOpts)}`,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
+      const baseEntries = [formatPriceCompact(inputPriceUSD)]
+      if (other.completion_ratio != null) {
+        baseEntries.push(
+          formatPriceCompact(inputPriceUSD * other.completion_ratio)
+        )
+      }
       segments.push({
-        text: `${t('Input')} ${formatBillingCurrencyFromUSD(inputPriceUSD, priceOpts)}/M`,
-        muted: true,
+        text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
       })
+
+      if (hasAnyCacheTokens(other)) {
+        const cacheEntries = [
+          other.cache_ratio != null && other.cache_ratio !== 1
+            ? formatPriceCompact(inputPriceUSD * other.cache_ratio)
+            : null,
+          other.cache_creation_ratio != null &&
+          other.cache_creation_ratio !== 1
+            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio)
+            : null,
+          other.cache_creation_ratio_1h != null &&
+          other.cache_creation_ratio_1h !== 0
+            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
+            : null,
+        ].filter(Boolean) as string[]
+
+        if (cacheEntries.length > 0) {
+          segments.push({
+            text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+            muted: true,
+          })
+        }
+      }
+    } else {
+      const userGroupRatio = other.user_group_ratio
+      const groupRatio = other.group_ratio
+      const isUserGroup =
+        userGroupRatio != null &&
+        Number.isFinite(userGroupRatio) &&
+        userGroupRatio !== -1
+      const effectiveRatio = isUserGroup ? userGroupRatio : groupRatio
+      const ratioLabel = isUserGroup
+        ? t('User Exclusive Ratio')
+        : t('Group Ratio')
+
+      if (effectiveRatio != null && Number.isFinite(effectiveRatio)) {
+        segments.push({
+          text: `${ratioLabel} ${formatRatioCompact(effectiveRatio)}x`,
+        })
+      }
     }
   }
 
@@ -482,7 +553,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     {
       accessorKey: 'prompt_tokens',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Input')} />
+        <DataTableColumnHeader column={column} title='Tokens' />
       ),
       cell: ({ row }) => {
         const log = row.original
@@ -494,84 +565,41 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         }
 
         const promptTokens = log.prompt_tokens || 0
-        if (promptTokens === 0) {
+        const completionTokens = log.completion_tokens || 0
+        if (promptTokens === 0 && completionTokens === 0) {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 
         const cacheReadTokens = other?.cache_tokens || 0
-
-        return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs font-medium'>
-              {promptTokens.toLocaleString()}
-            </span>
-            {cacheReadTokens > 0 && (
-              <span className='flex items-center gap-1 text-[11px]'>
-                <CacheTooltip
-                  tokens={cacheReadTokens}
-                  label={t('Cache Read')}
-                  color='fill-amber-500 text-amber-500'
-                />
-                <span className='text-muted-foreground/60'>
-                  {t('Cache Read')} {cacheReadTokens.toLocaleString()}
-                </span>
-              </span>
-            )}
-          </div>
-        )
-      },
-      meta: { label: t('Input'), mobileHidden: true },
-    },
-
-    {
-      accessorKey: 'completion_tokens',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Output')} />
-      ),
-      cell: ({ row }) => {
-        const log = row.original
-        if (!isDisplayableLogType(log.type)) return null
-
-        const other = parseLogOther(log.other)
-        if (isPerCallBilling(other?.model_price)) {
-          return <span className='text-muted-foreground text-xs'>-</span>
-        }
-
-        const completionTokens = log.completion_tokens || 0
-        if (completionTokens === 0) {
-          return <span className='text-muted-foreground text-xs'>-</span>
-        }
-
         const cacheWrite5m = other?.cache_creation_tokens_5m || 0
         const cacheWrite1h = other?.cache_creation_tokens_1h || 0
         const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
         const cacheWriteTokens = hasSplitCache
           ? cacheWrite5m + cacheWrite1h
           : other?.cache_creation_tokens || 0
+        const cacheSegments = [
+          cacheReadTokens > 0
+            ? `${t('Cache')}读 ${cacheReadTokens.toLocaleString()}`
+            : null,
+          cacheWriteTokens > 0
+            ? `写 ${cacheWriteTokens.toLocaleString()}`
+            : null,
+        ].filter(Boolean)
 
         return (
           <div className='flex flex-col gap-0.5'>
             <span className='font-mono text-xs font-medium'>
-              {completionTokens.toLocaleString()}
+              {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
             </span>
-            {cacheWriteTokens > 0 && (
-              <span className='flex items-center gap-1 text-[11px]'>
-                <CacheTooltip
-                  tokens={cacheWriteTokens}
-                  label={t('Cache Write')}
-                  color='fill-blue-500 text-blue-500'
-                />
-                <span className='text-muted-foreground/60'>
-                  {hasSplitCache
-                    ? `${t('Cache Write')} ${cacheWrite5m.toLocaleString()}/${cacheWrite1h.toLocaleString()}`
-                    : `${t('Cache Write')} ${cacheWriteTokens.toLocaleString()}`}
-                </span>
+            {cacheSegments.length > 0 && (
+              <span className='text-muted-foreground/60 text-[11px]'>
+                {cacheSegments.join(' · ')}
               </span>
             )}
           </div>
         )
       },
-      meta: { label: t('Output'), mobileHidden: true },
+      meta: { label: 'Tokens', mobileHidden: true },
     },
 
     {
