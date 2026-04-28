@@ -28,15 +28,18 @@ import {
 import {
   DataTablePagination,
   DataTableToolbar,
+  DataTableViewOptions,
   TableSkeleton,
   TableEmpty,
   MobileCardList,
 } from '@/components/data-table'
 import { PageFooterPortal } from '@/components/layout'
-import { LOG_TYPE_FILTERS, DEFAULT_LOGS_DATA } from '../constants'
+import { DEFAULT_LOGS_DATA } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { fetchLogsByCategory } from '../lib/utils'
 import type { LogCategory } from '../types'
+import { CommonLogsFilterBar } from './common-logs-filter-bar'
+import { CommonLogsStats } from './common-logs-stats'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -147,25 +150,23 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     ensurePageInRange(pageCount)
   }, [pageCount, ensurePageInRange])
 
-  const filters =
-    logCategory === 'common'
-      ? [
-          {
-            columnId: 'created_at',
-            title: t('Log Type'),
-            options: LOG_TYPE_FILTERS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.label),
-            })),
-            singleSelect: true,
-          },
-        ]
-      : []
-
   return (
     <>
       <div className='space-y-4'>
-        <DataTableToolbar table={table} filters={filters} customSearch={null} />
+        {logCategory === 'common' ? (
+          <div className='rounded-md border bg-card/50 p-3 shadow-xs'>
+            <CommonLogsFilterBar
+              stats={<CommonLogsStats />}
+              viewOptions={<DataTableViewOptions table={table} />}
+            />
+          </div>
+        ) : (
+          <DataTableToolbar
+            table={table}
+            filters={[]}
+            customSearch={null}
+          />
+        )}
         {isMobile ? (
           <MobileCardList
             table={table}

@@ -8,6 +8,7 @@ import {
   formatLogQuota,
   formatTimestampToDate,
 } from '@/lib/format'
+import { getAvatarColorClass } from '@/lib/colors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -241,19 +242,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               size='sm'
               copyable={false}
             />
-            {log.request_id && (
-              <StatusBadge
-                label={
-                  log.request_id.length > 18
-                    ? `${log.request_id.slice(0, 18)}…`
-                    : log.request_id
-                }
-                variant='neutral'
-                size='sm'
-                copyText={log.request_id}
-                className='max-w-[140px] truncate font-mono'
-              />
-            )}
           </div>
         )
       },
@@ -267,45 +255,47 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
   ]
 
   if (isAdmin) {
-    columns.push({
-      id: 'source',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Source')} />
-      ),
-      cell: function SourceCell({ row }) {
-        const {
-          setAffinityTarget,
-          setAffinityDialogOpen,
-          setSelectedUserId,
-          setUserInfoDialogOpen,
-        } = useUsageLogsContext()
-        const log = row.original
+    columns.push(
+      {
+        id: 'channel',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Channel')} />
+        ),
+        cell: function ChannelCell({ row }) {
+          const {
+            sensitiveVisible,
+            setAffinityTarget,
+            setAffinityDialogOpen,
+          } = useUsageLogsContext()
+          const log = row.original
 
-        if (!isDisplayableLogType(log.type)) return null
+          if (!isDisplayableLogType(log.type)) return null
 
-        const other = parseLogOther(log.other)
-        const affinity = other?.admin_info?.channel_affinity
-        const useChannel = other?.admin_info?.use_channel
-        const channelChain =
-          useChannel && useChannel.length > 0
-            ? useChannel.join(' → ')
-            : undefined
-        const channelDisplay = log.channel_name
-          ? `${log.channel_name} #${log.channel}`
-          : `#${log.channel}`
+          const other = parseLogOther(log.other)
+          const affinity = other?.admin_info?.channel_affinity
+          const useChannel = other?.admin_info?.use_channel
+          const channelChain =
+            useChannel && useChannel.length > 0
+              ? useChannel.join(' → ')
+              : undefined
+          const channelDisplay = log.channel_name
+            ? `${log.channel_name} #${log.channel}`
+            : `#${log.channel}`
+          const channelIdDisplay = `#${log.channel}`
+          const channelName = sensitiveVisible ? log.channel_name : '••••'
 
-        return (
-          <div className='flex flex-col gap-1'>
-            <div className='flex items-center gap-1'>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className='relative'>
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className='flex max-w-[160px] flex-col gap-0.5'>
+                    <div className='relative inline-flex w-fit'>
                       <StatusBadge
-                        label={channelDisplay}
-                        autoColor={log.channel_name || String(log.channel)}
+                        label={channelIdDisplay}
+                        autoColor={String(log.channel)}
                         copyText={String(log.channel)}
                         size='sm'
+                        className='font-mono'
                       />
                       {affinity && (
                         <button
@@ -329,57 +319,89 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                         </button>
                       )}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className='space-y-1'>
-                      <p>{channelDisplay}</p>
-                      {channelChain && (
-                        <p className='text-muted-foreground text-xs'>
-                          {t('Chain')}: {channelChain}
+                    {log.channel_name && (
+                      <span className='text-muted-foreground/70 truncate text-[11px]'>
+                        {channelName}
+                      </span>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className='space-y-1'>
+                    <p>{sensitiveVisible ? channelDisplay : channelIdDisplay}</p>
+                    {channelChain && (
+                      <p className='text-muted-foreground text-xs'>
+                        {t('Chain')}: {channelChain}
+                      </p>
+                    )}
+                    {affinity && (
+                      <div className='border-t pt-1 text-xs'>
+                        <p className='font-medium'>{t('Channel Affinity')}</p>
+                        <p>
+                          {t('Rule')}: {affinity.rule_name || '-'}
                         </p>
-                      )}
-                      {affinity && (
-                        <div className='border-t pt-1 text-xs'>
-                          <p className='font-medium'>{t('Channel Affinity')}</p>
-                          <p>
-                            {t('Rule')}: {affinity.rule_name || '-'}
-                          </p>
-                          <p>
-                            {t('Group')}:{' '}
-                            {affinity.using_group ||
+                        <p>
+                          {t('Group')}:{' '}
+                          {sensitiveVisible
+                            ? affinity.using_group ||
                               affinity.selected_group ||
-                              '-'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            {log.username && (
-              <button
-                type='button'
-                className='flex items-center gap-1 text-left'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedUserId(log.user_id)
-                  setUserInfoDialogOpen(true)
-                }}
-              >
-                <span className='bg-primary/10 text-primary flex size-4 items-center justify-center rounded-full text-[10px] font-bold'>
-                  {log.username.charAt(0).toUpperCase()}
-                </span>
-                <span className='text-muted-foreground truncate text-xs hover:underline'>
-                  {log.username}
-                </span>
-              </button>
-            )}
-          </div>
-        )
+                              '-'
+                            : '••••'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        meta: { label: t('Channel'), mobileHidden: true },
       },
-      meta: { label: t('Source'), mobileHidden: true },
-    })
+      {
+        id: 'user',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('User')} />
+        ),
+        cell: function UserCell({ row }) {
+          const {
+            sensitiveVisible,
+            setSelectedUserId,
+            setUserInfoDialogOpen,
+          } = useUsageLogsContext()
+          const log = row.original
+
+          if (!isDisplayableLogType(log.type) || !log.username) return null
+
+          return (
+            <button
+              type='button'
+              className='flex items-center gap-1.5 text-left'
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedUserId(log.user_id)
+                setUserInfoDialogOpen(true)
+              }}
+            >
+              <span
+                className={cn(
+                  'flex size-5 items-center justify-center rounded-full text-[11px] font-bold',
+                  sensitiveVisible
+                    ? getAvatarColorClass(log.username)
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {sensitiveVisible ? log.username.charAt(0).toUpperCase() : '•'}
+              </span>
+              <span className='text-muted-foreground truncate text-sm hover:underline'>
+                {sensitiveVisible ? log.username : '••••'}
+              </span>
+            </button>
+          )
+        },
+        meta: { label: t('User'), mobileHidden: true },
+      }
+    )
   }
 
   columns.push(
@@ -389,6 +411,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         <DataTableColumnHeader column={column} title={t('Model')} />
       ),
       cell: function ModelCell({ row }) {
+        const { sensitiveVisible } = useUsageLogsContext()
         const log = row.original
         if (!isDisplayableLogType(log.type)) return null
 
@@ -450,8 +473,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         )
 
         const metaParts: string[] = []
-        if (tokenName) metaParts.push(tokenName)
-        if (group) metaParts.push(group)
+        if (tokenName) metaParts.push(sensitiveVisible ? tokenName : '••••')
+        if (group) metaParts.push(sensitiveVisible ? group : '••••')
 
         return (
           <div className='flex max-w-[220px] flex-col gap-0.5'>

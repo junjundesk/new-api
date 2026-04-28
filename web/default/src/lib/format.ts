@@ -61,7 +61,7 @@ export function parseQuotaFromDollars(amount: number): number {
   const { config, meta } = getCurrencyDisplay()
 
   // Tokens-only or raw quota mode
-  if (!config.displayInCurrency || meta.kind === 'tokens') {
+  if (meta.kind === 'tokens') {
     return Math.round(amount)
   }
 
@@ -80,7 +80,7 @@ export function parseQuotaFromDollars(amount: number): number {
 export function quotaUnitsToDollars(units: number): number {
   const { config, meta } = getCurrencyDisplay()
 
-  if (!config.displayInCurrency || meta.kind === 'tokens') {
+  if (meta.kind === 'tokens') {
     return units
   }
 
