@@ -129,7 +129,7 @@ export function Pricing() {
   if (isLoading) {
     return (
       <PublicLayout showMainContainer={false}>
-        <div className='mx-auto w-full max-w-[1800px] px-4 pt-20 pb-10 sm:px-6 xl:px-8'>
+        <div className='mx-auto w-full max-w-[1800px] px-3 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10 xl:px-8'>
           <LoadingSkeleton viewMode={viewMode} />
         </div>
       </PublicLayout>
@@ -152,15 +152,15 @@ export function Pricing() {
             WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 100%)',
           }}
         />
-        <PageTransition className='relative mx-auto w-full max-w-[1800px] px-4 pt-20 pb-10 sm:px-6 xl:px-8'>
-          <header className='mx-auto mb-8 max-w-3xl pt-8 text-center sm:mb-10 sm:pt-10'>
+        <PageTransition className='relative mx-auto w-full max-w-[1800px] px-3 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10 xl:px-8'>
+          <header className='mx-auto mb-5 max-w-3xl pt-5 text-center sm:mb-10 sm:pt-10'>
             <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
               {t('Models Directory')}
             </p>
             <h1 className='text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'>
               {t('Model Square')}
             </h1>
-            <p className='text-muted-foreground/80 mt-4 text-sm sm:text-base'>
+            <p className='text-muted-foreground/80 mt-3 text-sm sm:mt-4 sm:text-base'>
               {t('This site currently has {{count}} models enabled', {
                 count: models?.length || 0,
               })}
@@ -175,7 +175,7 @@ export function Pricing() {
               onChange={setSearchInput}
               onClear={clearSearch}
               placeholder={t('Search model name, provider, endpoint, or tag...')}
-              className='mx-auto mt-6 max-w-2xl'
+              className='mx-auto mt-4 max-w-2xl sm:mt-6'
             />
           </header>
 

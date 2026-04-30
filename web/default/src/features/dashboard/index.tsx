@@ -191,9 +191,9 @@ export function Dashboard() {
         {t(meta.descriptionKey)}
       </SectionPageLayout.Description>
       <SectionPageLayout.Content>
-        <div className='space-y-4'>
+        <div className='space-y-3 sm:space-y-4'>
           {activeSection !== 'overview' && (
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>
               {showSectionTabs ? (
                 <Tabs value={activeSection} onValueChange={handleSectionChange}>
                   <TabsList className='h-auto max-w-full flex-wrap justify-start'>
@@ -208,7 +208,7 @@ export function Dashboard() {
                 <div />
               )}
               {modelActions != null && (
-                <div className='flex shrink-0 flex-wrap items-center gap-2'>
+                <div className='flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2'>
                   {modelActions}
                 </div>
               )}
@@ -217,7 +217,7 @@ export function Dashboard() {
           {activeSection === 'overview' && (
             <>
               <SummaryCards />
-              <CardStaggerContainer className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
+              <CardStaggerContainer className='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2'>
                 <CardStaggerItem>
                   <ApiInfoPanel />
                 </CardStaggerItem>

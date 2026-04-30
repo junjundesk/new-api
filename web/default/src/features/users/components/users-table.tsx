@@ -74,7 +74,7 @@ export function UsersTable() {
   } = useTableUrlState({
     search: route.useSearch(),
     navigate: route.useNavigate(),
-    pagination: { defaultPage: 1, defaultPageSize: 20 },
+    pagination: { defaultPage: 1, defaultPageSize: isMobile ? 10 : 20 },
     globalFilter: { enabled: true, key: 'filter' },
     columnFilters: [
       { columnId: 'status', searchKey: 'status', type: 'array' },
@@ -168,7 +168,7 @@ export function UsersTable() {
 
   return (
     <>
-      <div className='space-y-4'>
+      <div className='space-y-3 sm:space-y-4'>
         <DataTableToolbar
           table={table}
           searchPlaceholder={t('Filter by username, name or email...')}

@@ -68,7 +68,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   return (
     <div
       className={cn(
-        'group flex flex-col rounded-xl border p-4 transition-colors sm:p-5',
+        'group flex flex-col rounded-xl border p-3 transition-colors sm:p-5',
         'hover:bg-muted/20'
       )}
     >
@@ -175,12 +175,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       </div>
 
       {/* Description */}
-      <p className='text-muted-foreground mt-3 line-clamp-1 flex-1 text-[13px] leading-relaxed sm:mt-4 sm:line-clamp-2 sm:min-h-[2.5rem]'>
+      <p className='text-muted-foreground mt-2 line-clamp-1 flex-1 text-[13px] leading-relaxed sm:mt-4 sm:line-clamp-2 sm:min-h-[2.5rem]'>
         {props.model.description || t('No description available.')}
       </p>
 
       {/* Footer row 1: group + billing type */}
-      <div className='mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mt-4'>
+      <div className='mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:mt-4'>
         {primaryGroup && (
           <span className='text-muted-foreground text-xs font-medium'>
             {primaryGroup} {t('Groups')}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Filter, RotateCcw, Calendar, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
-import { getNormalizedDateRange, type TimeGranularity } from '@/lib/time'
+import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -88,7 +88,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
   const handleReset = () => {
     const days = props.preferences.defaultTimeRangeDays
-    const { start, end } = getNormalizedDateRange(days)
+    const { start, end } = getRollingDateRange(days)
     setFilters({
       ...buildDefaultDashboardFilters(props.preferences),
       start_timestamp: start,
@@ -109,7 +109,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
   }
 
   const handleQuickRange = (days: number) => {
-    const { start, end } = getNormalizedDateRange(days)
+    const { start, end } = getRollingDateRange(days)
 
     setFilters((prev) => ({
       ...prev,
@@ -127,7 +127,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
           {t('Filter')}
         </Button>
       </DialogTrigger>
-      <DialogContent className='flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg'>
+      <DialogContent className='flex max-h-[calc(100dvh-2rem)] flex-col max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-lg'>
         <DialogHeader>
           <DialogTitle>{t('Filter Dashboard Models')}</DialogTitle>
           <DialogDescription>
@@ -137,15 +137,15 @@ export function ModelsFilter(props: ModelsFilterProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className='flex-1 pr-4'>
-          <div className='grid gap-4 py-4'>
+        <ScrollArea className='flex-1 pr-3 sm:pr-4'>
+          <div className='grid gap-3 py-3 sm:gap-4 sm:py-4'>
             {/* Quick time range selection */}
             <div className='grid gap-2'>
               <Label className='flex items-center gap-2'>
                 <Calendar className='h-4 w-4' />
                 {t('Quick Range')}
               </Label>
-              <div className='flex gap-2'>
+              <div className='grid grid-cols-2 gap-2 sm:flex'>
                 {TIME_RANGE_PRESETS.map((range) => (
                   <Button
                     key={range.days}
@@ -170,7 +170,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
             <SectionDivider label={t('Custom Time Range')} />
 
             {/* Custom time range */}
-            <div className='grid gap-4'>
+            <div className='grid gap-3 sm:gap-4'>
               <div className='grid gap-2'>
                 <Label htmlFor='start_timestamp'>{t('Start Time')}</Label>
                 <DateTimePicker
@@ -236,7 +236,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
           </div>
         </ScrollArea>
 
-        <DialogFooter>
+        <DialogFooter className='grid grid-cols-2 gap-2 sm:flex'>
           <Button onClick={handleReset} variant='outline' type='button'>
             <RotateCcw className='mr-2 h-4 w-4' />
             {t('Reset')}

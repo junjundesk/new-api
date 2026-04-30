@@ -769,7 +769,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           </>
         )
       },
-      meta: { label: t('Details'), mobileHidden: true },
+      meta: { label: t('Details') },
       size: 180,
       maxSize: 200,
     }
