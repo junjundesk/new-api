@@ -26,6 +26,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  DISABLED_ROW_DESKTOP,
+  DISABLED_ROW_MOBILE,
   DataTablePagination,
   DataTableToolbar,
   TableSkeleton,
@@ -36,11 +38,19 @@ import { PageFooterPortal } from '@/components/layout'
 import { getRedemptions, searchRedemptions } from '../api'
 import { REDEMPTION_STATUS, getRedemptionStatusOptions } from '../constants'
 import { isRedemptionExpired } from '../lib'
+import type { Redemption } from '../types'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useRedemptionsColumns } from './redemptions-columns'
 import { useRedemptions } from './redemptions-provider'
 
 const route = getRouteApi('/_authenticated/redemption-codes/')
+
+function isDisabledRedemptionRow(redemption: Redemption) {
+  return (
+    redemption.status !== REDEMPTION_STATUS.ENABLED ||
+    isRedemptionExpired(redemption.expired_time, redemption.status)
+  )
+}
 
 export function RedemptionsTable() {
   const { t } = useTranslation()
@@ -164,6 +174,11 @@ export function RedemptionsTable() {
             emptyDescription={t(
               'No redemption codes available. Create your first redemption code to get started.'
             )}
+            getRowClassName={(row) =>
+              isDisabledRedemptionRow(row.original)
+                ? DISABLED_ROW_MOBILE
+                : undefined
+            }
           />
         ) : (
           <>
@@ -209,18 +224,15 @@ export function RedemptionsTable() {
                   ) : (
                     table.getRowModel().rows.map((row) => {
                       const redemption = row.original
-                      const isDisabled =
-                        redemption.status !== REDEMPTION_STATUS.ENABLED ||
-                        isRedemptionExpired(
-                          redemption.expired_time,
-                          redemption.status
-                        )
 
                       return (
                         <TableRow
                           key={row.id}
                           data-state={row.getIsSelected() && 'selected'}
-                          className={isDisabled ? 'opacity-50' : undefined}
+                          className={cn(
+                            isDisabledRedemptionRow(redemption) &&
+                              DISABLED_ROW_DESKTOP
+                          )}
                         >
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>

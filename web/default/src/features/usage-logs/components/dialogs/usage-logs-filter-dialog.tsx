@@ -246,7 +246,7 @@ export function UsageLogsFilterDialog({
           <FilterInput
             id='mjId'
             label={t('Task ID')}
-            placeholder={t('Filter by Midjourney task ID')}
+            placeholder={t('Filter by task ID')}
             value={drawingFilters.mjId || ''}
             onChange={(value) => handleChange('mjId', value)}
           />

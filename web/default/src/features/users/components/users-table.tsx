@@ -27,6 +27,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  DISABLED_ROW_DESKTOP,
+  DISABLED_ROW_MOBILE,
   DataTablePagination,
   DataTableToolbar,
   TableSkeleton,
@@ -41,11 +43,16 @@ import {
   getUserRoleOptions,
   isUserDeleted,
 } from '../constants'
+import type { User } from '../types'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useUsersColumns } from './users-columns'
 import { useUsers } from './users-provider'
 
 const route = getRouteApi('/_authenticated/users/')
+
+function isDisabledUserRow(user: User) {
+  return isUserDeleted(user) || user.status === USER_STATUS.DISABLED
+}
 
 export function UsersTable() {
   const { t } = useTranslation()
@@ -186,6 +193,9 @@ export function UsersTable() {
             emptyDescription={t(
               'No users available. Try adjusting your search or filters.'
             )}
+            getRowClassName={(row) =>
+              isDisabledUserRow(row.original) ? DISABLED_ROW_MOBILE : undefined
+            }
           />
         ) : (
           <>
@@ -226,16 +236,14 @@ export function UsersTable() {
                   ) : (
                     table.getRowModel().rows.map((row) => {
                       const user = row.original
-                      const isDeleted = isUserDeleted(user)
-                      const isDisabled = user.status === USER_STATUS.DISABLED
 
                       return (
                         <TableRow
                           key={row.id}
                           data-state={row.getIsSelected() && 'selected'}
-                          className={
-                            isDeleted || isDisabled ? 'opacity-50' : undefined
-                          }
+                          className={cn(
+                            isDisabledUserRow(user) && DISABLED_ROW_DESKTOP
+                          )}
                         >
                           {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>

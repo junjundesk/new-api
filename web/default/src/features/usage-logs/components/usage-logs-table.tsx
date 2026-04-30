@@ -27,7 +27,6 @@ import {
 } from '@/components/ui/table'
 import {
   DataTablePagination,
-  DataTableToolbar,
   DataTableViewOptions,
   TableSkeleton,
   TableEmpty,
@@ -40,6 +39,7 @@ import { fetchLogsByCategory } from '../lib/utils'
 import type { LogCategory } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { CommonLogsStats } from './common-logs-stats'
+import { TaskLogsFilterBar } from './task-logs-filter-bar'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -194,11 +194,12 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
             />
           </div>
         ) : (
-          <DataTableToolbar
-            table={table}
-            filters={[]}
-            customSearch={null}
-          />
+          <div className='rounded-md border bg-card/50 p-3 shadow-xs'>
+            <TaskLogsFilterBar
+              logCategory={logCategory}
+              viewOptions={<DataTableViewOptions table={table} />}
+            />
+          </div>
         )}
         {isMobile ? (
           <MobileCardList

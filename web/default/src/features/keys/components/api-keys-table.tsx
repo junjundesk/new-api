@@ -27,6 +27,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  DISABLED_ROW_DESKTOP,
+  DISABLED_ROW_MOBILE,
   DataTablePagination,
   DataTableToolbar,
   TableSkeleton,
@@ -35,7 +37,7 @@ import {
 } from '@/components/data-table'
 import { PageFooterPortal } from '@/components/layout'
 import { getApiKeys, searchApiKeys } from '../api'
-import { API_KEY_STATUS_OPTIONS, ERROR_MESSAGES } from '../constants'
+import { API_KEY_STATUS, API_KEY_STATUS_OPTIONS, ERROR_MESSAGES } from '../constants'
 import { type ApiKey } from '../types'
 import { useApiKeysColumns } from './api-keys-columns'
 import { ApiKeysPrimaryButtons } from './api-keys-primary-buttons'
@@ -43,6 +45,10 @@ import { useApiKeys } from './api-keys-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 
 const route = getRouteApi('/_authenticated/keys/')
+
+function isDisabledApiKeyRow(apiKey: ApiKey) {
+  return apiKey.status !== API_KEY_STATUS.ENABLED
+}
 
 export function ApiKeysTable() {
   const { t } = useTranslation()
@@ -185,6 +191,11 @@ export function ApiKeysTable() {
             emptyDescription={t(
               'No API keys available. Create your first API key to get started.'
             )}
+            getRowClassName={(row) =>
+              isDisabledApiKeyRow(row.original)
+                ? DISABLED_ROW_MOBILE
+                : undefined
+            }
           />
         ) : (
           <div
@@ -226,11 +237,10 @@ export function ApiKeysTable() {
                     <TableRow
                       key={row.id}
                       data-state={row.getIsSelected() && 'selected'}
-                      className={
-                        (row.original as ApiKey).status !== 1
-                          ? 'opacity-60'
-                          : undefined
-                      }
+                      className={cn(
+                        isDisabledApiKeyRow(row.original) &&
+                          DISABLED_ROW_DESKTOP
+                      )}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id}>

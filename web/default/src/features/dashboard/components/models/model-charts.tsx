@@ -5,46 +5,50 @@ import { useTranslation } from 'react-i18next'
 import type { TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useTheme } from '@/context/theme-provider'
-import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
+import {
+  DEFAULT_TIME_GRANULARITY,
+  MODEL_ANALYTICS_CHART_OPTIONS,
+} from '@/features/dashboard/constants'
 import { processChartData } from '@/features/dashboard/lib'
-import type { QuotaDataItem } from '@/features/dashboard/types'
+import type {
+  ModelAnalyticsChartTab,
+  QuotaDataItem,
+} from '@/features/dashboard/types'
 
 let themeManagerPromise: Promise<
   (typeof import('@visactor/vchart'))['ThemeManager']
 > | null = null
 
-type ChartTab = 'trend' | 'proportion' | 'top'
 type ChartSpecKey = 'spec_model_line' | 'spec_pie' | 'spec_rank_bar'
 
-const CHART_TABS: {
-  value: ChartTab
-  labelKey: string
-  specKey: ChartSpecKey
-}[] = [
-  { value: 'trend', labelKey: 'Call Trend', specKey: 'spec_model_line' },
-  {
-    value: 'proportion',
-    labelKey: 'Call Count Distribution',
-    specKey: 'spec_pie',
-  },
-  { value: 'top', labelKey: 'Call Count Ranking', specKey: 'spec_rank_bar' },
-]
+const CHART_SPEC_KEYS: Record<ModelAnalyticsChartTab, ChartSpecKey> = {
+  trend: 'spec_model_line',
+  proportion: 'spec_pie',
+  top: 'spec_rank_bar',
+}
 
 interface ModelChartsProps {
   data: QuotaDataItem[]
   loading?: boolean
   timeGranularity?: TimeGranularity
+  defaultChartTab?: ModelAnalyticsChartTab
 }
 
 export function ModelCharts(props: ModelChartsProps) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
-  const [activeTab, setActiveTab] = useState<ChartTab>('trend')
+  const [activeTab, setActiveTab] = useState<ModelAnalyticsChartTab>(
+    props.defaultChartTab ?? 'trend'
+  )
   const [themeReady, setThemeReady] = useState(false)
   const themeManagerRef = useRef<
     (typeof import('@visactor/vchart'))['ThemeManager'] | null
   >(null)
   const timeGranularity = props.timeGranularity ?? DEFAULT_TIME_GRANULARITY
+
+  useEffect(() => {
+    if (props.defaultChartTab) setActiveTab(props.defaultChartTab)
+  }, [props.defaultChartTab])
 
   useEffect(() => {
     const updateTheme = async () => {
@@ -70,8 +74,7 @@ export function ModelCharts(props: ModelChartsProps) {
     [props.data, props.loading, timeGranularity, t]
   )
 
-  const activeSpec = CHART_TABS.find((tab) => tab.value === activeTab)
-  const spec = activeSpec ? chartData[activeSpec.specKey] : null
+  const spec = chartData[CHART_SPEC_KEYS[activeTab]]
 
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -87,7 +90,7 @@ export function ModelCharts(props: ModelChartsProps) {
         </div>
 
         <div className='bg-muted/60 inline-flex h-8 rounded-md border p-0.5'>
-          {CHART_TABS.map((tab) => (
+          {MODEL_ANALYTICS_CHART_OPTIONS.map((tab) => (
             <button
               key={tab.value}
               type='button'

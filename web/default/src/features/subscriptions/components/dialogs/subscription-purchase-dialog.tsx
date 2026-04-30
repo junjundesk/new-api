@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { GroupBadge } from '@/components/group-badge'
 import { Separator } from '@/components/ui/separator'
 import {
   paySubscriptionStripe,
@@ -209,11 +210,11 @@ export function SubscriptionPurchaseDialog(props: Props) {
               </span>
             </div>
             {plan.upgrade_group && (
-              <div className='flex justify-between'>
+              <div className='flex items-center justify-between'>
                 <span className='text-muted-foreground text-sm'>
                   {t('Upgrade Group')}
                 </span>
-                <span className='text-sm'>{plan.upgrade_group}</span>
+                <GroupBadge group={plan.upgrade_group} />
               </div>
             )}
             <Separator />

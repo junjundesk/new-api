@@ -5,42 +5,50 @@ import { useTranslation } from 'react-i18next'
 import type { TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useTheme } from '@/context/theme-provider'
-import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
+import {
+  CONSUMPTION_DISTRIBUTION_CHART_OPTIONS,
+  DEFAULT_TIME_GRANULARITY,
+} from '@/features/dashboard/constants'
 import { processChartData } from '@/features/dashboard/lib'
-import type { QuotaDataItem } from '@/features/dashboard/types'
+import type {
+  ConsumptionDistributionChartType,
+  QuotaDataItem,
+} from '@/features/dashboard/types'
 
 let themeManagerPromise: Promise<
   (typeof import('@visactor/vchart'))['ThemeManager']
 > | null = null
 
-type DistributionChartType = 'bar' | 'area'
-
 interface ConsumptionDistributionChartProps {
   data: QuotaDataItem[]
   loading?: boolean
   timeGranularity?: TimeGranularity
+  defaultChartType?: ConsumptionDistributionChartType
 }
 
-const CHART_TYPES: Array<{
-  value: DistributionChartType
-  labelKey: string
-  icon: typeof BarChart3
-}> = [
-  { value: 'bar', labelKey: 'Bar Chart', icon: BarChart3 },
-  { value: 'area', labelKey: 'Area Chart', icon: AreaChart },
-]
+const CHART_TYPE_ICONS: Record<ConsumptionDistributionChartType, typeof BarChart3> =
+  {
+    bar: BarChart3,
+    area: AreaChart,
+  }
 
 export function ConsumptionDistributionChart(
   props: ConsumptionDistributionChartProps
 ) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
-  const [chartType, setChartType] = useState<DistributionChartType>('bar')
+  const [chartType, setChartType] = useState<ConsumptionDistributionChartType>(
+    props.defaultChartType ?? 'bar'
+  )
   const [themeReady, setThemeReady] = useState(false)
   const themeManagerRef = useRef<
     (typeof import('@visactor/vchart'))['ThemeManager'] | null
   >(null)
   const timeGranularity = props.timeGranularity ?? DEFAULT_TIME_GRANULARITY
+
+  useEffect(() => {
+    if (props.defaultChartType) setChartType(props.defaultChartType)
+  }, [props.defaultChartType])
 
   useEffect(() => {
     const updateTheme = async () => {
@@ -81,8 +89,8 @@ export function ConsumptionDistributionChart(
         </div>
 
         <div className='bg-muted/60 inline-flex h-8 rounded-md border p-0.5'>
-          {CHART_TYPES.map((item) => {
-            const Icon = item.icon
+          {CONSUMPTION_DISTRIBUTION_CHART_OPTIONS.map((item) => {
+            const Icon = CHART_TYPE_ICONS[item.value]
             return (
               <button
                 key={item.value}

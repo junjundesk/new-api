@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Filter, RotateCcw, Calendar, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
@@ -26,20 +26,20 @@ import {
 } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/datetime-picker'
 import {
-  DEFAULT_TIME_GRANULARITY,
   TIME_GRANULARITY_OPTIONS,
   TIME_RANGE_PRESETS,
-  EMPTY_DASHBOARD_FILTERS,
 } from '@/features/dashboard/constants'
 import {
+  buildDefaultDashboardFilters,
   cleanFilters,
-  getSavedGranularity,
-  saveGranularity,
-  getDefaultDays,
 } from '@/features/dashboard/lib'
-import { type DashboardFilters } from '@/features/dashboard/types'
+import type {
+  DashboardChartPreferences,
+  DashboardFilters,
+} from '@/features/dashboard/types'
 
 interface ModelsFilterProps {
+  preferences: DashboardChartPreferences
   onFilterChange: (filters: DashboardFilters) => void
   onReset: () => void
 }
@@ -58,30 +58,27 @@ const SectionDivider = ({ label }: { label: string }) => (
   </div>
 )
 
-export function ModelsFilter({ onFilterChange, onReset }: ModelsFilterProps) {
+export function ModelsFilter(props: ModelsFilterProps) {
   const { t } = useTranslation()
   // 使用已缓存的用户数据，避免重复调用 API
   const user = useAuthStore((state) => state.auth.user)
   const isAdmin = user?.role && user.role >= 10
 
   const [open, setOpen] = useState(false)
-  const [filters, setFilters] = useState<DashboardFilters>(() => {
-    const granularity = getSavedGranularity()
-    const days = getDefaultDays(granularity)
-    const { start, end } = getNormalizedDateRange(days)
-    return {
-      ...EMPTY_DASHBOARD_FILTERS,
-      start_timestamp: start,
-      end_timestamp: end,
-      time_granularity: granularity,
-    }
-  })
+  const [filters, setFilters] = useState<DashboardFilters>(() =>
+    buildDefaultDashboardFilters(props.preferences)
+  )
   const [selectedRange, setSelectedRange] = useState<number | null>(() =>
-    getDefaultDays()
+    props.preferences.defaultTimeRangeDays
   )
 
+  useEffect(() => {
+    setFilters(buildDefaultDashboardFilters(props.preferences))
+    setSelectedRange(props.preferences.defaultTimeRangeDays)
+  }, [props.preferences])
+
   const handleApply = () => {
-    onFilterChange(
+    props.onFilterChange(
       cleanFilters(
         filters as unknown as Record<string, unknown>
       ) as typeof filters
@@ -90,17 +87,15 @@ export function ModelsFilter({ onFilterChange, onReset }: ModelsFilterProps) {
   }
 
   const handleReset = () => {
-    const days = getDefaultDays(DEFAULT_TIME_GRANULARITY)
+    const days = props.preferences.defaultTimeRangeDays
     const { start, end } = getNormalizedDateRange(days)
     setFilters({
-      ...EMPTY_DASHBOARD_FILTERS,
+      ...buildDefaultDashboardFilters(props.preferences),
       start_timestamp: start,
       end_timestamp: end,
-      time_granularity: DEFAULT_TIME_GRANULARITY,
     })
     setSelectedRange(days)
-    saveGranularity(DEFAULT_TIME_GRANULARITY)
-    onReset()
+    props.onReset()
     setOpen(false)
   }
 
@@ -111,8 +106,6 @@ export function ModelsFilter({ onFilterChange, onReset }: ModelsFilterProps) {
     setFilters((prev) => ({ ...prev, [field]: value }))
     if (field === 'start_timestamp' || field === 'end_timestamp')
       setSelectedRange(null)
-    if (field === 'time_granularity' && typeof value === 'string')
-      saveGranularity(value as TimeGranularity)
   }
 
   const handleQuickRange = (days: number) => {
