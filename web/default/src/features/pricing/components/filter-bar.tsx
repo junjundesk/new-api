@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   Filter,
-  List,
   RotateCcw,
   Table2,
   X,
@@ -572,7 +571,6 @@ export function FilterBar(props: FilterBarProps) {
 
           <SegmentedControl
             options={[
-              { value: VIEW_MODES.LIST, icon: List, tooltip: t('List view') },
               {
                 value: VIEW_MODES.TABLE,
                 icon: Table2,

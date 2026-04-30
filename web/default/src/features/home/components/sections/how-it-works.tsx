@@ -18,7 +18,7 @@ export function HowItWorks() {
       num: '2',
       title: t('Connect'),
       desc: t(
-        'Use our unified OpenAI-compatible endpoint in your applications'
+        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
       ),
       icon: <Zap className='size-6' strokeWidth={1.5} />,
     },

@@ -156,14 +156,11 @@ export function DynamicPricingBreakdown({
     return { symbol: '$', rate: 1 }
   }, [currency])
 
-  const priceSuffix = `${symbol}/1M tokens`
-
-  const { tiers, ruleGroups, baseExpr } = useMemo(() => {
+  const { tiers, ruleGroups } = useMemo(() => {
     const split = splitBillingExprAndRequestRules(expr)
     const parsedTiers = parseTiersFromExpr(split.billingExpr)
     const parsedRules = tryParseRequestRuleExpr(split.requestRuleExpr || '')
     return {
-      baseExpr: split.billingExpr,
       tiers: parsedTiers,
       ruleGroups: parsedRules || [],
     }
@@ -174,19 +171,27 @@ export function DynamicPricingBreakdown({
 
   if (!expr) return null
 
-  if (!hasTiers && !hasRules) {
+  if (!hasTiers) {
     return (
       <section className='min-w-0 py-4'>
         <div className='mb-3 flex items-center gap-2'>
           <span className='inline-flex size-6 items-center justify-center rounded-full bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-500/20 dark:text-amber-300'>
             <TagIcon className='size-3.5' />
           </span>
-          <span className='text-foreground text-base font-medium'>
-            {t('Dynamic Pricing')}
-          </span>
+          <div>
+            <div className='text-foreground text-base font-medium'>
+              {t('Special billing expression')}
+            </div>
+            <div className='text-muted-foreground text-xs'>
+              {t('Unable to parse structured pricing')}
+            </div>
+          </div>
+        </div>
+        <div className='text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase'>
+          {t('Raw expression')}
         </div>
         <code className='text-muted-foreground block text-xs break-all'>
-          {baseExpr || expr}
+          {expr}
         </code>
       </section>
     )
@@ -233,7 +238,7 @@ export function DynamicPricingBreakdown({
                       key={v.field}
                       className='text-muted-foreground py-2 text-right text-[10px] font-medium tracking-wider uppercase'
                     >
-                      {`${t(v.shortLabel)} (${priceSuffix})`}
+                      {t(v.shortLabel)}
                     </TableHead>
                   ))}
                 </TableRow>
