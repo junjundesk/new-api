@@ -1,90 +1,157 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
+type AccentTone = 'emerald' | 'amber' | 'blue' | 'violet'
+
 interface ApiDemoConfig {
   id: string
   label: string
+  method: 'POST' | 'GET'
   endpoint: string
-  requestBodyLines: string[]
-  responseKind: 'chat' | 'responses' | 'claude' | 'gemini'
-  response: string
+  headers: string[]
+  request: string[]
+  response: string[]
+  responseHighlights: string[]
   tokens: number
   latency: number
-  badgeClass: string
+  accent: AccentTone
+}
+
+const ACCENT_CLASSES: Record<
+  AccentTone,
+  {
+    activeText: string
+    activeBorder: string
+    badge: string
+  }
+> = {
+  emerald: {
+    activeText: 'text-emerald-600 dark:text-emerald-400',
+    activeBorder: 'border-emerald-500 dark:border-emerald-400',
+    badge:
+      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400',
+  },
+  amber: {
+    activeText: 'text-amber-600 dark:text-amber-400',
+    activeBorder: 'border-amber-500 dark:border-amber-400',
+    badge:
+      'bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400',
+  },
+  blue: {
+    activeText: 'text-blue-600 dark:text-blue-400',
+    activeBorder: 'border-blue-500 dark:border-blue-400',
+    badge: 'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400',
+  },
+  violet: {
+    activeText: 'text-violet-600 dark:text-violet-400',
+    activeBorder: 'border-violet-500 dark:border-violet-400',
+    badge:
+      'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400',
+  },
 }
 
 const API_DEMOS: ApiDemoConfig[] = [
   {
     id: 'gpt-chat',
-    label: 'GPT Chat',
+    label: 'Chat',
+    method: 'POST',
     endpoint: '/v1/chat/completions',
-    requestBodyLines: [
+    headers: ['"Authorization: Bearer sk-••••"'],
+    request: [
       '"model": "your-model",',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
       ']',
     ],
-    responseKind: 'chat',
-    response: 'Route chat requests through configured upstreams.',
+    response: [
+      '{',
+      '  "choices": [{ "message": { "content": <text> } }],',
+      '  "usage": { "total_tokens": <tokens> }',
+      '}',
+    ],
+    responseHighlights: ['<text>', '<tokens>'],
     tokens: 27,
     latency: 142,
-    badgeClass:
-      'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/25',
+    accent: 'emerald',
   },
   {
     id: 'responses',
     label: 'Responses',
+    method: 'POST',
     endpoint: '/v1/responses',
-    requestBodyLines: ['"model": "your-model",', '"input": "..."'],
-    responseKind: 'responses',
-    response: 'Run response workflows behind one gateway.',
+    headers: ['"Authorization: Bearer sk-••••"'],
+    request: [
+      '"model": "your-model",',
+      '"input": "..."',
+    ],
+    response: [
+      '{',
+      '  "output": [{ "type": "output_text", "text": <text> }],',
+      '  "usage": { "total_tokens": <tokens> }',
+      '}',
+    ],
+    responseHighlights: ['<text>', '<tokens>'],
     tokens: 31,
     latency: 168,
-    badgeClass:
-      'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-500/25',
+    accent: 'amber',
   },
   {
     id: 'claude',
     label: 'Claude',
+    method: 'POST',
     endpoint: '/v1/messages',
-    requestBodyLines: [
+    headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
+    request: [
       '"model": "your-model",',
       '"max_tokens": 1024,',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
       ']',
     ],
-    responseKind: 'claude',
-    response: 'Send Claude-style messages through your gateway.',
+    response: [
+      '{',
+      '  "content": [{ "type": "text", "text": <text> }],',
+      '  "usage": { "input_tokens": <in>, "output_tokens": <out> }',
+      '}',
+    ],
+    responseHighlights: ['<text>', '<in>', '<out>'],
     tokens: 29,
     latency: 156,
-    badgeClass:
-      'bg-blue-500/10 text-blue-600 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400 dark:ring-blue-500/25',
+    accent: 'blue',
   },
   {
     id: 'gemini',
     label: 'Gemini',
+    method: 'POST',
     endpoint: '/v1beta/models/{model}:generateContent',
-    requestBodyLines: [
+    headers: ['"x-goog-api-key: sk-••••"'],
+    request: [
       '"contents": [',
-      '  { "parts": [{ "text": "..." }] }',
+      '  { "role": "user",',
+      '    "parts": [{ "text": "..." }] }',
       ']',
     ],
-    responseKind: 'gemini',
-    response: 'Serve Gemini-compatible generation requests.',
+    response: [
+      '{',
+      '  "candidates": [{ "content": { "parts": [{ "text": <text> }] } }],',
+      '  "usageMetadata": { "totalTokenCount": <tokens> }',
+      '}',
+    ],
+    responseHighlights: ['<text>', '<tokens>'],
     tokens: 25,
     latency: 93,
-    badgeClass:
-      'bg-violet-500/10 text-violet-600 ring-violet-500/20 dark:bg-violet-500/15 dark:text-violet-400 dark:ring-violet-500/25',
+    accent: 'violet',
   },
 ]
 
-const CYCLE_INTERVAL = 4000
+const CYCLE_INTERVAL = 4500
+const TRANSITION_MS = 220
 
 export function HeroTerminalDemo() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -92,376 +159,315 @@ export function HeroTerminalDemo() {
 
     intervalRef.current = setInterval(() => {
       setTransitioning(true)
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         setActiveIndex((prev) => (prev + 1) % API_DEMOS.length)
         setTransitioning(false)
-      }, 300)
+      }, TRANSITION_MS)
     }, CYCLE_INTERVAL)
 
-    return () => clearInterval(intervalRef.current)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
   }, [])
 
+  const handleSelect = (index: number) => {
+    if (index === activeIndex) return
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    setTransitioning(true)
+    timeoutRef.current = setTimeout(() => {
+      setActiveIndex(index)
+      setTransitioning(false)
+    }, TRANSITION_MS)
+  }
+
   const demo = API_DEMOS[activeIndex]
+  const accent = ACCENT_CLASSES[demo.accent]
 
   return (
     <div className='mx-auto mt-16 w-full max-w-2xl'>
       <div
         className={cn(
-          'overflow-hidden rounded-xl border',
-          'border-border/60 bg-white shadow-[0_8px_32px_-8px_rgba(0,0,0,0.1),0_0_0_0.5px_rgba(0,0,0,0.04)]',
-          'dark:border-border/40 dark:bg-[#0d1117] dark:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.6),0_0_0_0.5px_rgba(255,255,255,0.05)]'
+          'overflow-hidden rounded-2xl border backdrop-blur-sm',
+          'border-border/60 bg-white/95 shadow-[0_20px_50px_-25px_rgba(15,23,42,0.18)]',
+          'dark:border-white/[0.06] dark:bg-[#0b0f17]/95 dark:shadow-[0_20px_60px_-25px_rgba(0,0,0,0.7)]'
         )}
       >
-        {/* Title bar */}
+        {/* Tab strip */}
         <div
           className={cn(
-            'flex items-center justify-between border-b px-4 py-2.5',
-            'border-border/40 bg-gray-50/80',
-            'dark:border-white/[0.06] dark:bg-transparent'
+            'flex items-center gap-1 border-b px-2 sm:gap-1.5 sm:px-3',
+            'border-border/50 dark:border-white/[0.05]'
           )}
         >
-          <div className='flex items-center gap-1.5'>
-            <div className='size-2.5 rounded-full bg-[#ff5f57]/80 dark:bg-[#ff5f57]' />
-            <div className='size-2.5 rounded-full bg-[#febc2e]/80 dark:bg-[#febc2e]' />
-            <div className='size-2.5 rounded-full bg-[#28c840]/80 dark:bg-[#28c840]' />
-          </div>
-          <div className='flex items-center gap-2'>
-            <ModelSelector
-              demos={API_DEMOS}
-              activeIndex={activeIndex}
-              onSelect={(i) => {
-                clearInterval(intervalRef.current)
-                setTransitioning(true)
-                setTimeout(() => {
-                  setActiveIndex(i)
-                  setTransitioning(false)
-                }, 300)
-              }}
-            />
-          </div>
-          <div className='flex items-center gap-2'>
-            <span className='inline-block size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400' />
-            <span className='text-foreground/30 text-[10px]'>200 OK</span>
+          {API_DEMOS.map((item, index) => {
+            const tone = ACCENT_CLASSES[item.accent]
+            const isActive = index === activeIndex
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleSelect(index)}
+                className={cn(
+                  '-mb-px relative flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-medium tracking-wide transition-colors sm:px-3 sm:text-xs',
+                  isActive
+                    ? `${tone.activeBorder} ${tone.activeText}`
+                    : 'border-transparent text-foreground/40 hover:text-foreground/70'
+                )}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+          <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
+            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]' />
+            <span className='font-mono text-[10px] tracking-wider text-foreground/40 uppercase'>
+              200 ok
+            </span>
           </div>
         </div>
 
-        {/* Terminal body — fixed height */}
-        <div className='grid min-h-[280px] grid-rows-[auto_1fr] font-mono text-[12.5px] leading-[1.7]'>
-          {/* Request */}
-          <div
+        {/* Endpoint row */}
+        <div
+          className={cn(
+            'flex items-center gap-2.5 border-b px-5 py-3',
+            'border-border/40 dark:border-white/[0.04]'
+          )}
+        >
+          <span
             className={cn(
-              'border-b px-5 py-3.5',
-              'border-border/30',
-              'dark:border-white/[0.04]'
+              'rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider',
+              accent.badge
             )}
           >
-            <div className='mb-1.5 flex items-center gap-2'>
-              <span className='text-[10px] font-medium tracking-wider text-blue-500/60 uppercase dark:text-blue-400/60'>
-                Request
-              </span>
-            </div>
-            <RequestPreview demo={demo} transitioning={transitioning} />
-          </div>
+            {demo.method}
+          </span>
+          <code
+            className={cn(
+              'truncate font-mono text-[12.5px] text-foreground/75 transition-opacity duration-200',
+              transitioning ? 'opacity-0' : 'opacity-100'
+            )}
+          >
+            {demo.endpoint}
+          </code>
+        </div>
+
+        {/* Body — fixed rows so neither block shifts when switching demos */}
+        <div className='grid h-[400px] grid-rows-[235px_minmax(0,1fr)] font-mono text-[12.5px] leading-[1.55]'>
+          {/* Request */}
+          <RequestBlock demo={demo} transitioning={transitioning} />
 
           {/* Response */}
-          <div className='px-5 py-3.5'>
-            <div className='mb-2 flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <span className='text-[10px] font-medium tracking-wider text-emerald-600/60 uppercase dark:text-emerald-400/60'>
-                  Response
-                </span>
-                <span
-                  className={cn(
-                    'text-foreground/25 text-[10px] tabular-nums transition-opacity duration-300',
-                    transitioning ? 'opacity-0' : 'opacity-100'
-                  )}
-                >
-                  {demo.latency}ms
-                </span>
-              </div>
-              <div
-                className={cn(
-                  'text-foreground/25 flex items-center gap-3 text-[10px] tabular-nums transition-opacity duration-300',
-                  transitioning ? 'opacity-0' : 'opacity-100'
-                )}
-              >
-                <span>{demo.tokens} tokens</span>
-                <span>${(demo.tokens * 0.00003).toFixed(5)}</span>
-              </div>
-            </div>
-            <ResponsePreview demo={demo} transitioning={transitioning} />
+          <ResponseBlock demo={demo} transitioning={transitioning} />
+        </div>
+
+        {/* Footer metrics */}
+        <div
+          className={cn(
+            'flex items-center justify-between border-t px-5 py-2.5',
+            'border-border/40 bg-muted/30 dark:border-white/[0.05] dark:bg-white/[0.02]'
+          )}
+        >
+          <div className='flex items-center gap-3 text-[10px] tabular-nums text-foreground/40'>
+            <span className='flex items-center gap-1'>
+              <span className='font-mono'>{demo.latency}</span>
+              <span className='tracking-wider uppercase'>ms</span>
+            </span>
+            <span className='size-1 rounded-full bg-foreground/15' />
+            <span className='flex items-center gap-1'>
+              <span className='font-mono'>{demo.tokens}</span>
+              <span className='tracking-wider uppercase'>tokens</span>
+            </span>
+            <span className='size-1 rounded-full bg-foreground/15' />
+            <span className='flex items-center gap-1'>
+              <span className='tracking-wider uppercase'>cost</span>
+              <span className='font-mono'>
+                ${(demo.tokens * 0.00003).toFixed(5)}
+              </span>
+            </span>
           </div>
+          <span className='font-mono text-[10px] tracking-wider text-foreground/30 uppercase'>
+            stream · sse
+          </span>
         </div>
       </div>
     </div>
   )
 }
 
-function RequestPreview(props: {
-  demo: ApiDemoConfig
-  transitioning: boolean
-}) {
+function RequestBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
   const { demo, transitioning } = props
 
   return (
-    <div className='space-y-0.5 text-foreground/80'>
-      <CodeLine>
-        <Command>curl</Command> <Flag>-X POST</Flag>{' '}
-        <AnimatedString transitioning={transitioning}>
-          &quot;{demo.endpoint}&quot;
-        </AnimatedString>{' '}
-        <Muted>{'\\'}</Muted>
-      </CodeLine>
-      <CodeLine indent={2}>
-        <Flag>-H</Flag>{' '}
-        <StringText>&quot;Authorization: Bearer sk-••••&quot;</StringText>{' '}
-        <Muted>{'\\'}</Muted>
-      </CodeLine>
-      <CodeLine indent={2}>
-        <Flag>-d</Flag> <StringText>&apos;{'{'}</StringText>
-      </CodeLine>
-      {demo.requestBodyLines.map((line) => (
-        <CodeLine key={line} indent={4}>
-          <AnimatedString transitioning={transitioning}>
-            {line}
-          </AnimatedString>
+    <div className='relative px-5 py-4'>
+      <SectionLabel>Request</SectionLabel>
+      <div
+        className={cn(
+          'mt-2 transition-opacity duration-200',
+          transitioning ? 'opacity-0' : 'opacity-100'
+        )}
+      >
+        <CodeLine>
+          <Command>curl</Command> <Flag>-X</Flag> <Flag>POST</Flag>{' '}
+          <StringText>&quot;{demo.endpoint}&quot;</StringText>{' '}
+          <Muted>{'\\'}</Muted>
         </CodeLine>
-      ))}
-      <CodeLine indent={2}>
-        <StringText>{'}'}&apos;</StringText>
-      </CodeLine>
+        {demo.headers.map((header) => (
+          <CodeLine key={header} indent={2}>
+            <Flag>-H</Flag> <StringText>{header}</StringText>{' '}
+            <Muted>{'\\'}</Muted>
+          </CodeLine>
+        ))}
+        <CodeLine indent={2}>
+          <Flag>-d</Flag> <StringText>&apos;{'{'}</StringText>
+        </CodeLine>
+        {demo.request.map((line, i) => (
+          <CodeLine key={i} indent={4}>
+            {renderJsonLine(line)}
+          </CodeLine>
+        ))}
+        <CodeLine indent={2}>
+          <StringText>{'}'}&apos;</StringText>
+        </CodeLine>
+      </div>
     </div>
   )
 }
 
-function ResponsePreview(props: {
-  demo: ApiDemoConfig
-  transitioning: boolean
-}) {
+function ResponseBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
   const { demo, transitioning } = props
 
   return (
     <div
       className={cn(
-        'rounded-lg border px-3.5 py-3',
-        'border-border/40 bg-muted/30',
-        'dark:border-white/[0.06] dark:bg-white/[0.02]'
+        'relative border-t px-5 py-4',
+        'border-border/40 bg-muted/20 dark:border-white/[0.05] dark:bg-white/[0.015]'
       )}
     >
-      {demo.responseKind === 'chat' && (
-        <>
-          <CodeLine>
-            <Muted>{'{'}</Muted>
+      <SectionLabel>Response</SectionLabel>
+      <div
+        className={cn(
+          'mt-2 transition-opacity duration-200',
+          transitioning ? 'opacity-0' : 'opacity-100'
+        )}
+      >
+        {demo.response.map((line, i) => (
+          <CodeLine key={i}>
+            {renderResponseLine(line, demo)}
           </CodeLine>
-          <CodeLine indent={2}>
-            <Key>&quot;choices&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'{'} </Muted>
-            <Key>&quot;message&quot;</Key>
-            <Muted>: {'{'} </Muted>
-            <Key>&quot;content&quot;</Key>
-            <Muted>: </Muted>
-            <ResponseText demo={demo} transitioning={transitioning} />
-            <Muted> {'}'} {'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Muted>],</Muted>
-          </CodeLine>
-          <UsageLine
-            container='usage'
-            name='total_tokens'
-            value={demo.tokens}
-            indent={2}
-          />
-          <CodeLine>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-        </>
-      )}
-
-      {demo.responseKind === 'responses' && (
-        <>
-          <CodeLine>
-            <Muted>{'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Key>&quot;output&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={6}>
-            <Key>&quot;type&quot;</Key>
-            <Muted>: </Muted>
-            <StringText>&quot;message&quot;</StringText>
-            <Muted>,</Muted>
-          </CodeLine>
-          <CodeLine indent={6}>
-            <Key>&quot;content&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={8}>
-            <Muted>{'{'} </Muted>
-            <Key>&quot;type&quot;</Key>
-            <Muted>: </Muted>
-            <StringText>&quot;output_text&quot;</StringText>
-            <Muted>, </Muted>
-            <Key>&quot;text&quot;</Key>
-            <Muted>: </Muted>
-            <ResponseText demo={demo} transitioning={transitioning} />
-            <Muted> {'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={6}>
-            <Muted>]</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Muted>],</Muted>
-          </CodeLine>
-          <UsageLine
-            container='usage'
-            name='total_tokens'
-            value={demo.tokens}
-            indent={2}
-          />
-          <CodeLine>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-        </>
-      )}
-
-      {demo.responseKind === 'claude' && (
-        <>
-          <CodeLine>
-            <Muted>{'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Key>&quot;content&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'{'} </Muted>
-            <Key>&quot;type&quot;</Key>
-            <Muted>: </Muted>
-            <StringText>&quot;text&quot;</StringText>
-            <Muted>, </Muted>
-            <Key>&quot;text&quot;</Key>
-            <Muted>: </Muted>
-            <ResponseText demo={demo} transitioning={transitioning} />
-            <Muted> {'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Muted>],</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Key>&quot;usage&quot;</Key>
-            <Muted>: {'{'} </Muted>
-            <Key>&quot;input_tokens&quot;</Key>
-            <Muted>: </Muted>
-            <NumberText>{Math.floor(demo.tokens * 0.4)}</NumberText>
-            <Muted>, </Muted>
-            <Key>&quot;output_tokens&quot;</Key>
-            <Muted>: </Muted>
-            <NumberText>{Math.ceil(demo.tokens * 0.6)}</NumberText>
-            <Muted> {'}'}</Muted>
-          </CodeLine>
-          <CodeLine>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-        </>
-      )}
-
-      {demo.responseKind === 'gemini' && (
-        <>
-          <CodeLine>
-            <Muted>{'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Key>&quot;candidates&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={6}>
-            <Key>&quot;content&quot;</Key>
-            <Muted>: {'{'}</Muted>
-          </CodeLine>
-          <CodeLine indent={8}>
-            <Key>&quot;parts&quot;</Key>
-            <Muted>: [</Muted>
-          </CodeLine>
-          <CodeLine indent={10}>
-            <Muted>{'{'} </Muted>
-            <Key>&quot;text&quot;</Key>
-            <Muted>: </Muted>
-            <ResponseText demo={demo} transitioning={transitioning} />
-            <Muted> {'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={8}>
-            <Muted>]</Muted>
-          </CodeLine>
-          <CodeLine indent={6}>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={4}>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-          <CodeLine indent={2}>
-            <Muted>],</Muted>
-          </CodeLine>
-          <UsageLine
-            container='usageMetadata'
-            name='totalTokenCount'
-            value={demo.tokens}
-            indent={2}
-          />
-          <CodeLine>
-            <Muted>{'}'}</Muted>
-          </CodeLine>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   )
 }
 
-function UsageLine(props: {
-  container: string
-  name: string
-  value: number
-  indent: number
-}) {
+function SectionLabel(props: { children: ReactNode }) {
   return (
-    <CodeLine indent={props.indent}>
-      <Key>&quot;{props.container}&quot;</Key>
-      <Muted>: {'{'} </Muted>
-      <Key>&quot;{props.name}&quot;</Key>
-      <Muted>: </Muted>
-      <NumberText>{props.value}</NumberText>
-      <Muted> {'}'}</Muted>
-    </CodeLine>
+    <span className='font-sans text-[10px] font-semibold tracking-[0.18em] text-foreground/30 uppercase'>
+      {props.children}
+    </span>
   )
 }
 
-function ResponseText(props: {
-  demo: ApiDemoConfig
-  transitioning: boolean
-}) {
-  return (
-    <span
-      className={cn(
-        'text-emerald-600 transition-all duration-300 dark:text-emerald-400',
-        props.transitioning ? 'opacity-0' : 'opacity-100'
-      )}
-    >
-      &quot;{props.demo.response}&quot;
-    </span>
-  )
+const STRING_RE = /"[^"]*"/g
+const PLACEHOLDER_RE = /<[a-z]+>/gi
+
+function renderJsonLine(line: string): ReactNode {
+  if (!line.trim()) return <Muted> </Muted>
+  return tokenize(line)
+}
+
+function renderResponseLine(line: string, demo: ApiDemoConfig): ReactNode {
+  if (!line.trim()) return <Muted> </Muted>
+
+  const segments: ReactNode[] = []
+  let cursor = 0
+  const matches = [...line.matchAll(PLACEHOLDER_RE)]
+
+  if (matches.length === 0) return tokenize(line)
+
+  matches.forEach((match, idx) => {
+    const start = match.index ?? 0
+    if (start > cursor) {
+      segments.push(
+        <span key={`pre-${idx}`}>{tokenize(line.slice(cursor, start))}</span>
+      )
+    }
+    const placeholder = match[0]
+    if (placeholder === '<text>') {
+      segments.push(
+        <Accent key={`ph-${idx}`} accent={demo.accent}>
+          {`"${truncateResponse(demo)}"`}
+        </Accent>
+      )
+    } else if (placeholder === '<tokens>') {
+      segments.push(
+        <NumberText key={`ph-${idx}`}>{demo.tokens}</NumberText>
+      )
+    } else if (placeholder === '<in>') {
+      segments.push(
+        <NumberText key={`ph-${idx}`}>
+          {Math.floor(demo.tokens * 0.4)}
+        </NumberText>
+      )
+    } else if (placeholder === '<out>') {
+      segments.push(
+        <NumberText key={`ph-${idx}`}>
+          {Math.ceil(demo.tokens * 0.6)}
+        </NumberText>
+      )
+    } else {
+      segments.push(<Muted key={`ph-${idx}`}>{placeholder}</Muted>)
+    }
+    cursor = start + placeholder.length
+  })
+
+  if (cursor < line.length) {
+    segments.push(<span key='tail'>{tokenize(line.slice(cursor))}</span>)
+  }
+
+  return segments
+}
+
+function truncateResponse(demo: ApiDemoConfig): string {
+  const map: Record<string, string> = {
+    'gpt-chat': 'Chat request routed.',
+    responses: 'Response workflow ready.',
+    claude: 'Claude message routed.',
+    gemini: 'Gemini request served.',
+  }
+  return map[demo.id] ?? '...'
+}
+
+function tokenize(input: string): ReactNode {
+  // Split string into "..." string runs and the rest, then color keys/punct.
+  const segments: ReactNode[] = []
+  let cursor = 0
+  const matches = [...input.matchAll(STRING_RE)]
+
+  matches.forEach((match, idx) => {
+    const start = match.index ?? 0
+    if (start > cursor) {
+      segments.push(
+        <Muted key={`m-${idx}`}>{input.slice(cursor, start)}</Muted>
+      )
+    }
+    const text = match[0]
+    const after = input.slice(start + text.length).trimStart()
+    const isKey = after.startsWith(':')
+    if (isKey) {
+      segments.push(<Key key={`k-${idx}`}>{text}</Key>)
+    } else {
+      segments.push(<StringText key={`s-${idx}`}>{text}</StringText>)
+    }
+    cursor = start + text.length
+  })
+
+  if (cursor < input.length) {
+    segments.push(<Muted key='tail'>{input.slice(cursor)}</Muted>)
+  }
+
+  return segments
 }
 
 function CodeLine(props: { children: ReactNode; indent?: number }) {
@@ -479,27 +485,9 @@ function CodeLine(props: { children: ReactNode; indent?: number }) {
   )
 }
 
-function AnimatedString(props: {
-  children: ReactNode
-  transitioning: boolean
-}) {
-  return (
-    <span
-      className={cn(
-        'transition-all duration-300',
-        props.transitioning
-          ? 'text-foreground/20'
-          : 'text-amber-700 dark:text-amber-300'
-      )}
-    >
-      {props.children}
-    </span>
-  )
-}
-
 function Command(props: { children: ReactNode }) {
   return (
-    <span className='text-emerald-600 dark:text-emerald-400'>
+    <span className='font-medium text-emerald-600 dark:text-emerald-400'>
       {props.children}
     </span>
   )
@@ -513,49 +501,29 @@ function Flag(props: { children: ReactNode }) {
 
 function Key(props: { children: ReactNode }) {
   return (
-    <span className='text-blue-600 dark:text-blue-400'>{props.children}</span>
+    <span className='text-sky-700 dark:text-sky-300'>{props.children}</span>
   )
 }
 
 function StringText(props: { children: ReactNode }) {
   return (
-    <span className='text-amber-600 dark:text-amber-400'>{props.children}</span>
+    <span className='text-amber-700 dark:text-amber-300'>{props.children}</span>
   )
 }
 
 function NumberText(props: { children: ReactNode }) {
   return (
-    <span className='text-violet-600 dark:text-violet-400'>
+    <span className='font-medium text-violet-600 dark:text-violet-300'>
       {props.children}
     </span>
   )
 }
 
 function Muted(props: { children: ReactNode }) {
-  return <span className='text-foreground/35'>{props.children}</span>
+  return <span className='text-foreground/55'>{props.children}</span>
 }
 
-function ModelSelector(props: {
-  demos: ApiDemoConfig[]
-  activeIndex: number
-  onSelect: (index: number) => void
-}) {
-  return (
-    <div className='flex items-center gap-1'>
-      {props.demos.map((demo, i) => (
-        <button
-          key={demo.id}
-          onClick={() => props.onSelect(i)}
-          className={cn(
-            'rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 transition-all duration-300 ring-inset',
-            i === props.activeIndex
-              ? demo.badgeClass
-              : 'text-foreground/20 ring-border/30 hover:text-foreground/40 hover:ring-border/50 dark:ring-white/[0.06] dark:hover:ring-white/10'
-          )}
-        >
-          {demo.label}
-        </button>
-      ))}
-    </div>
-  )
+function Accent(props: { children: ReactNode; accent: AccentTone }) {
+  const tone = ACCENT_CLASSES[props.accent]
+  return <span className={cn('font-medium', tone.activeText)}>{props.children}</span>
 }
