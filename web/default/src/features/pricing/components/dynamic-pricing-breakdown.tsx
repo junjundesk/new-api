@@ -21,6 +21,7 @@ import {
   MATCH_LT,
   MATCH_RANGE,
   SOURCE_TIME,
+  normalizeTierLabel,
   parseTiersFromExpr,
   splitBillingExprAndRequestRules,
   tryParseRequestRuleExpr,
@@ -168,6 +169,9 @@ export function DynamicPricingBreakdown({
 
   const hasTiers = tiers.length > 0
   const hasRules = ruleGroups.length > 0
+  const normalizedMatchedTierLabel = normalizeTierLabel(
+    matchedTierLabel ?? undefined
+  )
 
   if (!expr) return null
 
@@ -307,9 +311,9 @@ export function DynamicPricingBreakdown({
                 {tiers.map((tier, i) => {
                   const condSummary = formatConditionSummary(tier.conditions, t)
                   const isMatched =
-                    matchedTierLabel != null &&
-                    matchedTierLabel !== '' &&
-                    tier.label === matchedTierLabel
+                    normalizedMatchedTierLabel !== '' &&
+                    normalizeTierLabel(tier.label) ===
+                      normalizedMatchedTierLabel
                   return (
                     <TableRow
                       key={`tier-${i}`}
