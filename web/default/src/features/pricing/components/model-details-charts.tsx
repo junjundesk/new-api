@@ -14,6 +14,13 @@ function formatHourLabel(iso: string): string {
 
 function formatDayLabel(date: string): string {
   const parsed = new Date(date)
+  if (date.includes('T')) {
+    return parsed.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+    })
+  }
   return parsed.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
