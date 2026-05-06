@@ -207,7 +207,7 @@ export function RatioSettingsCard({
     mutationFn: resetModelRatios,
     onSuccess: (data) => {
       if (data.success) {
-        toast.success(t('Model ratios reset successfully'))
+        toast.success(t('Model prices reset successfully'))
         queryClient.invalidateQueries({ queryKey: ['system-options'] })
         setConfirmOpen(false)
       } else {
@@ -422,7 +422,7 @@ export function RatioSettingsCard({
   }, [resetMutate])
 
   const tabLabels: Record<RatioTabId, string> = {
-    models: 'Model ratios',
+    models: 'Model prices',
     groups: 'Group ratios',
     'tool-prices': 'Tool prices',
     'upstream-sync': 'Upstream price sync',
@@ -480,26 +480,30 @@ export function RatioSettingsCard({
 
   return (
     <SettingsSection title={t(titleKey)} description={t(descriptionKey)}>
-      <Tabs defaultValue={defaultTab} className='space-y-6'>
-        <TabsList className={`grid w-full ${tabsGridClass}`}>
-          {visibleTabs.map((tab) => (
-            <TabsTrigger key={tab} value={tab}>
-              {t(tabLabels[tab])}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {visibleTabs.length === 1 ? (
+        renderTabContent(defaultTab)
+      ) : (
+        <Tabs defaultValue={defaultTab} className='space-y-6'>
+          <TabsList className={`grid w-full ${tabsGridClass}`}>
+            {visibleTabs.map((tab) => (
+              <TabsTrigger key={tab} value={tab}>
+                {t(tabLabels[tab])}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        {visibleTabs.map((tab) => (
-          <TabsContent key={tab} value={tab}>
-            {renderTabContent(tab)}
-          </TabsContent>
-        ))}
-      </Tabs>
+          {visibleTabs.map((tab) => (
+            <TabsContent key={tab} value={tab}>
+              {renderTabContent(tab)}
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
 
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={t('Reset all model ratios?')}
+        title={t('Reset all model prices?')}
         desc={t(
           'This will clear custom pricing ratios and revert to upstream defaults.'
         )}
