@@ -105,7 +105,9 @@ export function BillingHistoryDialog({
               </div>
               <Select
                 value={pageSize.toString()}
-                onValueChange={(value) => handlePageSizeChange(parseInt(value))}
+                onValueChange={(value) =>
+                  value !== null && handlePageSizeChange(parseInt(value))
+                }
               >
                 <SelectTrigger className='h-9 w-[92px] sm:w-32'>
                   <SelectValue />

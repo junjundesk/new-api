@@ -2142,6 +2142,7 @@ function RuleEditor(ruleEditorProps: RuleEditorProps) {
             <Select
               value={mode}
               onValueChange={(nextMode) =>
+                nextMode !== null &&
                 ruleEditorProps.updateOperation(operation.id, {
                   mode: nextMode,
                 })
@@ -2340,6 +2341,7 @@ function RuleEditor(ruleEditorProps: RuleEditorProps) {
               <Select
                 value={operation.logic || 'OR'}
                 onValueChange={(v) =>
+                  v !== null &&
                   ruleEditorProps.updateOperation(operation.id, {
                     logic: v,
                   })
@@ -2515,6 +2517,7 @@ function ConditionEditor(conditionEditorProps: ConditionEditorProps) {
                 <Select
                   value={condition.mode}
                   onValueChange={(v) =>
+                    v !== null &&
                     conditionEditorProps.updateCondition(
                       conditionEditorProps.operationId,
                       condition.id,
@@ -3020,6 +3023,7 @@ function PruneObjectsEditor(pruneObjectsEditorProps: PruneObjectsEditorProps) {
                         <Select
                           value={rule.mode}
                           onValueChange={(v) =>
+                            v !== null &&
                             pruneObjectsEditorProps.updateRule(
                               pruneObjectsEditorProps.operationId,
                               rule.id,
@@ -3124,6 +3128,7 @@ function SyncFieldsEditor(syncFieldsEditorProps: SyncFieldsEditorProps) {
             <Select
               value={syncFieldsEditorProps.syncFromTarget.type || 'json'}
               onValueChange={(v) =>
+                v !== null &&
                 syncFieldsEditorProps.updateOperation(
                   syncFieldsEditorProps.operationId,
                   {
@@ -3172,6 +3177,7 @@ function SyncFieldsEditor(syncFieldsEditorProps: SyncFieldsEditorProps) {
             <Select
               value={syncFieldsEditorProps.syncToTarget.type || 'json'}
               onValueChange={(v) =>
+                v !== null &&
                 syncFieldsEditorProps.updateOperation(
                   syncFieldsEditorProps.operationId,
                   {

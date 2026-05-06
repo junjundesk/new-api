@@ -478,19 +478,21 @@ export function ModelRatioDialog({
                 )}
 
                 <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      className='flex w-full items-center justify-between'
-                    >
-                      {t('Advanced options')}
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform duration-200 ${
-                          advancedOpen ? 'rotate-180' : ''
-                        }`}
+                  <CollapsibleTrigger
+                    render={
+                      <Button
+                        type='button'
+                        variant='outline'
+                        className='flex w-full items-center justify-between'
                       />
-                    </Button>
+                    }
+                  >
+                    {t('Advanced options')}
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform duration-200 ${
+                        advancedOpen ? 'rotate-180' : ''
+                      }`}
+                    />
                   </CollapsibleTrigger>
                   <CollapsibleContent className='space-y-6 pt-6'>
                     <FormField

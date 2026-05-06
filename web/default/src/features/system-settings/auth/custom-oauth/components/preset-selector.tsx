@@ -88,7 +88,10 @@ export function PresetSelector(props: PresetSelectorProps) {
       <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
         <div className='space-y-1.5'>
           <Label>{t('Preset Template')}</Label>
-          <Select value={selectedPreset} onValueChange={handlePresetChange}>
+          <Select
+            value={selectedPreset}
+            onValueChange={(v) => v !== null && handlePresetChange(v)}
+          >
             <SelectTrigger className='w-full'>
               <SelectValue placeholder={t('Select a preset...')} />
             </SelectTrigger>

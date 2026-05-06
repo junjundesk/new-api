@@ -119,10 +119,8 @@ export function ChannelSelectorDialog({
         id: 'select',
         header: ({ table }) => (
           <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && 'indeterminate')
-            }
+            checked={table.getIsAllPageRowsSelected()}
+            indeterminate={table.getIsSomePageRowsSelected()}
             onCheckedChange={(value) =>
               table.toggleAllPageRowsSelected(!!value)
             }
@@ -225,7 +223,10 @@ export function ChannelSelectorDialog({
 
           return (
             <div className='flex items-center gap-2'>
-              <Select value={endpointType} onValueChange={handleTypeChange}>
+              <Select
+                value={endpointType}
+                onValueChange={(v) => v !== null && handleTypeChange(v)}
+              >
                 <SelectTrigger className='h-8 w-32'>
                   <SelectValue />
                 </SelectTrigger>

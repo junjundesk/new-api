@@ -277,9 +277,13 @@ export function RuleEditorDialog(props: Props) {
                 <div key={idx} className='flex items-center gap-2'>
                   <Select
                     value={src.type}
-                    onValueChange={(v: KeySource['type']) => {
+                    onValueChange={(v) => {
+                      if (v === null) return
                       const next = [...keySources]
-                      next[idx] = normalizeKeySource({ ...src, type: v })
+                      next[idx] = normalizeKeySource({
+                        ...src,
+                        type: v as KeySource['type'],
+                      })
                       setKeySources(next)
                     }}
                   >
@@ -333,14 +337,16 @@ export function RuleEditorDialog(props: Props) {
 
           {/* Advanced */}
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                type='button'
-                variant='ghost'
-                className='w-full justify-start'
-              >
-                {advancedOpen ? '▼' : '▶'} {t('Advanced Settings')}
-              </Button>
+            <CollapsibleTrigger
+              render={
+                <Button
+                  type='button'
+                  variant='ghost'
+                  className='w-full justify-start'
+                />
+              }
+            >
+              {advancedOpen ? '▼' : '▶'} {t('Advanced Settings')}
             </CollapsibleTrigger>
             <CollapsibleContent className='space-y-3 pt-2'>
               <div className='grid gap-1.5'>

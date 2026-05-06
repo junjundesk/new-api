@@ -526,10 +526,10 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
                     <div className='rounded-lg border'>
                       <div className='flex items-center justify-between p-4'>
                         <div className='flex items-center gap-2'>
-                          <CollapsibleTrigger asChild>
-                            <Button variant='ghost' size='sm'>
-                              <ChevronDown className='h-4 w-4' />
-                            </Button>
+                          <CollapsibleTrigger
+                            render={<Button variant='ghost' size='sm' />}
+                          >
+                            <ChevronDown className='h-4 w-4' />
                           </CollapsibleTrigger>
                           <span className='font-semibold'>
                             {userGroupData.userGroup}

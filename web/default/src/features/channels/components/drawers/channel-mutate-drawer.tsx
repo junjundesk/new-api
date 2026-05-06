@@ -2247,16 +2247,18 @@ export function ChannelMutateDrawer({
                           {t('Model Mapping')}
                         </FormLabel>
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type='button'
-                              variant='ghost'
-                              size='icon-sm'
-                              className='text-muted-foreground hover:text-foreground size-auto p-0'
-                              aria-label='How model mapping works'
-                            >
-                              <HelpCircle className='h-4 w-4' />
-                            </Button>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type='button'
+                                variant='ghost'
+                                size='icon-sm'
+                                className='text-muted-foreground hover:text-foreground size-auto p-0'
+                                aria-label='How model mapping works'
+                              />
+                            }
+                          >
+                            <HelpCircle className='h-4 w-4' />
                           </TooltipTrigger>
                           <TooltipContent
                             side='top'
@@ -2362,28 +2364,30 @@ export function ChannelMutateDrawer({
                 open={advancedSettingsOpen}
                 onOpenChange={handleAdvancedSettingsOpenChange}
               >
-                <CollapsibleTrigger asChild>
-                  <button
-                    type='button'
-                    className='bg-card hover:bg-accent/50 flex w-full items-center justify-between rounded-xl border px-5 py-4 text-left transition-colors'
-                  >
-                    <div className='space-y-0.5'>
-                      <div className='text-[13px] font-semibold'>
-                        {t('Advanced Settings')}
-                      </div>
-                      <div className='text-muted-foreground text-xs'>
-                        {t(
-                          'Request overrides, routing behavior, and upstream model automation'
-                        )}
-                      </div>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        'text-muted-foreground h-4 w-4 shrink-0 transition-transform',
-                        advancedSettingsOpen && 'rotate-180'
-                      )}
+                <CollapsibleTrigger
+                  render={
+                    <button
+                      type='button'
+                      className='bg-card hover:bg-accent/50 flex w-full items-center justify-between rounded-xl border px-5 py-4 text-left transition-colors'
                     />
-                  </button>
+                  }
+                >
+                  <div className='space-y-0.5'>
+                    <div className='text-[13px] font-semibold'>
+                      {t('Advanced Settings')}
+                    </div>
+                    <div className='text-muted-foreground text-xs'>
+                      {t(
+                        'Request overrides, routing behavior, and upstream model automation'
+                      )}
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      'text-muted-foreground h-4 w-4 shrink-0 transition-transform',
+                      advancedSettingsOpen && 'rotate-180'
+                    )}
+                  />
                 </CollapsibleTrigger>
 
                 <CollapsibleContent className='mt-5 space-y-5'>
@@ -3277,10 +3281,10 @@ export function ChannelMutateDrawer({
           </Form>
 
           <SheetFooter className='grid grid-cols-2 gap-2 border-t px-4 py-3 sm:flex sm:px-6 sm:py-4'>
-            <SheetClose asChild>
-              <Button variant='outline' disabled={isSubmitting}>
-                {t('Cancel')}
-              </Button>
+            <SheetClose
+              render={<Button variant='outline' disabled={isSubmitting} />}
+            >
+              {t('Cancel')}
             </SheetClose>
             <Button form='channel-form' type='submit' disabled={isSubmitting}>
               {isSubmitting && (

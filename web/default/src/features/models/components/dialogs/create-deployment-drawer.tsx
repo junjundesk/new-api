@@ -730,8 +730,8 @@ export function CreateDeploymentDrawer({
         </Form>
 
         <SheetFooter className='gap-2'>
-          <SheetClose asChild>
-            <Button variant='outline'>{t('Cancel')}</Button>
+          <SheetClose render={<Button variant='outline' />}>
+            {t('Cancel')}
           </SheetClose>
           <Button
             form='deployment-form'

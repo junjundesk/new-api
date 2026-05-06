@@ -253,8 +253,9 @@ export function PrefillGroupFormDrawer({
                     <FormLabel>Group Type</FormLabel>
                     <Select
                       value={field.value}
-                      onValueChange={(value: PrefillGroupType) =>
-                        field.onChange(value)
+                      onValueChange={(value) =>
+                        value !== null &&
+                        field.onChange(value as PrefillGroupType)
                       }
                     >
                       <FormControl>
@@ -344,10 +345,12 @@ export function PrefillGroupFormDrawer({
         </Form>
 
         <SheetFooter className='grid grid-cols-2 gap-2 border-t px-4 py-3 sm:flex sm:px-6 sm:py-4'>
-          <SheetClose asChild>
-            <Button type='button' variant='outline' disabled={isSaving}>
-              {t('Cancel')}
-            </Button>
+          <SheetClose
+            render={
+              <Button type='button' variant='outline' disabled={isSaving} />
+            }
+          >
+            {t('Cancel')}
           </SheetClose>
           <Button type='submit' form='prefill-group-form' disabled={isSaving}>
             {isSaving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}

@@ -793,7 +793,11 @@ export function ModelMutateDrawer({
             <div className='space-y-4'>
               <div className='flex items-center justify-between'>
                 <h3 className='text-sm font-semibold'>{t('Endpoints')}</h3>
-                <Select onValueChange={handleFillEndpointTemplate}>
+                <Select<string>
+                  onValueChange={(v) =>
+                    v !== null && handleFillEndpointTemplate(v)
+                  }
+                >
                   <SelectTrigger size='sm' className='w-[200px]'>
                     <SelectValue placeholder={t('Load template...')} />
                   </SelectTrigger>
@@ -1049,19 +1053,21 @@ export function ModelMutateDrawer({
                     open={advancedOpen}
                     onOpenChange={setAdvancedOpen}
                   >
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type='button'
-                        variant='outline'
-                        className='flex w-full items-center justify-between'
-                      >
-                        {t('Advanced options')}
-                        <ChevronDown
-                          className={`h-4 w-4 transition-transform duration-200 ${
-                            advancedOpen ? 'rotate-180' : ''
-                          }`}
+                    <CollapsibleTrigger
+                      render={
+                        <Button
+                          type='button'
+                          variant='outline'
+                          className='flex w-full items-center justify-between'
                         />
-                      </Button>
+                      }
+                    >
+                      {t('Advanced options')}
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform duration-200 ${
+                          advancedOpen ? 'rotate-180' : ''
+                        }`}
+                      />
                     </CollapsibleTrigger>
                     <CollapsibleContent className='space-y-6 pt-6'>
                       <FormField
@@ -1233,10 +1239,10 @@ export function ModelMutateDrawer({
         </Form>
 
         <SheetFooter className='grid grid-cols-2 gap-2 border-t px-4 py-3 sm:flex sm:px-6 sm:py-4'>
-          <SheetClose asChild>
-            <Button variant='outline' disabled={isSubmitting}>
-              {t('Cancel')}
-            </Button>
+          <SheetClose
+            render={<Button variant='outline' disabled={isSubmitting} />}
+          >
+            {t('Cancel')}
           </SheetClose>
           <Button form='model-form' type='submit' disabled={isSubmitting}>
             {isSubmitting && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}

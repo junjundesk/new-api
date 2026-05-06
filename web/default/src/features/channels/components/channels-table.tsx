@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import {
-  flexRender,
   getCoreRowModel,
   useReactTable,
   getExpandedRowModel,
@@ -14,27 +13,13 @@ import {
 import { useDebounce, useMediaQuery } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { getLobeIcon } from '@/lib/lobe-icon'
-import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { Input } from '@/components/ui/input'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   DISABLED_ROW_DESKTOP,
   DISABLED_ROW_MOBILE,
-  DataTableToolbar,
-  TableSkeleton,
-  TableEmpty,
-  MobileCardList,
+  DataTablePage,
 } from '@/components/data-table'
-import { DataTablePagination } from '@/components/data-table/pagination'
-import { PageFooterPortal } from '@/components/layout'
 import { getChannels, searchChannels, getGroups } from '../api'
 import {
   DEFAULT_PAGE_SIZE,
@@ -331,122 +316,56 @@ export function ChannelsTable() {
   ]
 
   return (
-    <>
-      <div className='space-y-3 sm:space-y-4'>
-        <DataTableToolbar
-          table={table}
-          searchPlaceholder={t('Filter by name, ID, or key...')}
-          additionalSearch={
-            <Input
-              placeholder={t('Filter by model...')}
-              value={modelFilterInput}
-              onChange={(e) => setModelFilterInput(e.target.value)}
-              className='h-8 w-full sm:w-[150px] lg:w-[200px]'
-            />
-          }
-          filters={[
-            {
-              columnId: 'status',
-              title: t('Status'),
-              options: [...CHANNEL_STATUS_OPTIONS],
-              singleSelect: true,
-            },
-            {
-              columnId: 'type',
-              title: t('Type'),
-              options: typeFilterOptions,
-              singleSelect: true,
-            },
-            {
-              columnId: 'group',
-              title: t('Group'),
-              options: groupFilterOptions,
-              singleSelect: true,
-            },
-          ]}
-        />
-
-        {isMobile ? (
-          <MobileCardList
-            table={table}
-            isLoading={isLoading}
-            emptyTitle='No Channels Found'
-            emptyDescription='No channels available. Create your first channel to get started.'
-            getRowClassName={(row) =>
-              isDisabledChannelRow(row.original) ? DISABLED_ROW_MOBILE : undefined
-            }
+    <DataTablePage
+      table={table}
+      columns={columns}
+      isLoading={isLoading}
+      isFetching={isFetching}
+      emptyTitle={t('No Channels Found')}
+      emptyDescription={t(
+        'No channels available. Create your first channel to get started.'
+      )}
+      skeletonKeyPrefix='channel-skeleton'
+      applyHeaderSize
+      toolbarProps={{
+        searchPlaceholder: t('Filter by name, ID, or key...'),
+        additionalSearch: (
+          <Input
+            placeholder={t('Filter by model...')}
+            value={modelFilterInput}
+            onChange={(e) => setModelFilterInput(e.target.value)}
+            className='w-full sm:w-[150px] lg:w-[180px]'
           />
-        ) : (
-          <>
-            <div
-              className={cn(
-                'overflow-hidden rounded-md border transition-opacity duration-150',
-                isFetching && !isLoading && 'pointer-events-none opacity-50'
-              )}
-            >
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead
-                          key={header.id}
-                          style={{ width: header.getSize() }}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableSkeleton table={table} keyPrefix='channel-skeleton' />
-                  ) : table.getRowModel().rows.length === 0 ? (
-                    <TableEmpty
-                      colSpan={columns.length}
-                      title={t('No Channels Found')}
-                      description={t(
-                        'No channels available. Create your first channel to get started.'
-                      )}
-                    />
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && 'selected'}
-                        className={cn(
-                          isDisabledChannelRow(row.original) &&
-                            DISABLED_ROW_DESKTOP
-                        )}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            <DataTableBulkActions table={table} />
-          </>
-        )}
-      </div>
-      <PageFooterPortal>
-        <DataTablePagination table={table} />
-      </PageFooterPortal>
-    </>
+        ),
+        filters: [
+          {
+            columnId: 'status',
+            title: t('Status'),
+            options: [...CHANNEL_STATUS_OPTIONS],
+            singleSelect: true,
+          },
+          {
+            columnId: 'type',
+            title: t('Type'),
+            options: typeFilterOptions,
+            singleSelect: true,
+          },
+          {
+            columnId: 'group',
+            title: t('Group'),
+            options: groupFilterOptions,
+            singleSelect: true,
+          },
+        ],
+      }}
+      getRowClassName={(row, { isMobile }) =>
+        isDisabledChannelRow(row.original)
+          ? isMobile
+            ? DISABLED_ROW_MOBILE
+            : DISABLED_ROW_DESKTOP
+          : undefined
+      }
+      bulkActions={<DataTableBulkActions table={table} />}
+    />
   )
 }

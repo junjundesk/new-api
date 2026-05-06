@@ -133,14 +133,16 @@ function GroupSection(props: GroupSectionProps) {
       <div className='rounded-lg border'>
         <div className='flex items-center justify-between p-3'>
           <div className='flex items-center gap-2'>
-            <CollapsibleTrigger asChild>
-              <Button variant='ghost' size='sm' className='h-6 w-6 p-0'>
-                {open ? (
-                  <ChevronUp className='h-4 w-4' />
-                ) : (
-                  <ChevronDown className='h-4 w-4' />
-                )}
-              </Button>
+            <CollapsibleTrigger
+              render={
+                <Button variant='ghost' size='sm' className='h-6 w-6 p-0' />
+              }
+            >
+              {open ? (
+                <ChevronUp className='h-4 w-4' />
+              ) : (
+                <ChevronDown className='h-4 w-4' />
+              )}
             </CollapsibleTrigger>
             <span className='font-semibold'>{props.groupName}</span>
             <StatusBadge variant='neutral' copyable={false}>
@@ -172,7 +174,9 @@ function GroupSection(props: GroupSectionProps) {
               <div key={rule._id} className='flex items-center gap-2'>
                 <Select
                   value={rule.op}
-                  onValueChange={(v) => props.onUpdate(rule._id, 'op', v)}
+                  onValueChange={(v) =>
+                    v !== null && props.onUpdate(rule._id, 'op', v)
+                  }
                 >
                   <SelectTrigger className='w-[130px]'>
                     <SelectValue>

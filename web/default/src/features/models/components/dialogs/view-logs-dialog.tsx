@@ -176,7 +176,7 @@ export function ViewLogsDialog({
             </div>
             <Select
               value={containerId}
-              onValueChange={(v) => setContainerId(v)}
+              onValueChange={(v) => v !== null && setContainerId(v)}
               disabled={isLoadingContainers || containers.length === 0}
             >
               <SelectTrigger>

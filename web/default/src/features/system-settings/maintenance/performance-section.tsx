@@ -510,7 +510,7 @@ export function PerformanceSection(props: Props) {
                 <Label className='text-xs'>{t('Cleanup Mode')}</Label>
                 <Select
                   value={logCleanupMode}
-                  onValueChange={setLogCleanupMode}
+                  onValueChange={(v) => v !== null && setLogCleanupMode(v)}
                 >
                   <SelectTrigger className='w-[160px]'>
                     <SelectValue />
@@ -541,16 +541,18 @@ export function PerformanceSection(props: Props) {
                 />
               </div>
               <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant='destructive'
-                    size='sm'
-                    disabled={logCleanupLoading}
-                  >
-                    {logCleanupLoading
-                      ? t('Cleaning...')
-                      : t('Clean Up Log Files')}
-                  </Button>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant='destructive'
+                      size='sm'
+                      disabled={logCleanupLoading}
+                    />
+                  }
+                >
+                  {logCleanupLoading
+                    ? t('Cleaning...')
+                    : t('Clean Up Log Files')}
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
@@ -604,10 +606,8 @@ export function PerformanceSection(props: Props) {
             {t('Refresh Stats')}
           </Button>
           <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant='outline' size='sm'>
-                {t('Clean up inactive cache')}
-              </Button>
+            <AlertDialogTrigger render={<Button variant='outline' size='sm' />}>
+              {t('Clean up inactive cache')}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>

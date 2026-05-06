@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SectionPageLayout } from '@/components/layout'
 import type { NavGroup } from '@/components/layout/types'
 import { CacheStatsDialog } from '@/features/system-settings/general/channel-affinity/cache-stats-dialog'
+import { CommonLogsHeaderActions } from './components/common-logs-header-actions'
 import { UserInfoDialog } from './components/dialogs/user-info-dialog'
 import {
   UsageLogsProvider,
@@ -75,9 +76,8 @@ function UsageLogsContent() {
           if (!('url' in item) || typeof item.url !== 'string') return null
           return item.url.split('/').pop() ?? null
         })
-        .filter(
-          (section): section is UsageLogsSectionId =>
-            Boolean(section && isUsageLogsSectionId(section))
+        .filter((section): section is UsageLogsSectionId =>
+          Boolean(section && isUsageLogsSectionId(section))
         ),
     [filteredTabGroups]
   )
@@ -100,10 +100,17 @@ function UsageLogsContent() {
   return (
     <>
       <SectionPageLayout>
-        <SectionPageLayout.Title>{t(pageMeta.titleKey)}</SectionPageLayout.Title>
+        <SectionPageLayout.Title>
+          {t(pageMeta.titleKey)}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Description>
           {t(pageMeta.descriptionKey)}
         </SectionPageLayout.Description>
+        {activeCategory === 'common' && (
+          <SectionPageLayout.Actions>
+            <CommonLogsHeaderActions />
+          </SectionPageLayout.Actions>
+        )}
         <SectionPageLayout.Content>
           <div className='space-y-4'>
             {showTaskSwitcher && (

@@ -1,7 +1,6 @@
-export interface LogAvatarStyle {
-  backgroundColor: string
-  color: string
-}
+import type { CSSProperties } from 'react'
+
+export type UserAvatarStyle = Pick<CSSProperties, 'backgroundColor' | 'color'>
 
 function hashString(value: string): number {
   let hash = 0
@@ -11,7 +10,7 @@ function hashString(value: string): number {
   return hash
 }
 
-export function getLogAvatarStyle(name: string): LogAvatarStyle {
+export function getUserAvatarStyle(name: string): UserAvatarStyle {
   const hash = hashString(name)
   const hue = hash % 360
   const saturation = 54 + (hash % 8)
@@ -21,4 +20,8 @@ export function getLogAvatarStyle(name: string): LogAvatarStyle {
     backgroundColor: `hsl(${hue} ${saturation}% ${lightness}% / 0.82)`,
     color: 'white',
   }
+}
+
+export function getUserAvatarFallback(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || '?'
 }

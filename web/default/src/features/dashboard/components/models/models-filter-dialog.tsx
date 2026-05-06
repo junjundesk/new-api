@@ -68,8 +68,8 @@ export function ModelsFilter(props: ModelsFilterProps) {
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     buildDefaultDashboardFilters(props.preferences)
   )
-  const [selectedRange, setSelectedRange] = useState<number | null>(() =>
-    props.preferences.defaultTimeRangeDays
+  const [selectedRange, setSelectedRange] = useState<number | null>(
+    () => props.preferences.defaultTimeRangeDays
   )
 
   useEffect(() => {
@@ -121,11 +121,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant='outline' size='sm'>
-          <Filter className='mr-2 h-4 w-4' />
-          {t('Filter')}
-        </Button>
+      <DialogTrigger render={<Button variant='outline' size='sm' />}>
+        <Filter className='mr-2 h-4 w-4' />
+        {t('Filter')}
       </DialogTrigger>
       <DialogContent className='flex max-h-[calc(100dvh-2rem)] flex-col max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-lg'>
         <DialogHeader>

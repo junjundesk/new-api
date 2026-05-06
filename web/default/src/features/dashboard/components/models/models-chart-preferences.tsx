@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { TimeGranularity } from '@/lib/time'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,7 +31,6 @@ import type {
   DashboardChartPreferences,
   ModelAnalyticsChartTab,
 } from '@/features/dashboard/types'
-import type { TimeGranularity } from '@/lib/time'
 
 interface ModelsChartPreferencesProps {
   preferences: DashboardChartPreferences
@@ -55,11 +55,9 @@ export function ModelsChartPreferences(props: ModelsChartPreferencesProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant='outline' size='sm'>
-          <Settings2 className='mr-2 h-4 w-4' />
-          {t('Preferences')}
-        </Button>
+      <DialogTrigger render={<Button variant='outline' size='sm' />}>
+        <Settings2 className='mr-2 h-4 w-4' />
+        {t('Preferences')}
       </DialogTrigger>
       <DialogContent className='sm:max-w-md'>
         <DialogHeader>

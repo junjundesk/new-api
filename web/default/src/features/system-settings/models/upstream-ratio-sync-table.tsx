@@ -213,7 +213,7 @@ export function UpstreamRatioSyncTable({
         </div>
         <Select
           value={ratioTypeFilter}
-          onValueChange={setRatioTypeFilter}
+          onValueChange={(v) => v !== null && setRatioTypeFilter(v)}
           disabled={isDisabled}
         >
           <SelectTrigger className='w-full sm:w-56'>

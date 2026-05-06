@@ -182,7 +182,10 @@ export function UserSubscriptionsDialog(props: Props) {
 
           <div className='mt-4 space-y-4'>
             <div className='flex gap-2'>
-              <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+              <Select
+                value={selectedPlanId}
+                onValueChange={(v) => v !== null && setSelectedPlanId(v)}
+              >
                 <SelectTrigger className='flex-1'>
                   <SelectValue placeholder={t('Select subscription plan')} />
                 </SelectTrigger>

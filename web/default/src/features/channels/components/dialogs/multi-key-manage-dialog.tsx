@@ -258,7 +258,7 @@ export function MultiKeyManageDialog({
             <div className='flex shrink-0 items-center justify-between'>
               <Select
                 value={statusFilter === null ? 'all' : statusFilter.toString()}
-                onValueChange={handleStatusFilterChange}
+                onValueChange={(v) => v !== null && handleStatusFilterChange(v)}
               >
                 <SelectTrigger className='w-40'>
                   <SelectValue placeholder={t('All Status')} />
