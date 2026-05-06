@@ -3,6 +3,7 @@ package perfmetrics
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -119,6 +120,77 @@ func Query(params QueryParams) (QueryResult, error) {
 	})
 
 	return buildQueryResult(params.Model, merged), nil
+}
+
+func QuerySummaryAll(hours int) (SummaryAllResult, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	if hours > 24*30 {
+		hours = 24 * 30
+	}
+	endTs := time.Now().Unix()
+	startTs := endTs - int64(hours)*3600
+
+	rows, err := model.GetPerfMetricsSummaryAll(startTs, endTs)
+	if err != nil {
+		return SummaryAllResult{}, err
+	}
+
+	totals := map[string]counters{}
+	for _, row := range rows {
+		totals[row.ModelName] = counters{
+			requestCount:   row.RequestCount,
+			successCount:   row.SuccessCount,
+			totalLatencyMs: row.TotalLatencyMs,
+			outputTokens:   row.OutputTokens,
+			generationMs:   row.GenerationMs,
+		}
+	}
+
+	hotBuckets.Range(func(key, value any) bool {
+		k := key.(bucketKey)
+		if k.bucketTs < startTs || k.bucketTs > endTs {
+			return true
+		}
+		snap := value.(*atomicBucket).snapshot()
+		if snap.requestCount == 0 {
+			return true
+		}
+		cur := totals[k.model]
+		cur.requestCount += snap.requestCount
+		cur.successCount += snap.successCount
+		cur.totalLatencyMs += snap.totalLatencyMs
+		cur.outputTokens += snap.outputTokens
+		cur.generationMs += snap.generationMs
+		totals[k.model] = cur
+		return true
+	})
+
+	models := make([]ModelSummary, 0, len(totals))
+	for name, total := range totals {
+		if total.requestCount == 0 {
+			continue
+		}
+		avgLatency := total.totalLatencyMs / total.requestCount
+		successRate := float64(total.successCount) / float64(total.requestCount) * 100
+		avgTps := 0.0
+		if total.generationMs > 0 {
+			avgTps = float64(total.outputTokens) / (float64(total.generationMs) / 1000.0)
+		}
+		models = append(models, ModelSummary{
+			ModelName:    name,
+			AvgLatencyMs: avgLatency,
+			SuccessRate:  math.Round(successRate*100) / 100,
+			AvgTps:       math.Round(avgTps*100) / 100,
+			RequestCount: total.requestCount,
+		})
+	}
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ModelName < models[j].ModelName
+	})
+
+	return SummaryAllResult{Models: models}, nil
 }
 
 func bucketStart(ts int64) int64 {
