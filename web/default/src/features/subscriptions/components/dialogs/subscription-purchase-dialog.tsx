@@ -65,6 +65,11 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment = hasStripe || hasCreem || hasEpay
+  const selectedEpayMethodLabel =
+    (props.epayMethods || []).find((m) => m.type === selectedEpayMethod)
+      ?.name ||
+    selectedEpayMethod ||
+    t('Select payment method')
   const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
   const limitReached =
@@ -272,7 +277,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     disabled={limitReached}
                   >
                     <SelectTrigger className='flex-1'>
-                      <SelectValue placeholder={t('Select payment method')} />
+                      <SelectValue>{selectedEpayMethodLabel}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {(props.epayMethods || []).map((m) => (
