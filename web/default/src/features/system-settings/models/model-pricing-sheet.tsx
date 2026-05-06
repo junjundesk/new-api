@@ -269,11 +269,6 @@ function getModeBadgeVariant(
   return 'outline'
 }
 
-function truncateExpr(value: string) {
-  if (!value) return ''
-  return value.length > 110 ? `${value.slice(0, 110)}...` : value
-}
-
 function buildPreviewRows(
   values: ModelPricingFormValues,
   mode: PricingMode,

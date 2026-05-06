@@ -15,13 +15,15 @@ import (
 
 var hotBuckets sync.Map
 
+// seriesSchema is a stable client cache/schema marker. Do not change it when
+// hiding fields or making response-only privacy hardening changes.
 const seriesSchema = "dbcd0a3c01b55203"
 
 func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool) {
+func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
 	if info == nil {
 		return
 	}
@@ -31,13 +33,23 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool) {
 	if hasTtft {
 		ttftMs = info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
 	}
+	latencyMs := now.Sub(info.StartTime).Milliseconds()
+	generationMs := latencyMs
+	if hasTtft {
+		generationMs = now.Sub(info.FirstResponseTime).Milliseconds()
+	}
+	if generationMs <= 0 {
+		generationMs = latencyMs
+	}
 	Record(Sample{
-		Model:     info.OriginModelName,
-		Group:     info.UsingGroup,
-		LatencyMs: now.Sub(info.StartTime).Milliseconds(),
-		TtftMs:    ttftMs,
-		HasTtft:   hasTtft,
-		Success:   success,
+		Model:        info.OriginModelName,
+		Group:        info.UsingGroup,
+		LatencyMs:    latencyMs,
+		TtftMs:       ttftMs,
+		HasTtft:      hasTtft,
+		Success:      success,
+		OutputTokens: outputTokens,
+		GenerationMs: generationMs,
 	})
 }
 
@@ -89,6 +101,8 @@ func Query(params QueryParams) (QueryResult, error) {
 			totalLatencyMs: row.TotalLatencyMs,
 			ttftSumMs:      row.TtftSumMs,
 			ttftCount:      row.TtftCount,
+			outputTokens:   row.OutputTokens,
+			generationMs:   row.GenerationMs,
 		})
 	}
 
@@ -125,6 +139,8 @@ func mergeCounters(merged map[bucketKey]counters, key bucketKey, value counters)
 	current.totalLatencyMs += value.totalLatencyMs
 	current.ttftSumMs += value.ttftSumMs
 	current.ttftCount += value.ttftCount
+	current.outputTokens += value.outputTokens
+	current.generationMs += value.generationMs
 	merged[key] = current
 }
 
@@ -166,6 +182,8 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 			total.totalLatencyMs += value.totalLatencyMs
 			total.ttftSumMs += value.ttftSumMs
 			total.ttftCount += value.ttftCount
+			total.outputTokens += value.outputTokens
+			total.generationMs += value.generationMs
 			series = append(series, bucketPoint(ts, value))
 		}
 
@@ -174,9 +192,7 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
 			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
 			SuccessRate:  successRate(total),
-			RequestCount: total.requestCount,
-			SuccessCount: total.successCount,
-			TtftCount:    total.ttftCount,
+			AvgTps:       avgTps(total),
 			Series:       series,
 		})
 	}
@@ -194,9 +210,7 @@ func bucketPoint(ts int64, value counters) BucketPoint {
 		AvgTtftMs:    avg(value.ttftSumMs, value.ttftCount),
 		AvgLatencyMs: avg(value.totalLatencyMs, value.requestCount),
 		SuccessRate:  successRate(value),
-		Count:        value.requestCount,
-		SuccessCount: value.successCount,
-		TtftCount:    value.ttftCount,
+		AvgTps:       avgTps(value),
 	}
 }
 
@@ -212,6 +226,13 @@ func successRate(value counters) float64 {
 		return 0
 	}
 	return float64(value.successCount) / float64(value.requestCount) * 100
+}
+
+func avgTps(value counters) float64 {
+	if value.outputTokens <= 0 || value.generationMs <= 0 {
+		return 0
+	}
+	return float64(value.outputTokens) / (float64(value.generationMs) / 1000)
 }
 
 func recordRedis(key bucketKey, sample Sample) {
@@ -233,6 +254,10 @@ func recordRedis(key bucketKey, sample Sample) {
 	if sample.HasTtft && sample.TtftMs >= 0 {
 		pipe.HIncrBy(ctx, redisKey, "ttft", sample.TtftMs)
 		pipe.HIncrBy(ctx, redisKey, "ttft_n", 1)
+	}
+	if sample.OutputTokens > 0 && sample.GenerationMs > 0 {
+		pipe.HIncrBy(ctx, redisKey, "out", sample.OutputTokens)
+		pipe.HIncrBy(ctx, redisKey, "gen_ms", sample.GenerationMs)
 	}
 	pipe.Expire(ctx, redisKey, time.Hour)
 	_, _ = pipe.Exec(ctx)

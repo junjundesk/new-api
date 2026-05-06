@@ -13,11 +13,13 @@ type PerfMetric struct {
 	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_bucket,priority:1"`
 	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_bucket,priority:2"`
 	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_bucket,priority:3;index:idx_perf_bucket_ts"`
-	RequestCount   int64  `json:"request_count" gorm:"default:0"`
-	SuccessCount   int64  `json:"success_count" gorm:"default:0"`
-	TotalLatencyMs int64  `json:"total_latency_ms" gorm:"default:0"`
-	TtftSumMs      int64  `json:"ttft_sum_ms" gorm:"default:0"`
-	TtftCount      int64  `json:"ttft_count" gorm:"default:0"`
+	RequestCount   int64  `json:"-" gorm:"default:0"`
+	SuccessCount   int64  `json:"-" gorm:"default:0"`
+	TotalLatencyMs int64  `json:"-" gorm:"default:0"`
+	TtftSumMs      int64  `json:"-" gorm:"default:0"`
+	TtftCount      int64  `json:"-" gorm:"default:0"`
+	OutputTokens   int64  `json:"-" gorm:"default:0"`
+	GenerationMs   int64  `json:"-" gorm:"default:0"`
 }
 
 func (PerfMetric) TableName() string {
@@ -40,6 +42,8 @@ func UpsertPerfMetric(metric *PerfMetric) error {
 			"total_latency_ms": gorm.Expr("total_latency_ms + ?", metric.TotalLatencyMs),
 			"ttft_sum_ms":      gorm.Expr("ttft_sum_ms + ?", metric.TtftSumMs),
 			"ttft_count":       gorm.Expr("ttft_count + ?", metric.TtftCount),
+			"output_tokens":    gorm.Expr("output_tokens + ?", metric.OutputTokens),
+			"generation_ms":    gorm.Expr("generation_ms + ?", metric.GenerationMs),
 		}),
 	}).Create(metric).Error
 }
