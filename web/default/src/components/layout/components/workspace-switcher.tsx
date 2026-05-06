@@ -119,7 +119,7 @@ export function WorkspaceSwitcher({
     // Only navigate, let useEffect synchronize workspace state based on new pathname
     // This avoids race conditions and context loss issues
     if (workspace.id === WORKSPACE_IDS.SYSTEM_SETTINGS) {
-      navigate({ to: '/system-settings/general' })
+      navigate({ to: '/system-settings/site' })
     } else {
       navigate({ to: '/dashboard' })
     }

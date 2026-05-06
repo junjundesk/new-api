@@ -168,6 +168,13 @@ export function ModelMutateDrawer({
       'group_ratio_setting.group_special_usable_group': '{}',
       'grok.violation_deduction_enabled': false,
       'grok.violation_deduction_amount': 0,
+      'channel_affinity_setting.enabled': false,
+      'channel_affinity_setting.switch_on_success': true,
+      'channel_affinity_setting.max_entries': 100000,
+      'channel_affinity_setting.default_ttl_seconds': 3600,
+      'channel_affinity_setting.rules': '[]',
+      'model_deployment.ionet.api_key': '',
+      'model_deployment.ionet.enabled': false,
     }
     return getOptionValue(systemOptionsData.data, defaultModelSettings)
   }, [systemOptionsData])

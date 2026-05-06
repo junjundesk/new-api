@@ -81,6 +81,8 @@
   "SunoAPI": "SunoAPI",
   "Telegram": "Telegram",
   "Tencent": "Tencent",
+  "Token prices": "Token prices",
+  "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.": "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.",
   "TTFT P50": "TTFT P50",
   "TTFT P95": "TTFT P95",
   "TTFT P99": "TTFT P99",
@@ -90,5 +92,16 @@
   "whsec_xxx": "whsec_xxx",
   "Xinference": "Xinference",
   "Xunfei": "Xunfei",
-  "Zhipu V4": "Zhipu V4"
+  "Zhipu V4": "Zhipu V4",
+  "Cache pricing": "Cache pricing",
+  "Core pricing": "Core pricing",
+  "All conditions must match before this tier is used.": "All conditions must match before this tier is used.",
+  "Base input and output token prices for this tier.": "Base input and output token prices for this tier.",
+  "Fallback tier": "Fallback tier",
+  "Media pricing": "Media pricing",
+  "No separate media pricing configured.": "No separate media pricing configured.",
+  "Separate image/audio prices are enabled.": "Separate image/audio prices are enabled.",
+  "Set separate prices for cache reads and writes.": "Set separate prices for cache reads and writes.",
+  "This tier catches any request that did not match earlier tiers.": "This tier catches any request that did not match earlier tiers.",
+  "Tier conditions": "Tier conditions"
 }

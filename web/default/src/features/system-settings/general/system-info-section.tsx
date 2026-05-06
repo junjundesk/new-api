@@ -32,7 +32,6 @@ const _systemInfoSchema = z.object({
   theme: z.object({
     frontend: z.enum(['default', 'classic']),
   }),
-  Notice: z.string().optional(),
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   Logo: z.string().url().optional().or(z.literal('')),
@@ -65,7 +64,6 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
       frontend:
         defaultValues.theme?.frontend === 'classic' ? 'classic' : 'default',
     },
-    Notice: normalizeValue(defaultValues.Notice),
     SystemName: normalizeValue(defaultValues.SystemName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     Logo: normalizeValue(defaultValues.Logo),
@@ -82,7 +80,6 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     theme: z.object({
       frontend: z.enum(['default', 'classic']),
     }),
-    Notice: z.string().optional(),
     SystemName: z.string().min(1, {
       error: () => t('System name is required'),
     }),
@@ -154,31 +151,6 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                   <FormDescription>
                     {t(
                       'Switch between the new frontend and the classic frontend. Changes take effect after page reload.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='Notice'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Notice')}</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder={t(
-                        'Enter announcement content (supports Markdown & HTML)'
-                      )}
-                      rows={6}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Announcement displayed to users (supports Markdown & HTML)'
                     )}
                   </FormDescription>
                   <FormMessage />
