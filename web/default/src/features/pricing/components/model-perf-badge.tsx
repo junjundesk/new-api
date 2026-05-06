@@ -9,8 +9,7 @@ export type ModelPerfBadgeData = {
   avg_tps: number
 }
 
-export interface ModelPerfBadgeProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface ModelPerfBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   perf: ModelPerfBadgeData | undefined
 }
 
@@ -47,7 +46,7 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
         <div className='text-muted-foreground/55 text-[10px] leading-4'>
           {t('Latency short')}
         </div>
-        <div className='text-muted-foreground/80 whitespace-nowrap font-mono text-xs leading-4'>
+        <div className='text-muted-foreground/80 font-mono text-xs leading-4 whitespace-nowrap'>
           {avg_latency_ms > 0 ? formatLatency(avg_latency_ms) : '—'}
         </div>
       </div>
@@ -55,7 +54,7 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
         <div className='text-muted-foreground/55 truncate text-[10px] leading-4'>
           {t('Throughput short')}
         </div>
-        <div className='text-muted-foreground/80 whitespace-nowrap font-mono text-xs leading-4'>
+        <div className='text-muted-foreground/80 font-mono text-xs leading-4 whitespace-nowrap'>
           {formatCompactThroughput(avg_tps)}
         </div>
       </div>

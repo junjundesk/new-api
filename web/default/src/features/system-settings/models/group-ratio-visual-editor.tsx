@@ -9,12 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -830,7 +830,9 @@ function GroupPricingTable({
           <div>
             <CardTitle>{t('Pricing groups')}</CardTitle>
             <CardDescription>
-              {t('Edit billing ratios and user-selectable groups in one table.')}
+              {t(
+                'Edit billing ratios and user-selectable groups in one table.'
+              )}
             </CardDescription>
           </div>
           <Button onClick={addRow} size='sm' className='sm:self-start'>
@@ -900,11 +902,7 @@ function GroupPricingTable({
                           <Checkbox
                             checked={row.selectable}
                             onCheckedChange={(checked) =>
-                              updateRow(
-                                row._id,
-                                'selectable',
-                                checked === true
-                              )
+                              updateRow(row._id, 'selectable', checked === true)
                             }
                             aria-label={t('User selectable')}
                           />

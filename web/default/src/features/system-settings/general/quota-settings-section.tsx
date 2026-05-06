@@ -1,5 +1,5 @@
-import * as z from 'zod'
 import type { ChangeEvent } from 'react'
+import * as z from 'zod'
 import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'

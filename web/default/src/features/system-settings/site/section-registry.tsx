@@ -1,5 +1,4 @@
-import type { SiteSettings } from '../types'
-import { createSectionRegistry } from '../utils/section-registry'
+import { SystemInfoSection } from '../general/system-info-section'
 import {
   parseHeaderNavModules,
   parseSidebarModulesAdmin,
@@ -9,7 +8,8 @@ import {
 import { HeaderNavigationSection } from '../maintenance/header-navigation-section'
 import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
-import { SystemInfoSection } from '../general/system-info-section'
+import type { SiteSettings } from '../types'
+import { createSectionRegistry } from '../utils/section-registry'
 
 const SITE_SECTIONS = [
   {

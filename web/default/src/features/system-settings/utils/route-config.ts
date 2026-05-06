@@ -44,12 +44,12 @@ export type SettingsRouteConfigOptions<
  *
  * @example
  * ```tsx
-   * export const Route = createFileRoute('/_authenticated/system-settings/site')(
+ * export const Route = createFileRoute('/_authenticated/system-settings/site')(
  *   createSettingsRouteConfig({
-   *     sectionIds: SITE_SECTION_IDS,
-   *     defaultSection: SITE_DEFAULT_SECTION,
-   *     component: SiteSettings,
-   *     routePath: '/system-settings/site',
+ *     sectionIds: SITE_SECTION_IDS,
+ *     defaultSection: SITE_DEFAULT_SECTION,
+ *     component: SiteSettings,
+ *     routePath: '/system-settings/site',
  *     redirectToDefault: true,
  *   })
  * )

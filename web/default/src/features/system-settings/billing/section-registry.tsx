@@ -1,11 +1,11 @@
 import { parseCurrencyDisplayType } from '@/lib/currency'
-import type { BillingSettings } from '../types'
-import { createSectionRegistry } from '../utils/section-registry'
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
+import type { BillingSettings } from '../types'
+import { createSectionRegistry } from '../utils/section-registry'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -161,8 +161,7 @@ const BILLING_SECTIONS = [
           WaffoPancakePrivateKey: settings.WaffoPancakePrivateKey ?? '',
           WaffoPancakeWebhookPublicKey:
             settings.WaffoPancakeWebhookPublicKey ?? '',
-          WaffoPancakeWebhookTestKey:
-            settings.WaffoPancakeWebhookTestKey ?? '',
+          WaffoPancakeWebhookTestKey: settings.WaffoPancakeWebhookTestKey ?? '',
           WaffoPancakeStoreID: settings.WaffoPancakeStoreID ?? '',
           WaffoPancakeProductID: settings.WaffoPancakeProductID ?? '',
           WaffoPancakeReturnURL: settings.WaffoPancakeReturnURL ?? '',
@@ -191,14 +190,15 @@ const BILLING_SECTIONS = [
 
 export type BillingSectionId = (typeof BILLING_SECTIONS)[number]['id']
 
-const billingRegistry = createSectionRegistry<BillingSectionId, BillingSettings>(
-  {
-    sections: BILLING_SECTIONS,
-    defaultSection: 'quota',
-    basePath: '/system-settings/billing',
-    urlStyle: 'path',
-  }
-)
+const billingRegistry = createSectionRegistry<
+  BillingSectionId,
+  BillingSettings
+>({
+  sections: BILLING_SECTIONS,
+  defaultSection: 'quota',
+  basePath: '/system-settings/billing',
+  urlStyle: 'path',
+})
 
 export const BILLING_SECTION_IDS = billingRegistry.sectionIds
 export const BILLING_DEFAULT_SECTION = billingRegistry.defaultSection
