@@ -7,11 +7,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  aggregateUptime,
-  formatUptimePct,
-  type UptimeDayPoint,
-} from '../lib/mock-stats'
+import { formatUptimePct } from '@/features/performance-metrics/lib/format'
+import { aggregateUptime, type UptimeDayPoint } from '../lib/mock-stats'
 
 // ---------------------------------------------------------------------------
 // Uptime sparkline
