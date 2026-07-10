@@ -276,8 +276,11 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
 
   const primarySearch =
     props.customSearch !== undefined ? props.customSearch : searchInput
-  const useWidePrimarySearch =
-    filters.length + (props.additionalSearch != null ? 1 : 0) <= 3
+  const additionalFilterCount =
+    filters.length + (props.additionalSearch != null ? 1 : 0)
+  const inlineActions =
+    additionalFilterCount <= 3 && !hasExpandable && props.leftActions == null
+  const useWidePrimarySearch = !inlineActions && additionalFilterCount <= 3
   const secondaryMobileFilters =
     props.additionalSearch != null ||
     filterChips.some(Boolean) ||
@@ -320,6 +323,7 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
       searchLoading={props.searchLoading}
       onReset={handleReset}
       onSearch={hasSearch ? props.onSearch : undefined}
+      inlineActions={inlineActions}
       className={props.className}
     />
   )

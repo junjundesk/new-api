@@ -20,6 +20,10 @@ export { DataTablePagination } from './core/pagination'
 export { DataTableColumnHeader } from './core/column-header'
 export { BadgeCell } from './core/badge-cell'
 export { BadgeListCell } from './core/badge-list-cell'
+export {
+  BadgeListCellDisplayContext,
+  type BadgeListCellDisplay,
+} from './core/badge-list-cell-context'
 export { TruncatedCell } from './core/truncated-cell'
 export { DataTableViewOptions } from './toolbar/view-options'
 export { DataTableToolbar } from './toolbar/toolbar'
@@ -55,8 +59,8 @@ export {
 } from './layout/card-grid'
 export { CardRowContent } from './layout/card-row-content'
 export {
-  DataTableCardDetails,
   DataTableCardField,
+  DataTableCardRow,
   type DataTableContentMode,
 } from './layout/card-field'
 export { tableHasCompactMeta } from './layout/card-cell-utils'

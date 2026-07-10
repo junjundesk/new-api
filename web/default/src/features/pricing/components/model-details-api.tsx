@@ -507,7 +507,7 @@ function CodeSamplesSection(props: {
                 <TabsTrigger
                   key={ep.type}
                   value={ep.type}
-                  className='h-7 px-2.5 text-xs'
+                  className='px-2.5 text-xs'
                 >
                   {ep.type}
                 </TabsTrigger>
@@ -523,7 +523,7 @@ function CodeSamplesSection(props: {
         >
           <TabsList className='bg-muted/40 p-0.5'>
             {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
-              <TabsTrigger key={l} value={l} className='h-7 px-2.5 text-xs'>
+              <TabsTrigger key={l} value={l} className='px-2.5 text-xs'>
                 {LANG_LABELS[l]}
               </TabsTrigger>
             ))}
@@ -598,7 +598,7 @@ function SupportedParametersSection(props: { model: PricingModel }) {
             cell: (p) => (
               <Badge
                 variant='secondary'
-                className='h-7 rounded-full px-2.5 font-mono text-sm font-normal'
+                className='rounded-full px-2.5 font-mono text-sm font-normal'
               >
                 {p.type}
               </Badge>

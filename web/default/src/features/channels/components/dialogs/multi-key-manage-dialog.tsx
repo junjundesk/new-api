@@ -249,7 +249,7 @@ export function MultiKeyManageDialog({
         description={t(
           'Manage multi-key status and configuration for this channel'
         )}
-        contentClassName='flex max-h-[90vh] max-w-5xl flex-col'
+        contentClassName='flex max-h-[90vh] flex-col sm:max-w-5xl'
         titleClassName='flex items-center gap-2'
         contentHeight='min(72vh, 720px)'
         bodyClassName='space-y-4'

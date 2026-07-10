@@ -22,13 +22,16 @@ import { cn } from '@/lib/utils'
 
 export const sideDrawerContentClassName = (className?: string) =>
   cn(
+    // Width: pass `sm:max-w-*` (or `sm:max-w-none`) in className. SheetContent
+    // defaults to `sm:max-w-sm` for left/right; plain utilities merge correctly.
     'bg-background text-foreground flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 shadow-none',
     className
   )
 
 export const sideDrawerHeaderClassName = (className?: string) =>
   cn(
-    'border-border/70 bg-background/95 border-b px-4 py-3 text-start backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:py-4',
+    // pr-12 reserves space for SheetContent's absolute close button
+    'border-border/70 bg-background/95 border-b px-4 py-3 pr-12 text-start backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:py-4 sm:pr-14',
     className
   )
 

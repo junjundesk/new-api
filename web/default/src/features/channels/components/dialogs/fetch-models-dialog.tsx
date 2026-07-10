@@ -388,7 +388,7 @@ export function FetchModelsDialog({
           t('Fetch available models from upstream')
         )
       }
-      contentClassName='max-w-3xl'
+      contentClassName='sm:max-w-3xl'
       contentHeight='auto'
       bodyClassName='space-y-4'
       footer={

@@ -19,10 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { flexRender, type Row } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
-import {
-  DataTableCardDetails,
-  DataTableCardField,
-} from '@/components/data-table'
+import { DataTableCardField, DataTableCardRow } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { formatQuota } from '@/lib/format'
 
@@ -82,108 +79,99 @@ export function ApiKeyCard(props: { row: Row<ApiKey> }) {
   const visibleColumnIds = new Set(
     props.row.getVisibleCells().map((cell) => cell.column.id)
   )
-  const detailsCount = [
-    'status',
+
+  const hasMetaRows = [
     'group',
-    'model_limits',
-    'allow_ips',
+    'quota',
     'created_time',
     'accessed_time',
     'expired_time',
-    'actions',
-  ].filter((columnId) => visibleColumnIds.has(columnId)).length
+  ].some((columnId) => visibleColumnIds.has(columnId))
+  const hasDetailSections =
+    visibleColumnIds.has('model_limits') || visibleColumnIds.has('allow_ips')
 
   return (
-    <>
-      <div className='grid grid-cols-2 gap-x-3 gap-y-2'>
-        {visibleColumnIds.has('name') && (
-          <DataTableCardField
-            label={t('Name')}
-            span={2}
-            contentMode='wrap'
-            valueClassName='font-medium'
-          >
-            {renderApiKeyCell(props.row, 'name')}
-          </DataTableCardField>
-        )}
-        {visibleColumnIds.has('key') && (
-          <DataTableCardField label={t('API Key')} span={2} contentMode='full'>
-            {renderApiKeyCell(props.row, 'key')}
-          </DataTableCardField>
-        )}
-        {visibleColumnIds.has('quota') && (
-          <DataTableCardField label={t('Quota')} span={2} contentMode='full'>
-            {apiKey.unlimited_quota ? (
-              <StatusBadge variant='neutral'>{t('Unlimited')}</StatusBadge>
-            ) : (
-              <span className='font-medium tabular-nums'>
-                {formatQuota(apiKey.remain_quota)}
-                <span className='text-muted-foreground font-normal'>
-                  {' / '}
-                  {formatQuota(totalQuota)}
-                </span>
-              </span>
-            )}
-          </DataTableCardField>
+    <div className='flex min-w-0 flex-col'>
+      <div className='flex min-w-0 items-start justify-between gap-3'>
+        <div className='min-w-0 flex-1'>
+          {visibleColumnIds.has('name') && (
+            <div className='text-[15px] leading-tight font-semibold break-words'>
+              {renderApiKeyCell(props.row, 'name')}
+            </div>
+          )}
+          {visibleColumnIds.has('key') && (
+            <div className='mt-1.5 min-w-0'>
+              {renderApiKeyCell(props.row, 'key')}
+            </div>
+          )}
+        </div>
+        {visibleColumnIds.has('status') && (
+          <div className='shrink-0'>
+            {renderApiKeyCell(props.row, 'status')}
+          </div>
         )}
       </div>
 
-      {detailsCount > 0 && (
-        <DataTableCardDetails count={detailsCount}>
-          {visibleColumnIds.has('status') && (
-            <DataTableCardField label={t('Status')} contentMode='full'>
-              {renderApiKeyCell(props.row, 'status')}
-            </DataTableCardField>
+      {hasMetaRows && (
+        <div className='mt-3 space-y-0.5 border-t pt-3'>
+          {visibleColumnIds.has('quota') && (
+            <DataTableCardRow label={t('Quota')} contentMode='full'>
+              {apiKey.unlimited_quota ? (
+                <StatusBadge variant='neutral'>{t('Unlimited')}</StatusBadge>
+              ) : (
+                <span className='font-medium tabular-nums'>
+                  {formatQuota(apiKey.remain_quota)}
+                  <span className='text-muted-foreground font-normal'>
+                    {' / '}
+                    {formatQuota(totalQuota)}
+                  </span>
+                </span>
+              )}
+            </DataTableCardRow>
           )}
           {visibleColumnIds.has('group') && (
-            <DataTableCardField label={t('Group')} contentMode='full'>
+            <DataTableCardRow label={t('Group')} contentMode='full'>
               {renderApiKeyCell(props.row, 'group')}
-            </DataTableCardField>
+            </DataTableCardRow>
           )}
+          {visibleColumnIds.has('created_time') && (
+            <DataTableCardRow label={t('Created')} contentMode='full'>
+              {renderApiKeyCell(props.row, 'created_time')}
+            </DataTableCardRow>
+          )}
+          {visibleColumnIds.has('accessed_time') && (
+            <DataTableCardRow label={t('Last Used')} contentMode='full'>
+              {renderApiKeyCell(props.row, 'accessed_time')}
+            </DataTableCardRow>
+          )}
+          {visibleColumnIds.has('expired_time') && (
+            <DataTableCardRow label={t('Expires')} contentMode='full'>
+              {renderApiKeyCell(props.row, 'expired_time')}
+            </DataTableCardRow>
+          )}
+        </div>
+      )}
+
+      {hasDetailSections && (
+        <div className='mt-3 space-y-3 border-t pt-3'>
           {visibleColumnIds.has('model_limits') && (
-            <DataTableCardField label={t('Models')} span={2} contentMode='full'>
+            <DataTableCardField label={t('Models')} contentMode='full'>
               <ApiKeyModels apiKey={apiKey} />
             </DataTableCardField>
           )}
           {visibleColumnIds.has('allow_ips') && (
-            <DataTableCardField
-              label={t('IP Restriction')}
-              span={2}
-              contentMode='full'
-            >
+            <DataTableCardField label={t('IP Restriction')} contentMode='full'>
               <ApiKeyIpRestrictions apiKey={apiKey} />
             </DataTableCardField>
           )}
-          {visibleColumnIds.has('created_time') && (
-            <DataTableCardField label={t('Created')} contentMode='full'>
-              {renderApiKeyCell(props.row, 'created_time')}
-            </DataTableCardField>
-          )}
-          {visibleColumnIds.has('accessed_time') && (
-            <DataTableCardField label={t('Last Used')} contentMode='full'>
-              {renderApiKeyCell(props.row, 'accessed_time')}
-            </DataTableCardField>
-          )}
-          {visibleColumnIds.has('expired_time') && (
-            <DataTableCardField
-              label={t('Expires')}
-              span={2}
-              contentMode='full'
-            >
-              {renderApiKeyCell(props.row, 'expired_time')}
-            </DataTableCardField>
-          )}
-          {visibleColumnIds.has('actions') && (
-            <DataTableCardField
-              label={t('Operations')}
-              span={2}
-              contentMode='full'
-            >
-              {renderApiKeyCell(props.row, 'actions')}
-            </DataTableCardField>
-          )}
-        </DataTableCardDetails>
+        </div>
       )}
-    </>
+
+      {visibleColumnIds.has('actions') && (
+        <div className='mt-3 flex justify-end border-t pt-2'>
+          {renderApiKeyCell(props.row, 'actions')}
+        </div>
+      )}
+    </div>
   )
 }

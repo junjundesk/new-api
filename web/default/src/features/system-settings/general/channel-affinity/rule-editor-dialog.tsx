@@ -245,7 +245,7 @@ export function RuleEditorDialog(props: Props) {
       open={props.open}
       onOpenChange={props.onOpenChange}
       title={isEdit ? t('Edit Rule') : t('Add Rule')}
-      contentClassName='max-w-2xl'
+      contentClassName='sm:max-w-2xl'
       contentHeight='auto'
       bodyClassName='pr-2'
       footer={

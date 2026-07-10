@@ -20,8 +20,9 @@ import { flexRender, type Row } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
 import {
-  DataTableCardDetails,
+  BadgeListCellDisplayContext,
   DataTableCardField,
+  DataTableCardRow,
 } from '@/components/data-table'
 
 import { isTagAggregateRow } from '../lib'
@@ -31,10 +32,7 @@ import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 /**
  * Bespoke channel card for the card view. Reuses every column's existing cell
  * renderer via `flexRender`, so the table's information and interactions are
- * preserved: row selection, provider/multi-key/IO.NET type badge, id,
- * name/remark + warning icons, status (with tooltips), groups, inline
- * priority/weight spinners, balance refresh, response/test times, tag
- * expand-collapse, models, and the per-row (or per-tag) actions menu.
+ * preserved. All fields are always visible — no "More" disclosure.
  */
 function ChannelCardComponent({
   row,
@@ -71,111 +69,112 @@ function ChannelCardComponent({
   const responseCell = renderCell('response_time')
   const testCell = renderCell('test_time')
 
-  const emptyValue = <span className='text-muted-foreground'>-</span>
-  const detailsCount = [
-    visibleColumnIds.has('group'),
-    !isTagRow && visibleColumnIds.has('tag'),
-    visibleColumnIds.has('priority'),
-    visibleColumnIds.has('weight'),
-  ].filter(Boolean).length
+  const showId = !isTagRow && visibleColumnIds.has('id')
+  const showTag = !isTagRow && visibleColumnIds.has('tag')
+  const showModels = !isTagRow && visibleColumnIds.has('models')
+  const showTestTime = !isTagRow && visibleColumnIds.has('test_time')
+  const hasStatRows =
+    showId ||
+    showTag ||
+    showTestTime ||
+    visibleColumnIds.has('balance') ||
+    visibleColumnIds.has('response_time') ||
+    visibleColumnIds.has('priority') ||
+    visibleColumnIds.has('weight')
+  const hasBadgeSections = showModels || visibleColumnIds.has('group')
 
   return (
     <ChannelRowActionsLayoutContext.Provider value='card'>
-      <div
-        data-state={isSelected ? 'selected' : undefined}
-        className='flex flex-col gap-3'
-      >
-        {/* Provider identity, status, selection, and every row action remain
-            immediately available. The wrapping layout avoids mobile clipping. */}
-        <div className='flex flex-wrap items-start justify-between gap-2'>
-          <div className='flex min-w-0 flex-1 items-center gap-2'>
+      <BadgeListCellDisplayContext.Provider value='full'>
+        <div
+          data-state={isSelected ? 'selected' : undefined}
+          className='flex h-full min-w-0 flex-col'
+        >
+          <div className='flex min-w-0 items-start gap-2.5'>
             {!isTagRow && selectCell && (
-              <span className='shrink-0'>{selectCell}</span>
+              <span className='mt-0.5 shrink-0'>{selectCell}</span>
             )}
-            {visibleColumnIds.has('type') && (
-              <div className='min-w-0 flex-1'>{typeCell}</div>
-            )}
-          </div>
-          <div className='flex flex-wrap items-center justify-end gap-1.5'>
-            {visibleColumnIds.has('status') && statusCell}
-            {actionsCell}
-          </div>
-        </div>
 
-        <div className='grid grid-cols-2 gap-x-3 gap-y-2'>
-          {visibleColumnIds.has('name') && (
-            <DataTableCardField
-              label={isTagRow ? t('Tag') : t('Name')}
-              span={2}
-              contentMode='wrap'
-            >
-              {nameCell ?? emptyValue}
-            </DataTableCardField>
+            <div className='min-w-0 flex-1'>
+              {visibleColumnIds.has('name') && (
+                <div className='min-w-0 text-[15px] leading-tight font-semibold break-words'>
+                  {nameCell}
+                </div>
+              )}
+              {visibleColumnIds.has('type') && (
+                <div className='mt-1.5 min-w-0'>{typeCell}</div>
+              )}
+            </div>
+
+            <div className='flex shrink-0 items-center gap-1'>
+              {visibleColumnIds.has('status') && statusCell}
+              {actionsCell}
+            </div>
+          </div>
+
+          {hasStatRows && (
+            <div className='mt-3 space-y-0.5 border-t pt-3'>
+              {showId && (
+                <DataTableCardRow label={t('ID')} contentMode='full'>
+                  {idCell}
+                </DataTableCardRow>
+              )}
+              {visibleColumnIds.has('balance') && (
+                <DataTableCardRow
+                  label={t('Used / Remaining')}
+                  contentMode='full'
+                >
+                  {balanceCell}
+                </DataTableCardRow>
+              )}
+              {visibleColumnIds.has('response_time') && (
+                <DataTableCardRow label={t('Response')} contentMode='full'>
+                  {responseCell}
+                </DataTableCardRow>
+              )}
+              {showTestTime && (
+                <DataTableCardRow label={t('Last Tested')} contentMode='full'>
+                  {testCell}
+                </DataTableCardRow>
+              )}
+              {visibleColumnIds.has('priority') && (
+                <DataTableCardRow label={t('Priority')} contentMode='full'>
+                  {priorityCell}
+                </DataTableCardRow>
+              )}
+              {visibleColumnIds.has('weight') && (
+                <DataTableCardRow label={t('Weight')} contentMode='full'>
+                  {weightCell}
+                </DataTableCardRow>
+              )}
+              {showTag && (
+                <DataTableCardRow label={t('Tag')} contentMode='wrap'>
+                  {tagCell}
+                </DataTableCardRow>
+              )}
+            </div>
           )}
-          {!isTagRow && visibleColumnIds.has('id') && (
-            <DataTableCardField label={t('ID')} contentMode='full'>
-              {idCell ?? emptyValue}
-            </DataTableCardField>
-          )}
-          {visibleColumnIds.has('balance') && (
-            <DataTableCardField
-              label={t('Used / Remaining')}
-              span={2}
-              contentMode='full'
-            >
-              {balanceCell ?? emptyValue}
-            </DataTableCardField>
-          )}
-          {!isTagRow && visibleColumnIds.has('models') && (
-            <DataTableCardField
-              label={t('Models')}
-              span={2}
-              contentMode='summary'
-            >
-              {modelsCell ?? emptyValue}
-            </DataTableCardField>
-          )}
-          {visibleColumnIds.has('response_time') && (
-            <DataTableCardField label={t('Response')} contentMode='full'>
-              {responseCell ?? emptyValue}
-            </DataTableCardField>
-          )}
-          {!isTagRow && visibleColumnIds.has('test_time') && (
-            <DataTableCardField label={t('Last Tested')} contentMode='full'>
-              {testCell ?? emptyValue}
-            </DataTableCardField>
+
+          {hasBadgeSections && (
+            <div className='mt-3 space-y-3 border-t pt-3'>
+              {visibleColumnIds.has('group') && (
+                <DataTableCardField label={t('Groups')} contentMode='full'>
+                  {groupsCell ?? (
+                    <span className='text-muted-foreground'>-</span>
+                  )}
+                </DataTableCardField>
+              )}
+              {showModels && (
+                <DataTableCardField label={t('Models')} contentMode='full'>
+                  {modelsCell ?? (
+                    <span className='text-muted-foreground'>-</span>
+                  )}
+                </DataTableCardField>
+              )}
+            </div>
           )}
         </div>
-
-        {detailsCount > 0 && (
-          <DataTableCardDetails count={detailsCount}>
-            {visibleColumnIds.has('group') && (
-              <DataTableCardField
-                label={t('Groups')}
-                span={2}
-                contentMode='summary'
-              >
-                {groupsCell ?? emptyValue}
-              </DataTableCardField>
-            )}
-            {!isTagRow && visibleColumnIds.has('tag') && (
-              <DataTableCardField label={t('Tag')} span={2} contentMode='wrap'>
-                {tagCell ?? emptyValue}
-              </DataTableCardField>
-            )}
-            {visibleColumnIds.has('priority') && (
-              <DataTableCardField label={t('Priority')} contentMode='full'>
-                {priorityCell ?? emptyValue}
-              </DataTableCardField>
-            )}
-            {visibleColumnIds.has('weight') && (
-              <DataTableCardField label={t('Weight')} contentMode='full'>
-                {weightCell ?? emptyValue}
-              </DataTableCardField>
-            )}
-          </DataTableCardDetails>
-        )}
-      </div>
+      </BadgeListCellDisplayContext.Provider>
     </ChannelRowActionsLayoutContext.Provider>
   )
 }

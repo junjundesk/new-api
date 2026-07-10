@@ -212,7 +212,7 @@ export function DynamicPricingBreakdown({
             </div>
           </div>
         )}
-        <div className='text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase'>
+        <div className='text-muted-foreground mb-1 text-xs font-medium'>
           {t('Raw expression')}
         </div>
         <code className='text-muted-foreground block text-xs break-all'>
@@ -275,10 +275,7 @@ export function DynamicPricingBreakdown({
                   )}
                 >
                   <div className='mb-1.5 flex flex-wrap items-center gap-1.5'>
-                    <Badge
-                      variant='secondary'
-                      className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
-                    >
+                    <Badge variant='outline'>
                       {tier.label || t('Default')}
                     </Badge>
                     {isMatched && (
@@ -302,12 +299,12 @@ export function DynamicPricingBreakdown({
                       )
                       return (
                         <div key={v.field} className='min-w-0'>
-                          <div className='text-muted-foreground truncate text-xs font-medium tracking-wider uppercase'>
+                          <div className='text-muted-foreground truncate text-xs font-medium'>
                             {t(v.shortLabel)}
                           </div>
                           <div
                             className={cn(
-                              'truncate font-mono',
+                              'truncate tabular-nums',
                               compact ? 'text-xs' : 'text-sm font-semibold'
                             )}
                           >
@@ -357,10 +354,7 @@ export function DynamicPricingBreakdown({
                   return (
                     <>
                       <div className='flex flex-wrap items-center gap-1.5'>
-                        <Badge
-                          variant='secondary'
-                          className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
-                        >
+                        <Badge variant='outline'>
                           {tier.label || t('Default')}
                         </Badge>
                         {isMatched && (
@@ -389,7 +383,7 @@ export function DynamicPricingBreakdown({
                   compact && 'h-8'
                 ),
                 cellClassName: cn(
-                  'text-right align-top font-mono',
+                  'text-right align-top tabular-nums',
                   compact ? 'py-2' : 'py-2.5'
                 ),
                 cell: (tier: ParsedTier) => {

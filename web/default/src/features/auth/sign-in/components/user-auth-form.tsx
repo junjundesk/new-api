@@ -414,7 +414,7 @@ export function UserAuthForm({
           description={t(
             'Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.'
           )}
-          contentClassName='max-w-sm'
+          contentClassName='sm:max-w-sm'
           headerClassName='text-left'
           contentHeight='auto'
           bodyClassName='space-y-4'

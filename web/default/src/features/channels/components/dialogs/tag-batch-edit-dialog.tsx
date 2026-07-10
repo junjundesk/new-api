@@ -195,7 +195,7 @@ export function TagBatchEditDialog({
           <strong>{currentTag}</strong>
         </>
       }
-      contentClassName='max-w-2xl'
+      contentClassName='sm:max-w-2xl'
       contentHeight='auto'
       bodyClassName='space-y-4'
       footer={

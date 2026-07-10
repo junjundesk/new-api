@@ -260,9 +260,7 @@ export function ApiKeysMutateDrawer({
         }
       }}
     >
-      <SheetContent
-        className={sideDrawerContentClassName('max-w-none sm:!max-w-[620px]')}
-      >
+      <SheetContent className={sideDrawerContentClassName('sm:max-w-[620px]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>
             {isUpdate ? t('Update API Key') : t('Create API Key')}

@@ -163,7 +163,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   }
 
   return (
-    <div className='-ml-1.5 flex items-center gap-1'>
+    <div
+      className={
+        layout === 'card'
+          ? 'flex items-center'
+          : '-ml-1.5 flex items-center gap-1'
+      }
+    >
       {layout !== 'card' && (
         <Tooltip>
           <TooltipTrigger
@@ -185,71 +191,54 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </Tooltip>
       )}
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant='ghost'
-              size='icon-sm'
-              onClick={handleDirectTest}
-              disabled={isTesting}
-              aria-label={t('Test Connection')}
-            />
-          }
-        >
-          {isTesting ? (
-            <Loader2 className='size-4 animate-spin' />
-          ) : (
-            <Gauge className='size-4' />
-          )}
-        </TooltipTrigger>
-        <TooltipContent>{t('Test Connection')}</TooltipContent>
-      </Tooltip>
-
-      {layout === 'card' && (
+      {layout !== 'card' && (
         <Tooltip>
           <TooltipTrigger
             render={
               <Button
                 variant='ghost'
                 size='icon-sm'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleTest()
-                }}
-                aria-label={t('Test Channel Connection')}
+                onClick={handleDirectTest}
+                disabled={isTesting}
+                aria-label={t('Test Connection')}
               />
             }
           >
-            <PlugZap className='size-4' />
+            {isTesting ? (
+              <Loader2 className='size-4 animate-spin' />
+            ) : (
+              <Gauge className='size-4' />
+            )}
           </TooltipTrigger>
-          <TooltipContent>{t('Test Channel Connection')}</TooltipContent>
+          <TooltipContent>{t('Test Connection')}</TooltipContent>
         </Tooltip>
       )}
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant='ghost'
-              size='icon-sm'
-              onClick={handleToggleStatus}
-              disabled={isTogglingStatus}
-              aria-label={isEnabled ? t('Disable') : t('Enable')}
-              className={
-                isEnabled
-                  ? 'text-destructive hover:text-destructive'
-                  : 'text-success hover:text-success'
-              }
-            />
-          }
-        >
-          {statusIcon}
-        </TooltipTrigger>
-        <TooltipContent>
-          {isEnabled ? t('Disable') : t('Enable')}
-        </TooltipContent>
-      </Tooltip>
+      {layout !== 'card' && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={handleToggleStatus}
+                disabled={isTogglingStatus}
+                aria-label={isEnabled ? t('Disable') : t('Enable')}
+                className={
+                  isEnabled
+                    ? 'text-destructive hover:text-destructive'
+                    : 'text-success hover:text-success'
+                }
+              />
+            }
+          >
+            {statusIcon}
+          </TooltipTrigger>
+          <TooltipContent>
+            {isEnabled ? t('Disable') : t('Enable')}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -281,6 +270,20 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               <PlugZap size={16} />
             </DropdownMenuShortcut>
           </DropdownMenuItem>
+          {layout === 'card' && (
+            <DropdownMenuItem
+              disabled={isTogglingStatus}
+              onClick={() => void handleToggleStatus()}
+              className={
+                isEnabled
+                  ? 'text-destructive focus:text-destructive'
+                  : 'text-success focus:text-success'
+              }
+            >
+              {isEnabled ? t('Disable') : t('Enable')}
+              <DropdownMenuShortcut>{statusIcon}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
 
           {/* Query Balance */}
           <DropdownMenuItem onClick={handleQueryBalance}>

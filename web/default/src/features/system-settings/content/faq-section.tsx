@@ -322,7 +322,7 @@ export function FAQSection({ enabled, data }: FAQSectionProps) {
         onOpenChange={setShowDialog}
         title={editingFaq ? t('Edit FAQ') : t('Add FAQ')}
         description={t('Create or update frequently asked questions for users')}
-        contentClassName='max-w-2xl'
+        contentClassName='sm:max-w-2xl'
         contentHeight='auto'
         bodyClassName='space-y-4'
         footer={

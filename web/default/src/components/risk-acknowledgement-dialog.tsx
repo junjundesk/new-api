@@ -183,7 +183,7 @@ export function RiskAcknowledgementDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
         className={cn(
-          'flex max-h-[min(88dvh,760px)] w-[calc(100vw-1.5rem)] !max-w-[44rem] grid-rows-none flex-col gap-0 overflow-hidden !p-0 sm:w-[min(44rem,calc(100vw-3rem))]',
+          'flex max-h-[min(88dvh,760px)] w-[calc(100vw-1.5rem)] max-w-[44rem] grid-rows-none flex-col gap-0 overflow-hidden p-0 sm:w-[min(44rem,calc(100vw-3rem))] sm:max-w-[44rem]',
           className
         )}
       >

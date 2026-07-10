@@ -19,13 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@fontsource-variable/public-sans';
-/* Editorial serif (Lora) backing the `serif` font axis and the Anthropic
- * preset's default typography. See `--font-serif` in theme.css for the
- * full Latin + CJK fallback stack and `theme-presets.css` for the cascade
- * that activates it. Loaded globally so font-switching is instantaneous
- * with no FOUT once the variable is fetched. */
-@import '@fontsource-variable/lora';
+/* Public Sans + Lora with `font-display: optional` (see fonts.css). Avoids
+ * the mid-session size jump from Fontsource's default `swap` policy. */
+@import './fonts.css';
 
 @import './theme.css';
 @import './theme-presets.css';
@@ -54,7 +50,10 @@ For commercial licensing, please contact support@quantumnous.com
     scrollbar-color: var(--border) transparent;
   }
   html {
-    @apply overflow-x-hidden font-sans;
+    /* Inherit the active body face from `--font-body` (set on body). Avoid
+     * `font-sans` here — it pinned Public Sans even when the serif axis was
+     * active, and fought the body cascade during theme boot. */
+    @apply overflow-x-hidden;
   }
   body {
     @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full;

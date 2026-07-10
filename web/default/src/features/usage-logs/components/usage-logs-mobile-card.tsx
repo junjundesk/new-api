@@ -25,8 +25,8 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import {
-  DataTableCardDetails,
   DataTableCardField,
+  DataTableCardRow,
   MobileCardList,
 } from '@/components/data-table'
 import { cn } from '@/lib/utils'
@@ -73,76 +73,76 @@ function orderCardCells<TData>(
   })
 }
 
-function CardCellField<TData>(props: {
-  cell: Cell<TData, unknown>
-  hideLabel?: boolean
-  className?: string
-  valueClassName?: string
-}) {
-  const meta = props.cell.column.columnDef.meta
-
-  return (
-    <DataTableCardField
-      label={props.hideLabel ? undefined : getCardLabel(props.cell)}
-      contentMode={meta?.contentMode}
-      span={meta?.cardSpan}
-      className={props.className}
-      valueClassName={props.valueClassName}
-    >
-      {flexRender(props.cell.column.columnDef.cell, props.cell.getContext())}
-    </DataTableCardField>
-  )
+function isWideField<TData>(cell: Cell<TData, unknown>): boolean {
+  const meta = cell.column.columnDef.meta
+  return meta?.cardSpan === 2 || meta?.contentMode === 'summary'
 }
 
 function UsageLogCard<TData>(props: { cells: Cell<TData, unknown>[] }) {
   const titleCell = props.cells.find((cell) => getCardRole(cell) === 'title')
   const badgeCell = props.cells.find((cell) => getCardRole(cell) === 'badge')
-  const primaryCells = orderCardCells(
-    props.cells.filter((cell) => getCardRole(cell) === 'primary')
+  const bodyCells = orderCardCells(
+    props.cells.filter(
+      (cell) =>
+        getCardRole(cell) !== 'title' &&
+        getCardRole(cell) !== 'badge' &&
+        getCardRole(cell) !== 'hidden'
+    )
   )
-  const secondaryCells = orderCardCells(
-    props.cells.filter((cell) => getCardRole(cell) === 'secondary')
-  )
+  const rowCells = bodyCells.filter((cell) => !isWideField(cell))
+  const wideCells = bodyCells.filter((cell) => isWideField(cell))
 
   return (
-    <>
+    <div className='flex min-w-0 flex-col'>
       {(titleCell || badgeCell) && (
         <div className='flex min-w-0 items-start justify-between gap-3'>
           {titleCell && (
-            <CardCellField
-              cell={titleCell}
-              hideLabel
-              className='min-w-0 flex-1'
-              valueClassName='font-medium'
-            />
+            <div className='min-w-0 flex-1 text-[15px] leading-tight font-semibold break-words'>
+              {flexRender(
+                titleCell.column.columnDef.cell,
+                titleCell.getContext()
+              )}
+            </div>
           )}
           {badgeCell && (
-            <CardCellField
-              cell={badgeCell}
-              hideLabel
-              className='max-w-1/2 shrink text-right'
-              valueClassName='flex justify-end text-right tabular-nums'
-            />
+            <div className='max-w-1/2 shrink text-right tabular-nums'>
+              {flexRender(
+                badgeCell.column.columnDef.cell,
+                badgeCell.getContext()
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {primaryCells.length > 0 && (
-        <div className='mt-2 grid grid-cols-2 gap-x-3 gap-y-2'>
-          {primaryCells.map((cell) => (
-            <CardCellField key={cell.id} cell={cell} />
+      {rowCells.length > 0 && (
+        <div className='mt-3 space-y-0.5 border-t pt-3'>
+          {rowCells.map((cell) => (
+            <DataTableCardRow
+              key={cell.id}
+              label={getCardLabel(cell)}
+              contentMode={cell.column.columnDef.meta?.contentMode}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </DataTableCardRow>
           ))}
         </div>
       )}
 
-      {secondaryCells.length > 0 && (
-        <DataTableCardDetails count={secondaryCells.length}>
-          {secondaryCells.map((cell) => (
-            <CardCellField key={cell.id} cell={cell} />
+      {wideCells.length > 0 && (
+        <div className='mt-3 space-y-3 border-t pt-3'>
+          {wideCells.map((cell) => (
+            <DataTableCardField
+              key={cell.id}
+              label={getCardLabel(cell)}
+              contentMode={cell.column.columnDef.meta?.contentMode ?? 'full'}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </DataTableCardField>
           ))}
-        </DataTableCardDetails>
+        </div>
       )}
-    </>
+    </div>
   )
 }
 

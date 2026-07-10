@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { Cell, Row } from '@tanstack/react-table'
 
 import { getCellLabel, renderCellContent } from './card-cell-utils'
-import { DataTableCardDetails, DataTableCardField } from './card-field'
+import { DataTableCardField, DataTableCardRow } from './card-field'
 
 type CardRole = 'title' | 'badge' | 'primary' | 'secondary' | 'hidden'
 
@@ -43,26 +43,14 @@ function orderCardCells<TData>(
   })
 }
 
-function CardFields<TData>({ cells }: { cells: Cell<TData, unknown>[] }) {
-  return cells.map((cell) => {
-    const meta = cell.column.columnDef.meta
-    return (
-      <DataTableCardField
-        key={cell.id}
-        label={getCellLabel(cell)}
-        contentMode={meta?.contentMode}
-        span={meta?.cardSpan}
-      >
-        {renderCellContent(cell)}
-      </DataTableCardField>
-    )
-  })
+function isWideField<TData>(cell: Cell<TData, unknown>): boolean {
+  const meta = cell.column.columnDef.meta
+  return meta?.cardSpan === 2 || meta?.contentMode === 'summary'
 }
 
 /**
  * Shared row content for both the mobile list and optional desktop card grid.
- * Primary values never clip silently; lower-priority values remain available
- * through the shared progressive details disclosure.
+ * All visible fields render immediately — no "More" click to reveal content.
  */
 export function CardRowContent<TData>(props: {
   row: Row<TData>
@@ -74,67 +62,84 @@ export function CardRowContent<TData>(props: {
   const titleCell = cells.find((cell) => getCardRole(cell) === 'title')
   const badgeCell = cells.find((cell) => getCardRole(cell) === 'badge')
   const actionsCell = cells.find((cell) => cell.column.id === 'actions')
-  const fieldCells = orderCardCells(
+  const bodyCells = orderCardCells(
     cells.filter(
       (cell) =>
         cell !== titleCell &&
         cell !== badgeCell &&
         cell !== actionsCell &&
-        getCardRole(cell) === 'primary'
+        getCardRole(cell) !== 'hidden'
     )
   )
-  const secondaryCells = orderCardCells(
-    cells.filter(
-      (cell) =>
-        cell !== titleCell &&
-        cell !== badgeCell &&
-        cell !== actionsCell &&
-        getCardRole(cell) === 'secondary'
-    )
-  )
+  const rowCells = bodyCells.filter((cell) => !isWideField(cell))
+  const wideCells = bodyCells.filter((cell) => isWideField(cell))
 
   return (
-    <>
+    <div className='flex min-w-0 flex-col'>
       {props.compact && (titleCell || badgeCell) && (
         <div className='flex min-w-0 items-start justify-between gap-3'>
-          <div className='min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere] break-words whitespace-normal [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal [&_[data-slot=status-badge-label]]:whitespace-normal [&_[data-slot=status-badge]]:h-auto [&_[data-slot=status-badge]]:max-w-full'>
+          <div className='min-w-0 flex-1 text-[15px] leading-tight font-semibold [overflow-wrap:anywhere] break-words whitespace-normal [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal [&_[data-slot=status-badge-label]]:whitespace-normal [&_[data-slot=status-badge]]:h-auto [&_[data-slot=status-badge]]:max-w-full'>
             {titleCell ? renderCellContent(titleCell) : null}
           </div>
           {badgeCell && (
-            <DataTableCardField
-              contentMode={badgeCell.column.columnDef.meta?.contentMode}
-              className='max-w-1/2 shrink'
-              valueClassName='flex justify-end text-right'
-            >
+            <div className='max-w-1/2 shrink text-right'>
               {renderCellContent(badgeCell)}
-            </DataTableCardField>
+            </div>
           )}
         </div>
       )}
 
-      {fieldCells.length > 0 && (
-        <div
-          className={
-            props.compact
-              ? 'mt-2 grid grid-cols-2 gap-x-3 gap-y-2'
-              : 'grid grid-cols-2 gap-x-3 gap-y-2'
-          }
-        >
-          <CardFields cells={fieldCells} />
+      {!props.compact && (
+        <div className='grid grid-cols-2 gap-x-3 gap-y-2'>
+          {bodyCells.map((cell) => {
+            const meta = cell.column.columnDef.meta
+            return (
+              <DataTableCardField
+                key={cell.id}
+                label={getCellLabel(cell)}
+                contentMode={meta?.contentMode}
+                span={meta?.cardSpan}
+              >
+                {renderCellContent(cell)}
+              </DataTableCardField>
+            )
+          })}
         </div>
       )}
 
-      {secondaryCells.length > 0 && (
-        <DataTableCardDetails count={secondaryCells.length}>
-          <CardFields cells={secondaryCells} />
-        </DataTableCardDetails>
+      {props.compact && rowCells.length > 0 && (
+        <div className='mt-3 space-y-0.5 border-t pt-3'>
+          {rowCells.map((cell) => (
+            <DataTableCardRow
+              key={cell.id}
+              label={getCellLabel(cell)}
+              contentMode={cell.column.columnDef.meta?.contentMode}
+            >
+              {renderCellContent(cell)}
+            </DataTableCardRow>
+          ))}
+        </div>
+      )}
+
+      {props.compact && wideCells.length > 0 && (
+        <div className='mt-3 space-y-3 border-t pt-3'>
+          {wideCells.map((cell) => (
+            <DataTableCardField
+              key={cell.id}
+              label={getCellLabel(cell)}
+              contentMode={cell.column.columnDef.meta?.contentMode ?? 'full'}
+            >
+              {renderCellContent(cell)}
+            </DataTableCardField>
+          ))}
+        </div>
       )}
 
       {actionsCell && (
-        <div className='mt-2 -mb-0.5 flex justify-end border-t pt-2'>
+        <div className='mt-3 flex justify-end border-t pt-2'>
           {renderCellContent(actionsCell)}
         </div>
       )}
-    </>
+    </div>
   )
 }

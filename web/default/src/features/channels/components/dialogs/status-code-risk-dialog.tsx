@@ -88,7 +88,7 @@ export function StatusCodeRiskDialog({
         </>
       }
       description={t('High-risk status code retry risk disclaimer')}
-      contentClassName='max-w-lg'
+      contentClassName='sm:max-w-lg'
       titleClassName='text-destructive flex items-center gap-2'
       contentHeight='auto'
       bodyClassName='space-y-4'

@@ -150,7 +150,7 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
           <div
             key={key}
             className={cn(
-              '[background-color:var(--data-table-card-bg,var(--table-row))] px-3 py-2.5',
+              '[background-color:var(--data-table-card-bg,var(--table-row))] px-3.5 py-3',
               getRowClassName?.(row)
             )}
           >

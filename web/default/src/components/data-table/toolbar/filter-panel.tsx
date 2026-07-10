@@ -55,6 +55,7 @@ export interface DataTableFilterPanelProps<TData> {
   searchLoading?: boolean
   onReset: () => void
   onSearch?: () => void
+  inlineActions?: boolean
   className?: string
 }
 
@@ -143,6 +144,35 @@ export function DataTableFilterPanel<TData>(
   const viewOptions = !props.hideViewOptions ? (
     <DataTableViewOptions table={props.table} />
   ) : null
+
+  const desktopActions = (
+    <div className='ms-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2'>
+      {props.actionStart}
+      <Button
+        type='button'
+        variant={props.onSearch ? 'outline' : 'ghost'}
+        onClick={props.onReset}
+        disabled={!props.hasActiveFilters}
+        className={cn(
+          !props.onSearch && 'text-muted-foreground hover:text-foreground px-2'
+        )}
+      >
+        {t('Reset')}
+      </Button>
+      {props.onSearch && (
+        <Button
+          type='button'
+          onClick={props.onSearch}
+          disabled={props.searchLoading}
+        >
+          {props.searchLoading && <Loader2 className='animate-spin' />}
+          {t('Search')}
+        </Button>
+      )}
+      {props.viewToggle}
+      {viewOptions}
+    </div>
+  )
 
   if (isMobile && props.mobilePinnedFilters != null) {
     return (
@@ -264,6 +294,7 @@ export function DataTableFilterPanel<TData>(
             {advancedToggle}
           </div>
         )}
+        {props.inlineActions && desktopActions}
       </div>
 
       {advancedOpen && props.advancedFilters && (
@@ -272,36 +303,12 @@ export function DataTableFilterPanel<TData>(
         </div>
       )}
 
-      <div className='mt-2 flex min-w-0 flex-wrap items-center gap-2'>
-        {props.stats}
-        <div className='ms-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2'>
-          {props.actionStart}
-          <Button
-            type='button'
-            variant={props.onSearch ? 'outline' : 'ghost'}
-            onClick={props.onReset}
-            disabled={!props.hasActiveFilters}
-            className={cn(
-              !props.onSearch &&
-                'text-muted-foreground hover:text-foreground px-2'
-            )}
-          >
-            {t('Reset')}
-          </Button>
-          {props.onSearch && (
-            <Button
-              type='button'
-              onClick={props.onSearch}
-              disabled={props.searchLoading}
-            >
-              {props.searchLoading && <Loader2 className='animate-spin' />}
-              {t('Search')}
-            </Button>
-          )}
-          {props.viewToggle}
-          {viewOptions}
+      {(!props.inlineActions || props.stats != null) && (
+        <div className='mt-2 flex min-w-0 flex-wrap items-center gap-2'>
+          {props.stats}
+          {!props.inlineActions && desktopActions}
         </div>
-      </div>
+      )}
     </div>
   )
 }

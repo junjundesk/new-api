@@ -28,13 +28,17 @@ import { cn } from '@/lib/utils'
 
 function TabsList({
   className,
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof ShadcnTabsList>) {
   return (
     <ShadcnTabsList
       data-control-size='default'
+      variant={variant}
       className={cn(
-        'group-data-horizontal/tabs:h-7 sm:group-data-horizontal/tabs:h-8',
+        variant === 'line'
+          ? 'group-data-horizontal/tabs:h-auto sm:group-data-horizontal/tabs:h-auto'
+          : 'group-data-horizontal/tabs:h-7 sm:group-data-horizontal/tabs:h-8',
         className
       )}
       {...props}
