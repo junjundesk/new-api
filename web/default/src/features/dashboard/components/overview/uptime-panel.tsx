@@ -20,7 +20,7 @@ import { Activity, RotateCw } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { getUptimeStatus } from '@/features/dashboard/api'
 import type {
@@ -110,10 +110,9 @@ export function UptimePanel() {
       headerActions={
         <Button
           variant='ghost'
-          size='sm'
+          size='icon-sm'
           onClick={handleRefresh}
           disabled={refreshing}
-          className='size-7 p-0'
         >
           <RotateCw
             className={cn('size-3.5', refreshing && 'animate-spin')}

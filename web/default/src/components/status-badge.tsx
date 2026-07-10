@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -18,200 +17,203 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
+import { mergeProps } from '@base-ui/react/merge-props'
+import { useRender } from '@base-ui/react/use-render'
+import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 
-/* Color discipline: badges speak exactly five voices — success / warning /
- * danger / info / neutral. Legacy hue keys (blue, purple, teal, ...) remain
- * valid variant names for compatibility, but they all resolve to one of the
- * five semantic tokens so tables stop reading as rainbows. Chart hues stay
- * reserved for data visualization. */
-export const dotColorMap = {
-  success: 'bg-success',
-  warning: 'bg-warning',
-  danger: 'bg-destructive',
-  info: 'bg-info',
-  neutral: 'bg-neutral',
-  purple: 'bg-neutral',
-  amber: 'bg-warning',
-  blue: 'bg-neutral',
-  cyan: 'bg-neutral',
-  green: 'bg-success',
-  grey: 'bg-neutral',
-  indigo: 'bg-neutral',
-  'light-blue': 'bg-info',
-  'light-green': 'bg-success',
-  lime: 'bg-neutral',
-  orange: 'bg-warning',
-  pink: 'bg-neutral',
-  red: 'bg-destructive',
-  teal: 'bg-neutral',
-  violet: 'bg-neutral',
-  yellow: 'bg-warning',
-} as const
+export type StatusVariant =
+  | 'neutral'
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'destructive'
 
-export const textColorMap = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-destructive',
-  info: 'text-info',
-  neutral: 'text-muted-foreground',
-  purple: 'text-muted-foreground',
-  amber: 'text-warning',
-  blue: 'text-muted-foreground',
-  cyan: 'text-muted-foreground',
-  green: 'text-success',
-  grey: 'text-muted-foreground',
-  indigo: 'text-muted-foreground',
-  'light-blue': 'text-info',
-  'light-green': 'text-success',
-  lime: 'text-muted-foreground',
-  orange: 'text-warning',
-  pink: 'text-muted-foreground',
-  red: 'text-destructive',
-  teal: 'text-muted-foreground',
-  violet: 'text-muted-foreground',
-  yellow: 'text-warning',
-} as const
+export type StatusBadgeAppearance = 'soft' | 'outline' | 'plain'
 
-export type StatusVariant = keyof typeof dotColorMap
+export const statusBadgeVariants = cva(
+  'focus-visible:ring-ring/50 inline-flex w-fit max-w-full min-w-0 shrink items-center justify-center overflow-hidden rounded-md text-ellipsis whitespace-nowrap font-medium tracking-normal outline-none transition-[color,background-color,border-color,filter] duration-150 focus-visible:ring-[3px] has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_[data-icon]]:pointer-events-none [&_[data-icon]]:size-3 [&_[data-icon]]:shrink-0',
+  {
+    variants: {
+      size: {
+        sm: 'h-5 gap-1 px-1.5 text-xs leading-none',
+        md: 'h-6 gap-1.5 px-2 text-sm leading-none',
+      },
+      variant: {
+        neutral: 'text-muted-foreground',
+        info: 'text-status-info',
+        success: 'text-status-success',
+        warning: 'text-status-warning',
+        destructive: 'text-status-destructive',
+      },
+      appearance: {
+        soft: 'border',
+        outline: 'border bg-transparent',
+        plain:
+          'h-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none',
+      },
+    },
+    compoundVariants: [
+      {
+        variant: 'neutral',
+        appearance: 'soft',
+        className: 'border-border/60 bg-muted/40',
+      },
+      {
+        variant: 'info',
+        appearance: 'soft',
+        className: 'border-info/25 bg-info/10',
+      },
+      {
+        variant: 'success',
+        appearance: 'soft',
+        className: 'border-success/25 bg-success/10',
+      },
+      {
+        variant: 'warning',
+        appearance: 'soft',
+        className: 'border-warning/30 bg-warning/10',
+      },
+      {
+        variant: 'destructive',
+        appearance: 'soft',
+        className: 'border-destructive/25 bg-destructive/10',
+      },
+      {
+        variant: 'neutral',
+        appearance: 'outline',
+        className: 'border-border',
+      },
+      {
+        variant: 'info',
+        appearance: 'outline',
+        className: 'border-info/40',
+      },
+      {
+        variant: 'success',
+        appearance: 'outline',
+        className: 'border-success/40',
+      },
+      {
+        variant: 'warning',
+        appearance: 'outline',
+        className: 'border-warning/45',
+      },
+      {
+        variant: 'destructive',
+        appearance: 'outline',
+        className: 'border-destructive/40',
+      },
+    ],
+    defaultVariants: {
+      appearance: 'soft',
+      size: 'sm',
+      variant: 'neutral',
+    },
+  }
+)
 
-/** Soft tinted pill surface per semantic voice — the one sanctioned recipe
- * for badges that need a filled background (timing pills, duration pills).
- * Border/background/text always come from the same token so light and dark
- * modes stay consistent without `!important` overrides. */
-export const tintedBadgeClassMap = {
-  success: 'border border-success/25 bg-success/10 text-success',
-  warning: 'border border-warning/30 bg-warning/10 text-warning',
-  danger: 'border border-destructive/25 bg-destructive/10 text-destructive',
-  info: 'border border-info/25 bg-info/10 text-info',
-  neutral: 'border border-border/60 bg-muted/30 text-muted-foreground',
-} as const
-
-/** Controls the visual style of the badge.
- * - `badge`    — default pill with background and padding (default)
- * - `text`     — plain text, no background or padding, only color
- * - `underline`— plain text with a bottom border underline
- */
-export type StatusBadgeType = 'badge' | 'text' | 'underline'
-
-/** Context that lets ancestor components (e.g. MobileCardList field area)
- *  override the badge type without modifying every call site. */
-export const StatusBadgeTypeContext =
-  React.createContext<StatusBadgeType>('badge')
-
-const sizeMap = {
-  sm: 'h-5 gap-1 text-sm leading-none',
-  md: 'h-5 gap-1 text-sm leading-none',
-  lg: 'h-6 gap-1.5 text-sm leading-none',
-} as const
-
-const textSizeMap = {
-  sm: 'gap-1 text-sm leading-none',
-  md: 'gap-1 text-sm leading-none',
-  lg: 'gap-1.5 text-sm leading-none',
-} as const
-
-export interface StatusBadgeProps extends Omit<
-  React.HTMLAttributes<HTMLSpanElement>,
-  'children'
-> {
-  label?: string
-  children?: React.ReactNode
-  icon?: LucideIcon
-  pulse?: boolean
-  /** Kept for compatibility. Badges no longer render leading dots. */
-  showDot?: boolean
-  variant?: StatusVariant | null
-  size?: 'sm' | 'md' | 'lg' | null
-  copyable?: boolean
-  copyText?: string
-  /** Deprecated: categorical identity is conveyed by label/icon, not hue.
-   *  Accepted for call-site compatibility; renders as `neutral`. */
-  autoColor?: string
-  /** Visual style. Defaults to 'badge'. Can be overridden via StatusBadgeTypeContext. */
-  type?: StatusBadgeType
-}
+export type StatusBadgeProps = useRender.ComponentProps<'span'> &
+  VariantProps<typeof statusBadgeVariants>
 
 export function StatusBadge({
-  label,
+  appearance: appearanceProp,
   children,
-  icon: Icon,
-  variant,
-  size = 'sm',
-  pulse = false,
-  showDot = false,
-  copyable = true,
-  copyText,
-  autoColor,
-  type: typeProp,
   className,
-  onClick,
+  render,
+  size: sizeProp,
+  variant: variantProp,
   ...props
 }: StatusBadgeProps) {
-  const { copyToClipboard } = useCopyToClipboard()
-  const contextType = React.useContext(StatusBadgeTypeContext)
-  const type = typeProp ?? contextType
+  const appearance = appearanceProp ?? 'soft'
+  const size = sizeProp ?? 'sm'
+  const variant = variantProp ?? 'neutral'
+  const leadingIcons: React.ReactNode[] = []
+  const trailingIcons: React.ReactNode[] = []
+  const labelChildren: React.ReactNode[] = []
 
-  // String-hash rainbow coloring is retired; `autoColor` intentionally falls
-  // through to the neutral voice (see prop doc above).
-  void autoColor
-  const computedVariant: StatusVariant = variant ?? 'neutral'
-
-  const handleClick = (e: React.MouseEvent<HTMLSpanElement>) => {
-    if (copyable) {
-      e.stopPropagation()
-      copyToClipboard(copyText || label || '')
+  for (const child of React.Children.toArray(children)) {
+    if (React.isValidElement<{ 'data-icon'?: string }>(child)) {
+      const iconPlacement = child.props['data-icon']
+      if (iconPlacement === 'inline-start') {
+        leadingIcons.push(child)
+        continue
+      }
+      if (iconPlacement === 'inline-end') {
+        trailingIcons.push(child)
+        continue
+      }
     }
-    onClick?.(e)
+    labelChildren.push(child)
   }
 
-  const content =
-    children ??
-    (label ? (
-      <span className='min-w-0 truncate leading-normal'>{label}</span>
-    ) : null)
+  return useRender({
+    defaultTagName: 'span',
+    props: mergeProps<'span'>(
+      {
+        className: cn(
+          statusBadgeVariants({ appearance, size, variant }),
+          className
+        ),
+        children: (
+          <>
+            {leadingIcons}
+            {labelChildren.length > 0 && (
+              <span data-slot='status-badge-label' className='min-w-0 truncate'>
+                {labelChildren}
+              </span>
+            )}
+            {trailingIcons}
+          </>
+        ),
+      },
+      props
+    ),
+    render,
+    state: {
+      appearance,
+      size,
+      slot: 'status-badge',
+      variant,
+    },
+  })
+}
 
-  const isBadge = type === 'badge'
-  const title = copyable
-    ? `Click to copy: ${copyText || label || ''}`
-    : label || undefined
+export type CopyableStatusBadgeProps = Omit<
+  StatusBadgeProps,
+  'onClick' | 'render'
+> & {
+  value: string
+}
+
+export function CopyableStatusBadge({
+  'aria-label': ariaLabel,
+  children,
+  className,
+  value,
+  ...props
+}: CopyableStatusBadgeProps) {
+  const { t } = useTranslation()
+  const { copyToClipboard } = useCopyToClipboard()
 
   return (
-    <span
-      data-slot='status-badge'
-      className={cn(
-        'inline-flex w-fit max-w-full min-w-0 shrink items-center font-medium tracking-normal whitespace-nowrap transition-colors',
-        isBadge
-          ? cn('rounded-md', sizeMap[size ?? 'sm'])
-          : cn(
-              textSizeMap[size ?? 'sm'],
-              type === 'underline' && 'border-b border-current pb-px'
-            ),
-        textColorMap[computedVariant],
-        pulse && 'animate-pulse',
-        copyable &&
-          'cursor-copy hover:brightness-95 active:scale-95 dark:hover:brightness-110',
-        className
-      )}
-      onClick={handleClick}
-      title={title}
+    <StatusBadge
       {...props}
+      render={<button type='button' />}
+      className={cn('cursor-copy hover:brightness-95', className)}
+      aria-label={ariaLabel ?? `${t('Copy')}: ${value}`}
+      title={t('Copy to clipboard')}
+      onClick={(event) => {
+        event.stopPropagation()
+        void copyToClipboard(value)
+      }}
     >
-      {showDot && (
-        <span
-          className={cn(
-            'inline-block size-1.5 shrink-0 rounded-full',
-            dotColorMap[computedVariant]
-          )}
-          aria-hidden='true'
-        />
-      )}
-      {Icon && <Icon className='size-3.5 shrink-0' />}
-      {content}
-    </span>
+      {children}
+    </StatusBadge>
   )
 }
 
@@ -239,9 +241,7 @@ export function StatusBadgeList<T>(props: StatusBadgeListProps<T>) {
     ...domProps
   } = props
 
-  if (items.length === 0) {
-    return empty
-  }
+  if (items.length === 0) return empty
 
   const displayed = items.slice(0, max)
   const remaining = items.length - max
@@ -260,40 +260,10 @@ export function StatusBadgeList<T>(props: StatusBadgeListProps<T>) {
         </React.Fragment>
       ))}
       {remaining > 0 && (
-        <StatusBadge
-          label={moreLabel?.(remaining) ?? `+${remaining}`}
-          variant='neutral'
-          size='sm'
-          copyable={false}
-          className='shrink-0'
-        />
+        <StatusBadge className='shrink-0'>
+          {moreLabel?.(remaining) ?? `+${remaining}`}
+        </StatusBadge>
       )}
     </div>
   )
 }
-
-export const statusPresets = {
-  active: {
-    variant: 'success' as const,
-    label: 'Active',
-  },
-  inactive: {
-    variant: 'neutral' as const,
-    label: 'Inactive',
-  },
-  invited: {
-    variant: 'info' as const,
-    label: 'Invited',
-  },
-  suspended: {
-    variant: 'danger' as const,
-    label: 'Suspended',
-  },
-  pending: {
-    variant: 'warning' as const,
-    label: 'Pending',
-    pulse: true,
-  },
-} as const
-
-export type StatusPreset = keyof typeof statusPresets

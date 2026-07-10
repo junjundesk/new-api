@@ -20,6 +20,7 @@ import { ShieldCheck } from 'lucide-react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
+import { Input } from '@/components/design-system/input'
 import { PasswordInput } from '@/components/password-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -29,7 +30,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 
 import type { SetupFormValues } from '../types'
 

@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { StatusBadge } from '@/components/status-badge'
+
 import { SettingsPageTitleStatusPortal } from './settings-page-context'
 
 type FormDirtyIndicatorProps = {
@@ -42,10 +44,9 @@ export function FormDirtyIndicator({
 
   return (
     <SettingsPageTitleStatusPortal>
-      <span className='bg-warning/10 text-warning ring-warning/25 inline-flex h-5 items-center gap-1.5 rounded-full px-2 text-xs font-medium whitespace-nowrap ring-1 ring-inset'>
-        <span className='bg-warning size-1.5 rounded-full' />
+      <StatusBadge variant='warning'>
         {message ? t(message) : t('Unsaved changes')}
-      </span>
+      </StatusBadge>
     </SettingsPageTitleStatusPortal>
   )
 }

@@ -68,6 +68,99 @@ For commercial licensing, please contact support@quantumnous.com
   --color-info-foreground: var(--info-foreground);
   --color-neutral: var(--neutral);
   --color-neutral-foreground: var(--neutral-foreground);
+  /* Readable foregrounds for low-emphasis status surfaces. Mixing each
+   * semantic hue toward the current foreground preserves its meaning while
+   * keeping compact badge text legible across light, dark, and preset themes. */
+  --color-status-destructive: color-mix(
+    in oklch,
+    var(--destructive) 55%,
+    var(--foreground)
+  );
+  --color-status-success: color-mix(
+    in oklch,
+    var(--success) 55%,
+    var(--foreground)
+  );
+  --color-status-warning: color-mix(
+    in oklch,
+    var(--warning) 55%,
+    var(--foreground)
+  );
+  --color-status-info: color-mix(in oklch, var(--info) 55%, var(--foreground));
+  /* Metric identity accent; intentionally distinct from status semantics. */
+  --color-metric-rpm: color-mix(
+    in oklch,
+    oklch(0.68 0.2 350) 55%,
+    var(--foreground)
+  );
+  /* Stable entity hues used by deterministic string-to-color identity tints. */
+  --color-identity-amber: color-mix(
+    in oklch,
+    oklch(0.72 0.17 75) 55%,
+    var(--foreground)
+  );
+  --color-identity-blue: color-mix(
+    in oklch,
+    oklch(0.62 0.18 250) 55%,
+    var(--foreground)
+  );
+  --color-identity-cyan: color-mix(
+    in oklch,
+    oklch(0.7 0.14 205) 55%,
+    var(--foreground)
+  );
+  --color-identity-green: color-mix(
+    in oklch,
+    oklch(0.64 0.16 145) 55%,
+    var(--foreground)
+  );
+  --color-identity-grey: var(--muted-foreground);
+  --color-identity-indigo: color-mix(
+    in oklch,
+    oklch(0.6 0.2 275) 55%,
+    var(--foreground)
+  );
+  --color-identity-light-blue: color-mix(
+    in oklch,
+    oklch(0.74 0.12 225) 55%,
+    var(--foreground)
+  );
+  --color-identity-lime: color-mix(
+    in oklch,
+    oklch(0.75 0.17 125) 55%,
+    var(--foreground)
+  );
+  --color-identity-orange: color-mix(
+    in oklch,
+    oklch(0.7 0.19 50) 55%,
+    var(--foreground)
+  );
+  --color-identity-pink: var(--color-metric-rpm);
+  --color-identity-purple: color-mix(
+    in oklch,
+    oklch(0.62 0.2 305) 55%,
+    var(--foreground)
+  );
+  --color-identity-red: color-mix(
+    in oklch,
+    oklch(0.64 0.21 25) 55%,
+    var(--foreground)
+  );
+  --color-identity-teal: color-mix(
+    in oklch,
+    oklch(0.66 0.14 175) 55%,
+    var(--foreground)
+  );
+  --color-identity-violet: color-mix(
+    in oklch,
+    oklch(0.65 0.2 325) 55%,
+    var(--foreground)
+  );
+  --color-identity-yellow: color-mix(
+    in oklch,
+    oklch(0.78 0.16 95) 55%,
+    var(--foreground)
+  );
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

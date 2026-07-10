@@ -34,7 +34,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -156,7 +156,6 @@ export function ChannelsPrimaryButtons() {
                 setCurrentRow(null)
                 setOpen('create-channel')
               }}
-              size='sm'
               disabled={!canEditSensitive}
             >
               <Plus className='h-4 w-4' />
@@ -173,7 +172,7 @@ export function ChannelsPrimaryButtons() {
 
         {/* More Actions */}
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant='outline' size='sm' />}>
+          <DropdownMenuTrigger render={<Button variant='outline' />}>
             <MoreHorizontal className='h-4 w-4' />
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-56'>

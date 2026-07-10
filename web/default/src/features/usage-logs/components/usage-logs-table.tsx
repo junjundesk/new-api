@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -27,7 +27,6 @@ import {
   DataTableRow,
   useDataTable,
 } from '@/components/data-table'
-import { useMediaQuery } from '@/hooks'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { cn } from '@/lib/utils'
@@ -64,7 +63,12 @@ function getColumnVisibilityStorageKey(
 }
 
 function deserializeLogTypeFilter(value: unknown): unknown[] {
-  const values = Array.isArray(value) ? value : value ? [value] : []
+  let values: unknown[] = []
+  if (Array.isArray(value)) {
+    values = value
+  } else if (value) {
+    values = [value]
+  }
   return values.filter((item) => String(item) !== LOG_TYPE_ALL_VALUE)
 }
 
@@ -75,7 +79,6 @@ interface UsageLogsTableProps {
 export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const { t } = useTranslation()
   const isAdmin = useIsAdmin()
-  const isMobile = useMediaQuery('(max-width: 640px)')
   const searchParams = route.useSearch()
 
   const {
@@ -87,7 +90,11 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   } = useTableUrlState({
     search: route.useSearch(),
     navigate: route.useNavigate(),
-    pagination: { defaultPage: 1, defaultPageSize: isMobile ? 20 : 100 },
+    pagination: {
+      defaultPage: 1,
+      defaultPageSize: 20,
+      pageSizeStorageKey: `usage-logs:${logCategory}:${isAdmin ? 'admin' : 'user'}:page-size:v1`,
+    },
     globalFilter: { enabled: false },
     columnFilters: [
       {
@@ -180,6 +187,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     <DataTablePage
       table={table}
       columns={columns as ColumnDef<Record<string, unknown>>[]}
+      tableLabel={t('Usage Logs')}
       isLoading={isLoadingData}
       isFetching={isFetching}
       emptyTitle={t('No Logs Found')}
@@ -195,7 +203,15 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
         <UsageLogsMobileList
           table={table}
           isLoading={isLoadingData}
-          logCategory={logCategory}
+          getRowClassName={(row) => {
+            if (!isCommon || !isAdmin) return undefined
+            const other = parseLogOther(
+              ((row.original as Record<string, unknown>).other as string) ?? ''
+            )
+            return other?.admin_info?.quota_saturation
+              ? quotaSaturationRowTint
+              : undefined
+          }}
         />
       }
       toolbar={
@@ -205,7 +221,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
           <TaskLogsFilterBar table={table} logCategory={logCategory} />
         )
       }
-      renderRow={(row) => {
+      renderRow={(row, helpers) => {
         const logType = (row.original as Record<string, unknown>).type as
           | number
           | undefined
@@ -225,7 +241,9 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
             key={row.id}
             row={row}
             className={cn('transition-colors', tintClass)}
-            getColumnClassName={() => (isCommon ? 'py-2' : 'py-3.5')}
+            getColumnClassName={(columnId) =>
+              helpers.getCellClassName(columnId, isCommon ? 'py-2' : 'py-3.5')
+            }
           />
         )
       }}

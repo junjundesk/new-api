@@ -22,23 +22,18 @@ import { cn } from '@/lib/utils'
 
 import { StatusBadge, type StatusBadgeProps } from './status-badge'
 
-type GroupBadgeProps = Omit<
-  StatusBadgeProps,
-  'autoColor' | 'label' | 'variant'
-> & {
+type GroupBadgeProps = Omit<StatusBadgeProps, 'children' | 'variant'> & {
   group?: string | null
   label?: string
   ratio?: number | null
 }
 
-function getGroupRatioClassName(ratio: number): string {
-  if (ratio > 1) {
-    return 'bg-warning/10 text-warning'
-  }
-  if (ratio < 1) {
-    return 'bg-info/10 text-info'
-  }
-  return 'bg-muted text-muted-foreground'
+function getGroupRatioVariant(
+  ratio: number
+): NonNullable<StatusBadgeProps['variant']> {
+  if (ratio > 1) return 'warning'
+  if (ratio < 1) return 'info'
+  return 'neutral'
 }
 
 function getGroupLabel(params: {
@@ -56,19 +51,10 @@ function getGroupLabel(params: {
 
 export function GroupBadge(props: GroupBadgeProps) {
   const { t } = useTranslation()
-  const {
-    group,
-    label: labelOverride,
-    ratio,
-    copyable = false,
-    showDot,
-    className,
-    ...badgeProps
-  } = props
+  const { group, label: labelOverride, ratio, className, ...badgeProps } = props
   const groupName = group?.trim()
   const isAutoGroup = groupName === 'auto'
   const isEmptyGroup = !groupName
-  const isSpecialGroup = isAutoGroup || isEmptyGroup
   const label = getGroupLabel({
     labelOverride,
     groupName,
@@ -80,13 +66,11 @@ export function GroupBadge(props: GroupBadgeProps) {
   const badge = (
     <StatusBadge
       {...badgeProps}
-      copyable={copyable}
-      label={label}
-      showDot={showDot ?? (isSpecialGroup ? false : undefined)}
-      variant={isSpecialGroup ? 'neutral' : undefined}
-      autoColor={isSpecialGroup ? undefined : groupName}
+      variant='neutral'
       className={cn('min-w-0 shrink overflow-hidden', className)}
-    />
+    >
+      {label}
+    </StatusBadge>
   )
 
   if (ratio == null) {
@@ -96,14 +80,12 @@ export function GroupBadge(props: GroupBadgeProps) {
   return (
     <span className='inline-flex max-w-full min-w-0 items-center gap-2 text-xs'>
       <span className='max-w-full min-w-0 overflow-hidden'>{badge}</span>
-      <span
-        className={cn(
-          'inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-xs leading-none font-medium tabular-nums',
-          getGroupRatioClassName(ratio)
-        )}
+      <StatusBadge
+        variant={getGroupRatioVariant(ratio)}
+        className='shrink-0 tabular-nums'
       >
-        <span>{ratio}x</span>
-      </span>
+        {ratio}x
+      </StatusBadge>
     </span>
   )
 }

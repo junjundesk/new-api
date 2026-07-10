@@ -29,9 +29,17 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Button } from '@/components/design-system/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/design-system/table'
 import { ErrorState } from '@/components/error-state'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { StatusBadge, type StatusVariant } from '@/components/status-badge'
 import {
   Popover,
   PopoverContent,
@@ -41,14 +49,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Tooltip,
   TooltipContent,
@@ -73,9 +73,9 @@ const INSTANCE_SKELETON_KEYS = [
   'system-instance-skeleton-3',
 ]
 
-const STATUS_CLASS_NAME: Record<SystemInstanceStatus, string> = {
-  online: 'bg-success/10 text-success',
-  stale: 'bg-warning/10 text-warning',
+const STATUS_VARIANT: Record<SystemInstanceStatus, StatusVariant> = {
+  online: 'success',
+  stale: 'warning',
 }
 
 const STATUS_DOT_CLASS_NAME: Record<SystemInstanceStatus, string> = {
@@ -296,18 +296,19 @@ function SystemInstancesList(props: SystemInstancesTableProps) {
                         {shouldConfigure && (
                           <Popover>
                             <PopoverTrigger
-                              className='inline-flex shrink-0 rounded-full focus-visible:ring-2 focus-visible:outline-none'
-                              aria-label={t('Configure NODE_NAME')}
-                            >
-                              <Badge
-                                variant='outline'
-                                className='border-warning/30 bg-warning/10 text-warning'
-                              >
-                                <AlertTriangle
-                                  className='size-3'
-                                  aria-hidden='true'
+                              render={
+                                <StatusBadge
+                                  render={<button type='button' />}
+                                  variant='warning'
+                                  appearance='outline'
+                                  aria-label={t('Configure NODE_NAME')}
                                 />
-                              </Badge>
+                              }
+                            >
+                              <AlertTriangle
+                                data-icon='inline-start'
+                                aria-hidden='true'
+                              />
                             </PopoverTrigger>
                             <PopoverContent align='start' className='w-80'>
                               <PopoverHeader>
@@ -346,31 +347,23 @@ function SystemInstancesList(props: SystemInstancesTableProps) {
                   </div>
                 </TableCell>
                 <TableCell className='py-2.5 align-middle'>
-                  <Badge
-                    variant='secondary'
-                    className={cn(
-                      'gap-1.5',
-                      STATUS_CLASS_NAME[instance.status]
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        STATUS_DOT_CLASS_NAME[instance.status]
-                      )}
-                      aria-hidden='true'
-                    />
+                  <StatusBadge variant={STATUS_VARIANT[instance.status]}>
                     {t(instance.status)}
-                  </Badge>
+                  </StatusBadge>
                 </TableCell>
                 <TableCell className='py-2.5 align-middle'>
                   <TooltipProvider delay={100}>
                     <Tooltip>
                       <TooltipTrigger
-                        className='inline-flex shrink-0 rounded-full focus-visible:ring-2 focus-visible:outline-none'
-                        aria-label={t('Node role')}
+                        render={
+                          <StatusBadge
+                            render={<button type='button' />}
+                            appearance='outline'
+                            aria-label={t('Node role')}
+                          />
+                        }
                       >
-                        <Badge variant='outline'>{roleLabel(instance)}</Badge>
+                        {roleLabel(instance)}
                       </TooltipTrigger>
                       <TooltipContent>
                         {t(roleDescriptionKey(instance))}
@@ -650,7 +643,6 @@ export function SystemInstancesPanel() {
             <Button
               type='button'
               variant='destructive'
-              size='sm'
               onClick={() => setDeleteAllConfirmOpen(true)}
               disabled={
                 staleInstances.length === 0 ||
@@ -676,7 +668,6 @@ export function SystemInstancesPanel() {
             <Button
               type='button'
               variant='outline'
-              size='sm'
               onClick={() => void instancesQuery.refetch()}
               disabled={instancesQuery.isFetching}
               aria-label={t('Refresh')}

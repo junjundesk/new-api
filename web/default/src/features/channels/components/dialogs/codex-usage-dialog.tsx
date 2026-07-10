@@ -29,14 +29,10 @@ import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Button } from '@/components/design-system/button'
 import { Dialog } from '@/components/dialog'
-import {
-  StatusBadge,
-  textColorMap,
-  type StatusBadgeProps,
-} from '@/components/status-badge'
+import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardAction,
@@ -332,8 +328,8 @@ const PLAN_TYPE_BADGE: Record<
 > = {
   enterprise: { label: 'Enterprise', variant: 'success' },
   team: { label: 'Team', variant: 'info' },
-  pro: { label: 'Pro', variant: 'blue' },
-  plus: { label: 'Plus', variant: 'purple' },
+  pro: { label: 'Pro', variant: 'neutral' },
+  plus: { label: 'Plus', variant: 'neutral' },
   free: { label: 'Free', variant: 'warning' },
 }
 
@@ -376,7 +372,7 @@ function windowLabel(windowData?: CodexRateLimitWindow | null) {
   const percent = clampPercent(windowData?.used_percent)
   let variant: StatusBadgeProps['variant'] = 'info'
   if (percent >= 95) {
-    variant = 'danger'
+    variant = 'destructive'
   } else if (percent >= 80) {
     variant = 'warning'
   }
@@ -388,27 +384,28 @@ function getUsageStatusBadge(
   t: (key: string) => string
 ) {
   if (!rateLimit || Object.keys(rateLimit).length === 0) {
-    return (
-      <StatusBadge label={t('Pending')} variant='neutral' copyable={false} />
-    )
+    return <StatusBadge variant='neutral'>{t('Pending')}</StatusBadge>
   }
   if (rateLimit.allowed && !rateLimit.limit_reached) {
-    return (
-      <StatusBadge label={t('Available')} variant='success' copyable={false} />
-    )
+    return <StatusBadge variant='success'>{t('Available')}</StatusBadge>
   }
-  return <StatusBadge label={t('Limited')} variant='danger' copyable={false} />
+  return <StatusBadge variant='destructive'>{t('Limited')}</StatusBadge>
 }
 
 function formatLabelValue(label: string, value: string) {
   return label.endsWith('：') ? `${label}${value}` : `${label} ${value}`
 }
 
-// Single source of truth for variant → text color lives in status-badge.
 const percentTextClassName: Record<
   NonNullable<StatusBadgeProps['variant']>,
   string
-> = textColorMap
+> = {
+  neutral: 'text-muted-foreground',
+  info: 'text-status-info',
+  success: 'text-status-success',
+  warning: 'text-status-warning',
+  destructive: 'text-status-destructive',
+}
 
 type RateLimitWindowProps = {
   title: string
@@ -648,11 +645,9 @@ function ResetCreditItem(props: { credit: CodexResetCredit; index: number }) {
             <div className='min-w-0 text-sm font-medium break-words'>
               {title}
             </div>
-            <StatusBadge
-              label={t(statusBadge.label)}
-              variant={statusBadge.variant}
-              copyable={false}
-            />
+            <StatusBadge variant={statusBadge.variant}>
+              {t(statusBadge.label)}
+            </StatusBadge>
           </div>
           {props.credit.description ? (
             <div className='text-muted-foreground mt-1 text-xs leading-5'>
@@ -801,7 +796,6 @@ function ResetCreditsPanel(props: {
         <Button
           type='button'
           variant='outline'
-          size='sm'
           onClick={props.onRefresh}
           disabled={props.isLoading}
         >
@@ -822,7 +816,6 @@ function ResetCreditsPanel(props: {
         <Button
           type='button'
           variant={canReset ? 'destructive' : 'outline'}
-          size='sm'
           onClick={props.onRequestReset}
           disabled={!canReset || props.isLoading || props.isResetting}
           className='shrink-0'
@@ -1079,7 +1072,6 @@ export function CodexUsageDialog({
                 <Button
                   type='button'
                   variant='outline'
-                  size='sm'
                   onClick={onRefresh}
                   disabled={Boolean(isRefreshing)}
                 >
@@ -1091,35 +1083,25 @@ export function CodexUsageDialog({
           </CardHeader>
           <CardContent className='p-4 pt-0'>
             <div className='flex flex-wrap items-center gap-2'>
-              <StatusBadge
-                label={accountBadge.label}
-                variant={accountBadge.variant}
-                copyable={false}
-              />
+              <StatusBadge variant={accountBadge.variant}>
+                {accountBadge.label}
+              </StatusBadge>
               {getUsageStatusBadge(rateLimit, t)}
-              <StatusBadge
-                label={`HTTP ${response?.upstream_status ?? '-'}`}
-                variant='neutral'
-                copyable={false}
-              />
-              <StatusBadge
-                label={formatLabelValue(t('Reset count:'), resetCreditsText)}
-                variant={Number(resetCredits) > 0 ? 'blue' : 'neutral'}
-                copyable={false}
-              />
+              <StatusBadge variant='neutral'>
+                {`HTTP ${response?.upstream_status ?? '-'}`}
+              </StatusBadge>
+              <StatusBadge variant='neutral'>
+                {formatLabelValue(t('Reset count:'), resetCreditsText)}
+              </StatusBadge>
               {payload?.credits?.overage_limit_reached ? (
-                <StatusBadge
-                  label={t('Overage limited')}
-                  variant='danger'
-                  copyable={false}
-                />
+                <StatusBadge variant='destructive'>
+                  {t('Overage limited')}
+                </StatusBadge>
               ) : null}
               {payload?.spend_control?.reached ? (
-                <StatusBadge
-                  label={t('Spend limited')}
-                  variant='danger'
-                  copyable={false}
-                />
+                <StatusBadge variant='destructive'>
+                  {t('Spend limited')}
+                </StatusBadge>
               ) : null}
             </div>
             <div className='mt-4 grid grid-cols-1 gap-3 md:grid-cols-2'>
@@ -1158,11 +1140,9 @@ export function CodexUsageDialog({
                 <div className='text-sm font-semibold'>
                   {t('Reset Credits')}
                 </div>
-                <StatusBadge
-                  label={`${t('Available')} ${resetCreditsText}`}
-                  variant={Number(resetCredits) > 0 ? 'blue' : 'neutral'}
-                  copyable={false}
-                />
+                <StatusBadge variant='neutral'>
+                  {`${t('Available')} ${resetCreditsText}`}
+                </StatusBadge>
               </div>
               <div className='text-muted-foreground mt-1 text-xs leading-5'>
                 {t('View issued reset credits, grant dates, and expiration.')}
@@ -1262,7 +1242,6 @@ export function CodexUsageDialog({
                 <Button
                   type='button'
                   variant='outline'
-                  size='sm'
                   onClick={() => copyToClipboard(rawJsonText)}
                   disabled={!rawJsonText}
                 >

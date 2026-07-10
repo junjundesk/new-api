@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
@@ -30,7 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getUserGroups } from '@/lib/api'
+import { useGroupRatios } from '@/hooks/use-group-ratios'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -44,30 +43,11 @@ import {
 import { DataTableRowActions } from './data-table-row-actions'
 
 function getQuotaProgressColor(percentage: number): string {
-  if (percentage <= 10)
+  if (percentage <= 10) {
     return '[&_[data-slot=progress-indicator]]:bg-destructive'
+  }
   if (percentage <= 30) return '[&_[data-slot=progress-indicator]]:bg-warning'
   return '[&_[data-slot=progress-indicator]]:bg-success'
-}
-
-function useGroupRatios(): Record<string, number> {
-  const { data } = useQuery({
-    queryKey: ['user-groups'],
-    queryFn: getUserGroups,
-    staleTime: 0,
-    select: (res) => {
-      if (!res.success || !res.data) return {}
-      const ratios: Record<string, number> = {}
-      for (const [group, info] of Object.entries(res.data)) {
-        if (typeof info.ratio === 'number') {
-          ratios[group] = info.ratio
-        }
-      }
-      return ratios
-    },
-  })
-
-  return data ?? {}
 }
 
 export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
@@ -96,6 +76,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       enableSorting: false,
       enableHiding: false,
       size: 40,
+      meta: { cardRole: 'hidden' },
     },
     {
       accessorKey: 'name',
@@ -104,7 +85,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         <span className='font-medium'>{row.getValue('name')}</span>
       ),
       size: 180,
-      meta: { mobileTitle: true },
+      meta: {
+        cardRole: 'title',
+        cardSpan: 2,
+        contentMode: 'wrap',
+      },
     },
     {
       accessorKey: 'status',
@@ -113,16 +98,18 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         const statusConfig = API_KEY_STATUSES[row.getValue('status') as number]
         if (!statusConfig) return null
         return (
-          <StatusBadge
-            label={t(statusConfig.label)}
-            variant={statusConfig.variant}
-            copyable={false}
-          />
+          <StatusBadge variant={statusConfig.variant}>
+            {t(statusConfig.label)}
+          </StatusBadge>
         )
       },
       filterFn: (row, id, value) => value.includes(String(row.getValue(id))),
       size: 120,
-      meta: { mobileBadge: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 10,
+        contentMode: 'full',
+      },
     },
     {
       id: 'key',
@@ -131,6 +118,12 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => <ApiKeyCell apiKey={row.original} />,
       enableSorting: false,
       size: 260,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 10,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
     {
       id: 'quota',
@@ -139,13 +132,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => {
         const apiKey = row.original
         if (apiKey.unlimited_quota) {
-          return (
-            <StatusBadge
-              label={t('Unlimited')}
-              variant='neutral'
-              copyable={false}
-            />
-          )
+          return <StatusBadge variant='neutral'>{t('Unlimited')}</StatusBadge>
         }
 
         const used = apiKey.used_quota
@@ -187,6 +174,12 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         )
       },
       size: 170,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 20,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
     {
       accessorKey: 'group',
@@ -204,11 +197,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
               >
                 <GroupBadge group='auto' />
                 {apiKey.cross_group_retry && (
-                  <StatusBadge
-                    label={t('Cross-group')}
-                    variant='info'
-                    copyable={false}
-                  />
+                  <StatusBadge variant='info'>{t('Cross-group')}</StatusBadge>
                 )}
               </TooltipTrigger>
               <TooltipContent>
@@ -231,7 +220,12 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         )
       },
       size: 160,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 20,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
     {
       id: 'model_limits',
@@ -240,7 +234,12 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => <ModelLimitsCell apiKey={row.original} />,
       enableSorting: false,
       size: 160,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 30,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
     {
       id: 'allow_ips',
@@ -249,7 +248,12 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => <IpRestrictionsCell apiKey={row.original} />,
       enableSorting: false,
       size: 160,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 40,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
     {
       accessorKey: 'created_time',
@@ -260,7 +264,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         </span>
       ),
       size: 180,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 50,
+        contentMode: 'full',
+      },
     },
     {
       accessorKey: 'accessed_time',
@@ -277,7 +285,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         )
       },
       size: 180,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 60,
+        contentMode: 'full',
+      },
     },
     {
       accessorKey: 'expired_time',
@@ -285,13 +297,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => {
         const expiredTime = row.getValue('expired_time') as number
         if (expiredTime === -1) {
-          return (
-            <StatusBadge
-              label={t('Never')}
-              variant='neutral'
-              copyable={false}
-            />
-          )
+          return <StatusBadge variant='neutral'>{t('Never')}</StatusBadge>
         }
         const isExpired = expiredTime * 1000 < Date.now()
         return (
@@ -306,13 +312,23 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         )
       },
       size: 180,
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 70,
+        contentMode: 'full',
+      },
     },
     {
       id: 'actions',
       header: () => t('Actions'),
       cell: ({ row }) => <DataTableRowActions row={row} />,
-      meta: { pinned: 'right' as const },
+      meta: {
+        pinned: 'right' as const,
+        cardRole: 'secondary',
+        cardOrder: 80,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
     },
   ]
 }

@@ -26,7 +26,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
@@ -242,8 +242,7 @@ export function JsonCodeEditor({
           <Button
             type='button'
             variant='ghost'
-            size='sm'
-            className='h-6 px-2 text-xs'
+            size='xs'
             onClick={formatJson}
             disabled={disabled || !jsonStatus.valid || !value.trim()}
           >

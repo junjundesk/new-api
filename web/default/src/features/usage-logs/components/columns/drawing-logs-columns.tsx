@@ -38,7 +38,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { StatusBadge } from '@/components/status-badge'
+import { CopyableStatusBadge, StatusBadge } from '@/components/status-badge'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { MJ_TASK_TYPES } from '../../constants'
@@ -95,19 +95,24 @@ export function useDrawingLogsColumns(
 
         return (
           <div className='flex min-w-0 flex-col gap-0.5'>
-            <span className='truncate text-xs tabular-nums'>
+            <span className='text-xs tabular-nums'>
               {formatTimestampToDate(submitTime, 'milliseconds')}
             </span>
             <StatusBadge
-              label={t(mjStatusMapper.getLabel(log.status))}
               variant={mjStatusMapper.getVariant(log.status)}
               size='sm'
-              copyable={false}
-            />
+            >
+              {t(mjStatusMapper.getLabel(log.status))}
+            </StatusBadge>
           </div>
         )
       },
       size: 180,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 10,
+        contentMode: 'full',
+      },
     },
   ]
 
@@ -122,15 +127,18 @@ export function useDrawingLogsColumns(
     header: t('Type'),
     cell: ({ row }) => {
       const action = row.getValue('action') as string
+      const TypeIcon = getDrawingTypeIcon(action)
       return (
-        <StatusBadge
-          label={t(mjTaskTypeMapper.getLabel(action))}
-          variant={mjTaskTypeMapper.getVariant(action)}
-          icon={getDrawingTypeIcon(action)}
-          size='sm'
-          copyable={false}
-        />
+        <StatusBadge variant={mjTaskTypeMapper.getVariant(action)} size='sm'>
+          <TypeIcon data-icon='inline-start' aria-hidden='true' />
+          {t(mjTaskTypeMapper.getLabel(action))}
+        </StatusBadge>
       )
+    },
+    meta: {
+      cardRole: 'title',
+      cardSpan: 2,
+      contentMode: 'wrap',
     },
   })
 
@@ -146,17 +154,23 @@ export function useDrawingLogsColumns(
 
       return (
         <div className='flex max-w-[160px] flex-col gap-0.5'>
-          <StatusBadge
-            label={mjId}
-            copyText={mjId}
+          <CopyableStatusBadge
+            value={mjId}
             variant='neutral'
             size='sm'
-            className='border-border/60 bg-muted/30 text-foreground max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono'
-          />
+            className='h-auto max-w-full overflow-visible font-mono [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
+          >
+            {mjId}
+          </CopyableStatusBadge>
         </div>
       )
     },
-    meta: { mobileTitle: true },
+    meta: {
+      cardRole: 'primary',
+      cardOrder: 30,
+      cardSpan: 2,
+      contentMode: 'full',
+    },
   })
 
   columns.push(
@@ -176,12 +190,16 @@ export function useDrawingLogsColumns(
 
         return (
           <StatusBadge
-            label={t(mjSubmitResultMapper.getLabel(String(code)))}
             variant={mjSubmitResultMapper.getVariant(String(code))}
             size='sm'
-            copyable={false}
-          />
+          >
+            {t(mjSubmitResultMapper.getLabel(String(code)))}
+          </StatusBadge>
         )
+      },
+      meta: {
+        cardRole: 'badge',
+        contentMode: 'full',
       },
     })
   }
@@ -208,7 +226,7 @@ export function useDrawingLogsColumns(
               onClick={() => setDialogOpen(true)}
               title={t('Click to view image')}
             >
-              <span className='text-foreground truncate leading-snug group-hover:underline'>
+              <span className='text-foreground leading-snug group-hover:underline'>
                 {t('View')}
               </span>
             </button>
@@ -220,6 +238,11 @@ export function useDrawingLogsColumns(
             />
           </>
         )
+      },
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 50,
+        contentMode: 'full',
       },
     },
     {
@@ -257,6 +280,12 @@ export function useDrawingLogsColumns(
       },
       size: 200,
       maxSize: 220,
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 20,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
     },
     createFailReasonColumn<MidjourneyLog>({
       headerLabel: t('Fail Reason'),

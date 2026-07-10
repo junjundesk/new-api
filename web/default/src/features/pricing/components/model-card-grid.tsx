@@ -21,7 +21,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
 
 import { DEFAULT_PRICING_PAGE_SIZE, DEFAULT_TOKEN_UNIT } from '../constants'
@@ -101,7 +101,6 @@ export function ModelCardGrid(props: ModelCardGridProps) {
             <Button
               type='button'
               variant='outline'
-              size='sm'
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={currentPage <= 1}
               className='gap-1.5'
@@ -112,7 +111,6 @@ export function ModelCardGrid(props: ModelCardGridProps) {
             <Button
               type='button'
               variant='outline'
-              size='sm'
               onClick={() =>
                 setPage((current) => Math.min(totalPages, current + 1))
               }

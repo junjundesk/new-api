@@ -100,11 +100,9 @@ export function usePricingColumns(
       cell: ({ row }) => {
         const isTokenBased = row.original.quota_type === QUOTA_TYPE_VALUES.TOKEN
         return (
-          <StatusBadge
-            label={isTokenBased ? t('Token') : t('Request')}
-            variant={isTokenBased ? 'info' : 'neutral'}
-            copyable={false}
-          />
+          <StatusBadge variant={isTokenBased ? 'info' : 'neutral'}>
+            {isTokenBased ? t('Token') : t('Request')}
+          </StatusBadge>
         )
       },
       size: 80,
@@ -334,12 +332,9 @@ export function usePricingColumns(
         return (
           <BadgeCell className='gap-1.5'>
             {vendorIcon}
-            <StatusBadge
-              label={model.vendor_name}
-              autoColor={model.vendor_name}
-              size='sm'
-              copyable={false}
-            />
+            <StatusBadge variant='neutral' size='sm'>
+              {model.vendor_name}
+            </StatusBadge>
           </BadgeCell>
         )
       },
@@ -356,13 +351,9 @@ export function usePricingColumns(
         return (
           <BadgeListCell
             items={tags.map((tag) => (
-              <StatusBadge
-                key={tag}
-                label={tag}
-                autoColor={tag}
-                size='sm'
-                copyable={false}
-              />
+              <StatusBadge key={tag} variant='neutral' size='sm'>
+                {tag}
+              </StatusBadge>
             ))}
           />
         )
@@ -380,13 +371,9 @@ export function usePricingColumns(
         return (
           <BadgeListCell
             items={endpoints.map((ep) => (
-              <StatusBadge
-                key={ep}
-                label={ep}
-                autoColor={ep}
-                size='sm'
-                copyable={false}
-              />
+              <StatusBadge key={ep} variant='neutral' size='sm'>
+                {ep}
+              </StatusBadge>
             ))}
           />
         )

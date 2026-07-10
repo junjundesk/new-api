@@ -119,32 +119,30 @@ export function useUpstreamRatioSyncColumns(
                 return (
                   <div key={ratioType} className={syncFieldRowClassName}>
                     <StatusBadge
-                      label={getSyncFieldLabel(ratioType, t)}
-                      autoColor={ratioType}
+                      variant='neutral'
                       size='sm'
-                      copyable={false}
                       className={syncFieldLabelClassName}
-                    />
+                    >
+                      {getSyncFieldLabel(ratioType, t)}
+                    </StatusBadge>
                     {current === null || current === undefined ? (
-                      <StatusBadge
-                        label={t('Not Set')}
-                        variant='neutral'
-                        size='sm'
-                        copyable={false}
-                      />
+                      <StatusBadge variant='neutral' size='sm'>
+                        {t('Not Set')}
+                      </StatusBadge>
                     ) : (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger
                             render={
                               <StatusBadge
-                                label={String(current)}
                                 variant='info'
                                 size='sm'
-                                className='max-w-[160px] truncate font-mono'
+                                className='max-w-[160px]'
                               />
                             }
-                          />
+                          >
+                            {String(current)}
+                          </TooltipTrigger>
                           <TooltipContent>
                             <p className='max-w-xs text-xs break-all'>
                               {String(current)}
@@ -230,12 +228,12 @@ export function useUpstreamRatioSyncColumns(
                 return (
                   <div key={ratioType} className={syncFieldRowClassName}>
                     <StatusBadge
-                      label={getSyncFieldLabel(ratioType, t)}
-                      autoColor={ratioType}
+                      variant='neutral'
                       size='sm'
-                      copyable={false}
                       className={syncFieldLabelClassName}
-                    />
+                    >
+                      {getSyncFieldLabel(ratioType, t)}
+                    </StatusBadge>
                     <div className='min-w-0 flex-1'>
                       {renderUpstreamValue({
                         upstreamVal,
@@ -301,29 +299,25 @@ function renderUpstreamValue(args: RenderUpstreamValueArgs) {
 
   if (!isAvailable) {
     return (
-      <StatusBadge label='—' variant='neutral' size='sm' copyable={false} />
+      <StatusBadge variant='neutral' size='sm'>
+        —
+      </StatusBadge>
     )
   }
 
   if (upstreamVal === null || upstreamVal === undefined) {
     return (
-      <StatusBadge
-        label={t('Not Set')}
-        variant='neutral'
-        size='sm'
-        copyable={false}
-      />
+      <StatusBadge variant='neutral' size='sm'>
+        {t('Not Set')}
+      </StatusBadge>
     )
   }
 
   if (upstreamVal === 'same') {
     return (
-      <StatusBadge
-        label={t('Same as Local')}
-        variant='info'
-        size='sm'
-        copyable={false}
-      />
+      <StatusBadge variant='info' size='sm'>
+        {t('Same as Local')}
+      </StatusBadge>
     )
   }
 

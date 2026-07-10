@@ -20,7 +20,7 @@ import { Search, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/design-system/button'
 import { cn } from '@/lib/utils'
 
 export interface SearchBarProps {
@@ -70,9 +70,9 @@ export function SearchBar(props: SearchBarProps) {
         {props.value ? (
           <Button
             variant='ghost'
-            size='icon'
+            size='icon-sm'
             onClick={props.onClear}
-            className='text-muted-foreground/60 hover:text-foreground size-7'
+            className='text-muted-foreground/60 hover:text-foreground'
             aria-label={t('Clear search')}
           >
             <X className='size-4' />

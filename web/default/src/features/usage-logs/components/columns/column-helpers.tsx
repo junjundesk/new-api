@@ -22,7 +22,7 @@ import { Zap } from 'lucide-react'
 import { useState } from 'react'
 
 import { DataTableColumnHeader } from '@/components/data-table'
-import { StatusBadge, tintedBadgeClassMap } from '@/components/status-badge'
+import { CopyableStatusBadge, StatusBadge } from '@/components/status-badge'
 import {
   Tooltip,
   TooltipContent,
@@ -30,7 +30,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatTimestampToDate, formatTokens } from '@/lib/format'
-import { cn } from '@/lib/utils'
 
 import { formatDuration } from '../../lib/format'
 import { FailReasonDialog } from '../dialogs/fail-reason-dialog'
@@ -54,7 +53,7 @@ export function CacheTooltip({
       <Tooltip>
         <TooltipTrigger
           render={<Zap className={`size-3 flex-shrink-0 ${color}`} />}
-        ></TooltipTrigger>
+        />
         <TooltipContent side='top'>
           <p className='text-xs'>
             {label}: {formatTokens(tokens)}
@@ -95,7 +94,12 @@ export function createTimestampColumn<T>(config: {
         </span>
       )
     },
-    meta: { label: title },
+    meta: {
+      label: title,
+      cardRole: 'primary',
+      cardOrder: 10,
+      contentMode: 'full',
+    },
   }
 }
 
@@ -135,22 +139,20 @@ export function createDurationColumn<T>(config: {
       }
 
       const variant =
-        duration.durationSec > warningThresholdSec ? 'danger' : 'success'
+        duration.durationSec > warningThresholdSec ? 'destructive' : 'success'
 
       return (
-        <StatusBadge
-          label={`${duration.durationSec.toFixed(1)}s`}
-          variant={variant}
-          size='sm'
-          copyable={false}
-          className={cn(
-            'rounded-md tabular-nums',
-            tintedBadgeClassMap[variant]
-          )}
-        />
+        <StatusBadge variant={variant} size='sm' className='tabular-nums'>
+          {duration.durationSec.toFixed(1)}s
+        </StatusBadge>
       )
     },
-    meta: { label: headerLabel },
+    meta: {
+      label: headerLabel,
+      cardRole: 'primary',
+      cardOrder: 40,
+      contentMode: 'full',
+    },
   }
 }
 
@@ -174,17 +176,22 @@ export function createChannelColumn<T>(config: {
         return <span className='text-muted-foreground/60 text-xs'>-</span>
       }
       return (
-        <StatusBadge
-          label={`#${channelId}`}
-          autoColor={String(channelId)}
-          copyText={String(channelId)}
+        <CopyableStatusBadge
+          value={String(channelId)}
+          variant='neutral'
           size='sm'
-          showDot={false}
           className='font-mono'
-        />
+        >
+          #{channelId}
+        </CopyableStatusBadge>
       )
     },
-    meta: { label: headerLabel },
+    meta: {
+      label: headerLabel,
+      cardRole: 'primary',
+      cardOrder: 20,
+      contentMode: 'full',
+    },
   }
 }
 
@@ -231,7 +238,13 @@ export function createFailReasonColumn<T>(config: {
         </>
       )
     },
-    meta: { label: headerLabel },
+    meta: {
+      label: headerLabel,
+      cardRole: 'secondary',
+      cardOrder: 30,
+      cardSpan: 2,
+      contentMode: 'summary',
+    },
   }
 }
 
@@ -255,11 +268,16 @@ export function createProgressColumn<T>(config: {
         return <span className='text-muted-foreground/60 text-xs'>-</span>
       }
       return (
-        <span className='border-border/60 bg-muted/30 inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-xs'>
+        <StatusBadge variant='neutral' className='font-mono'>
           {progress}
-        </span>
+        </StatusBadge>
       )
     },
-    meta: { label: headerLabel },
+    meta: {
+      label: headerLabel,
+      cardRole: 'secondary',
+      cardOrder: 10,
+      contentMode: 'full',
+    },
   }
 }

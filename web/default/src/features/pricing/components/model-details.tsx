@@ -35,10 +35,16 @@ import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { StaticDataTable } from '@/components/data-table'
+import { Button } from '@/components/design-system/button'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/design-system/tabs'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
-import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
@@ -47,7 +53,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getPerfMetrics } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -545,7 +550,7 @@ function ModelHeader(props: { model: PricingModel }) {
         </h1>
         <CopyButton
           value={model.model_name || ''}
-          className='size-6'
+          size='icon-xs'
           iconClassName='size-3'
           tooltip={t('Copy model name')}
           successTooltip={t('Copied!')}
@@ -1165,7 +1170,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
       <ModelHeader model={props.model} />
 
       <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto sm:group-data-horizontal/tabs:h-auto'>
           {TAB_VALUES.map((value) => {
             const Icon = TAB_META[value].icon
             return (
@@ -1323,7 +1328,7 @@ export function ModelDetails() {
           <p className='text-muted-foreground mb-4 text-sm'>
             {t("The model you're looking for doesn't exist.")}
           </p>
-          <Button onClick={handleBack} variant='outline' size='sm'>
+          <Button onClick={handleBack} variant='outline'>
             {t('Back to Models')}
           </Button>
         </div>
@@ -1336,9 +1341,8 @@ export function ModelDetails() {
       <div className='mx-auto max-w-5xl px-4 sm:px-6'>
         <Button
           variant='ghost'
-          size='sm'
           onClick={handleBack}
-          className='text-muted-foreground hover:text-foreground mb-4 h-auto gap-1 px-0 py-1 text-xs'
+          className='text-muted-foreground hover:text-foreground mb-4 h-auto gap-1 px-0 py-1 text-xs sm:h-auto'
         >
           <ArrowLeft className='size-3.5' />
           {t('Back')}

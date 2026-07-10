@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { BadgeCell, BadgeListCell } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
-import { StatusBadge } from '@/components/status-badge'
+import { CopyableStatusBadge, StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -94,7 +94,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'id',
       header: t('ID'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 10,
+        cardSpan: 2,
+        contentMode: 'full',
+      },
       cell: ({ row }) => {
         const id = row.getValue('id') as number
         return <TableId value={id} />
@@ -106,7 +111,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'icon',
       header: t('Icon'),
-      meta: { mobileHidden: true },
+      meta: { cardRole: 'hidden' },
       cell: ({ row }) => {
         const model = row.original
         const iconKey =
@@ -130,17 +135,22 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'model_name',
       header: t('Model Name'),
-      meta: { mobileTitle: true },
+      meta: {
+        cardRole: 'title',
+        cardSpan: 2,
+        contentMode: 'wrap',
+      },
       cell: ({ row }) => {
         const name = row.getValue('model_name') as string
         return (
-          <StatusBadge
-            label={name}
+          <CopyableStatusBadge
+            value={name}
             variant='neutral'
-            copyText={name}
             size='sm'
-            className='font-mono'
-          />
+            className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
+          >
+            {name}
+          </CopyableStatusBadge>
         )
       },
       minSize: 200,
@@ -161,18 +171,9 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         }
 
         const badge = (
-          <StatusBadge
-            label={label}
-            variant={
-              (config.color === 'error' ? 'danger' : config.color) as
-                | 'neutral'
-                | 'success'
-                | 'warning'
-                | 'danger'
-                | 'info'
-            }
-            size='sm'
-          />
+          <StatusBadge variant={config.variant} size='sm'>
+            {label}
+          </StatusBadge>
         )
 
         // Show tooltip with matched models for non-exact rules
@@ -182,7 +183,9 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           model.matched_models.length > 0
         ) {
           const matchedBadges = model.matched_models.map((m) => (
-            <StatusBadge key={m} label={m} autoColor={m} size='sm' />
+            <StatusBadge key={m} variant='neutral' size='sm'>
+              {m}
+            </StatusBadge>
           ))
 
           return (
@@ -204,25 +207,27 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       },
       size: 140,
       enableSorting: false,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 10,
+        contentMode: 'wrap',
+      },
     },
 
     // Status column
     {
       accessorKey: 'status',
       header: t('Status'),
-      meta: { mobileBadge: true },
+      meta: { cardRole: 'badge', contentMode: 'wrap' },
       cell: ({ row }) => {
         const status = row.getValue('status') as number
         const config =
           MODEL_STATUS_CONFIG[status as 0 | 1] || MODEL_STATUS_CONFIG[0]
 
         return (
-          <StatusBadge
-            label={config.label}
-            variant={config.variant}
-            size='sm'
-            copyable={false}
-          />
+          <StatusBadge variant={config.variant} size='sm'>
+            {config.label}
+          </StatusBadge>
         )
       },
       filterFn: (row, id, value) => {
@@ -249,8 +254,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         }
 
         return (
-          <BadgeCell>
-            <ProviderBadge iconKey={vendor.icon} label={vendor.name} />
+          <BadgeCell className='overflow-visible'>
+            <ProviderBadge
+              iconKey={vendor.icon}
+              label={vendor.name}
+              className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
+            />
           </BadgeCell>
         )
       },
@@ -260,13 +269,24 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       },
       size: 150,
       enableSorting: false,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 20,
+        cardSpan: 2,
+        contentMode: 'wrap',
+      },
     },
 
     // Description column
     {
       accessorKey: 'description',
       header: t('Description'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 20,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const description = row.getValue('description') as string
         const modelName = row.getValue('model_name') as string
@@ -283,14 +303,21 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'tags',
       header: t('Tags'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 30,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const tags = row.getValue('tags') as string
         const tagArray = parseModelTags(tags)
         return (
           <BadgeListCell
             items={tagArray.map((tag) => (
-              <StatusBadge key={tag} label={tag} autoColor={tag} size='sm' />
+              <StatusBadge key={tag} variant='neutral' size='sm'>
+                {tag}
+              </StatusBadge>
             ))}
           />
         )
@@ -303,14 +330,21 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'endpoints',
       header: t('Endpoints'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 40,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const endpoints = row.getValue('endpoints') as string
         const endpointArray = formatEndpointsDisplay(endpoints)
         return (
           <BadgeListCell
             items={endpointArray.map((ep) => (
-              <StatusBadge key={ep} label={ep} autoColor={ep} size='sm' />
+              <StatusBadge key={ep} variant='neutral' size='sm'>
+                {ep}
+              </StatusBadge>
             ))}
           />
         )
@@ -323,7 +357,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'bound_channels',
       header: t('Bound Channels'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 50,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const channels = row.getValue('bound_channels') as Array<{
           id: number
@@ -336,10 +375,11 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
             items={(channels ?? []).map((c) => (
               <StatusBadge
                 key={`${c.id}-${c.name}-${c.type ?? ''}`}
-                label={`${c.name} (${c.type})`}
-                autoColor={c.name}
+                variant='neutral'
                 size='sm'
-              />
+              >
+                {`${c.name} (${c.type})`}
+              </StatusBadge>
             ))}
           />
         )
@@ -352,7 +392,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'enable_groups',
       header: t('Enable Groups'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 60,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const groups = row.getValue('enable_groups') as string[]
         return (
@@ -371,7 +416,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'quota_types',
       header: t('Quota Types'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 70,
+        cardSpan: 2,
+        contentMode: 'summary',
+      },
       cell: ({ row }) => {
         const quotaTypes = row.getValue('quota_types') as number[]
         return (
@@ -381,17 +431,11 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
               return (
                 <StatusBadge
                   key={qt}
-                  label={config?.label || String(qt)}
-                  variant={
-                    (config?.color === 'error' ? 'danger' : config?.color) as
-                      | 'neutral'
-                      | 'success'
-                      | 'warning'
-                      | 'danger'
-                      | 'info'
-                  }
+                  variant={config?.variant || 'neutral'}
                   size='sm'
-                />
+                >
+                  {config?.label || String(qt)}
+                </StatusBadge>
               )
             })}
           />
@@ -405,16 +449,20 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'sync_official',
       header: t('Official Sync'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 80,
+        contentMode: 'wrap',
+      },
       cell: ({ row }) => {
         const syncOfficial = row.getValue('sync_official') as number
         return (
           <StatusBadge
-            label={syncOfficial === 1 ? t('Official Sync') : t('No Sync')}
             variant={syncOfficial === 1 ? 'success' : 'warning'}
             size='sm'
-            copyable={false}
-          />
+          >
+            {syncOfficial === 1 ? t('Official Sync') : t('No Sync')}
+          </StatusBadge>
         )
       },
       filterFn: (row, id, value) => {
@@ -432,7 +480,11 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'created_time',
       header: t('Created'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 90,
+        contentMode: 'full',
+      },
       cell: ({ row }) => {
         const timestamp = row.getValue('created_time') as number
         return (
@@ -448,7 +500,11 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
     {
       accessorKey: 'updated_time',
       header: t('Updated'),
-      meta: { mobileHidden: true },
+      meta: {
+        cardRole: 'secondary',
+        cardOrder: 100,
+        contentMode: 'full',
+      },
       cell: ({ row }) => {
         const timestamp = row.getValue('updated_time') as number
         return (

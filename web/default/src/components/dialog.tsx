@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/design-system/dialog'
 import { cn } from '@/lib/utils'
 
 type DialogProps = React.ComponentProps<typeof DialogRoot> & {

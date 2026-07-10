@@ -33,12 +33,12 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { BadgeListCell } from '@/components/data-table'
+import { Button } from '@/components/design-system/button'
 import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { TruncatedText } from '@/components/truncated-text'
-import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -128,10 +128,9 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
     <div className='flex items-center gap-0.5'>
       {addCount > 0 && (
         <StatusBadge
-          label={`+${addCount}`}
           variant='success'
           size='sm'
-          copyable={false}
+          render={<button type='button' />}
           className='cursor-pointer'
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation()
@@ -143,14 +142,15 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
               'add'
             )
           }}
-        />
+        >
+          {`+${addCount}`}
+        </StatusBadge>
       )}
       {removeCount > 0 && (
         <StatusBadge
-          label={`-${removeCount}`}
-          variant='danger'
+          variant='destructive'
           size='sm'
-          copyable={false}
+          render={<button type='button' />}
           className='cursor-pointer'
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation()
@@ -162,7 +162,9 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
               'remove'
             )
           }}
-        />
+        >
+          {`-${removeCount}`}
+        </StatusBadge>
       )}
     </div>
   )
@@ -362,18 +364,11 @@ function BalanceCell({ channel }: { channel: Channel }) {
         <Tooltip>
           <TooltipTrigger
             render={
-              <StatusBadge
-                label={
-                  sensitiveVisible
-                    ? `${t('Used:')} ${usedDisplay}`
-                    : maskedUsedLabel
-                }
-                variant='neutral'
-                size='sm'
-                copyable={false}
-                showDot={false}
-                className='cursor-help'
-              />
+              <StatusBadge variant='neutral' size='sm' className='cursor-help'>
+                {sensitiveVisible
+                  ? `${t('Used:')} ${usedDisplay}`
+                  : maskedUsedLabel}
+              </StatusBadge>
             }
           />
           <TooltipContent>
@@ -435,18 +430,19 @@ function BalanceCell({ channel }: { channel: Channel }) {
 
   return (
     <TooltipProvider>
-      <div className='flex items-center gap-1'>
+      <div
+        className={
+          layout === 'card'
+            ? 'flex flex-wrap items-center gap-1'
+            : 'flex items-center gap-1'
+        }
+      >
         <Tooltip>
           <TooltipTrigger
             render={
-              <StatusBadge
-                label={sensitiveVisible ? usedDisplay : SENSITIVE_MASK}
-                variant='neutral'
-                size='sm'
-                copyable={false}
-                showDot={false}
-                className='cursor-help'
-              />
+              <StatusBadge variant='neutral' size='sm' className='cursor-help'>
+                {sensitiveVisible ? usedDisplay : SENSITIVE_MASK}
+              </StatusBadge>
             }
           />
           <TooltipContent>
@@ -457,14 +453,14 @@ function BalanceCell({ channel }: { channel: Channel }) {
           <TooltipTrigger
             render={
               <StatusBadge
-                label={remainingBadgeLabel}
                 variant={remainingBadgeVariant}
                 size='sm'
-                copyable={false}
-                showDot={false}
+                render={<button type='button' />}
                 className='cursor-pointer'
                 onClick={handleClickUpdate}
-              />
+              >
+                {remainingBadgeLabel}
+              </StatusBadge>
             }
           />
           <TooltipContent>
@@ -570,7 +566,11 @@ export function useChannelsColumns(
       {
         accessorKey: 'id',
         header: t('ID'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 20,
+          contentMode: 'full',
+        },
         cell: ({ row }) => {
           const id = row.getValue('id') as number
           return <TableId value={sensitiveVisible ? id : SENSITIVE_MASK} />
@@ -581,7 +581,11 @@ export function useChannelsColumns(
       {
         accessorKey: 'name',
         header: t('Name'),
-        meta: { mobileTitle: true },
+        meta: {
+          cardRole: 'title',
+          cardSpan: 2,
+          contentMode: 'wrap',
+        },
         cell: ({ row }) => {
           const isTagRow = isTagAggregateRow(row.original)
           const name = row.getValue('name') as string
@@ -596,8 +600,7 @@ export function useChannelsColumns(
               <div className='flex items-center gap-2'>
                 <Button
                   variant='ghost'
-                  size='sm'
-                  className='h-6 w-6 p-0'
+                  size='icon-sm'
                   onClick={row.getToggleExpandedHandler()}
                 >
                   {row.getIsExpanded() ? (
@@ -608,12 +611,9 @@ export function useChannelsColumns(
                 </Button>
                 <div className='flex items-center gap-1.5'>
                   <span className='font-semibold'>Tag：{tag}</span>
-                  <StatusBadge
-                    label={`${childrenCount} channels`}
-                    variant='blue'
-                    size='sm'
-                    copyable={false}
-                  />
+                  <StatusBadge variant='neutral' size='sm'>
+                    {`${childrenCount} channels`}
+                  </StatusBadge>
                 </div>
               </div>
             )
@@ -693,17 +693,20 @@ export function useChannelsColumns(
       {
         accessorKey: 'type',
         header: t('Type'),
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 10,
+          cardSpan: 2,
+          contentMode: 'wrap',
+        },
         cell: ({ row }) => {
           const isTagRow = isTagAggregateRow(row.original)
 
           if (isTagRow) {
             return (
-              <StatusBadge
-                label={t('Tag Aggregate')}
-                variant='blue'
-                size='sm'
-                copyable={false}
-              />
+              <StatusBadge variant='neutral' size='sm'>
+                {t('Tag Aggregate')}
+              </StatusBadge>
             )
           }
 
@@ -755,11 +758,7 @@ export function useChannelsColumns(
                   >
                     <ProviderBadge
                       iconKey={`${iconName}.Color`}
-                      iconSize={18}
                       label={typeName}
-                      colorText={false}
-                      copyable={false}
-                      showDot={false}
                       className='max-w-full min-w-0 overflow-hidden'
                     />
                   </TooltipTrigger>
@@ -771,8 +770,11 @@ export function useChannelsColumns(
                   <Tooltip>
                     <TooltipTrigger
                       render={
-                        <span
-                          className='flex cursor-pointer items-center gap-1.5 text-xs font-medium'
+                        <StatusBadge
+                          variant='neutral'
+                          size='sm'
+                          render={<button type='button' />}
+                          className='cursor-pointer'
                           onClick={(e) => {
                             e.stopPropagation()
                             if (!deploymentId) {
@@ -784,13 +786,7 @@ export function useChannelsColumns(
                         />
                       }
                     >
-                      <StatusBadge
-                        label='IO.NET'
-                        variant='purple'
-                        size='sm'
-                        copyable={false}
-                        className='cursor-pointer'
-                      />
+                      IO.NET
                     </TooltipTrigger>
                     <TooltipContent side='top'>
                       <div className='max-w-xs space-y-1'>
@@ -827,7 +823,7 @@ export function useChannelsColumns(
       {
         accessorKey: 'status',
         header: t('Status'),
-        meta: { mobileBadge: true },
+        meta: { cardRole: 'badge', contentMode: 'wrap' },
         cell: ({ row }) => {
           const isTagRow = isTagAggregateRow(row.original)
           const status = row.getValue('status') as number
@@ -840,21 +836,15 @@ export function useChannelsColumns(
 
             if (hasEnabled) {
               return (
-                <StatusBadge
-                  label={`Active (${childrenCount})`}
-                  variant='success'
-                  size='sm'
-                  copyable={false}
-                />
+                <StatusBadge variant='success' size='sm'>
+                  {`Active (${childrenCount})`}
+                </StatusBadge>
               )
             } else {
               return (
-                <StatusBadge
-                  label={`Inactive (${childrenCount})`}
-                  variant='neutral'
-                  size='sm'
-                  copyable={false}
-                />
+                <StatusBadge variant='neutral' size='sm'>
+                  {`Inactive (${childrenCount})`}
+                </StatusBadge>
               )
             }
           }
@@ -899,12 +889,9 @@ export function useChannelsColumns(
                 <TooltipProvider delay={100}>
                   <Tooltip>
                     <TooltipTrigger render={<span />}>
-                      <StatusBadge
-                        label={label}
-                        variant={config.variant}
-                        size='sm'
-                        copyable={false}
-                      />
+                      <StatusBadge variant={config.variant} size='sm'>
+                        {label}
+                      </StatusBadge>
                     </TooltipTrigger>
                     <TooltipContent side='top' className='max-w-xs'>
                       <div className='space-y-1 text-xs'>
@@ -927,12 +914,9 @@ export function useChannelsColumns(
           }
 
           return (
-            <StatusBadge
-              label={label}
-              variant={config.variant}
-              size='sm'
-              copyable={false}
-            />
+            <StatusBadge variant={config.variant} size='sm'>
+              {label}
+            </StatusBadge>
           )
         },
         filterFn: (row, id, value) => {
@@ -956,7 +940,12 @@ export function useChannelsColumns(
       {
         accessorKey: 'models',
         header: t('Models'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 40,
+          cardSpan: 2,
+          contentMode: 'summary',
+        },
         cell: ({ row }) => {
           const models = row.getValue('models') as string
           const modelArray = parseModelsList(models)
@@ -965,11 +954,12 @@ export function useChannelsColumns(
               items={modelArray.map((model) => (
                 <StatusBadge
                   key={model}
-                  label={model}
-                  autoColor={model}
+                  variant='neutral'
                   size='sm'
-                  className='font-mono'
-                />
+                  title={model}
+                >
+                  {model}
+                </StatusBadge>
               ))}
             />
           )
@@ -982,7 +972,12 @@ export function useChannelsColumns(
       {
         accessorKey: 'group',
         header: t('Groups'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'secondary',
+          cardOrder: 10,
+          cardSpan: 2,
+          contentMode: 'summary',
+        },
         cell: ({ row }) => {
           const group = row.getValue('group') as string
           const groupArray = parseGroupsList(group)
@@ -994,6 +989,7 @@ export function useChannelsColumns(
                   group={g}
                   label={sensitiveVisible ? undefined : SENSITIVE_MASK}
                   size='sm'
+                  title={sensitiveVisible ? g : undefined}
                 />
               ))}
             />
@@ -1015,14 +1011,23 @@ export function useChannelsColumns(
       {
         accessorKey: 'tag',
         header: t('Tag'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'secondary',
+          cardOrder: 20,
+          cardSpan: 2,
+          contentMode: 'wrap',
+        },
         cell: ({ row }) => {
           const tag = row.getValue('tag') as string | null
           if (!tag) {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
 
-          return <StatusBadge label={tag} autoColor={tag} size='sm' />
+          return (
+            <StatusBadge variant='neutral' size='sm' title={tag}>
+              {tag}
+            </StatusBadge>
+          )
         },
         size: 120,
         enableSorting: false,
@@ -1032,7 +1037,11 @@ export function useChannelsColumns(
       {
         accessorKey: 'priority',
         header: t('Priority'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'secondary',
+          cardOrder: 30,
+          contentMode: 'full',
+        },
         cell: ({ row }) => <PriorityCell channel={row.original} />,
         size: 100,
       },
@@ -1041,7 +1050,11 @@ export function useChannelsColumns(
       {
         accessorKey: 'weight',
         header: t('Weight'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'secondary',
+          cardOrder: 40,
+          contentMode: 'full',
+        },
         cell: ({ row }) => <WeightCell channel={row.original} />,
         size: 90,
         enableSorting: false,
@@ -1051,6 +1064,12 @@ export function useChannelsColumns(
       {
         accessorKey: 'balance',
         header: t('Used / Remaining'),
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 30,
+          cardSpan: 2,
+          contentMode: 'full',
+        },
         cell: ({ row }) => <BalanceCell channel={row.original} />,
         size: 180,
       },
@@ -1059,18 +1078,19 @@ export function useChannelsColumns(
       {
         accessorKey: 'response_time',
         header: t('Response'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 50,
+          contentMode: 'full',
+        },
         cell: ({ row }) => {
           const responseTime = row.getValue('response_time') as number
           const config = getResponseTimeConfig(responseTime)
 
           return (
-            <StatusBadge
-              label={formatResponseTime(responseTime, t)}
-              variant={config.variant}
-              size='sm'
-              copyable={false}
-            />
+            <StatusBadge variant={config.variant} size='sm'>
+              {formatResponseTime(responseTime, t)}
+            </StatusBadge>
           )
         },
         size: 110,
@@ -1080,7 +1100,11 @@ export function useChannelsColumns(
       {
         accessorKey: 'test_time',
         header: t('Last Tested'),
-        meta: { mobileHidden: true },
+        meta: {
+          cardRole: 'primary',
+          cardOrder: 60,
+          contentMode: 'full',
+        },
         cell: ({ row }) => {
           const testTime = row.getValue('test_time') as number
 
@@ -1099,12 +1123,12 @@ export function useChannelsColumns(
                 <TooltipTrigger
                   render={
                     <StatusBadge
-                      label={timeText}
                       variant='neutral'
                       size='sm'
-                      copyable={false}
                       className='cursor-pointer'
-                    />
+                    >
+                      {timeText}
+                    </StatusBadge>
                   }
                 />
                 <TooltipContent side='top'>

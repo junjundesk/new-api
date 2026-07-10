@@ -37,7 +37,7 @@ import { CardRowContent } from './card-row-content'
 /** Helpers passed to a custom {@link DataTableCardGridProps.renderCard}. */
 export type DataTableCardHelpers = {
   /**
-   * Whether the table declares compact card meta (`mobileTitle`/`mobileBadge`).
+   * Whether the table declares title/status `cardRole` metadata.
    * Provided so custom renderers can match the default layout decision.
    */
   compact: boolean
@@ -53,6 +53,7 @@ export interface DataTableCardGridProps<TData> {
   emptyTitle?: string
   emptyDescription?: string
   emptyIcon?: React.ReactNode
+  emptyAction?: React.ReactNode
   getRowKey?: (row: Row<TData>) => string | number
   getRowClassName?: (row: Row<TData>) => string | undefined
   /**
@@ -151,6 +152,7 @@ export function DataTableCardGrid<TData>(props: DataTableCardGridProps<TData>) {
             <EmptyTitle>{resolvedEmptyTitle}</EmptyTitle>
             <EmptyDescription>{resolvedEmptyDescription}</EmptyDescription>
           </EmptyHeader>
+          {props.emptyAction}
         </Empty>
       </div>
     )
