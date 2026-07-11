@@ -46,6 +46,7 @@ import {
   CardStaggerItem,
 } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
+import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -117,6 +118,7 @@ interface HeroSignal {
   label: string
   value: string
   icon: LucideIcon
+  tone: IconBadgeTone
 }
 
 function getSavedSetupGuideExpanded(): boolean | null {
@@ -333,9 +335,9 @@ function RequestPreview(props: {
 
       <div className='flex items-center justify-between gap-3 border-b pb-3'>
         <div className='flex min-w-0 items-center gap-2'>
-          <span className='bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg'>
-            <TerminalSquare className='size-4' aria-hidden='true' />
-          </span>
+          <IconBadge tone='info'>
+            <TerminalSquare />
+          </IconBadge>
           <div className='min-w-0'>
             <div className='truncate text-sm font-medium'>
               {t('First API request')}
@@ -395,10 +397,9 @@ function RequestPreview(props: {
               className='bg-muted/40 flex items-center justify-between gap-3 rounded-xl px-3 py-2'
             >
               <span className='flex min-w-0 items-center gap-2'>
-                <Icon
-                  className='text-muted-foreground size-3.5 shrink-0'
-                  aria-hidden='true'
-                />
+                <IconBadge tone={signal.tone} size='xs'>
+                  <Icon />
+                </IconBadge>
                 <span className='truncate text-xs font-medium'>
                   {signal.label}
                 </span>
@@ -565,16 +566,19 @@ export function OverviewDashboard() {
         label: t('Route active'),
         value: apiInfoItems.length > 0 ? t('Online') : t('Current domain'),
         icon: RadioTower,
+        tone: 'info',
       },
       {
         label: t('Auth configured'),
         value: preferredKey ? t('Secured') : t('Needs API key'),
         icon: ShieldCheck,
+        tone: 'success',
       },
       {
         label: t('Model selected'),
         value: modelsQuery.data?.[0] ?? t('Loading'),
         icon: Timer,
+        tone: 'chart-4',
       },
     ],
     [apiInfoItems.length, modelsQuery.data, preferredKey, t]

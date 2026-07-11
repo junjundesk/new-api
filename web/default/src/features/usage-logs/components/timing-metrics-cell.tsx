@@ -20,6 +20,11 @@ import { CircleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
+  dotColorMap,
+  textColorMap,
+  type StatusVariant,
+} from '@/components/status-badge'
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -28,62 +33,124 @@ import {
 import { formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import { getFirstResponseTimeColor, getResponseTimeColor } from '../lib/format'
 import type { LogOtherData } from '../types'
+
+/**
+ * Softened fills for the full-height timing bar. The bar sits directly beside
+ * dense numeric text, so the saturated `dotColorMap` tones (tuned for small
+ * dots and badges) read as too high-contrast at that size; a translucent fill
+ * keeps the status legible while matching the page's muted palette.
+ */
+const barColorMap: Record<StatusVariant, string> = {
+  ...dotColorMap,
+  success: 'bg-success/90',
+  warning: 'bg-warning/80',
+  danger: 'bg-destructive/80',
+  neutral: 'bg-neutral/80',
+}
 
 interface TimingMetricsCellProps {
   useTimeSec: number
+  completionTokens: number
   frtMs?: number
   isStream: boolean
   className?: string
+  /**
+   * `bar` (default) draws a full-height color segment beside the labels,
+   * matching the dense desktop table. `dot` swaps that segment for small
+   * status dots inline with each label, matching the lighter-weight status
+   * indicator used elsewhere on the mobile card.
+   */
+  indicator?: 'bar' | 'dot'
 }
 
 export function TimingMetricsCell(props: TimingMetricsCellProps) {
   const { t } = useTranslation()
+  const indicator = props.indicator ?? 'bar'
   const showFirstToken = props.isStream
-  const hasFrt = props.frtMs != null && props.frtMs > 0
-  const firstTokenLabel = hasFrt
-    ? formatUseTime(props.frtMs! / 1000)
-    : t('N/A')
+  const firstTokenSeconds =
+    props.frtMs != null && props.frtMs > 0 ? props.frtMs / 1000 : null
+  const firstTokenVariant: StatusVariant =
+    firstTokenSeconds == null
+      ? 'neutral'
+      : getFirstResponseTimeColor(firstTokenSeconds)
+  const totalTimeVariant = getResponseTimeColor(
+    props.useTimeSec,
+    props.completionTokens
+  )
+  const firstTokenLabel =
+    firstTokenSeconds == null ? t('N/A') : formatUseTime(firstTokenSeconds)
   const totalTimeLabel = formatUseTime(props.useTimeSec)
+
+  const labels = (
+    <div className='flex min-h-8 min-w-0 flex-col justify-center gap-0.5 text-xs leading-tight'>
+      {showFirstToken && (
+        <div className='flex items-baseline gap-1.5'>
+          {indicator === 'dot' && (
+            <span
+              aria-hidden
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                dotColorMap[firstTokenVariant]
+              )}
+            />
+          )}
+          <span className='text-muted-foreground shrink-0'>
+            {t('First token')}
+          </span>
+          <span
+            className={cn('tabular-nums', textColorMap[firstTokenVariant])}
+          >
+            {firstTokenLabel}
+          </span>
+        </div>
+      )}
+      <div className='flex items-baseline gap-1.5'>
+        {indicator === 'dot' && (
+          <span
+            aria-hidden
+            className={cn(
+              'size-1.5 shrink-0 rounded-full',
+              dotColorMap[totalTimeVariant]
+            )}
+          />
+        )}
+        <span className='text-muted-foreground shrink-0'>
+          {t('Duration')}
+        </span>
+        <span className={cn('tabular-nums', textColorMap[totalTimeVariant])}>
+          {totalTimeLabel}
+        </span>
+      </div>
+    </div>
+  )
+
+  if (indicator === 'dot') {
+    return (
+      <div className={cn('flex items-stretch', props.className)}>
+        {labels}
+      </div>
+    )
+  }
 
   return (
     <div className={cn('flex items-stretch gap-2', props.className)}>
       <span
         aria-hidden
         className={cn(
-          'w-1 shrink-0 rounded-full',
-          showFirstToken
-            ? 'bg-linear-to-b from-success to-warning'
-            : 'bg-warning'
+          'flex w-1 shrink-0 flex-col overflow-hidden rounded-full',
+          !showFirstToken && barColorMap[totalTimeVariant]
         )}
-      />
-      <div className='flex min-w-0 flex-col justify-center gap-0.5 text-xs leading-tight'>
-        <div
-          className={cn(
-            'flex items-baseline gap-1.5',
-            !showFirstToken && 'invisible'
-          )}
-          aria-hidden={!showFirstToken}
-        >
-          <span className='text-muted-foreground shrink-0'>
-            {t('First token')}
-          </span>
-          <span
-            className={cn(
-              'tabular-nums',
-              hasFrt ? 'text-success' : 'text-muted-foreground'
-            )}
-          >
-            {showFirstToken ? firstTokenLabel : '—'}
-          </span>
-        </div>
-        <div className='flex items-baseline gap-1.5'>
-          <span className='text-muted-foreground shrink-0'>
-            {t('Duration')}
-          </span>
-          <span className='text-warning tabular-nums'>{totalTimeLabel}</span>
-        </div>
-      </div>
+      >
+        {showFirstToken && (
+          <>
+            <span className={cn('flex-1', barColorMap[firstTokenVariant])} />
+            <span className={cn('flex-1', barColorMap[totalTimeVariant])} />
+          </>
+        )}
+      </span>
+      {labels}
     </div>
   )
 }
@@ -98,13 +165,12 @@ interface StreamTpsCellProps {
 export function StreamTpsCell(props: StreamTpsCellProps) {
   const { t } = useTranslation()
   const showStreamError =
-    props.isStream &&
-    props.streamStatus &&
-    props.streamStatus.status !== 'ok'
+    props.isStream && props.streamStatus && props.streamStatus.status !== 'ok'
   const tpsLabel =
     props.tokensPerSecond != null
       ? `${Math.round(props.tokensPerSecond)} t/s`
       : '—'
+  const streamLabel = props.isStream ? t('Stream') : t('Non-stream')
 
   return (
     <div
@@ -113,8 +179,13 @@ export function StreamTpsCell(props: StreamTpsCellProps) {
         props.className
       )}
     >
-      <span className='border-border/60 bg-muted/30 text-muted-foreground inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 leading-none'>
-        {props.isStream ? t('Stream') : t('Non-stream')}
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 font-medium',
+          props.isStream ? 'text-info' : 'text-muted-foreground'
+        )}
+      >
+        {streamLabel}
         {showStreamError && (
           <TooltipProvider>
             <Tooltip>

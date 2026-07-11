@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { LucideIcon } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
+import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,8 @@ interface StatCardProps {
   loading?: boolean
   error?: boolean
   action?: ReactNode
+  iconTone?: IconBadgeTone
+  compactMobile?: boolean
 }
 
 const TONE_CLASSES: Record<StatCardTone, string> = {
@@ -64,6 +67,12 @@ const LINE_TONE_CLASSES: Record<StatCardTone, string> = {
   'accent-1': 'text-overview-accent-1',
   'accent-2': 'text-overview-accent-2',
   'accent-3': 'text-overview-accent-3',
+}
+
+const ICON_TONE_BY_STAT_TONE: Record<StatCardTone, IconBadgeTone> = {
+  'accent-1': 'chart-1',
+  'accent-2': 'chart-2',
+  'accent-3': 'chart-3',
 }
 
 const DETAIL_TONE_CLASSES: Record<StatCardDetailTone, string> = {
@@ -225,13 +234,24 @@ function StatCardDetails(props: { details: StatCardDetail[] }) {
 export function StatCard(props: StatCardProps) {
   const Icon = props.icon
   const tone = props.tone ?? 'accent-3'
+  const iconTone = props.iconTone ?? ICON_TONE_BY_STAT_TONE[tone]
   const sparklineVariant = props.sparklineVariant ?? 'bars'
   let valueContent: ReactNode
   if (props.loading) {
     valueContent = (
-      <div className='flex flex-col gap-1.5'>
-        <Skeleton className='h-7 w-24' />
-        <Skeleton className='h-3.5 w-32' />
+      <div
+        className={cn(
+          'flex flex-col',
+          props.compactMobile ? 'gap-1' : 'gap-1.5'
+        )}
+      >
+        <Skeleton className='h-5 w-16 sm:h-7 sm:w-24' />
+        <Skeleton
+          className={cn(
+            'h-3 w-24 sm:h-3.5 sm:w-32',
+            props.compactMobile && 'hidden sm:block'
+          )}
+        />
       </div>
     )
   } else if (props.error) {
@@ -240,16 +260,28 @@ export function StatCard(props: StatCardProps) {
         <div className='text-muted-foreground mt-0.5 font-mono text-base font-bold tracking-tight break-all tabular-nums sm:text-2xl'>
           --
         </div>
-        <p className='text-muted-foreground/60 text-xs'>{props.description}</p>
+        <p
+          className={cn(
+            'text-muted-foreground/60 line-clamp-1 text-[11px] sm:text-xs',
+            props.compactMobile && 'hidden sm:block'
+          )}
+        >
+          {props.description}
+        </p>
       </div>
     )
   } else {
     valueContent = (
       <div className='flex flex-col gap-1'>
-        <div className='text-foreground font-mono text-2xl font-semibold tracking-tight break-all tabular-nums'>
+        <div className='text-foreground font-mono text-base font-semibold tracking-tight break-all tabular-nums sm:text-2xl'>
           {props.value}
         </div>
-        <p className='text-muted-foreground/60 text-xs leading-relaxed'>
+        <p
+          className={cn(
+            'text-muted-foreground/60 line-clamp-1 text-[11px] leading-relaxed sm:text-xs',
+            props.compactMobile && 'hidden sm:block'
+          )}
+        >
           {props.description}
         </p>
       </div>
@@ -266,21 +298,34 @@ export function StatCard(props: StatCardProps) {
   }
 
   return (
-    <div className='group flex min-h-32 flex-col justify-between gap-3'>
+    <div
+      className={cn(
+        'group flex flex-col justify-between sm:min-h-32 sm:gap-3',
+        props.compactMobile ? 'gap-1' : 'gap-1.5'
+      )}
+    >
       <div className='flex items-start justify-between gap-1'>
-        <div className='text-muted-foreground flex items-center gap-1.5 text-xs font-medium sm:gap-2'>
-          <Icon
-            className='text-muted-foreground/60 size-3.5 shrink-0'
-            aria-hidden='true'
-          />
-          <span className='line-clamp-2 leading-snug'>{props.title}</span>
+        <div className='text-muted-foreground flex items-center gap-1 text-[11px] font-medium sm:gap-2 sm:text-xs'>
+          <IconBadge
+            tone={iconTone}
+            size='stat'
+            className={cn(
+              props.compactMobile &&
+                'size-4 rounded-sm [&>svg]:size-2.5 sm:size-7 sm:rounded-md sm:[&>svg]:size-3.5'
+            )}
+          >
+            <Icon />
+          </IconBadge>
+          <span className='line-clamp-1 leading-snug sm:line-clamp-2'>
+            {props.title}
+          </span>
         </div>
         {props.action && <div className='shrink-0'>{props.action}</div>}
       </div>
 
       {valueContent}
 
-      {visualization}
+      <div className='hidden sm:block'>{visualization}</div>
     </div>
   )
 }

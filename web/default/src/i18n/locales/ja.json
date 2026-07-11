@@ -3049,6 +3049,7 @@
     "Only configured combinations are overridden. All other calls keep the token group base ratio.": "設定済みの組み合わせだけが上書きされます。他の呼び出しはトークングループの基本倍率を維持します。",
     "Only enabled parameters are sent with the request.": "有効なパラメータだけがリクエストに送信されます。",
     "Only enter the site origin, for example https://api.example.com. Do not include any path such as /api/user/epay/notify. Leave blank to use the server address.": "サイトのオリジンのみを入力してください。例: https://api.example.com。/api/user/epay/notify などのパスは含めないでください。空欄の場合はサーバーアドレスを使用します。",
+    "Only Mine": "自分のみ",
     "Only selected fields will be overwritten. You can re-run the sync wizard if new conflicts appear.": "選択されたフィールドのみが上書きされます。新しい競合が発生した場合は、同期ウィザードを再実行できます。",
     "Only successful requests": "成功したリクエストのみ",
     "Only successful requests count toward this limit.": "成功したリクエストのみがこの制限にカウントされます。",
