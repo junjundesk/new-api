@@ -309,7 +309,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               variant={config.color as StatusBadgeProps['variant']}
               size='sm'
               copyable={false}
-              className='!text-xs [&_span]:!text-xs'
+              className='-ml-1.5 !text-xs [&_span]:!text-xs'
             />
           </div>
         )
