@@ -211,6 +211,20 @@ export function SummaryCards() {
   const runwayDays = getRunwayDays(remainQuota, recentUsage)
 
   const todayUsageDisplay = formatQuota(recentUsage)
+  let runwayDisplay: string
+  if (runwayDays !== null) {
+    if (runwayDays < 1) {
+      runwayDisplay = t('Less than 1 day left')
+    } else if (runwayDays > 999) {
+      runwayDisplay = `999+ ${t('days')}`
+    } else {
+      runwayDisplay = `~${formatNumber(Math.floor(runwayDays))} ${t('days')}`
+    }
+  } else if (remainQuota <= 0) {
+    runwayDisplay = t('Balance depleted')
+  } else {
+    runwayDisplay = t('No recent usage')
+  }
 
   const items = useSummaryCardsConfig({
     ...summaryValues,
@@ -218,7 +232,7 @@ export function SummaryCards() {
     currencyEnabled,
     currencyLabel,
   }).map((config, index) => {
-    const tones = ['rose', 'teal', 'gray'] as const
+    const tones = ['accent-1', 'accent-2', 'accent-3'] as const
 
     return {
       key: config.key,
@@ -226,7 +240,7 @@ export function SummaryCards() {
       value: config.value,
       desc: config.description,
       icon: config.icon,
-      tone: tones[index] ?? 'gray',
+      tone: tones[index] ?? 'accent-3',
       sparkline:
         config.key === 'todayUsage'
           ? sparklineData.usage
@@ -270,7 +284,7 @@ export function SummaryCards() {
           </StaggerContainer>
         </div>
 
-        <div className='bg-warning/10 flex flex-col justify-between gap-4 border-t p-4 sm:p-5 xl:border-t-0 xl:border-l'>
+        <div className='flex flex-col justify-between gap-4 border-t bg-[linear-gradient(135deg,color-mix(in_oklch,var(--overview-accent-1)_11%,var(--background))_0%,color-mix(in_oklch,var(--overview-accent-2)_7%,var(--background))_48%,color-mix(in_oklch,var(--overview-accent-3)_10%,var(--background))_100%)] p-4 sm:p-5 xl:border-t-0 xl:border-l'>
           <div className='flex flex-col gap-3'>
             <div className='flex items-center justify-between'>
               <span className='text-muted-foreground text-xs font-medium'>
@@ -323,15 +337,7 @@ export function SummaryCards() {
                     healthLevel === 'caution' && 'text-warning'
                   )}
                 >
-                  {runwayDays !== null
-                    ? runwayDays < 1
-                      ? t('Less than 1 day left')
-                      : runwayDays > 999
-                        ? `999+ ${t('days')}`
-                        : `~${formatNumber(Math.floor(runwayDays))} ${t('days')}`
-                    : remainQuota <= 0
-                      ? t('Balance depleted')
-                      : t('No recent usage')}
+                  {runwayDisplay}
                 </div>
               </div>
             </div>

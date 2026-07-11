@@ -116,14 +116,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               <span className='text-foreground font-mono font-semibold'>
                 {entry.formatted}
               </span>
-              /{tokenUnitLabel}
             </span>
           ))}
         </>
       )
     } else {
       priceSummary = (
-        <span className='text-muted-foreground text-xs'>
+        <span className='text-muted-foreground text-sm'>
           {t('Dynamic Pricing')}
         </span>
       )
@@ -144,7 +143,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               props.selectedGroup
             )}
           </span>
-          /{tokenUnitLabel}
         </span>
         <span className='text-muted-foreground whitespace-nowrap'>
           {t('Output')}{' '}
@@ -159,7 +157,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               props.selectedGroup
             )}
           </span>
-          /{tokenUnitLabel}
         </span>
         {hasCachedPrice && (
           <span className='text-muted-foreground/60 whitespace-nowrap'>
@@ -217,7 +214,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             <h3 className='text-foreground truncate font-mono text-[15px] leading-tight font-bold'>
               {props.model.model_name}
             </h3>
-            <div className='mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs sm:mt-1 sm:gap-x-3'>
+            <div className='mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm sm:mt-1 sm:gap-x-3'>
               {priceSummary}
             </div>
           </div>

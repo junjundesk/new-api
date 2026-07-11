@@ -220,13 +220,18 @@ function CommonLogsCard<TData>({
           valueClassName='[&_.flex-col]:max-w-none [&_.flex-col>*:not(:first-child)]:text-[11px] [&_.flex-col>*:not(:first-child)]:leading-none'
         />
         <SummaryField
-          label={t('Timing')}
-          cell={cells.get('use_time')}
+          label={t('Stream')}
+          cell={cells.get('is_stream')}
           primaryOnly
         />
         <SummaryField
           label={t('Tokens')}
           cell={cells.get('prompt_tokens')}
+          primaryOnly
+        />
+        <SummaryField
+          label={t('Timing')}
+          cell={cells.get('use_time')}
           primaryOnly
         />
         <SummaryField
