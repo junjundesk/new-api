@@ -25,12 +25,7 @@ import { toast } from 'sonner'
 import * as z from 'zod'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/design-system/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { resetModelRatios } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'

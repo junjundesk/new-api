@@ -32,14 +32,13 @@ import { IconSidebarSidebar } from '@/assets/custom/icon-sidebar-sidebar'
 import { IconThemeDark } from '@/assets/custom/icon-theme-dark'
 import { IconThemeLight } from '@/assets/custom/icon-theme-light'
 import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
-import { Button } from '@/components/design-system/button'
-import { useSidebar } from '@/components/design-system/sidebar'
 import {
   sideDrawerContentClassName,
   sideDrawerFooterClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
+import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
@@ -62,6 +61,8 @@ import {
   type ThemeScale,
 } from '@/lib/theme-customization'
 import { cn } from '@/lib/utils'
+
+import { useSidebar } from './ui/sidebar'
 
 const Item = RadioPrimitive.Root
 
@@ -144,8 +145,9 @@ function SectionTitle(props: {
       {props.title}
       {props.showReset && props.onReset && (
         <Button
-          size='icon-xs'
+          size='icon'
           variant='secondary'
+          className='size-4'
           onClick={props.onReset}
           aria-label='Reset'
         >

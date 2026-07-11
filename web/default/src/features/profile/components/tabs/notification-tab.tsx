@@ -21,27 +21,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/design-system/button'
-import { Input } from '@/components/design-system/input'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/design-system/toggle-group'
 import { PasswordInput } from '@/components/password-input'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { TitledCard } from '@/components/ui/titled-card'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ROLE } from '@/lib/roles'
 
-import { updateUserSettings } from '../api'
+import { updateUserSettings } from '../../api'
 import {
   DEFAULT_QUOTA_WARNING_THRESHOLD,
   NOTIFICATION_METHODS,
-} from '../constants'
-import { parseUserSettings } from '../lib'
-import type { UserProfile, UserSettings, NotifyType } from '../types'
+} from '../../constants'
+import { parseUserSettings } from '../../lib'
+import type { UserProfile, UserSettings, NotifyType } from '../../types'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
@@ -61,17 +55,16 @@ function normalizeNotifyType(value: unknown): NotifyType {
     : 'email'
 }
 
-interface NotificationSettingsCardProps {
+// ============================================================================
+// Settings Tab Component
+// ============================================================================
+
+interface NotificationTabProps {
   profile: UserProfile | null
-  loading: boolean
   onUpdate: () => void
 }
 
-export function NotificationSettingsCard({
-  profile,
-  loading: pageLoading,
-  onUpdate,
-}: NotificationSettingsCardProps) {
+export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
@@ -132,7 +125,7 @@ export function NotificationSettingsCard({
       } else {
         toast.error(response.message || t('Failed to update settings'))
       }
-    } catch {
+    } catch (_error) {
       toast.error(t('Failed to update settings'))
     } finally {
       setLoading(false)
@@ -141,29 +134,8 @@ export function NotificationSettingsCard({
 
   const notifyType = normalizeNotifyType(settings.notify_type)
 
-  if (pageLoading) {
-    return (
-      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
-        <CardHeader className='border-b p-4 !pb-4 sm:p-5 sm:!pb-5'>
-          <Skeleton className='h-6 w-40' />
-          <Skeleton className='mt-2 h-4 w-64' />
-        </CardHeader>
-        <CardContent className='space-y-4 p-4 sm:p-5'>
-          <Skeleton className='h-14 w-full' />
-          <Skeleton className='h-9 w-full' />
-          <Skeleton className='h-9 w-full' />
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
-    <TitledCard
-      title={t('Notification Settings')}
-      description={t('Choose how you receive alerts and account notices')}
-      disableHoverEffect
-      contentClassName='space-y-5 sm:space-y-6'
-    >
+    <div className='space-y-4 sm:space-y-6'>
       {/* Notification Type */}
       <div className='space-y-2.5'>
         <Label>{t('Notification Method')}</Label>
@@ -171,15 +143,14 @@ export function NotificationSettingsCard({
           value={[notifyType]}
           onValueChange={(value) => {
             const nextValue = value.find((item) => item !== notifyType)
-            if (nextValue) {
+            if (nextValue)
               updateField('notify_type', normalizeNotifyType(nextValue))
-            }
           }}
           aria-label={t('Notification Method')}
           variant='outline'
           size='lg'
           spacing={2}
-          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-4'
+          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3'
         >
           {NOTIFICATION_METHODS.map((method) => {
             const Icon = NOTIFICATION_ICONS[method.value]
@@ -187,10 +158,10 @@ export function NotificationSettingsCard({
               <ToggleGroupItem
                 key={method.value}
                 value={method.value}
-                className='h-auto min-h-14 w-full flex-col gap-1.5 px-3 py-2.5 sm:h-auto'
+                className='h-auto min-h-14 w-full flex-col gap-1.5 px-3 py-3 sm:min-h-16'
               >
-                <Icon className='size-4' />
-                <span className='max-w-full truncate text-xs font-medium'>
+                <Icon className='h-4 w-4 sm:h-5 sm:w-5' />
+                <span className='max-w-full truncate text-xs font-medium sm:text-sm'>
                   {t(method.label)}
                 </span>
               </ToggleGroupItem>
@@ -205,6 +176,7 @@ export function NotificationSettingsCard({
         <Input
           id='threshold'
           type='number'
+          className='h-9'
           value={settings.quota_warning_threshold}
           onChange={(e) =>
             updateField('quota_warning_threshold', Number(e.target.value))
@@ -223,6 +195,7 @@ export function NotificationSettingsCard({
           <Input
             id='notifyEmail'
             type='email'
+            className='h-9'
             value={settings.notification_email}
             onChange={(e) => updateField('notification_email', e.target.value)}
             placeholder={t('Leave empty to use account email')}
@@ -238,6 +211,7 @@ export function NotificationSettingsCard({
             <Input
               id='webhookUrl'
               type='url'
+              className='h-9'
               value={settings.webhook_url}
               onChange={(e) => updateField('webhook_url', e.target.value)}
               placeholder={t('https://example.com/webhook')}
@@ -262,6 +236,7 @@ export function NotificationSettingsCard({
           <Input
             id='barkUrl'
             type='url'
+            className='h-9'
             value={settings.bark_url}
             onChange={(e) => updateField('bark_url', e.target.value)}
             placeholder={t('https://api.day.app/yourkey/{{title}}/{{content}}')}
@@ -280,6 +255,7 @@ export function NotificationSettingsCard({
             <Input
               id='gotifyUrl'
               type='url'
+              className='h-9'
               value={settings.gotify_url}
               onChange={(e) => updateField('gotify_url', e.target.value)}
               placeholder={t('https://gotify.example.com')}
@@ -305,6 +281,7 @@ export function NotificationSettingsCard({
             <Input
               id='gotifyPriority'
               type='number'
+              className='h-9'
               min='0'
               max='10'
               value={settings.gotify_priority}
@@ -319,8 +296,8 @@ export function NotificationSettingsCard({
               )}
             </p>
           </div>
-          <div className='bg-muted/30 rounded-lg border p-3 sm:p-4'>
-            <h5 className='mb-1.5 text-sm font-medium'>
+          <div className='bg-muted/50 rounded-lg border p-3 sm:p-4'>
+            <h5 className='mb-1.5 text-sm font-medium sm:mb-2'>
               {t('Setup Instructions')}
             </h5>
             <ol className='text-muted-foreground space-y-1 text-xs'>
@@ -343,87 +320,86 @@ export function NotificationSettingsCard({
         </>
       )}
 
+      {/* Divider */}
+      <div className='border-t' />
+
       {/* Preferences Section */}
-      <div className='space-y-3 border-t pt-5 sm:pt-6'>
+      <div className='space-y-3'>
         <div>
           <h4 className='text-sm font-medium'>{t('Preferences')}</h4>
-          <p className='text-muted-foreground mt-0.5 text-xs'>
+          <p className='text-muted-foreground mt-1 text-xs'>
             {t('Configure your account behavior preferences')}
           </p>
         </div>
 
-        <div className='divide-border/60 divide-y rounded-lg border'>
-          {/* Receive Upstream Model Update Notifications (admin only) */}
-          {isAdmin && (
-            <div className='flex items-start justify-between gap-3 p-3 sm:items-center sm:p-4'>
-              <div className='space-y-0.5'>
-                <Label htmlFor='upstreamModelUpdateNotify'>
-                  {t('Receive Upstream Model Update Notifications')}
-                </Label>
-                <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none'>
-                  {t(
-                    'Only available for admins. When enabled, you will receive a summary notification via your selected method when the scheduled model check detects upstream model changes or check failures.'
-                  )}
-                </p>
-              </div>
-              <Switch
-                id='upstreamModelUpdateNotify'
-                className='shrink-0'
-                checked={settings.upstream_model_update_notify_enabled}
-                onCheckedChange={(checked) =>
-                  updateField('upstream_model_update_notify_enabled', checked)
-                }
-              />
-            </div>
-          )}
-
-          {/* Accept Unset Model Price */}
-          <div className='flex items-start justify-between gap-3 p-3 sm:items-center sm:p-4'>
+        {/* Receive Upstream Model Update Notifications (admin only) */}
+        {isAdmin && (
+          <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
             <div className='space-y-0.5'>
-              <Label htmlFor='acceptUnsetPrice'>
-                {t('Accept Unpriced Models')}
+              <Label htmlFor='upstreamModelUpdateNotify'>
+                {t('Receive Upstream Model Update Notifications')}
               </Label>
-              <p className='text-muted-foreground text-xs'>
-                {t('Allow using models without price configuration')}
+              <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none sm:text-sm'>
+                {t(
+                  'Only available for admins. When enabled, you will receive a summary notification via your selected method when the scheduled model check detects upstream model changes or check failures.'
+                )}
               </p>
             </div>
             <Switch
-              id='acceptUnsetPrice'
+              id='upstreamModelUpdateNotify'
               className='shrink-0'
-              checked={settings.accept_unset_model_ratio_model}
+              checked={settings.upstream_model_update_notify_enabled}
               onCheckedChange={(checked) =>
-                updateField('accept_unset_model_ratio_model', checked)
+                updateField('upstream_model_update_notify_enabled', checked)
               }
             />
           </div>
+        )}
 
-          {/* Record IP Log */}
-          <div className='flex items-start justify-between gap-3 p-3 sm:items-center sm:p-4'>
-            <div className='space-y-0.5'>
-              <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
-              <p className='text-muted-foreground text-xs'>
-                {t('Log IP address for usage and error logs')}
-              </p>
-            </div>
-            <Switch
-              id='recordIp'
-              className='shrink-0'
-              checked={settings.record_ip_log}
-              onCheckedChange={(checked) =>
-                updateField('record_ip_log', checked)
-              }
-            />
+        {/* Accept Unset Model Price */}
+        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
+          <div className='space-y-0.5'>
+            <Label htmlFor='acceptUnsetPrice'>
+              {t('Accept Unpriced Models')}
+            </Label>
+            <p className='text-muted-foreground text-xs sm:text-sm'>
+              {t('Allow using models without price configuration')}
+            </p>
           </div>
+          <Switch
+            id='acceptUnsetPrice'
+            className='shrink-0'
+            checked={settings.accept_unset_model_ratio_model}
+            onCheckedChange={(checked) =>
+              updateField('accept_unset_model_ratio_model', checked)
+            }
+          />
+        </div>
+
+        {/* Record IP Log */}
+        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
+          <div className='space-y-0.5'>
+            <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
+            <p className='text-muted-foreground text-xs sm:text-sm'>
+              {t('Log IP address for usage and error logs')}
+            </p>
+          </div>
+          <Switch
+            id='recordIp'
+            className='shrink-0'
+            checked={settings.record_ip_log}
+            onCheckedChange={(checked) => updateField('record_ip_log', checked)}
+          />
         </div>
       </div>
 
       {/* Save Button */}
       <div className='flex justify-end'>
         <Button onClick={handleSave} disabled={loading}>
-          {loading && <Loader2 className='mr-2 size-4 animate-spin' />}
+          {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
           {loading ? t('Saving...') : t('Save Settings')}
         </Button>
       </div>
-    </TitledCard>
+    </div>
   )
 }

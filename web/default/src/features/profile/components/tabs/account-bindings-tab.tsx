@@ -24,11 +24,9 @@ import { toast } from 'sonner'
 
 import { IconDiscord } from '@/assets/brand-icons'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Button } from '@/components/design-system/button'
 import { StatusBadge } from '@/components/status-badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { TitledCard } from '@/components/ui/titled-card'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { OAUTH_BIND_STORAGE_KEY } from '@/features/auth/constants'
 import { useDialogs } from '@/hooks/use-dialog'
 import { useStatus } from '@/hooks/use-status'
@@ -43,28 +41,30 @@ import {
   getSelfOAuthBindings,
   unbindCustomOAuth,
   type CustomOAuthBinding,
-} from '../api'
-import type { UserProfile, BindingItem } from '../types'
-import { EmailBindDialog } from './dialogs/email-bind-dialog'
-import { TelegramBindDialog } from './dialogs/telegram-bind-dialog'
-import { WeChatBindDialog } from './dialogs/wechat-bind-dialog'
+} from '../../api'
+import type { UserProfile, BindingItem } from '../../types'
+import { EmailBindDialog } from '../dialogs/email-bind-dialog'
+import { TelegramBindDialog } from '../dialogs/telegram-bind-dialog'
+import { WeChatBindDialog } from '../dialogs/wechat-bind-dialog'
 
-interface ConnectedAccountsCardProps {
+// ============================================================================
+// Account Bindings Tab Component
+// ============================================================================
+
+interface AccountBindingsTabProps {
   profile: UserProfile | null
-  loading: boolean
   onUpdate: () => void
 }
 
 type DialogKey = 'email' | 'wechat' | 'telegram'
 
-export function ConnectedAccountsCard({
+export function AccountBindingsTab({
   profile,
-  loading,
   onUpdate,
-}: ConnectedAccountsCardProps) {
+}: AccountBindingsTabProps) {
   const { t } = useTranslation()
   const dialogs = useDialogs<DialogKey>()
-  const { status, loading: statusLoading } = useStatus()
+  const { status, loading } = useStatus()
   const [customBindings, setCustomBindings] = useState<CustomOAuthBinding[]>([])
   const [unbindTarget, setUnbindTarget] = useState<CustomOAuthBinding | null>(
     null
@@ -261,122 +261,119 @@ export function ConnectedAccountsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, status, t])
 
-  if (loading || statusLoading) {
-    return (
-      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
-        <CardHeader className='border-b p-4 !pb-4 sm:p-5 sm:!pb-5'>
-          <Skeleton className='h-6 w-40' />
-          <Skeleton className='mt-2 h-4 w-64' />
-        </CardHeader>
-        <CardContent className='grid grid-cols-1 gap-2.5 p-4 sm:grid-cols-2 sm:gap-3 sm:p-5'>
-          <Skeleton className='h-14 w-full rounded-lg' />
-          <Skeleton className='h-14 w-full rounded-lg' />
-          <Skeleton className='h-14 w-full rounded-lg' />
-          <Skeleton className='h-14 w-full rounded-lg' />
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (!profile) return null
+  if (!profile || loading) return null
 
   return (
     <>
-      <TitledCard
-        title={t('Connected Accounts')}
-        description={t('Link third-party accounts for sign-in and alerts')}
-        disableHoverEffect
-      >
-        <div className='grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3'>
-          {bindings.map((binding) => {
-            let actionLabel = t('Bind')
-            if (binding.isBound) {
-              actionLabel = binding.id === 'email' ? t('Change') : t('Bound')
-            }
-            return (
-              <div
-                key={binding.id}
-                className='flex items-center justify-between gap-3 rounded-lg border p-3'
-              >
-                <div className='flex min-w-0 items-center gap-3'>
-                  <binding.icon className='text-muted-foreground size-4 shrink-0' />
-                  <div className='min-w-0'>
-                    <div className='flex items-center gap-1.5'>
-                      <p className='text-sm font-medium'>{binding.label}</p>
-                      {binding.isBound && (
-                        <StatusBadge variant='success'>
-                          {t('Bound')}
-                        </StatusBadge>
-                      )}
-                    </div>
-                    <p className='text-muted-foreground truncate text-xs'>
-                      {binding.value || t('Not bound')}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant='outline'
-                  className='shrink-0'
-                  onClick={binding.onBind}
-                  disabled={binding.isBound && binding.id !== 'email'}
-                >
-                  {actionLabel}
-                </Button>
+      <div className='grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3'>
+        {bindings.map((binding) => (
+          <div
+            key={binding.id}
+            className='flex items-center justify-between gap-2.5 rounded-lg border p-2.5 sm:gap-3 sm:p-3'
+          >
+            <div className='flex min-w-0 items-center gap-2.5 sm:gap-3'>
+              <div className='bg-muted shrink-0 rounded-md p-1.5 sm:p-2'>
+                <binding.icon className='h-4 w-4' />
               </div>
-            )
-          })}
+              <div className='min-w-0'>
+                <div className='flex items-center gap-1.5'>
+                  <p className='text-sm font-medium'>{binding.label}</p>
+                  {binding.isBound && (
+                    <StatusBadge
+                      label={t('Bound')}
+                      variant='success'
+                      copyable={false}
+                    />
+                  )}
+                </div>
+                <p className='text-muted-foreground truncate text-xs'>
+                  {binding.value || t('Not bound')}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant='outline'
+              size='sm'
+              className='h-7 shrink-0 px-2.5 text-xs'
+              onClick={binding.onBind}
+              disabled={binding.isBound && binding.id !== 'email'}
+            >
+              {binding.isBound
+                ? binding.id === 'email'
+                  ? t('Change')
+                  : t('Bound')
+                : t('Bind')}
+            </Button>
+          </div>
+        ))}
+      </div>
 
-          {customProviders?.map((provider) => {
-            const binding = customBindings.find(
-              (b) => b.provider_id === provider.id
-            )
-            const isBound = !!binding
-            return (
-              <div
-                key={provider.id}
-                className='flex items-center justify-between gap-3 rounded-lg border p-3'
-              >
-                <div className='flex min-w-0 items-center gap-3'>
-                  <Link2 className='text-muted-foreground size-4 shrink-0' />
-                  <div className='min-w-0'>
-                    <div className='flex items-center gap-1.5'>
-                      <p className='text-sm font-medium'>{provider.name}</p>
-                      {isBound && (
-                        <StatusBadge variant='success'>
-                          {t('Bound')}
-                        </StatusBadge>
-                      )}
+      {/* Custom OAuth Bindings */}
+      {customProviders && customProviders.length > 0 && (
+        <>
+          <Separator className='my-4' />
+          <p className='text-muted-foreground mb-3 text-sm font-medium'>
+            {t('Custom OAuth')}
+          </p>
+          <div className='grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3'>
+            {customProviders.map((provider) => {
+              const binding = customBindings.find(
+                (b) => b.provider_id === provider.id
+              )
+              const isBound = !!binding
+              return (
+                <div
+                  key={provider.id}
+                  className='flex items-center justify-between gap-2.5 rounded-lg border p-2.5 sm:gap-3 sm:p-3'
+                >
+                  <div className='flex min-w-0 items-center gap-2.5 sm:gap-3'>
+                    <div className='bg-muted shrink-0 rounded-md p-1.5 sm:p-2'>
+                      <Link2 className='h-4 w-4' />
                     </div>
-                    <p className='text-muted-foreground truncate text-xs'>
-                      {isBound
-                        ? binding?.external_id || t('Bound')
-                        : t('Not bound')}
-                    </p>
+                    <div className='min-w-0'>
+                      <div className='flex items-center gap-1.5'>
+                        <p className='text-sm font-medium'>{provider.name}</p>
+                        {isBound && (
+                          <StatusBadge
+                            label={t('Bound')}
+                            variant='success'
+                            copyable={false}
+                          />
+                        )}
+                      </div>
+                      <p className='text-muted-foreground truncate text-xs'>
+                        {isBound
+                          ? binding?.external_id || t('Bound')
+                          : t('Not bound')}
+                      </p>
+                    </div>
                   </div>
+                  {isBound ? (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='text-destructive h-7 shrink-0 px-2.5 text-xs'
+                      onClick={() => setUnbindTarget(binding)}
+                    >
+                      <Unlink className='mr-1 h-3 w-3' />
+                      {t('Unbind')}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='h-7 shrink-0 px-2.5 text-xs'
+                      onClick={() => handleBindCustomOAuth(provider)}
+                    >
+                      {t('Bind')}
+                    </Button>
+                  )}
                 </div>
-                {isBound ? (
-                  <Button
-                    variant='ghost'
-                    className='text-destructive shrink-0'
-                    onClick={() => setUnbindTarget(binding)}
-                  >
-                    <Unlink className='mr-1 size-3' />
-                    {t('Unbind')}
-                  </Button>
-                ) : (
-                  <Button
-                    variant='outline'
-                    className='shrink-0'
-                    onClick={() => handleBindCustomOAuth(provider)}
-                  >
-                    {t('Bind')}
-                  </Button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </TitledCard>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {/* Custom OAuth Unbind Confirmation */}
       <ConfirmDialog
@@ -395,6 +392,7 @@ export function ConnectedAccountsCard({
         isLoading={unbinding}
       />
 
+      {/* Email Bind Dialog */}
       <EmailBindDialog
         open={dialogs.isOpen('email')}
         onOpenChange={(open) =>
@@ -404,6 +402,7 @@ export function ConnectedAccountsCard({
         onSuccess={onUpdate}
       />
 
+      {/* WeChat Bind Dialog */}
       <WeChatBindDialog
         open={dialogs.isOpen('wechat')}
         onOpenChange={(open) =>
@@ -412,6 +411,7 @@ export function ConnectedAccountsCard({
         onSuccess={onUpdate}
       />
 
+      {/* Telegram Bind Dialog */}
       {status?.telegram_bot_name && (
         <TelegramBindDialog
           open={dialogs.isOpen('telegram')}

@@ -23,7 +23,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/design-system/button'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -31,7 +31,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/design-system/select'
+} from '@/components/ui/select'
 import {
   Tooltip,
   TooltipContent,
@@ -275,10 +275,10 @@ export function CommonLogsFilterBar<TData>(
         render={
           <Button
             variant='ghost'
-            size='icon-sm'
+            size='icon'
             onClick={() => setSensitiveVisible(!sensitiveVisible)}
             aria-label={sensitiveVisible ? t('Hide') : t('Show')}
-            className='text-muted-foreground hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground size-7'
           />
         }
       >

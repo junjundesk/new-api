@@ -21,14 +21,13 @@ import { Gauge, HeartPulse, Timer } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { StatusBadge, type StatusVariant } from '@/components/status-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
   formatThroughput,
   formatUptimePct,
-  getSuccessRateLevel,
+  getSuccessRateDotClass,
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
@@ -36,11 +35,6 @@ import { cn } from '@/lib/utils'
 
 const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 6
-const METRIC_SKELETON_KEYS = [
-  'success-rate-skeleton',
-  'latency-skeleton',
-  'throughput-skeleton',
-]
 
 type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
 
@@ -66,7 +60,7 @@ function simpleAverage(
     count++
   }
 
-  return count > 0 ? total / count : Number.NaN
+  return count > 0 ? total / count : NaN
 }
 
 function buildPerformanceSummary(rows: PerfModelSummary[]): PerformanceSummary {
@@ -134,8 +128,8 @@ export function PerformanceOverview() {
         {/* 3 KPI inline metrics */}
         {loading ? (
           <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
-            {METRIC_SKELETON_KEYS.map((key) => (
-              <div key={key} className='flex items-center gap-1.5'>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className='flex items-center gap-1.5'>
                 <Skeleton className='h-3 w-14' />
                 <Skeleton className='h-4 w-16' />
               </div>
@@ -192,10 +186,10 @@ function InlineMetric(props: {
         className='text-muted-foreground/50 size-3 shrink-0'
         aria-hidden='true'
       />
-      <span className='text-muted-foreground text-xs'>{props.label}</span>
+      <span className='text-muted-foreground text-[11px]'>{props.label}</span>
       <span
         className={cn(
-          'text-xs font-semibold tabular-nums',
+          'font-mono text-xs font-semibold tabular-nums',
           props.valueClassName
         )}
       >
@@ -207,22 +201,27 @@ function InlineMetric(props: {
 
 function ModelBadge(props: { model: PerfModelSummary }) {
   const model = props.model
-  const level = getSuccessRateLevel(model.success_rate)
-  let variant: StatusVariant = 'neutral'
-  if (level === 'excellent' || level === 'good') {
-    variant = 'success'
-  } else if (level === 'warning') {
-    variant = 'warning'
-  } else if (level === 'critical') {
-    variant = 'destructive'
-  }
 
   return (
-    <StatusBadge variant={variant}>
-      <span className='mr-1 whitespace-nowrap'>{model.model_name}</span>
-      <span className='tabular-nums'>
+    <span className='bg-muted/50 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'>
+      <span className='max-w-[10rem] truncate font-mono text-[11px]'>
+        {model.model_name}
+      </span>
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          getSuccessRateDotClass(model.success_rate)
+        )}
+        aria-hidden='true'
+      />
+      <span
+        className={cn(
+          'font-mono text-[11px] font-semibold tabular-nums',
+          getSuccessRateTextClass(model.success_rate)
+        )}
+      >
         {formatUptimePct(model.success_rate)}
       </span>
-    </StatusBadge>
+    </span>
   )
 }

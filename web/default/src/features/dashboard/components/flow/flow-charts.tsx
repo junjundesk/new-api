@@ -41,8 +41,6 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Tabs, TabsList, TabsTrigger } from '@/components/design-system/tabs'
-import { Toggle } from '@/components/design-system/toggle'
 import { MultiSelect } from '@/components/multi-select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -53,6 +51,8 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Toggle } from '@/components/ui/toggle'
 import {
   Tooltip,
   TooltipContent,
