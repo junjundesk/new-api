@@ -150,9 +150,10 @@ function ModelBadgeContent(
     return (
       <StatusBadge
         variant='neutral'
+        appearance='soft'
         size='sm'
         className={cn(
-          'h-5! max-w-none shrink-0 whitespace-nowrap! border-current/20 [&_[data-slot=status-badge-label]]:whitespace-nowrap!',
+          'h-5! max-w-none shrink-0 whitespace-nowrap! [&_[data-slot=status-badge-label]]:whitespace-nowrap!',
           colorClassName,
           props.className
         )}
@@ -166,9 +167,10 @@ function ModelBadgeContent(
     <CopyableStatusBadge
       value={props.modelName}
       variant='neutral'
+      appearance='soft'
       size='sm'
       className={cn(
-        'h-5! max-w-none shrink-0 whitespace-nowrap! border-current/20 [&_[data-slot=status-badge-label]]:whitespace-nowrap!',
+        'h-5! max-w-none shrink-0 whitespace-nowrap! [&_[data-slot=status-badge-label]]:whitespace-nowrap!',
         colorClassName,
         props.className
       )}

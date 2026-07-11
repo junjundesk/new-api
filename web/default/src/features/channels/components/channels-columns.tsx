@@ -456,7 +456,7 @@ function BalanceCell({ channel }: { channel: Channel }) {
                 variant={remainingBadgeVariant}
                 size='sm'
                 render={<button type='button' />}
-                className='cursor-pointer'
+                className='cursor-pointer underline-offset-2 hover:underline'
                 onClick={handleClickUpdate}
               >
                 {remainingBadgeLabel}
@@ -732,7 +732,7 @@ export function useChannelsColumns(
               : undefined
 
           return (
-            <div className='flex max-w-full min-w-0 items-center gap-2 overflow-hidden'>
+            <div className='flex w-max items-center gap-2'>
               {isMultiKey && (
                 <TooltipProvider delay={100}>
                   <Tooltip>
@@ -751,15 +751,10 @@ export function useChannelsColumns(
               )}
               <TooltipProvider delay={300}>
                 <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div className='max-w-full min-w-0 overflow-hidden' />
-                    }
-                  >
+                  <TooltipTrigger render={<div className='shrink-0' />}>
                     <ProviderBadge
                       iconKey={`${iconName}.Color`}
                       label={typeName}
-                      className='max-w-full min-w-0 overflow-hidden'
                     />
                   </TooltipTrigger>
                   <TooltipContent side='top'>{typeName}</TooltipContent>

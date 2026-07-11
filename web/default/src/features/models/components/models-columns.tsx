@@ -143,12 +143,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       cell: ({ row }) => {
         const name = row.getValue('model_name') as string
         return (
-          <CopyableStatusBadge
-            value={name}
-            variant='neutral'
-            size='sm'
-            className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
-          >
+          <CopyableStatusBadge value={name} variant='neutral' size='sm'>
             {name}
           </CopyableStatusBadge>
         )
@@ -255,11 +250,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
 
         return (
           <BadgeCell className='overflow-visible'>
-            <ProviderBadge
-              iconKey={vendor.icon}
-              label={vendor.name}
-              className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
-            />
+            <ProviderBadge iconKey={vendor.icon} label={vendor.name} />
           </BadgeCell>
         )
       },

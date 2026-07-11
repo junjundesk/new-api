@@ -219,7 +219,7 @@ function ModelBadge(props: { model: PerfModelSummary }) {
 
   return (
     <StatusBadge variant={variant}>
-      <span className='mr-1 max-w-[10rem] truncate'>{model.model_name}</span>
+      <span className='mr-1 whitespace-nowrap'>{model.model_name}</span>
       <span className='tabular-nums'>
         {formatUptimePct(model.success_rate)}
       </span>

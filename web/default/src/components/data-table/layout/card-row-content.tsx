@@ -77,12 +77,12 @@ export function CardRowContent<TData>(props: {
   return (
     <div className='flex min-w-0 flex-col'>
       {props.compact && (titleCell || badgeCell) && (
-        <div className='flex min-w-0 items-start justify-between gap-3'>
-          <div className='min-w-0 flex-1 text-[15px] leading-tight font-semibold [overflow-wrap:anywhere] break-words whitespace-normal [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal [&_[data-slot=status-badge-label]]:whitespace-normal [&_[data-slot=status-badge]]:h-auto [&_[data-slot=status-badge]]:max-w-full'>
+        <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
+          <div className='min-w-0 flex-1 text-[15px] leading-tight font-semibold [overflow-wrap:anywhere] break-words whitespace-normal [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal'>
             {titleCell ? renderCellContent(titleCell) : null}
           </div>
           {badgeCell && (
-            <div className='max-w-1/2 shrink text-right'>
+            <div className='shrink-0 text-right'>
               {renderCellContent(badgeCell)}
             </div>
           )}

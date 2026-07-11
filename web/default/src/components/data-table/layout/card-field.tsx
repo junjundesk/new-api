@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 export type DataTableContentMode = 'full' | 'wrap' | 'summary'
 
 const VALUE_WRAP_CLASS =
-  'whitespace-normal break-words [overflow-wrap:anywhere] [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal [&_.whitespace-nowrap]:whitespace-normal [&_[data-slot=status-badge]]:h-auto [&_[data-slot=status-badge]]:overflow-visible [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
+  'whitespace-normal break-words [overflow-wrap:anywhere] [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal'
 
 interface DataTableCardFieldProps {
   children: ReactNode

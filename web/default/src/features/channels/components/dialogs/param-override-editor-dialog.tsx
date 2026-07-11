@@ -964,7 +964,6 @@ const validateOperations = (
       if (headers.length === 0)
         return t('Rule {{line}} pass_headers format is invalid', { line })
     }
-
   }
   return ''
 }

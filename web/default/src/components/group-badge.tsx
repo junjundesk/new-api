@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { getIdentityTextColorClass } from '@/lib/colors'
 import { cn } from '@/lib/utils'
 
 import { StatusBadge, type StatusBadgeProps } from './status-badge'
@@ -55,6 +56,7 @@ export function GroupBadge(props: GroupBadgeProps) {
   const groupName = group?.trim()
   const isAutoGroup = groupName === 'auto'
   const isEmptyGroup = !groupName
+  const colorKey = groupName || labelOverride || 'group'
   const label = getGroupLabel({
     labelOverride,
     groupName,
@@ -67,7 +69,12 @@ export function GroupBadge(props: GroupBadgeProps) {
     <StatusBadge
       {...badgeProps}
       variant='neutral'
-      className={cn('min-w-0 shrink overflow-hidden', className)}
+      appearance='plain'
+      className={cn(
+        'shrink-0 overflow-visible',
+        getIdentityTextColorClass(colorKey),
+        className
+      )}
     >
       {label}
     </StatusBadge>
@@ -78,10 +85,11 @@ export function GroupBadge(props: GroupBadgeProps) {
   }
 
   return (
-    <span className='inline-flex max-w-full min-w-0 items-center gap-2 text-xs'>
-      <span className='max-w-full min-w-0 overflow-hidden'>{badge}</span>
+    <span className='inline-flex w-max shrink-0 items-center gap-2 text-xs whitespace-nowrap'>
+      <span className='inline-flex shrink-0'>{badge}</span>
       <StatusBadge
         variant={getGroupRatioVariant(ratio)}
+        appearance='plain'
         className='shrink-0 tabular-nums'
       >
         {ratio}x

@@ -115,9 +115,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
               {remark && (
                 <Tooltip>
                   <TooltipTrigger render={<StatusBadge variant='success' />}>
-                    <LongText className='max-w-full sm:max-w-[80px]'>
-                      {remark}
-                    </LongText>
+                    {remark}
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className='text-xs'>{remark}</p>

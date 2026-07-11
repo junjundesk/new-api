@@ -26,15 +26,16 @@ import {
   Loading03Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useTheme } from 'next-themes'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 
+import { useTheme } from '@/context/theme-provider'
+
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = 'system' } = useTheme()
+  const { resolvedTheme } = useTheme()
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme={resolvedTheme}
       className='toaster group'
       icons={{
         success: (
@@ -78,6 +79,29 @@ const Toaster = ({ ...props }: ToasterProps) => {
           '--normal-bg': 'var(--popover)',
           '--normal-text': 'var(--popover-foreground)',
           '--normal-border': 'var(--border)',
+          '--success-bg':
+            'color-mix(in oklch, var(--success) 10%, var(--popover))',
+          '--success-text':
+            'color-mix(in oklch, var(--success) 55%, var(--foreground))',
+          '--success-border':
+            'color-mix(in oklch, var(--success) 32%, var(--border))',
+          '--info-bg': 'color-mix(in oklch, var(--info) 10%, var(--popover))',
+          '--info-text':
+            'color-mix(in oklch, var(--info) 55%, var(--foreground))',
+          '--info-border':
+            'color-mix(in oklch, var(--info) 32%, var(--border))',
+          '--warning-bg':
+            'color-mix(in oklch, var(--warning) 10%, var(--popover))',
+          '--warning-text':
+            'color-mix(in oklch, var(--warning) 55%, var(--foreground))',
+          '--warning-border':
+            'color-mix(in oklch, var(--warning) 32%, var(--border))',
+          '--error-bg':
+            'color-mix(in oklch, var(--destructive) 10%, var(--popover))',
+          '--error-text':
+            'color-mix(in oklch, var(--destructive) 55%, var(--foreground))',
+          '--error-border':
+            'color-mix(in oklch, var(--destructive) 32%, var(--border))',
           '--border-radius': 'var(--radius)',
         } as React.CSSProperties
       }

@@ -78,12 +78,7 @@ export function useDeploymentsColumns(opts: {
       cell: ({ getValue }) => {
         const name = String(getValue() || '-') || '-'
         return (
-          <CopyableStatusBadge
-            value={name}
-            variant='neutral'
-            size='sm'
-            className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
-          >
+          <CopyableStatusBadge value={name} variant='neutral' size='sm'>
             {name}
           </CopyableStatusBadge>
         )
@@ -131,11 +126,7 @@ export function useDeploymentsColumns(opts: {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
         return (
-          <StatusBadge
-            variant='neutral'
-            size='sm'
-            className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
-          >
+          <StatusBadge variant='neutral' size='sm'>
             {String(provider)}
           </StatusBadge>
         )
@@ -232,7 +223,6 @@ export function useDeploymentsColumns(opts: {
               value={String(hardware)}
               variant='neutral'
               size='sm'
-              className='h-auto overflow-visible [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
             >
               {String(hardware)}
             </CopyableStatusBadge>

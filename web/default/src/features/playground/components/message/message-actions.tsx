@@ -110,7 +110,7 @@ export function MessageActions({
 
   if (hasContent) {
     actions.push({
-      className: isCopied ? 'text-green-600' : '',
+      className: isCopied ? 'text-success' : '',
       icon: isCopied ? Check : Copy,
       label: isCopied
         ? MESSAGE_ACTION_LABELS.COPIED

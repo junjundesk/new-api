@@ -442,7 +442,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     )}
                   </div>
                   {log.channel_name && (
-                    <span className='text-muted-foreground/70 truncate text-xs'>
+                    <span className='text-subtle-foreground truncate text-xs'>
                       {channelName}
                     </span>
                   )}
@@ -579,25 +579,20 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       if (groupRatioText) metaParts.push(groupRatioText)
 
       return (
-        <div className='flex max-w-[200px] flex-col gap-0.5'>
+        <div className='flex w-max flex-col gap-0.5'>
           <TooltipProvider delay={300}>
             <Tooltip>
-              <TooltipTrigger render={<div className='max-w-full' />}>
+              <TooltipTrigger render={<div className='shrink-0' />}>
                 {sensitiveVisible ? (
                   <CopyableStatusBadge
                     value={tokenName}
                     variant='neutral'
                     size='sm'
-                    className='max-w-full'
                   >
                     {displayName}
                   </CopyableStatusBadge>
                 ) : (
-                  <StatusBadge
-                    variant='neutral'
-                    size='sm'
-                    className='max-w-full'
-                  >
+                  <StatusBadge variant='neutral' size='sm'>
                     {displayName}
                   </StatusBadge>
                 )}
@@ -610,7 +605,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </Tooltip>
           </TooltipProvider>
           {metaParts.length > 0 && (
-            <span className='text-muted-foreground/60 text-xs [overflow-wrap:anywhere] break-words'>
+            <span className='text-subtle-foreground text-xs [overflow-wrap:anywhere] break-words'>
               {metaParts.join(' · ')}
             </span>
           )}
@@ -700,7 +695,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 ))}
             </div>
             <div className='flex items-center gap-1 text-xs leading-none'>
-              <span className='text-muted-foreground/60 text-xs leading-none'>
+              <span className='text-subtle-foreground text-xs leading-none'>
                 {log.is_stream ? t('Stream') : t('Non-stream')}
                 {tokensPerSecond != null && (
                   <>
@@ -782,12 +777,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
               <div className='flex items-center gap-1 text-xs'>
                 {cacheReadTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
+                  <span className='text-subtle-foreground'>
                     {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
                   </span>
                 )}
                 {cacheWriteTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
+                  <span className='text-subtle-foreground'>
                     ↑ {cacheWriteTokens.toLocaleString()}
                   </span>
                 )}
@@ -860,7 +855,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const segments = buildDetailSegments(log, other, t, isAdmin)
         const primary = segments[0]
         const hasMore = segments.length > 1
-        let detailsContent = <span className='text-muted-foreground/40'>—</span>
+        let detailsContent = <span className='text-faint-foreground'>—</span>
 
         if (log.content) {
           detailsContent = (
@@ -873,7 +868,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (primary) {
           let primaryClassName = 'text-foreground'
           if (primary.muted) {
-            primaryClassName = 'text-muted-foreground/60'
+            primaryClassName = 'text-subtle-foreground'
           } else if (primary.danger) {
             primaryClassName = 'text-destructive'
           }
@@ -887,7 +882,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             >
               {primary.text}
               {hasMore && (
-                <span className='text-muted-foreground/40 ml-0.5'>
+                <span className='text-faint-foreground ml-0.5'>
                   +{segments.length - 1}
                 </span>
               )}
@@ -905,7 +900,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             >
               {detailsContent}
               {ip && (
-                <span className='text-muted-foreground/60 max-w-full truncate tabular-nums'>
+                <span className='text-subtle-foreground max-w-full truncate tabular-nums'>
                   {ip}
                 </span>
               )}

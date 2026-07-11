@@ -1190,7 +1190,7 @@ function TestStatusCell({ result }: { result?: TestResult }) {
     return (
       <StatusBadge variant='info'>
         <Loader2 className='size-3.5 shrink-0 animate-spin' />
-        <span className='min-w-0 truncate leading-normal'>
+        <span className='leading-normal whitespace-nowrap'>
           {t('Testing...')}
         </span>
       </StatusBadge>
@@ -1363,7 +1363,7 @@ function FailureDetailsSheet({
                 onClick={() => copyToClipboard(details.details)}
               >
                 {copiedText === details.details ? (
-                  <Check className='mr-2 h-4 w-4 text-green-600' />
+                  <Check className='text-success mr-2 h-4 w-4' />
                 ) : (
                   <Copy className='mr-2 h-4 w-4' />
                 )}

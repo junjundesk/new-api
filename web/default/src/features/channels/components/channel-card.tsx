@@ -17,22 +17,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { flexRender, type Row } from '@tanstack/react-table'
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  BadgeListCellDisplayContext,
-  DataTableCardField,
-  DataTableCardRow,
-} from '@/components/data-table'
+import { GroupBadge } from '@/components/group-badge'
+import { cn } from '@/lib/utils'
 
-import { isTagAggregateRow } from '../lib'
+import { CHANNEL_STATUS } from '../constants'
+import { isTagAggregateRow, parseGroupsList } from '../lib'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
+import { useChannels } from './channels-provider'
+
+const SENSITIVE_MASK = '••••'
 
 /**
  * Bespoke channel card for the card view. Reuses every column's existing cell
- * renderer via `flexRender`, so the table's information and interactions are
- * preserved. All fields are always visible — no "More" disclosure.
+ * renderer via `flexRender`, preserving the original compact two-column
+ * hierarchy and all row interactions.
  */
 function ChannelCardComponent({
   row,
@@ -42,9 +44,9 @@ function ChannelCardComponent({
   isSelected: boolean
 }) {
   const { t } = useTranslation()
+  const { sensitiveVisible } = useChannels()
   const isTagRow = isTagAggregateRow(row.original)
-  const cells = row.getVisibleCells()
-  const visibleColumnIds = new Set(cells.map((cell) => cell.column.id))
+  const cells = row.getAllCells()
 
   const renderCell = (id: string) => {
     const cell = cells.find((candidate) => candidate.column.id === id)
@@ -54,129 +56,107 @@ function ChannelCardComponent({
     return flexRender(cell.column.columnDef.cell, cell.getContext())
   }
 
+  const fieldLabels: Record<string, string> = {
+    balance: t('Used / Remaining'),
+    response_time: t('Response'),
+    test_time: t('Last Tested'),
+  }
+  const groups = parseGroupsList(row.original.group ?? '')
+
   const selectCell = renderCell('select')
   const typeCell = renderCell('type')
-  const idCell = renderCell('id')
   const nameCell = renderCell('name')
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
   const priorityCell = renderCell('priority')
   const weightCell = renderCell('weight')
   const balanceCell = renderCell('balance')
-  const modelsCell = renderCell('models')
-  const groupsCell = renderCell('group')
-  const tagCell = renderCell('tag')
   const responseCell = renderCell('response_time')
   const testCell = renderCell('test_time')
 
-  const showId = !isTagRow && visibleColumnIds.has('id')
-  const showTag = !isTagRow && visibleColumnIds.has('tag')
-  const showModels = !isTagRow && visibleColumnIds.has('models')
-  const showTestTime = !isTagRow && visibleColumnIds.has('test_time')
-  const hasStatRows =
-    showId ||
-    showTag ||
-    showTestTime ||
-    visibleColumnIds.has('balance') ||
-    visibleColumnIds.has('response_time') ||
-    visibleColumnIds.has('priority') ||
-    visibleColumnIds.has('weight')
-  const hasBadgeSections = showModels || visibleColumnIds.has('group')
+  const labelClass = 'text-muted-foreground text-xs font-medium select-none'
+  const showStatusBadge =
+    isTagRow ||
+    (row.original.status !== CHANNEL_STATUS.ENABLED &&
+      row.original.status !== CHANNEL_STATUS.MANUAL_DISABLED)
 
   return (
-    <ChannelRowActionsLayoutContext.Provider value='card'>
-      <BadgeListCellDisplayContext.Provider value='full'>
-        <div
-          data-state={isSelected ? 'selected' : undefined}
-          className='flex h-full min-w-0 flex-col'
-        >
-          <div className='flex min-w-0 items-start gap-2.5'>
-            {!isTagRow && selectCell && (
-              <span className='mt-0.5 shrink-0'>{selectCell}</span>
+    <div
+      data-state={isSelected ? 'selected' : undefined}
+      className='flex flex-col gap-3'
+    >
+      <div className='flex items-center justify-between gap-2'>
+        <div className='flex min-w-0 flex-1 items-center gap-2'>
+          {!isTagRow && selectCell && (
+            <span className='shrink-0'>{selectCell}</span>
+          )}
+          <div className='min-w-0'>{typeCell}</div>
+        </div>
+        <div className='flex shrink-0 items-center gap-1.5'>
+          {showStatusBadge && statusCell}
+          <ChannelRowActionsLayoutContext.Provider value='card'>
+            {actionsCell}
+          </ChannelRowActionsLayoutContext.Provider>
+        </div>
+      </div>
+
+      <div className='flex items-start justify-between gap-3'>
+        <div className='flex min-w-0 flex-1 flex-col gap-3'>
+          <div className='min-w-0 text-sm'>
+            {!isTagRow && (
+              <div className={labelClass}>
+                #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
+              </div>
             )}
-
-            <div className='min-w-0 flex-1'>
-              {visibleColumnIds.has('name') && (
-                <div className='min-w-0 text-[15px] leading-tight font-semibold break-words'>
-                  {nameCell}
-                </div>
-              )}
-              {visibleColumnIds.has('type') && (
-                <div className='mt-1.5 min-w-0'>{typeCell}</div>
-              )}
-            </div>
-
-            <div className='flex shrink-0 items-center gap-1'>
-              {visibleColumnIds.has('status') && statusCell}
-              {actionsCell}
-            </div>
+            {nameCell}
           </div>
 
-          {hasStatRows && (
-            <div className='mt-3 space-y-0.5 border-t pt-3'>
-              {showId && (
-                <DataTableCardRow label={t('ID')} contentMode='full'>
-                  {idCell}
-                </DataTableCardRow>
-              )}
-              {visibleColumnIds.has('balance') && (
-                <DataTableCardRow
-                  label={t('Used / Remaining')}
-                  contentMode='full'
-                >
-                  {balanceCell}
-                </DataTableCardRow>
-              )}
-              {visibleColumnIds.has('response_time') && (
-                <DataTableCardRow label={t('Response')} contentMode='full'>
-                  {responseCell}
-                </DataTableCardRow>
-              )}
-              {showTestTime && (
-                <DataTableCardRow label={t('Last Tested')} contentMode='full'>
-                  {testCell}
-                </DataTableCardRow>
-              )}
-              {visibleColumnIds.has('priority') && (
-                <DataTableCardRow label={t('Priority')} contentMode='full'>
-                  {priorityCell}
-                </DataTableCardRow>
-              )}
-              {visibleColumnIds.has('weight') && (
-                <DataTableCardRow label={t('Weight')} contentMode='full'>
-                  {weightCell}
-                </DataTableCardRow>
-              )}
-              {showTag && (
-                <DataTableCardRow label={t('Tag')} contentMode='wrap'>
-                  {tagCell}
-                </DataTableCardRow>
-              )}
+          <div className='min-w-0'>
+            <div className={cn('mb-1', labelClass)}>{fieldLabels.balance}</div>
+            <div className='min-w-0 text-sm'>
+              {balanceCell ?? <span className='text-muted-foreground'>-</span>}
             </div>
-          )}
-
-          {hasBadgeSections && (
-            <div className='mt-3 space-y-3 border-t pt-3'>
-              {visibleColumnIds.has('group') && (
-                <DataTableCardField label={t('Groups')} contentMode='full'>
-                  {groupsCell ?? (
-                    <span className='text-muted-foreground'>-</span>
-                  )}
-                </DataTableCardField>
-              )}
-              {showModels && (
-                <DataTableCardField label={t('Models')} contentMode='full'>
-                  {modelsCell ?? (
-                    <span className='text-muted-foreground'>-</span>
-                  )}
-                </DataTableCardField>
-              )}
-            </div>
-          )}
+          </div>
         </div>
-      </BadgeListCellDisplayContext.Provider>
-    </ChannelRowActionsLayoutContext.Provider>
+
+        <div className='grid shrink-0 grid-cols-[auto_auto] items-center gap-x-3 gap-y-1'>
+          <span className={labelClass}>{t('Priority')}</span>
+          <span className={labelClass}>{t('Weight')}</span>
+          <div className='flex justify-start'>{priorityCell}</div>
+          <div className='flex justify-start'>{weightCell}</div>
+          <span className={cn('mt-2', labelClass)}>
+            {fieldLabels.response_time}
+          </span>
+          <span className={cn('mt-2', labelClass)}>
+            {fieldLabels.test_time}
+          </span>
+          <div className='text-sm'>
+            {responseCell ?? <span className='text-muted-foreground'>-</span>}
+          </div>
+          <div className='text-sm'>
+            {testCell ?? <span className='text-muted-foreground'>-</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className='min-w-0'>
+        {groups.length > 0 ? (
+          <div className='-ml-1.5 flex flex-wrap gap-1'>
+            {groups.map((group) => (
+              <GroupBadge
+                key={group}
+                group={group}
+                label={sensitiveVisible ? undefined : SENSITIVE_MASK}
+                size='sm'
+              />
+            ))}
+          </div>
+        ) : (
+          <span className='text-muted-foreground text-sm'>-</span>
+        )}
+      </div>
+    </div>
   )
 }
 
-export const ChannelCard = ChannelCardComponent
+export const ChannelCard = memo(ChannelCardComponent)

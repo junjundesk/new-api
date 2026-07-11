@@ -58,9 +58,9 @@ function DataTableRowInner<TData>({
             className={cn(
               'max-w-full min-w-0',
               contentMode === 'full' &&
-                'max-w-none overflow-visible [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_[data-slot=status-badge]]:max-w-none [&_[data-slot=status-badge]]:overflow-visible [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip',
+                'max-w-none overflow-visible [&_.truncate]:overflow-visible [&_.truncate]:text-clip',
               contentMode === 'wrap' &&
-                'whitespace-normal break-words [overflow-wrap:anywhere] [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal [&_.whitespace-nowrap]:whitespace-normal [&_[data-slot=status-badge]]:h-auto [&_[data-slot=status-badge]]:overflow-visible [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal',
+                'whitespace-normal break-words [overflow-wrap:anywhere] [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-normal',
               contentMode === 'summary' &&
                 'whitespace-normal break-words [overflow-wrap:anywhere]',
               getColumnClassName?.(cell.column.id, 'cell')

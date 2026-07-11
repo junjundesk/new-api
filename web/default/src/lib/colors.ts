@@ -55,28 +55,35 @@ export const colorToBgClass: Record<SemanticColor, string> = {
   slate: 'bg-slate-500',
 }
 
+const identitySurfaceClassName =
+  '[background-color:color-mix(in_oklch,currentColor_var(--identity-surface-mix),transparent)] [border-color:color-mix(in_oklch,currentColor_var(--identity-border-mix),transparent)]'
+
 const identityColorClassMap: Record<SemanticColor, string> = {
-  amber: 'bg-identity-amber/10 text-identity-amber',
-  blue: 'bg-identity-blue/10 text-identity-blue',
-  cyan: 'bg-identity-cyan/10 text-identity-cyan',
-  green: 'bg-identity-green/10 text-identity-green',
-  grey: 'bg-identity-grey/10 text-identity-grey',
-  indigo: 'bg-identity-indigo/10 text-identity-indigo',
-  'light-blue': 'bg-identity-light-blue/10 text-identity-light-blue',
-  'light-green': 'bg-identity-green/10 text-identity-green',
-  lime: 'bg-identity-lime/10 text-identity-lime',
-  orange: 'bg-identity-orange/10 text-identity-orange',
-  pink: 'bg-identity-pink/10 text-identity-pink',
-  purple: 'bg-identity-purple/10 text-identity-purple',
-  red: 'bg-identity-red/10 text-identity-red',
-  slate: 'bg-identity-grey/10 text-identity-grey',
-  teal: 'bg-identity-teal/10 text-identity-teal',
-  violet: 'bg-identity-violet/10 text-identity-violet',
-  yellow: 'bg-identity-yellow/10 text-identity-yellow',
+  amber: 'text-identity-amber',
+  blue: 'text-identity-blue',
+  cyan: 'text-identity-cyan',
+  green: 'text-identity-green',
+  grey: 'text-identity-grey',
+  indigo: 'text-identity-indigo',
+  'light-blue': 'text-identity-light-blue',
+  'light-green': 'text-identity-green',
+  lime: 'text-identity-lime',
+  orange: 'text-identity-orange',
+  pink: 'text-identity-pink',
+  purple: 'text-identity-purple',
+  red: 'text-identity-red',
+  slate: 'text-identity-grey',
+  teal: 'text-identity-teal',
+  violet: 'text-identity-violet',
+  yellow: 'text-identity-yellow',
+}
+
+export function getIdentityTextColorClass(name: string): string {
+  return identityColorClassMap[stringToColor(name)]
 }
 
 export function getIdentityColorClass(name: string): string {
-  return identityColorClassMap[stringToColor(name)]
+  return `${identitySurfaceClassName} ${getIdentityTextColorClass(name)}`
 }
 
 export function getBgColorClass(color?: string): string {

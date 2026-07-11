@@ -234,7 +234,7 @@ export function IoNetDeploymentSettingsSection({
 
               {testState.ok === true ? (
                 <Alert variant='default' className='flex items-center gap-2'>
-                  <CheckCircle2 className='size-4 text-green-600' />
+                  <CheckCircle2 className='text-success size-4' />
                   <div>
                     <AlertTitle>{t('Connection successful')}</AlertTitle>
                     <AlertDescription>

@@ -123,10 +123,7 @@ function PlaygroundParameterContent({
                   >
                     {t(control.labelKey)}
                   </label>
-                  <StatusBadge
-                    appearance='outline'
-                    className='max-w-24 shrink-0'
-                  >
+                  <StatusBadge appearance='outline'>
                     {t(getParameterControlValueText(control.key, value))}
                   </StatusBadge>
                 </div>

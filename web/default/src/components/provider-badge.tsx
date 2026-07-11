@@ -38,7 +38,7 @@ export function ProviderBadge({
     <StatusBadge
       {...badgeProps}
       variant='neutral'
-      className={cn('min-w-0 shrink overflow-hidden', className)}
+      className={cn('shrink-0 overflow-visible', className)}
     >
       {icon && (
         <span

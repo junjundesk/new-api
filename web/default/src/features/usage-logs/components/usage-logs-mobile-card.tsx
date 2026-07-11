@@ -97,7 +97,7 @@ function UsageLogCard<TData>(props: { cells: Cell<TData, unknown>[] }) {
       {(titleCell || badgeCell) && (
         <div className='flex min-w-0 items-start justify-between gap-3'>
           {titleCell && (
-            <div className='min-w-0 flex-1 text-[15px] leading-tight font-semibold break-words'>
+            <div className='min-w-0 flex-1 text-base leading-tight font-semibold break-words'>
               {flexRender(
                 titleCell.column.columnDef.cell,
                 titleCell.getContext()
@@ -115,31 +115,42 @@ function UsageLogCard<TData>(props: { cells: Cell<TData, unknown>[] }) {
         </div>
       )}
 
-      {rowCells.length > 0 && (
-        <div className='mt-3 space-y-0.5 border-t pt-3'>
-          {rowCells.map((cell) => (
-            <DataTableCardRow
-              key={cell.id}
-              label={getCardLabel(cell)}
-              contentMode={cell.column.columnDef.meta?.contentMode}
-            >
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </DataTableCardRow>
-          ))}
-        </div>
-      )}
+      {bodyCells.length > 0 && (
+        <div
+          className={cn(
+            'flex flex-col gap-3',
+            (titleCell || badgeCell) && 'mt-3'
+          )}
+        >
+          {rowCells.length > 0 && (
+            <div className='flex flex-col gap-0.5'>
+              {rowCells.map((cell) => (
+                <DataTableCardRow
+                  key={cell.id}
+                  label={getCardLabel(cell)}
+                  contentMode={cell.column.columnDef.meta?.contentMode}
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </DataTableCardRow>
+              ))}
+            </div>
+          )}
 
-      {wideCells.length > 0 && (
-        <div className='mt-3 space-y-3 border-t pt-3'>
-          {wideCells.map((cell) => (
-            <DataTableCardField
-              key={cell.id}
-              label={getCardLabel(cell)}
-              contentMode={cell.column.columnDef.meta?.contentMode ?? 'full'}
-            >
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </DataTableCardField>
-          ))}
+          {wideCells.length > 0 && (
+            <div className='bg-muted/30 flex flex-col gap-3 rounded-md px-2.5 py-2'>
+              {wideCells.map((cell) => (
+                <DataTableCardField
+                  key={cell.id}
+                  label={getCardLabel(cell)}
+                  contentMode={
+                    cell.column.columnDef.meta?.contentMode ?? 'full'
+                  }
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </DataTableCardField>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -23,8 +23,9 @@ import { cn } from '@/lib/utils'
 export const sideDrawerContentClassName = (className?: string) =>
   cn(
     // Width: pass `sm:max-w-*` (or `sm:max-w-none`) in className. SheetContent
-    // defaults to `sm:max-w-sm` for left/right; plain utilities merge correctly.
-    'bg-background text-foreground flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 shadow-none',
+    // defaults to 75% width on mobile and `sm:max-w-sm` for left/right.
+    // Match its side variants so product drawers occupy the full mobile viewport.
+    'bg-background text-foreground flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 shadow-none data-[side=left]:w-full data-[side=right]:w-full',
     className
   )
 

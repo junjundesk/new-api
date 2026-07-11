@@ -260,7 +260,7 @@ export function DynamicPricingBreakdown({
             {t('Tiered price table')}
           </div>
           <div className='space-y-1.5 sm:hidden'>
-            {tiers.map((tier, i) => {
+            {tiers.map((tier) => {
               const condSummary = formatConditionSummary(tier.conditions, t)
               const isMatched =
                 matchedTierLabel != null &&
@@ -268,7 +268,7 @@ export function DynamicPricingBreakdown({
                 tier.label === matchedTierLabel
               return (
                 <div
-                  key={`tier-mobile-${i}`}
+                  key={`tier-mobile-${tier.label || condSummary || 'default'}`}
                   className={cn(
                     'rounded-md border p-2',
                     isMatched && 'border-success/40 bg-success/10'
@@ -416,27 +416,30 @@ export function DynamicPricingBreakdown({
             {t('Conditional multipliers')}
           </div>
           <ul className='space-y-1.5'>
-            {ruleGroups.map((group, gi) => (
-              <li
-                key={`group-${gi}`}
-                className='bg-muted/50 flex items-center justify-between gap-3 rounded-md px-3 py-2'
-              >
-                <span
-                  className={cn(
-                    'text-foreground break-all',
-                    compact ? 'text-xs' : 'text-sm'
-                  )}
+            {ruleGroups.map((group) => {
+              const description = describeGroup(group, t)
+              return (
+                <li
+                  key={`${description}-${group.multiplier}`}
+                  className='bg-muted/50 flex items-center justify-between gap-3 rounded-md px-3 py-2'
                 >
-                  {describeGroup(group, t)}
-                </span>
-                <Badge
-                  variant='secondary'
-                  className='shrink-0 bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
-                >
-                  {group.multiplier}x
-                </Badge>
-              </li>
-            ))}
+                  <span
+                    className={cn(
+                      'text-foreground break-all',
+                      compact ? 'text-xs' : 'text-sm'
+                    )}
+                  >
+                    {description}
+                  </span>
+                  <Badge
+                    variant='secondary'
+                    className='border-warning/30 bg-warning/10 text-status-warning shrink-0'
+                  >
+                    {group.multiplier}x
+                  </Badge>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

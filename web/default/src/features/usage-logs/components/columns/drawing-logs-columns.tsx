@@ -149,16 +149,16 @@ export function useDrawingLogsColumns(
       const mjId = row.getValue('mj_id') as string
 
       if (!mjId) {
-        return <span className='text-muted-foreground/60 text-xs'>-</span>
+        return <span className='text-subtle-foreground text-xs'>-</span>
       }
 
       return (
-        <div className='flex max-w-[160px] flex-col gap-0.5'>
+        <div className='flex w-max flex-col gap-0.5'>
           <CopyableStatusBadge
             value={mjId}
             variant='neutral'
             size='sm'
-            className='h-auto max-w-full overflow-visible font-mono [overflow-wrap:anywhere] whitespace-normal [&_[data-slot=status-badge-label]]:overflow-visible [&_[data-slot=status-badge-label]]:text-clip [&_[data-slot=status-badge-label]]:whitespace-normal'
+            className='font-mono'
           >
             {mjId}
           </CopyableStatusBadge>
@@ -215,7 +215,7 @@ export function useDrawingLogsColumns(
         const [dialogOpen, setDialogOpen] = useState(false)
 
         if (!imageUrl) {
-          return <span className='text-muted-foreground/60 text-xs'>-</span>
+          return <span className='text-subtle-foreground text-xs'>-</span>
         }
 
         return (
@@ -254,7 +254,7 @@ export function useDrawingLogsColumns(
         const [dialogOpen, setDialogOpen] = useState(false)
 
         if (!prompt) {
-          return <span className='text-muted-foreground/60 text-xs'>-</span>
+          return <span className='text-subtle-foreground text-xs'>-</span>
         }
 
         return (

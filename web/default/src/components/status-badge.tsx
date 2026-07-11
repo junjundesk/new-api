@@ -35,8 +35,11 @@ export type StatusVariant =
 
 export type StatusBadgeAppearance = 'soft' | 'outline' | 'plain'
 
+export const StatusBadgeAppearanceContext =
+  React.createContext<StatusBadgeAppearance | null>(null)
+
 export const statusBadgeVariants = cva(
-  'focus-visible:ring-ring/50 inline-flex w-fit max-w-full min-w-0 shrink items-center justify-center overflow-hidden rounded-md text-ellipsis whitespace-nowrap font-medium tracking-normal outline-none transition-[color,background-color,border-color,filter] duration-150 focus-visible:ring-[3px] has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_[data-icon]]:pointer-events-none [&_[data-icon]]:size-3 [&_[data-icon]]:shrink-0',
+  'focus-visible:ring-ring/50 inline-flex w-fit max-w-none shrink-0 items-center justify-center overflow-visible rounded-md whitespace-nowrap font-medium tracking-normal outline-none transition-[color,background-color,border-color,filter] duration-150 focus-visible:ring-[3px] has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_.truncate]:max-w-none [&_.truncate]:overflow-visible [&_.truncate]:text-clip [&_.truncate]:whitespace-nowrap [&_[data-icon]]:pointer-events-none [&_[data-icon]]:size-3 [&_[data-icon]]:shrink-0',
   {
     variants: {
       size: {
@@ -110,7 +113,7 @@ export const statusBadgeVariants = cva(
       },
     ],
     defaultVariants: {
-      appearance: 'soft',
+      appearance: 'plain',
       size: 'sm',
       variant: 'neutral',
     },
@@ -129,7 +132,8 @@ export function StatusBadge({
   variant: variantProp,
   ...props
 }: StatusBadgeProps) {
-  const appearance = appearanceProp ?? 'soft'
+  const contextAppearance = React.useContext(StatusBadgeAppearanceContext)
+  const appearance = appearanceProp ?? contextAppearance ?? 'plain'
   const size = sizeProp ?? 'sm'
   const variant = variantProp ?? 'neutral'
   const leadingIcons: React.ReactNode[] = []
@@ -163,7 +167,10 @@ export function StatusBadge({
           <>
             {leadingIcons}
             {labelChildren.length > 0 && (
-              <span data-slot='status-badge-label' className='min-w-0 truncate'>
+              <span
+                data-slot='status-badge-label'
+                className='max-w-none shrink-0 overflow-visible whitespace-nowrap'
+              >
                 {labelChildren}
               </span>
             )}
@@ -249,7 +256,7 @@ export function StatusBadgeList<T>(props: StatusBadgeListProps<T>) {
   return (
     <div
       className={cn(
-        'flex max-w-full min-w-0 items-center gap-1 overflow-hidden',
+        'flex max-w-full min-w-0 items-center gap-1 overflow-visible',
         className
       )}
       {...domProps}
