@@ -114,6 +114,7 @@ export interface ToolSurchargeItem {
 
 export interface LogOtherData {
   admin_info?: {
+    request_ip?: string
     is_multi_key?: boolean
     multi_key_index?: number
     use_channel?: number[]
@@ -412,3 +413,4 @@ export interface UserInfo {
   aff_quota?: number
   remark?: string
 }
+
