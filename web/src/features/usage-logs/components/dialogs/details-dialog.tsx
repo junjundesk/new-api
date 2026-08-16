@@ -74,6 +74,7 @@ import {
   isViolationFeeLog,
   getFirstResponseTimeColor,
   getResponseTimeColor,
+  getRequestIpForDisplay,
   renderAuditContent,
 } from '../../lib/format'
 import {
@@ -496,9 +497,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
     !!other?.expr_b64
   const hasAudioTokens = other?.ws || other?.audio
   const showTiming = isTimingLogType(props.log.type)
-  const showAdminIp =
-    !!props.log.ip && (showTiming || (props.isAdmin && isTopup))
   const adminInfo = other?.admin_info
+  const requestIp = getRequestIpForDisplay(
+    props.log.ip,
+    adminInfo,
+    props.isAdmin
+  )
+  const showRequestIp = !!requestIp && (props.isAdmin || showTiming)
   const topupAuditFields =
     isTopup && props.isAdmin && adminInfo
       ? ([
@@ -577,9 +582,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
           label: t('Login Method'),
           value: String(other.login_method),
         },
-        props.log.ip && {
+        requestIp && {
           label: t('IP Address'),
-          value: props.log.ip,
+          value: requestIp,
         },
         other?.user_agent && {
           label: t('User Agent'),
@@ -690,13 +695,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {showAdminIp && (
+          {showRequestIp && (
             <DetailRow
               label={t('IP Address')}
               value={
                 <span className='flex items-center gap-1'>
                   <Globe className='size-3 text-amber-500' aria-hidden='true' />
-                  {props.log.ip}
+                  {requestIp}
                 </span>
               }
               mono

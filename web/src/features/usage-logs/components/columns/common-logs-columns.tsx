@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
+import { GitBranch, Globe, Sparkles, KeyRound } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -44,6 +44,7 @@ import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
+  getRequestIpForDisplay,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   parseLogOther,
@@ -531,6 +532,39 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </button>
           )
         },
+      },
+      {
+        id: 'request_ip',
+        header: t('IP Address'),
+        accessorFn: (row) => {
+          const other = parseLogOther(row.other)
+          return getRequestIpForDisplay(row.ip, other?.admin_info, true)
+        },
+        cell: ({ row }) => {
+          const log = row.original
+          const other = parseLogOther(log.other)
+          const requestIp = getRequestIpForDisplay(
+            log.ip,
+            other?.admin_info,
+            true
+          )
+
+          if (!requestIp) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+
+          return (
+            <span className='inline-flex max-w-[180px] items-center gap-1 font-mono text-xs break-all'>
+              <Globe
+                className='size-3 shrink-0 text-amber-500'
+                aria-hidden='true'
+              />
+              {requestIp}
+            </span>
+          )
+        },
+        meta: { label: t('IP Address') },
+        size: 150,
       }
     )
   }

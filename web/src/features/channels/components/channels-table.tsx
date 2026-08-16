@@ -209,6 +209,8 @@ export function ChannelsTable() {
     queryFn: getGroups,
   })
 
+  const groupRatios = useMemo(() => groupsData?.ratios ?? {}, [groupsData])
+
   const groupOptions = useMemo(
     () =>
       (groupsData?.data || []).map((g) => ({
@@ -305,7 +307,10 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupRatios,
+  })
 
   // React Table instance
   const { table } = useDataTable({
@@ -421,7 +426,11 @@ export function ChannelsTable() {
       enableCardView
       viewModeStorageKey={CHANNELS_VIEW_MODE_STORAGE_KEY}
       renderCard={(row, { isSelected }) => (
-        <ChannelCard row={row} isSelected={isSelected} />
+        <ChannelCard
+          row={row}
+          isSelected={isSelected}
+          groupRatios={groupRatios}
+        />
       )}
       cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
       applyHeaderSize
