@@ -167,6 +167,14 @@ export function parseLogOther(other: string): LogOtherData | null {
   }
 }
 
+export function getRequestIpForDisplay(
+  logIp: string,
+  adminInfo: LogOtherData['admin_info'],
+  isAdmin: boolean
+): string {
+  return (isAdmin ? adminInfo?.request_ip : undefined) || logIp
+}
+
 /**
  * Get time color based on duration (in seconds)
  */

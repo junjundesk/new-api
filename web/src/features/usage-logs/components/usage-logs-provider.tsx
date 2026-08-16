@@ -87,9 +87,8 @@ export function useUsageLogsContext() {
  * Resolves the effective admin scope for usage logs: whether the current
  * user is allowed to view all users' logs (`canManageScope`), and whether
  * their current view preference (`viewScope`) has that scope active
- * (`isAdminView`). Data fetching and admin-only UI should key off
- * `isAdminView` rather than raw role, so an admin who switches to "only
- * mine" is treated exactly like a regular user for that view.
+ * (`isAdminView`). Data fetching uses `isAdminView`, while admin-only fields
+ * use `canManageScope` so an admin still sees audit data in "Only Mine".
  */
 export function useLogsViewScope() {
   const canManageScope = useIsAdmin()
