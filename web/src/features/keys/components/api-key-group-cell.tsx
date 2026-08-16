@@ -47,6 +47,7 @@ import {
 type GroupOption = {
   value: string
   label: string
+  ratio?: GroupRatio
 }
 
 type ApiKeyGroupCellProps = {
@@ -55,7 +56,7 @@ type ApiKeyGroupCellProps = {
   group: string
   label?: string
   isChain?: boolean
-  channelIds?: number[]
+  chainGroups?: string[]
   onGroupChanged?: () => void
   ratio?: GroupRatio
   options?: GroupOption[]
@@ -68,13 +69,13 @@ function GroupCellContent(props: ApiKeyGroupCellProps) {
   if (props.isChain) {
     const ratio = typeof props.ratio === 'number' ? props.ratio : undefined
     const chainLabel = props.label || props.group
-    const channelIds = (props.channelIds || [])
-      .map((id) => `#${id}`)
-      .join(' -> ')
+    const chainGroups = (props.chainGroups || []).join(' -> ')
     return (
       <TruncatedCell
         className='-ml-1.5'
-        tooltipContent={channelIds ? `${chainLabel}\n${channelIds}` : chainLabel}
+        tooltipContent={
+          chainGroups ? `${chainLabel}\n${chainGroups}` : chainLabel
+        }
         tooltipClassName='break-all whitespace-pre-line'
       >
         <GroupBadge label={chainLabel} ratio={ratio} />
@@ -105,11 +106,7 @@ function GroupCellContent(props: ApiKeyGroupCellProps) {
           />
         }
       >
-        <StatusBadge
-          label={t('Cross-group')}
-          variant='info'
-          copyable={false}
-        />
+        <StatusBadge label={t('Cross-group')} variant='info' copyable={false} />
         <GroupRatioBadge
           ratio={props.ratio}
           isAuto
@@ -132,17 +129,21 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
   const [updating, setUpdating] = useState(false)
   const selectOptions = useMemo(() => {
     const options = [...(props.options ?? [])]
-    if (props.group && !options.some((option) => option.value === props.group)) {
+    if (
+      props.group &&
+      !options.some((option) => option.value === props.group)
+    ) {
       options.push({
         value: props.group,
         label: props.label || props.group,
+        ratio: props.ratio,
       })
     }
     if (!props.group && !options.some((option) => option.value === '')) {
       options.unshift({ value: '', label: t('User Group') })
     }
     return options
-  }, [props.group, props.label, props.options, t])
+  }, [props.group, props.label, props.options, props.ratio, t])
 
   const handleChange = async (value: string | null) => {
     if (value === props.group || updating) return
@@ -176,21 +177,40 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
     props.label ??
     props.group ??
     t('User Group')
+  const currentOption = selectOptions.find(
+    (option) => option.value === props.group
+  )
 
   return (
     <Select value={props.group} onValueChange={handleChange}>
       <SelectTrigger
         size='sm'
         disabled={updating}
-        className='hover:bg-muted/60 h-7 min-w-28 max-w-full border-transparent bg-transparent px-1.5'
+        className='hover:bg-muted/60 h-7 max-w-full min-w-28 border-transparent bg-transparent px-1.5'
       >
-        <SelectValue placeholder={currentLabel}>{currentLabel}</SelectValue>
+        <SelectValue placeholder={currentLabel}>
+          <span className='flex min-w-0 items-center gap-1.5'>
+            <span className='truncate'>{currentLabel}</span>
+            {currentOption?.ratio != null && (
+              <GroupRatioBadge
+                ratio={currentOption.ratio}
+                isAuto={currentOption.value === 'auto'}
+                shouldReduceMotion={props.shouldReduceMotion}
+              />
+            )}
+          </span>
+        </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className='min-w-72'>
         <SelectGroup>
           {selectOptions.map((option) => (
             <SelectItem key={option.value} value={option.value}>
-              {option.label}
+              <span className='min-w-0 flex-1 truncate'>{option.label}</span>
+              <GroupRatioBadge
+                ratio={option.ratio}
+                isAuto={option.value === 'auto'}
+                shouldReduceMotion={props.shouldReduceMotion}
+              />
             </SelectItem>
           ))}
         </SelectGroup>
