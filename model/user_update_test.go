@@ -27,6 +27,25 @@ func setupUserUpdateTestState(t *testing.T) {
 	})
 }
 
+func resetBatchUpdateTestState(t *testing.T) {
+	t.Helper()
+	oldBatchEnabled := common.BatchUpdateEnabled
+	common.BatchUpdateEnabled = false
+	for i := 0; i < BatchUpdateTypeCount; i++ {
+		batchUpdateLocks[i].Lock()
+		batchUpdateStores[i] = make(map[int]int)
+		batchUpdateLocks[i].Unlock()
+	}
+	t.Cleanup(func() {
+		common.BatchUpdateEnabled = oldBatchEnabled
+		for i := 0; i < BatchUpdateTypeCount; i++ {
+			batchUpdateLocks[i].Lock()
+			batchUpdateStores[i] = make(map[int]int)
+			batchUpdateLocks[i].Unlock()
+		}
+	})
+}
+
 func createUserBindTestUser(t *testing.T) User {
 	t.Helper()
 	user := User{
