@@ -39,6 +39,28 @@ func TestChatCompletionsRequestToResponsesRequestInstructionsAndTools(t *testing
 	assert.Equal(t, "function_call_output", gjson.GetBytes(got.Input, "3.type").String())
 }
 
+func TestChatCompletionsRequestToResponsesRequestPreservesAssistantReasoning(t *testing.T) {
+	reasoning := "先分析工具结果，再继续回答"
+	assistant := assistantMessageWithTool("", "call_1", "lookup", `{}`)
+	assistant.ReasoningContent = lo.ToPtr(reasoning)
+	req := &dto.GeneralOpenAIRequest{
+		Model: "deepseek-v4-flash",
+		Messages: []dto.Message{
+			{Role: "user", Content: "查天气"},
+			assistant,
+			{Role: "tool", ToolCallId: "call_1", Content: "晴"},
+		},
+	}
+
+	got, err := ChatCompletionsRequestToResponsesRequest(req)
+	require.NoError(t, err)
+	assert.Equal(t, "reasoning", gjson.GetBytes(got.Input, "1.type").String())
+	assert.Equal(t, reasoning, gjson.GetBytes(got.Input, "1.summary.0.text").String())
+	assert.Equal(t, "assistant", gjson.GetBytes(got.Input, "2.role").String())
+	assert.Equal(t, "function_call", gjson.GetBytes(got.Input, "3.type").String())
+	assert.Equal(t, "function_call_output", gjson.GetBytes(got.Input, "4.type").String())
+}
+
 func TestChatCompletionsRequestToResponsesRequestPreservesPromptCacheKey(t *testing.T) {
 	t.Run("present", func(t *testing.T) {
 		key := "session-\"quoted\"\\path\n世界"
