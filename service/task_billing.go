@@ -196,6 +196,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
 		Other:     other,
+		RequestIP: task.PrivateData.RequestIP,
 	})
 
 	// 5. 资金退款完成后再清除持久化标记。
@@ -276,6 +277,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
 		Other:     other,
+		RequestIP: task.PrivateData.RequestIP,
 		NodeName:  task.PrivateData.NodeName,
 	})
 }
@@ -331,3 +333,4 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason, clamp)
 }
+
