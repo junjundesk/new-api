@@ -148,6 +148,10 @@ func attachRequestIPForAdmin(other map[string]interface{}, requestIP string) map
 	return other
 }
 
+func requestClientIP(c *gin.Context) string {
+	return common.RequestClientIP(c)
+}
+
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
@@ -302,7 +306,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
-	requestIP := c.ClientIP()
+	requestIP := requestClientIP(c)
 	other = attachRequestIPForAdmin(other, requestIP)
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
@@ -368,7 +372,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
-	requestIP := c.ClientIP()
+	requestIP := requestClientIP(c)
 	params.Other = attachRequestIPForAdmin(params.Other, requestIP)
 	otherStr := common.MapToJsonStr(params.Other)
 	// 判断是否需要记录 IP
@@ -434,6 +438,7 @@ type RecordTaskBillingLogParams struct {
 	TokenId   int
 	Group     string
 	Other     map[string]interface{}
+	RequestIP string
 	NodeName  string // 任务发起节点；为空时回退当前节点
 }
 
@@ -449,6 +454,14 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		}
 	}
 	createdAt := common.GetTimestamp()
+	other := params.Other
+	if params.RequestIP != "" {
+		other = attachRequestIPForAdmin(other, params.RequestIP)
+	}
+	needRecordIP := false
+	if settingMap, err := GetUserSetting(params.UserId, false); err == nil {
+		needRecordIP = settingMap.RecordIpLog
+	}
 	log := &Log{
 		UserId:    params.UserId,
 		Username:  username,
@@ -461,7 +474,13 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		ChannelId: params.ChannelId,
 		TokenId:   params.TokenId,
 		Group:     params.Group,
-		Other:     common.MapToJsonStr(params.Other),
+		Ip: func() string {
+			if needRecordIP {
+				return params.RequestIP
+			}
+			return ""
+		}(),
+		Other: common.MapToJsonStr(other),
 	}
 	err := createLog(log)
 	if err != nil {
@@ -756,3 +775,4 @@ func DeleteOldLogBatch(ctx context.Context, targetTimestamp int64, limit int) (i
 	}
 	return result.RowsAffected, nil
 }
+
