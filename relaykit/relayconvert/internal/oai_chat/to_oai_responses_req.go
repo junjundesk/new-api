@@ -73,6 +73,20 @@ func convertChatResponseFormatToResponsesText(reqFormat *dto.ResponseFormat) jso
 	return textRaw
 }
 
+func chatReasoningToResponsesInputItem(reasoning string) map[string]any {
+	if reasoning == "" {
+		return nil
+	}
+	return map[string]any{
+		"type": "reasoning",
+		"id":   fmt.Sprintf("rs_%s", kitutil.GetUUID()),
+		"summary": []map[string]any{{
+			"type": "summary_text",
+			"text": reasoning,
+		}},
+	}
+}
+
 func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*dto.OpenAIResponsesRequest, error) {
 	if req == nil {
 		return nil, errors.New("request is nil")
@@ -154,6 +168,15 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 
 		item := map[string]any{
 			"role": role,
+		}
+
+		// Responses keeps assistant reasoning as a separate input item. Without
+		// this, Chat->Responses conversion drops the reasoning required by
+		// DeepSeek-style thinking tool continuations.
+		if role == "assistant" && isDeepSeekModel(req.Model) {
+			if reasoningItem := chatReasoningToResponsesInputItem(msg.GetReasoningContent()); reasoningItem != nil {
+				inputItems = append(inputItems, reasoningItem)
+			}
 		}
 
 		if msg.Content == nil {
@@ -420,4 +443,8 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 	}
 
 	return out, nil
+}
+
+func isDeepSeekModel(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "deepseek")
 }
