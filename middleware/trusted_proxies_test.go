@@ -5,17 +5,28 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func requestClientIP(router http.Handler, remoteAddr string, forwardedFor string) string {
+	headers := http.Header{}
+	if forwardedFor != "" {
+		headers.Set("X-Forwarded-For", forwardedFor)
+	}
+	return requestClientIPWithHeaders(router, remoteAddr, headers)
+}
+
+func requestClientIPWithHeaders(router http.Handler, remoteAddr string, headers http.Header) string {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/client-ip", nil)
 	request.RemoteAddr = remoteAddr
-	if forwardedFor != "" {
-		request.Header.Set("X-Forwarded-For", forwardedFor)
+	for name, values := range headers {
+		for _, value := range values {
+			request.Header.Add(name, value)
+		}
 	}
 	router.ServeHTTP(recorder, request)
 	return recorder.Body.String()
@@ -29,9 +40,22 @@ func newClientIPRouter() *gin.Engine {
 	return router
 }
 
+func TestCaptureClientIPSnapshotsRequestAddress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(CaptureClientIP())
+	router.GET("/client-ip", func(c *gin.Context) {
+		c.Request.RemoteAddr = "198.51.100.99:12345"
+		c.String(http.StatusOK, common.RequestClientIP(c))
+	})
+
+	assert.Equal(t, "198.51.100.10", requestClientIP(router, "198.51.100.10:12345", ""))
+}
+
 func TestConfigureTrustedProxiesDefaultsToLoopbackAndPrivateNetworks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", "")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	router := newClientIPRouter()
 	require.NoError(t, ConfigureTrustedProxies(router))
 
@@ -58,6 +82,7 @@ func TestConfigureTrustedProxiesDefaultsToLoopbackAndPrivateNetworks(t *testing.
 func TestConfigureTrustedProxiesDefaultRejectsPublicPeerHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", " \t ")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	router := newClientIPRouter()
 	require.NoError(t, ConfigureTrustedProxies(router))
 
@@ -68,6 +93,7 @@ func TestConfigureTrustedProxiesDefaultRejectsPublicPeerHeaders(t *testing.T) {
 func TestConfigureTrustedProxiesDefaultStopsAtPublicClientInForwardedChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", "")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	router := newClientIPRouter()
 	require.NoError(t, ConfigureTrustedProxies(router))
 
@@ -78,6 +104,7 @@ func TestConfigureTrustedProxiesDefaultStopsAtPublicClientInForwardedChain(t *te
 func TestConfigureTrustedProxiesNoneDisablesForwardedHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", " NoNe ")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	router := newClientIPRouter()
 	require.NoError(t, ConfigureTrustedProxies(router))
 
@@ -88,6 +115,7 @@ func TestConfigureTrustedProxiesNoneDisablesForwardedHeaders(t *testing.T) {
 func TestConfigureTrustedProxiesAcceptsTrimmedIPsAndCIDRs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", " 192.0.2.0/24, 198.51.100.30 ")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	router := newClientIPRouter()
 	require.NoError(t, ConfigureTrustedProxies(router))
 
@@ -106,6 +134,7 @@ func TestConfigureTrustedProxiesAcceptsTrimmedIPsAndCIDRs(t *testing.T) {
 
 func TestConfigureTrustedProxiesRejectsInvalidConfiguration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXY_HEADERS", "")
 	testCases := []struct {
 		name  string
 		value string
@@ -120,6 +149,37 @@ func TestConfigureTrustedProxiesRejectsInvalidConfiguration(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("TRUSTED_PROXIES", testCase.value)
+			router := newClientIPRouter()
+			assert.Error(t, ConfigureTrustedProxies(router))
+		})
+	}
+}
+
+func TestConfigureTrustedProxiesUsesConfiguredClientIPHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXIES", "172.20.0.0/16")
+	t.Setenv("TRUSTED_PROXY_HEADERS", " CF-Connecting-IP, X-Forwarded-For ")
+	router := newClientIPRouter()
+	require.NoError(t, ConfigureTrustedProxies(router))
+
+	headers := http.Header{
+		"CF-Connecting-IP": []string{"203.0.113.42"},
+		"X-Forwarded-For":  []string{"198.51.100.10"},
+	}
+	clientIP := requestClientIPWithHeaders(router, "172.20.0.2:12345", headers)
+	assert.Equal(t, "203.0.113.42", clientIP)
+
+	untrustedClientIP := requestClientIPWithHeaders(router, "198.51.100.20:12345", headers)
+	assert.Equal(t, "198.51.100.20", untrustedClientIP)
+}
+
+func TestConfigureTrustedProxiesRejectsInvalidClientIPHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXIES", "127.0.0.1")
+
+	for _, value := range []string{", ,", "X-Forwarded-For, bad header"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TRUSTED_PROXY_HEADERS", value)
 			router := newClientIPRouter()
 			assert.Error(t, ConfigureTrustedProxies(router))
 		})

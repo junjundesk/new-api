@@ -20,6 +20,17 @@ import (
 const KeyRequestBody = "key_request_body"
 const KeyBodyStorage = "key_body_storage"
 
+// RequestClientIP returns the client address captured at request entry.
+func RequestClientIP(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	if ip := c.GetString(RequestClientIPKey); ip != "" {
+		return ip
+	}
+	return c.ClientIP()
+}
+
 var ErrRequestBodyTooLarge = errors.New("request body too large")
 
 func IsRequestBodyTooLargeError(err error) bool {
