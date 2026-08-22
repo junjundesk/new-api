@@ -53,7 +53,11 @@ import {
   ERROR_MESSAGES,
 } from '../constants'
 import type { ApiKey } from '../types'
-import { ApiKeyCell, UnlimitedQuotaBadge } from './api-keys-cells'
+import {
+  ApiKeyCell,
+  QuotaUsageLines,
+  UnlimitedQuotaBadge,
+} from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
 import { useApiKeys } from './api-keys-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
@@ -168,15 +172,24 @@ function ApiKeysMobileList({
             <div className='flex items-center justify-between gap-2 text-xs'>
               <span className='text-muted-foreground'>{t('Quota')}</span>
               {apiKey.unlimited_quota ? (
-                <UnlimitedQuotaBadge used={apiKey.used_quota} />
+                <UnlimitedQuotaBadge
+                  used={apiKey.used_quota}
+                  todayUsed={apiKey.today_used_quota}
+                />
               ) : (
-                <span className='font-medium tabular-nums'>
-                  {formatQuota(apiKey.remain_quota)}
-                  <span className='text-muted-foreground font-normal'>
-                    {' / '}
-                    {formatQuota(total)}
-                  </span>
-                </span>
+                <div className='space-y-0.5 text-right'>
+                  <div className='font-medium tabular-nums'>
+                    {formatQuota(apiKey.remain_quota)}
+                    <span className='text-muted-foreground font-normal'>
+                      {' / '}
+                      {formatQuota(total)}
+                    </span>
+                  </div>
+                  <QuotaUsageLines
+                    used={apiKey.used_quota}
+                    todayUsed={apiKey.today_used_quota}
+                  />
+                </div>
               )}
             </div>
           </div>

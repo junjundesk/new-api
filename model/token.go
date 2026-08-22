@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -30,6 +31,37 @@ type Token struct {
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+// GetTokenTodayUsedQuota returns today's consumed quota for the supplied
+// tokens. Token usage is read from the log database because Token.UsedQuota is
+// an all-time counter and does not retain a daily breakdown.
+func GetTokenTodayUsedQuota(userId int, tokenIds []int) (map[int]int64, error) {
+	usage := make(map[int]int64, len(tokenIds))
+	if userId == 0 || len(tokenIds) == 0 || LOG_DB == nil {
+		return usage, nil
+	}
+
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endTimestamp := now.Unix()
+	var rows []struct {
+		TokenId int   `gorm:"column:token_id"`
+		Quota   int64 `gorm:"column:quota"`
+	}
+	err := LOG_DB.Table("logs").
+		Select("token_id, COALESCE(sum(quota), 0) as quota").
+		Where("user_id = ? AND token_id IN ? AND type = ? AND created_at >= ? AND created_at <= ?",
+			userId, tokenIds, LogTypeConsume, startOfDay.Unix(), endTimestamp).
+		Group("token_id").
+		Scan(&rows).Error
+	if err != nil {
+		return usage, err
+	}
+	for _, row := range rows {
+		usage[row.TokenId] = row.Quota
+	}
+	return usage, nil
 }
 
 func (token *Token) GetAutoGroups() ([]string, error) {
