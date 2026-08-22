@@ -188,7 +188,7 @@ func StripeWebhook(c *gin.Context) {
 		return
 	}
 
-	callerIp := c.ClientIP()
+	callerIp := common.RequestClientIP(c)
 	logger.LogInfo(ctx, fmt.Sprintf("Stripe webhook 验签成功 event_type=%s client_ip=%s path=%q", string(event.Type), callerIp, c.Request.RequestURI))
 	switch event.Type {
 	case stripe.EventTypeCheckoutSessionCompleted:

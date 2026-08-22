@@ -138,7 +138,7 @@ func loginMethodFromContext(c *gin.Context) string {
 // recordLoginAudit 记录登录成功审计日志（对所有用户启用，仅记录成功，不记录失败）。
 func recordLoginAudit(user *model.User, c *gin.Context) {
 	method := loginMethodFromContext(c)
-	ip := c.ClientIP()
+	ip := common.RequestClientIP(c)
 	extra := map[string]interface{}{
 		"login_method": method,
 		"user_agent":   c.Request.UserAgent(),
@@ -171,14 +171,14 @@ func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin
 			user.Id,
 			expectedAuthVersion,
 			loginMethodFromContext(c),
-			c.ClientIP(),
+			common.RequestClientIP(c),
 			c.Request.UserAgent(),
 		)
 	} else {
 		bundle, err = service.CreateLoginSession(
 			user.Id,
 			loginMethodFromContext(c),
-			c.ClientIP(),
+			common.RequestClientIP(c),
 			c.Request.UserAgent(),
 		)
 	}

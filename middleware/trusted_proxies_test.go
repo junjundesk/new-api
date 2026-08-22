@@ -52,6 +52,22 @@ func TestCaptureClientIPSnapshotsRequestAddress(t *testing.T) {
 	assert.Equal(t, "198.51.100.10", requestClientIP(router, "198.51.100.10:12345", ""))
 }
 
+func TestCaptureClientIPPreservesTrustedForwardedAddressAfterRequestMutation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("TRUSTED_PROXIES", "127.0.0.1")
+	t.Setenv("TRUSTED_PROXY_HEADERS", "X-Forwarded-For")
+	router := gin.New()
+	require.NoError(t, ConfigureTrustedProxies(router))
+	router.Use(CaptureClientIP())
+	router.GET("/client-ip", func(c *gin.Context) {
+		c.Request.RemoteAddr = "198.51.100.99:12345"
+		c.Request.Header.Set("X-Forwarded-For", "198.51.100.99")
+		c.String(http.StatusOK, common.RequestClientIP(c))
+	})
+
+	assert.Equal(t, "203.0.113.42", requestClientIP(router, "127.0.0.1:12345", "203.0.113.42"))
+}
+
 func TestConfigureTrustedProxiesDefaultsToLoopbackAndPrivateNetworks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("TRUSTED_PROXIES", "")
