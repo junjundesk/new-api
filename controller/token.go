@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,16 @@ func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 type tokenRequest struct {
 	model.Token
 	AutoGroups tokenAutoGroupsInput `json:"auto_groups"`
+}
+
+var validTokenNamePattern = regexp.MustCompile(`^[\p{L}\p{N} _\-\.\(\)\[\]@#+]{1,50}$`)
+
+func normalizeTokenName(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false
+	}
+	return name, validTokenNamePattern.MatchString(name)
 }
 
 type tokenResponse struct {
@@ -337,6 +348,12 @@ func AddToken(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
+	normalizedName, ok := normalizeTokenName(token.Name)
+	if !ok {
+		common.ApiErrorI18n(c, i18n.MsgTokenNameInvalid)
+		return
+	}
+	token.Name = normalizedName
 	// 非无限额度时，检查额度值是否超出有效范围
 	if !token.UnlimitedQuota {
 		if token.RemainQuota < 0 {
@@ -484,7 +501,12 @@ func UpdateToken(c *gin.Context) {
 		}
 	} else {
 		// If you add more fields, please also update token.Update()
-		cleanToken.Name = token.Name
+		if normalizedName, ok := normalizeTokenName(token.Name); ok {
+			cleanToken.Name = normalizedName
+		} else {
+			common.ApiErrorI18n(c, i18n.MsgTokenNameInvalid)
+			return
+		}
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota

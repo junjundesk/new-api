@@ -2443,6 +2443,7 @@
     "Keeps compatible responses more repeatable": "Keeps compatible responses more repeatable",
     "Key": "Key",
     "Key Fingerprint": "Key Fingerprint",
+    "Key name contains invalid characters": "Key name contains invalid characters",
     "Key Sources": "Key Sources",
     "Key Summary": "Key Summary",
     "Key Update Mode": "Key Update Mode",

@@ -36,6 +36,7 @@ auth.insufficient_privilege: "无权进行此操作，权限不足"
 
 # Token messages
 token.name_too_long: "令牌名称过长"
+token.name_invalid: "令牌名称包含非法字符"
 token.quota_negative: "额度值不能为负数"
 token.quota_exceed_max: "额度值超出有效范围，最大值为 {{.Max}}"
 token.generate_failed: "生成令牌失败"

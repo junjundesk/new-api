@@ -2443,6 +2443,7 @@
     "Keeps compatible responses more repeatable": "Делает совместимые ответы более воспроизводимыми",
     "Key": "Ключ",
     "Key Fingerprint": "Отпечаток ключа",
+    "Key name contains invalid characters": "Имя ключа содержит недопустимые символы",
     "Key Sources": "Источники ключей",
     "Key Summary": "Сводка ключа",
     "Key Update Mode": "Режим обновления ключа",

@@ -2443,6 +2443,7 @@
     "Keeps compatible responses more repeatable": "対応モデルの応答を再現しやすくします",
     "Key": "キー",
     "Key Fingerprint": "キーフィンガープリント",
+    "Key name contains invalid characters": "キー名に無効な文字が含まれています",
     "Key Sources": "キーソース",
     "Key Summary": "キー概要",
     "Key Update Mode": "キー更新モード",
