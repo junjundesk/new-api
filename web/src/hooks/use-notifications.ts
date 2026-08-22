@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
@@ -82,10 +82,16 @@ export function useNotifications() {
   // Fetch Announcements from status
   const { status, loading: statusLoading } = useStatus()
   const announcementsEnabled = status?.announcements_enabled ?? false
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const announcements: Record<string, unknown>[] = announcementsEnabled
-    ? ((status?.announcements || []) as Record<string, unknown>[]).slice(0, 20)
-    : []
+  const announcements = useMemo<Record<string, unknown>[]>(
+    () =>
+      announcementsEnabled
+        ? ((status?.announcements || []) as Record<string, unknown>[]).slice(
+            0,
+            20
+          )
+        : [],
+    [announcementsEnabled, status?.announcements]
+  )
 
   // Notification store
   const {
@@ -182,6 +188,11 @@ export function useNotifications() {
     // Actions
     openPopover: handleOpenPopover,
     closePopover: () => setPopoverOpen(false),
+    markNoticeAsRead: () => {
+      if (noticeContent) {
+        markNoticeRead(noticeContent)
+      }
+    },
     refetchNotice,
   }
 }
