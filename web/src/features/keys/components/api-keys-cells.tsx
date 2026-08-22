@@ -144,35 +144,53 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
 
 type UnlimitedQuotaBadgeProps = {
   used: number
+  todayUsed: number
+}
+
+export function QuotaUsageLines(props: { used: number; todayUsed: number }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='text-muted-foreground space-y-0.5 text-xs leading-4 tabular-nums'>
+      <div>
+        {t('Used:')} {formatQuota(props.used)}
+      </div>
+      <div>
+        {t('Today')}: {formatQuota(props.todayUsed)}
+      </div>
+    </div>
+  )
 }
 
 export function UnlimitedQuotaBadge(props: UnlimitedQuotaBadgeProps) {
   const { t } = useTranslation()
   const formattedUsed = formatQuota(props.used)
+  const formattedTodayUsed = formatQuota(props.todayUsed)
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            type='button'
-            className='focus-visible:ring-ring/50 -ml-1.5 cursor-help rounded-4xl focus-visible:ring-[3px] focus-visible:outline-none'
-            aria-label={`${t('Unlimited')}; ${t('Used:')} ${formattedUsed}`}
+    <div className='space-y-0.5'>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              type='button'
+              className='focus-visible:ring-ring/50 -ml-1.5 cursor-help rounded-4xl focus-visible:ring-[3px] focus-visible:outline-none'
+              aria-label={`${t('Unlimited')}; ${t('Used:')} ${formattedUsed}; ${t('Today')}: ${formattedTodayUsed}`}
+            />
+          }
+        >
+          <StatusBadge
+            label={t('Unlimited')}
+            variant='neutral'
+            copyable={false}
           />
-        }
-      >
-        <StatusBadge
-          label={t('Unlimited')}
-          variant='neutral'
-          copyable={false}
-        />
-      </PopoverTrigger>
-      <PopoverContent className='w-auto p-2' side='top'>
-        <span className='text-xs'>
-          {t('Used:')} {formattedUsed}
-        </span>
-      </PopoverContent>
-    </Popover>
+        </PopoverTrigger>
+        <PopoverContent className='w-auto p-2' side='top'>
+          <QuotaUsageLines used={props.used} todayUsed={props.todayUsed} />
+        </PopoverContent>
+      </Popover>
+      <QuotaUsageLines used={props.used} todayUsed={props.todayUsed} />
+    </div>
   )
 }
 

@@ -11,11 +11,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -32,10 +35,11 @@ type tokenPageResponse struct {
 }
 
 type tokenResponseItem struct {
-	ID     int    `json:"id"`
-	Name   string `json:"name"`
-	Key    string `json:"key"`
-	Status int    `json:"status"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	Key            string `json:"key"`
+	Status         int    `json:"status"`
+	TodayUsedQuota int64  `json:"today_used_quota"`
 }
 
 type tokenKeyResponse struct {
@@ -482,6 +486,39 @@ func TestSearchTokensMasksKeyInResponse(t *testing.T) {
 	if strings.Contains(recorder.Body.String(), token.Key) {
 		t.Fatalf("search response leaked raw token key: %s", recorder.Body.String())
 	}
+}
+
+func TestGetAllTokensIncludesTodayUsedQuota(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	token := seedToken(t, db, 1, "usage-token", "usage1234token5678")
+
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	require.NoError(t, db.Create(&model.Log{
+		UserId:    1,
+		CreatedAt: now.Unix(),
+		Type:      model.LogTypeConsume,
+		TokenId:   token.Id,
+		Quota:     125,
+	}).Error)
+	require.NoError(t, db.Create(&model.Log{
+		UserId:    1,
+		CreatedAt: startOfDay.Add(-time.Hour).Unix(),
+		Type:      model.LogTypeConsume,
+		TokenId:   token.Id,
+		Quota:     900,
+	}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/?p=1&size=10", nil, 1)
+	GetAllTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, int64(125), page.Items[0].TodayUsedQuota)
 }
 
 func TestGetTokenMasksKeyInResponse(t *testing.T) {

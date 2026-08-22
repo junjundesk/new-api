@@ -38,10 +38,11 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
-	AutoGroups []string `json:"auto_groups"`
+	AutoGroups     []string `json:"auto_groups"`
+	TodayUsedQuota int64    `json:"today_used_quota"`
 }
 
-func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
+func buildMaskedTokenResponseWithUsage(token *model.Token, todayUsedQuota int64) *tokenResponse {
 	if token == nil {
 		return nil
 	}
@@ -55,13 +56,45 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 	if len(autoGroups) == 0 {
 		autoGroups = nil
 	}
-	return &tokenResponse{Token: &maskedToken, AutoGroups: autoGroups}
+	return &tokenResponse{
+		Token:          &maskedToken,
+		AutoGroups:     autoGroups,
+		TodayUsedQuota: todayUsedQuota,
+	}
+}
+
+func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
+	if token == nil {
+		return nil
+	}
+	usage, err := model.GetTokenTodayUsedQuota(token.UserId, []int{token.Id})
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to query today's quota for token %d: %v", token.Id, err))
+	}
+	return buildMaskedTokenResponseWithUsage(token, usage[token.Id])
 }
 
 func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	maskedTokens := make([]*tokenResponse, 0, len(tokens))
+	if len(tokens) == 0 {
+		return maskedTokens
+	}
+	tokenIds := make([]int, 0, len(tokens))
 	for _, token := range tokens {
-		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
+		if token != nil {
+			tokenIds = append(tokenIds, token.Id)
+		}
+	}
+	usage, err := model.GetTokenTodayUsedQuota(tokens[0].UserId, tokenIds)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to query today's token quota: %v", err))
+	}
+	for _, token := range tokens {
+		if token == nil {
+			maskedTokens = append(maskedTokens, nil)
+			continue
+		}
+		maskedTokens = append(maskedTokens, buildMaskedTokenResponseWithUsage(token, usage[token.Id]))
 	}
 	return maskedTokens
 }
