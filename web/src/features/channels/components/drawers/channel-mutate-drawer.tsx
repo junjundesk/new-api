@@ -4330,7 +4330,7 @@ export function ChannelMutateDrawer({
                                   <FormControl>
                                     <Textarea
                                       placeholder={t(
-                                        'Enter system prompt (user prompt takes priority)'
+                                        'Enter system prompt (overrides user prompt)'
                                       )}
                                       rows={3}
                                       {...field}
@@ -4357,7 +4357,7 @@ export function ChannelMutateDrawer({
                                     </FormLabel>
                                     <FormDescription>
                                       {t(
-                                        'Concatenate channel system prompt with user&apos;s prompt'
+                                        'When enabled, the custom system prompt takes priority, followed by the user prompt'
                                       )}
                                     </FormDescription>
                                   </div>

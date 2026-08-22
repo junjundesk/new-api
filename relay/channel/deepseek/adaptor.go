@@ -1,6 +1,7 @@
 package deepseek
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -162,6 +163,11 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(_ *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
 	applyDeepSeekV4ResponsesThinkingSuffix(info, &request)
+	normalizedInput, err := normalizeDeepSeekResponsesInput(request.Input)
+	if err != nil {
+		return nil, err
+	}
+	request.Input = normalizedInput
 	return request, nil
 }
 
@@ -187,6 +193,43 @@ func applyDeepSeekV4ResponsesThinkingSuffix(info *relaycommon.RelayInfo, request
 	if info != nil && request.Reasoning != nil {
 		info.ReasoningEffort = request.Reasoning.Effort
 	}
+}
+
+func normalizeDeepSeekResponsesInput(input json.RawMessage) (json.RawMessage, error) {
+	if len(input) == 0 || common.GetJsonType(input) != "array" {
+		return input, nil
+	}
+
+	var items []map[string]any
+	if err := common.Unmarshal(input, &items); err != nil {
+		return nil, fmt.Errorf("invalid responses input: %w", err)
+	}
+	changed := false
+	for i := range items {
+		if items[i]["type"] != "reasoning" {
+			continue
+		}
+		summary, ok := items[i]["summary"].([]any)
+		if !ok || len(summary) == 0 {
+			continue
+		}
+		var summaryText string
+		if part, ok := summary[0].(map[string]any); ok {
+			summaryText = common.Interface2String(part["text"])
+		} else {
+			summaryText = common.Interface2String(summary[0])
+		}
+		items[i]["content"] = []map[string]any{{
+			"type": "reasoning_text",
+			"text": summaryText,
+		}}
+		delete(items[i], "summary")
+		changed = true
+	}
+	if !changed {
+		return input, nil
+	}
+	return common.Marshal(items)
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {

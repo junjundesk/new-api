@@ -57,8 +57,8 @@ func TestResponsesResponseToChatCompletionsPreservesReasoningSummary(t *testing.
 			{
 				Type: responsesOutputTypeReasoning,
 				Content: []dto.ResponsesOutputContent{
-					{Type: "summary_text", Text: "first summary"},
-					{Type: "summary_text", Text: "\n\nsecond summary"},
+					{Type: "reasoning_text", Text: "first summary"},
+					{Type: "reasoning_text", Text: "\n\nsecond summary"},
 				},
 			},
 			{

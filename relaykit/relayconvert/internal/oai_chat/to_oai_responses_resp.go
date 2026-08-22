@@ -79,7 +79,7 @@ func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id
 			Status: responseOutputStatus(out),
 			Content: []dto.ResponsesOutputContent{
 				{
-					Type: "summary_text",
+					Type: "reasoning_text",
 					Text: reasoning,
 				},
 			},
