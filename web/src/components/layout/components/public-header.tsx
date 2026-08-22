@@ -17,11 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { NoticeDialog } from '@/components/notice-dialog'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -81,6 +82,8 @@ export function PublicHeader(props: PublicHeaderProps) {
     useState<AuthPromptTarget | null>(null)
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
+  const [noticeDialogOpen, setNoticeDialogOpen] = useState(false)
+  const noticeDialogShownFor = useRef('')
   const { auth } = useAuthStore()
   const {
     systemName,
@@ -97,6 +100,58 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+
+  let logoContent: React.ReactNode
+  if (loading) {
+    logoContent = <Skeleton className='size-full rounded-lg' />
+  } else if (customLogo) {
+    logoContent = customLogo
+  } else {
+    logoContent = (
+      <HeaderLogo
+        src={systemLogo}
+        loading={loading}
+        logoLoaded={logoLoaded}
+        className='size-full rounded-lg object-contain'
+      />
+    )
+  }
+
+  let authContent: React.ReactNode
+  if (loading) {
+    authContent = <Skeleton className='h-8 w-20 rounded-lg' />
+  } else if (isAuthenticated) {
+    authContent = <ProfileDropdown />
+  } else {
+    authContent = (
+      <Button
+        size='sm'
+        className='h-8 rounded-lg px-3.5 text-xs font-medium'
+        render={<Link to='/sign-in' />}
+      >
+        {t('Sign in')}
+      </Button>
+    )
+  }
+
+  useEffect(() => {
+    if (pathname !== '/') {
+      setNoticeDialogOpen(false)
+      noticeDialogShownFor.current = ''
+      return
+    }
+
+    if (
+      !notifications.notice ||
+      notifications.unreadNoticeCount === 0 ||
+      noticeDialogShownFor.current === notifications.notice
+    ) {
+      return
+    }
+
+    noticeDialogShownFor.current = notifications.notice
+    setNoticeDialogOpen(true)
+  }, [notifications.notice, notifications.unreadNoticeCount, pathname])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -196,18 +251,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               className='group flex shrink-0 items-center gap-2.5'
             >
               <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
-                {loading ? (
-                  <Skeleton className='size-full rounded-lg' />
-                ) : customLogo ? (
-                  customLogo
-                ) : (
-                  <HeaderLogo
-                    src={systemLogo}
-                    loading={loading}
-                    logoLoaded={logoLoaded}
-                    className='size-full rounded-lg object-contain'
-                  />
-                )}
+                {logoContent}
               </div>
               <span className='text-sm font-semibold tracking-tight'>
                 {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
@@ -216,12 +260,13 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Desktop nav */}
             <div className='hidden items-center gap-0.5 sm:flex'>
-              {links.map((link, i) => {
+              {links.map((link) => {
                 const isActive = pathname === link.href
+                const linkKey = `${link.href}:${link.title}`
                 if (link.external) {
                   return (
                     <a
-                      key={i}
+                      key={linkKey}
                       href={link.href}
                       target='_blank'
                       rel='noopener noreferrer'
@@ -239,7 +284,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                 }
                 return (
                   <Link
-                    key={i}
+                    key={linkKey}
                     to={link.href}
                     disabled={link.disabled}
                     onClick={(event) => handleNavLinkClick(event, link)}
@@ -280,19 +325,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               {showAuthButtons && (
                 <>
                   <div className='bg-border/40 mx-1 h-4 w-px' />
-                  {loading ? (
-                    <Skeleton className='h-8 w-20 rounded-lg' />
-                  ) : isAuthenticated ? (
-                    <ProfileDropdown />
-                  ) : (
-                    <Button
-                      size='sm'
-                      className='h-8 rounded-lg px-3.5 text-xs font-medium'
-                      render={<Link to='/sign-in' />}
-                    >
-                      {t('Sign in')}
-                    </Button>
-                  )}
+                  {authContent}
                 </>
               )}
             </div>
@@ -350,6 +383,7 @@ export function PublicHeader(props: PublicHeaderProps) {
           <nav className='flex flex-col gap-1'>
             {links.map((link, i) => {
               const isActive = pathname === link.href
+              const linkKey = `${link.href}:${link.title}`
               const linkClassName = cn(
                 'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
                 mobileOpen
@@ -364,7 +398,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               if (link.external) {
                 return (
                   <a
-                    key={i}
+                    key={linkKey}
                     href={link.href}
                     target='_blank'
                     rel='noopener noreferrer'
@@ -380,7 +414,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               }
               return (
                 <Link
-                  key={i}
+                  key={linkKey}
                   to={link.href}
                   disabled={link.disabled}
                   onClick={(event) => handleNavLinkClick(event, link, true)}
@@ -443,6 +477,17 @@ export function PublicHeader(props: PublicHeaderProps) {
           })}
         </div>
       </Dialog>
+
+      <NoticeDialog
+        open={noticeDialogOpen}
+        notice={notifications.notice}
+        onOpenChange={(open) => {
+          setNoticeDialogOpen(open)
+          if (!open) {
+            notifications.markNoticeAsRead()
+          }
+        }}
+      />
     </>
   )
 }
