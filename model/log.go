@@ -98,6 +98,22 @@ func ensureLogRequestId(log *Log) {
 	}
 }
 
+// resolveLogGroupName converts an internal user channel-chain reference into
+// the chain name used in the usage-log UI. Keep the original value when the
+// chain cannot be loaded so logging remains best-effort and never hides the
+// underlying group identifier.
+func resolveLogGroupName(userId int, group string) string {
+	chainId, ok := ParseUserChannelChain(group)
+	if !ok {
+		return group
+	}
+	chain, err := GetUserChannelChain(userId, chainId)
+	if err != nil || chain.Name == "" {
+		return group
+	}
+	return chain.Name
+}
+
 func createLog(log *Log) error {
 	ensureLogRequestId(log)
 	return LOG_DB.Create(log).Error
@@ -331,7 +347,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		TokenId:          tokenId,
 		UseTime:          useTimeSeconds,
 		IsStream:         isStream,
-		Group:            group,
+		Group:            resolveLogGroupName(userId, group),
 		Ip: func() string {
 			if needRecordIp {
 				return requestIP
@@ -375,6 +391,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestIP := requestClientIP(c)
 	params.Other = attachRequestIPForAdmin(params.Other, requestIP)
 	otherStr := common.MapToJsonStr(params.Other)
+	group := resolveLogGroupName(userId, params.Group)
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
@@ -397,7 +414,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		TokenId:          params.TokenId,
 		UseTime:          params.UseTimeSeconds,
 		IsStream:         params.IsStream,
-		Group:            params.Group,
+		Group:            group,
 		Ip: func() string {
 			if needRecordIp {
 				return requestIP
@@ -420,7 +437,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			Quota:     params.Quota,
 			CreatedAt: createdAt,
 			TokenUsed: params.PromptTokens + params.CompletionTokens,
-			UseGroup:  params.Group,
+			UseGroup:  group,
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  common.NodeName,
@@ -462,6 +479,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	if settingMap, err := GetUserSetting(params.UserId, false); err == nil {
 		needRecordIP = settingMap.RecordIpLog
 	}
+	group := resolveLogGroupName(params.UserId, params.Group)
 	log := &Log{
 		UserId:    params.UserId,
 		Username:  username,
@@ -473,7 +491,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Quota:     params.Quota,
 		ChannelId: params.ChannelId,
 		TokenId:   params.TokenId,
-		Group:     params.Group,
+		Group:     group,
 		Ip: func() string {
 			if needRecordIP {
 				return params.RequestIP
@@ -497,7 +515,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 			ModelName: params.ModelName,
 			Quota:     params.Quota,
 			CreatedAt: createdAt,
-			UseGroup:  params.Group,
+			UseGroup:  group,
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  nodeName,
