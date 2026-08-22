@@ -104,14 +104,18 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			}
 		} else if len(request.SystemInstructions.Parts) == 0 {
 			request.SystemInstructions.Parts = []dto.GeminiPart{{Text: info.ChannelSetting.SystemPrompt}}
-		} else if info.ChannelSetting.SystemPromptOverride {
+		} else {
 			common.SetContextKey(c, constant.ContextKeySystemPromptOverride, true)
 			merged := false
 			for i := range request.SystemInstructions.Parts {
 				if request.SystemInstructions.Parts[i].Text == "" {
 					continue
 				}
-				request.SystemInstructions.Parts[i].Text = info.ChannelSetting.SystemPrompt + "\n" + request.SystemInstructions.Parts[i].Text
+				request.SystemInstructions.Parts[i].Text = relaycommon.MergeChannelSystemPrompt(
+					info.ChannelSetting.SystemPrompt,
+					request.SystemInstructions.Parts[i].Text,
+					info.ChannelSetting.SystemPromptOverride,
+				)
 				merged = true
 				break
 			}

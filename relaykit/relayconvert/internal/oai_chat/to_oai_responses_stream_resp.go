@@ -266,7 +266,7 @@ func (s *ChatToResponsesStreamState) doneDeltaEvents() []ChatToResponsesStreamEv
 			SummaryIndex: intPtr(0),
 			ItemID:       s.reasoningID(),
 			Part: &dto.ResponsesReasoningSummaryPart{
-				Type: "summary_text",
+				Type: "reasoning_text",
 				Text: s.reasoning.String(),
 			},
 		}))
@@ -398,7 +398,7 @@ func (s *ChatToResponsesStreamState) reasoningOutput(status string) *dto.Respons
 		Status: status,
 		Content: []dto.ResponsesOutputContent{
 			{
-				Type: "summary_text",
+				Type: "reasoning_text",
 				Text: s.reasoning.String(),
 			},
 		},

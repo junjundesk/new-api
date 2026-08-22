@@ -80,8 +80,8 @@ func chatReasoningToResponsesInputItem(reasoning string) map[string]any {
 	return map[string]any{
 		"type": "reasoning",
 		"id":   fmt.Sprintf("rs_%s", kitutil.GetUUID()),
-		"summary": []map[string]any{{
-			"type": "summary_text",
+		"content": []map[string]any{{
+			"type": "reasoning_text",
 			"text": reasoning,
 		}},
 	}

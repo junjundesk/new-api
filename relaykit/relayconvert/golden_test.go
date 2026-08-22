@@ -247,7 +247,7 @@ func fixtureResponses() map[types.RelayFormat]any {
 		"model": "gpt-test",
 		"status": "completed",
 		"output": [
-			{"type": "reasoning", "summary": [{"type": "summary_text", "text": "Deep thought."}]},
+			{"type": "reasoning", "content": [{"type": "reasoning_text", "text": "Deep thought."}]},
 			{"type": "message", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "The answer is 42."}]},
 			{"type": "function_call", "call_id": "call_abc", "name": "get_weather", "arguments": "{\"city\":\"Paris\"}", "status": "completed"}
 		],

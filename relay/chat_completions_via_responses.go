@@ -45,17 +45,21 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 		return
 	}
 
-	if !info.ChannelSetting.SystemPromptOverride {
-		return
-	}
-
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, true)
 	for i, message := range request.Messages {
 		if message.Role != systemRole {
 			continue
 		}
 		if message.IsStringContent() {
-			request.Messages[i].SetStringContent(info.ChannelSetting.SystemPrompt + "\n" + message.StringContent())
+			request.Messages[i].SetStringContent(relaycommon.MergeChannelSystemPrompt(
+				info.ChannelSetting.SystemPrompt,
+				message.StringContent(),
+				info.ChannelSetting.SystemPromptOverride,
+			))
+			return
+		}
+		if !info.ChannelSetting.SystemPromptOverride {
+			request.Messages[i].SetStringContent(info.ChannelSetting.SystemPrompt)
 			return
 		}
 		contents := message.ParseContent()
@@ -68,6 +72,34 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 		request.Messages[i].Content = contents
 		return
 	}
+}
+
+func applySystemPromptToResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.OpenAIResponsesRequest) error {
+	if info == nil || request == nil || info.ChannelSetting.SystemPrompt == "" {
+		return nil
+	}
+
+	existing := ""
+	if len(request.Instructions) > 0 {
+		if err := common.Unmarshal(request.Instructions, &existing); err != nil {
+			existing = ""
+		}
+	}
+
+	if strings.TrimSpace(existing) != "" {
+		common.SetContextKey(c, constant.ContextKeySystemPromptOverride, true)
+	}
+	merged := relaycommon.MergeChannelSystemPrompt(
+		info.ChannelSetting.SystemPrompt,
+		existing,
+		info.ChannelSetting.SystemPromptOverride,
+	)
+	encoded, err := common.Marshal(merged)
+	if err != nil {
+		return err
+	}
+	request.Instructions = encoded
+	return nil
 }
 
 func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, request *dto.GeneralOpenAIRequest) (*dto.Usage, *types.NewAPIError) {

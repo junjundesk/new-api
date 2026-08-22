@@ -625,7 +625,7 @@ func (a *ResponsesBufferedAccumulator) BuildOutput() []dto.ResponsesOutput {
 		out = append(out, dto.ResponsesOutput{
 			Type: responsesOutputTypeReasoning,
 			Content: []dto.ResponsesOutputContent{
-				{Type: "summary_text", Text: a.reasoning.String()},
+				{Type: "reasoning_text", Text: a.reasoning.String()},
 			},
 		})
 	}
