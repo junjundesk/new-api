@@ -44,6 +44,16 @@ func TestParseUserChannelChain(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestResolveLogGroupName(t *testing.T) {
+	user := setupChannelChainTest(t)
+	chain, err := CreateUserChannelChain(user.Id, "customer-priority", []string{"vip", "default"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "customer-priority", resolveLogGroupName(user.Id, "chain:"+chain.ChainId))
+	assert.Equal(t, "default", resolveLogGroupName(user.Id, "default"))
+	assert.Equal(t, "chain:missing", resolveLogGroupName(user.Id, "chain:missing"))
+}
+
 func TestUserChannelChainCRUDAndTokenReset(t *testing.T) {
 	user := setupChannelChainTest(t)
 
