@@ -2443,6 +2443,7 @@
     "Keeps compatible responses more repeatable": "Giúp phản hồi tương thích dễ lặp lại hơn",
     "Key": "Khóa",
     "Key Fingerprint": "Vân tay khóa",
+    "Key name contains invalid characters": "Tên khóa chứa ký tự không hợp lệ",
     "Key Sources": "Nguồn khóa",
     "Key Summary": "Tóm tắt khóa",
     "Key Update Mode": "Chế độ cập nhật khóa",

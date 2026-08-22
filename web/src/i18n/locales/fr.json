@@ -2443,6 +2443,7 @@
     "Keeps compatible responses more repeatable": "Rend les réponses compatibles plus reproductibles",
     "Key": "Clé",
     "Key Fingerprint": "Empreinte de clé",
+    "Key name contains invalid characters": "Le nom de clé contient des caractères non valides",
     "Key Sources": "Sources de clé",
     "Key Summary": "Résumé de clé",
     "Key Update Mode": "Mode de mise à jour de la clé",

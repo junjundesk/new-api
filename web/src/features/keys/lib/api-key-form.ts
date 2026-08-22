@@ -24,6 +24,8 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import { DEFAULT_GROUP } from '../constants'
 import type { ApiKey, ApiKeyFormData } from '../types'
 
+const KEY_NAME_PATTERN = /^[\p{L}\p{N} _\-\.\(\)\[\]@#+]+$/u
+
 // ============================================================================
 // Form Schema
 // ============================================================================
@@ -34,7 +36,12 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
 
   return z
     .object({
-      name: z.string().min(1, t('Please enter a name')),
+      name: z
+        .string()
+        .trim()
+        .min(1, t('Please enter a name'))
+        .max(50, t('Key name contains invalid characters'))
+        .regex(KEY_NAME_PATTERN, t('Key name contains invalid characters')),
       remain_quota_dollars: z.number().optional(),
       expired_time: z.date().optional(),
       unlimited_quota: z.boolean(),
