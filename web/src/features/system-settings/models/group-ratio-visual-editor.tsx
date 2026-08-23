@@ -512,11 +512,17 @@ function GroupPricingTable({
   const handleGroupNameBlur = useCallback(
     async (id: string, rawValue: string) => {
       const newName = rawValue.trim()
-      const currentRow = rows.find((row) => row._id === id)
+      const currentRow = rowsRef.current.find((row) => row._id === id)
       setNameDraft(null)
       if (!currentRow || !newName || newName === currentRow.name.trim()) return
 
       const oldName = currentRow.name.trim()
+      emitRows(
+        rowsRef.current.map((row) =>
+          row._id === id ? { ...row, name: newName } : row
+        )
+      )
+
       if (syncChannels) {
         setSyncingRowId(id)
         try {
@@ -526,29 +532,22 @@ function GroupPricingTable({
           })
           if (!response.success) {
             toast.error(response.message || t('Failed to sync channels'))
-            return
+          } else {
+            toast.success(t('Channels updated successfully'))
+            queryClient.invalidateQueries({ queryKey: channelsQueryKeys.all })
           }
-          toast.success(t('Channels updated successfully'))
-          queryClient.invalidateQueries({ queryKey: channelsQueryKeys.all })
         } catch (error) {
           toast.error(
             error instanceof Error
               ? error.message
               : t('Failed to sync channels')
           )
-          return
         } finally {
           setSyncingRowId(null)
         }
       }
-
-      emitRows(
-        rowsRef.current.map((row) =>
-          row._id === id ? { ...row, name: newName } : row
-        )
-      )
     },
-    [emitRows, queryClient, rows, syncChannels, t]
+    [emitRows, queryClient, syncChannels, t]
   )
 
   const addRow = useCallback(() => {
