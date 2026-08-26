@@ -16,6 +16,8 @@ type Sample struct {
 	Success      bool
 	OutputTokens int64
 	GenerationMs int64
+	CacheTokens  int64 // prompt cache 命中 token
+	PromptTokens int64 // 输入 token（未命中缓存部分）
 }
 
 type QueryParams struct {
@@ -26,6 +28,7 @@ type QueryParams struct {
 
 type BucketPoint struct {
 	Ts           int64   `json:"ts"`
+	RequestCount int64   `json:"request_count"`
 	AvgTtftMs    int64   `json:"avg_ttft_ms"`
 	AvgLatencyMs int64   `json:"avg_latency_ms"`
 	SuccessRate  float64 `json:"success_rate"`
@@ -60,6 +63,54 @@ type SummaryAllResult struct {
 	Models []ModelSummary `json:"models"`
 }
 
+type GroupMetadata struct {
+	Description string
+	Ratio       float64
+}
+
+type GroupSeriesPoint struct {
+	Ts           int64   `json:"ts"`
+	RequestCount int64   `json:"request_count"`
+	AvgLatencyMs int64   `json:"avg_latency_ms"`
+	SuccessRate  float64 `json:"success_rate"`
+}
+
+type GroupModelSummary struct {
+	ModelName     string  `json:"model_name"`
+	RequestCount  int64   `json:"request_count"`
+	SuccessRate   float64 `json:"success_rate"`
+	AvgTtftMs     int64   `json:"avg_ttft_ms"`
+	AvgLatencyMs  int64   `json:"avg_latency_ms"`
+	AvgTps        float64 `json:"avg_tps"`
+	CacheObserved bool    `json:"cache_observed"`
+	CacheHitRate  float64 `json:"cache_hit_rate"`
+}
+
+type GroupSummary struct {
+	Group         string              `json:"group"`
+	Description   string              `json:"description"`
+	Ratio         float64             `json:"ratio"`
+	RequestCount  int64               `json:"request_count"`
+	SuccessCount  int64               `json:"success_count"`
+	AvgTtftMs     int64               `json:"avg_ttft_ms"`
+	AvgLatencyMs  int64               `json:"avg_latency_ms"`
+	SuccessRate   float64             `json:"success_rate"`
+	AvgTps        float64             `json:"avg_tps"`
+	CacheObserved bool                `json:"cache_observed"`
+	CacheHitRate  float64             `json:"cache_hit_rate"`
+	Series        []GroupSeriesPoint  `json:"series"`
+	Models        []GroupModelSummary `json:"models"`
+}
+
+type GroupsResult struct {
+	Groups        []GroupSummary `json:"groups"`
+	CacheObserved bool           `json:"cache_observed"`
+	CacheHitRate  float64        `json:"cache_hit_rate"`
+	StartTs       int64          `json:"start_ts"`
+	EndTs         int64          `json:"end_ts"`
+	BucketSeconds int64          `json:"bucket_seconds"`
+}
+
 type bucketKey struct {
 	model    string
 	group    string
@@ -74,6 +125,8 @@ type counters struct {
 	ttftCount      int64
 	outputTokens   int64
 	generationMs   int64
+	cacheTokens    int64
+	promptTokens   int64
 }
 
 type atomicBucket struct {
@@ -84,6 +137,8 @@ type atomicBucket struct {
 	ttftCount      atomic.Int64
 	outputTokens   atomic.Int64
 	generationMs   atomic.Int64
+	cacheTokens    atomic.Int64
+	promptTokens   atomic.Int64
 }
 
 func (b *atomicBucket) add(sample Sample) {
@@ -102,6 +157,12 @@ func (b *atomicBucket) add(sample Sample) {
 		b.outputTokens.Add(sample.OutputTokens)
 		b.generationMs.Add(sample.GenerationMs)
 	}
+	if sample.CacheTokens > 0 {
+		b.cacheTokens.Add(sample.CacheTokens)
+	}
+	if sample.PromptTokens > 0 {
+		b.promptTokens.Add(sample.PromptTokens)
+	}
 }
 
 func (b *atomicBucket) snapshot() counters {
@@ -113,6 +174,8 @@ func (b *atomicBucket) snapshot() counters {
 		ttftCount:      b.ttftCount.Load(),
 		outputTokens:   b.outputTokens.Load(),
 		generationMs:   b.generationMs.Load(),
+		cacheTokens:    b.cacheTokens.Load(),
+		promptTokens:   b.promptTokens.Load(),
 	}
 }
 
@@ -125,6 +188,8 @@ func (b *atomicBucket) drain() counters {
 		ttftCount:      b.ttftCount.Swap(0),
 		outputTokens:   b.outputTokens.Swap(0),
 		generationMs:   b.generationMs.Swap(0),
+		cacheTokens:    b.cacheTokens.Swap(0),
+		promptTokens:   b.promptTokens.Swap(0),
 	}
 }
 
@@ -149,5 +214,11 @@ func (b *atomicBucket) addCounters(c counters) {
 	}
 	if c.generationMs != 0 {
 		b.generationMs.Add(c.generationMs)
+	}
+	if c.cacheTokens != 0 {
+		b.cacheTokens.Add(c.cacheTokens)
+	}
+	if c.promptTokens != 0 {
+		b.promptTokens.Add(c.promptTokens)
 	}
 }

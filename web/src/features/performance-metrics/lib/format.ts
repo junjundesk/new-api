@@ -22,6 +22,23 @@ export function formatThroughput(tps: number): string {
   return `${tps.toFixed(tps < 10 ? 2 : 1)} t/s`
 }
 
+/** Formats a group ratio as "×0.08" / "×1", trimming trailing zeros. */
+export function formatRatio(ratio: number): string {
+  if (!Number.isFinite(ratio)) return '—'
+  const trimmed = ratio.toFixed(3).replace(/\.?0+$/, '')
+  return `×${trimmed}`
+}
+
+/** Formats a request count compactly (2943501 → 294万 / 2.9M). */
+export function formatCompactCount(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  if (value < 10_000) return value.toLocaleString()
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
 export function formatLatency(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '—'
   if (ms >= 1_000) return `${(ms / 1_000).toFixed(2)}s`
