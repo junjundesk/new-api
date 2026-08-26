@@ -59,3 +59,50 @@ export type PerfSummaryAllData = {
     models: PerfModelSummary[]
   }
 }
+
+export type PerformanceGroupSeriesPoint = {
+  ts: number
+  request_count: number
+  avg_latency_ms: number
+  success_rate: number
+}
+
+export type PerformanceGroupModelSummary = {
+  model_name: string
+  request_count: number
+  success_rate: number
+  avg_ttft_ms: number
+  avg_latency_ms: number
+  avg_tps: number
+  cache_observed: boolean
+  cache_hit_rate: number
+}
+
+export type PerformanceGroupSummary = {
+  group: string
+  description: string
+  ratio: number
+  request_count: number
+  success_count: number
+  avg_ttft_ms: number
+  avg_latency_ms: number
+  success_rate: number
+  avg_tps: number
+  cache_observed: boolean
+  cache_hit_rate: number
+  series: PerformanceGroupSeriesPoint[]
+  models: PerformanceGroupModelSummary[]
+}
+
+export type PerfGroupsData = {
+  success: boolean
+  message?: string
+  data: {
+    groups: PerformanceGroupSummary[]
+    cache_observed: boolean
+    cache_hit_rate: number
+    start_ts: number
+    end_ts: number
+    bucket_seconds: number
+  }
+}

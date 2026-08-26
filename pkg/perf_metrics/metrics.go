@@ -24,7 +24,7 @@ func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
+func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, cacheTokens, promptTokens int64) {
 	if info == nil {
 		return
 	}
@@ -51,6 +51,8 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		Success:      success,
 		OutputTokens: outputTokens,
 		GenerationMs: generationMs,
+		CacheTokens:  cacheTokens,
+		PromptTokens: promptTokens,
 	})
 }
 
@@ -198,6 +200,213 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 	return SummaryAllResult{Models: models}, nil
 }
 
+// QueryGroups aggregates the same persisted and in-memory buckets as the
+// model performance APIs, but pivots the result by usable group. The
+// metadata map also lets the caller return empty usable groups so the UI can
+// distinguish "no requests" from a missing group.
+func QueryGroups(hours int, metadata map[string]GroupMetadata) (GroupsResult, error) {
+	return queryGroups(hours, metadata, true)
+}
+
+// QueryGroupsAll returns the same group summaries without restricting the
+// persisted/in-memory rows to metadata keys. It is reserved for administrator
+// views so historical groups remain inspectable after being disabled.
+func QueryGroupsAll(hours int, metadata map[string]GroupMetadata) (GroupsResult, error) {
+	return queryGroups(hours, metadata, false)
+}
+
+func queryGroups(hours int, metadata map[string]GroupMetadata, filterGroups bool) (GroupsResult, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	if hours > 24*30 {
+		hours = 24 * 30
+	}
+
+	endTs := time.Now().Unix()
+	startTs := endTs - int64(hours)*3600
+	groupFilter := metadataKeys(metadata)
+	if !filterGroups {
+		groupFilter = nil
+	}
+	allowedGroups := allowedGroupSet(groupFilter)
+	rows, err := model.GetPerfMetricsGroupSummaryBucketsAll(startTs, endTs, groupFilter)
+	if err != nil {
+		return GroupsResult{}, err
+	}
+
+	merged := map[bucketKey]counters{}
+	for _, row := range rows {
+		mergeCounters(merged, bucketKey{
+			model:    row.ModelName,
+			group:    row.Group,
+			bucketTs: row.BucketTs,
+		}, counters{
+			requestCount:   row.RequestCount,
+			successCount:   row.SuccessCount,
+			totalLatencyMs: row.TotalLatencyMs,
+			ttftSumMs:      row.TtftSumMs,
+			ttftCount:      row.TtftCount,
+			outputTokens:   row.OutputTokens,
+			generationMs:   row.GenerationMs,
+		})
+	}
+
+	hotBuckets.Range(func(key, value any) bool {
+		k := key.(bucketKey)
+		if k.bucketTs < startTs || k.bucketTs > endTs {
+			return true
+		}
+		if allowedGroups != nil {
+			if _, ok := allowedGroups[k.group]; !ok {
+				return true
+			}
+		}
+		mergeCounters(merged, k, value.(*atomicBucket).snapshot())
+		return true
+	})
+
+	groupBuckets := map[string]map[int64]counters{}
+	groupModels := map[string]map[string]counters{}
+	for key, value := range merged {
+		if value.requestCount == 0 {
+			continue
+		}
+		if _, ok := groupBuckets[key.group]; !ok {
+			groupBuckets[key.group] = map[int64]counters{}
+		}
+		currentBucket := groupBuckets[key.group][key.bucketTs]
+		groupBuckets[key.group][key.bucketTs] = addCounters(currentBucket, value)
+		if _, ok := groupModels[key.group]; !ok {
+			groupModels[key.group] = map[string]counters{}
+		}
+		currentModel := groupModels[key.group][key.model]
+		groupModels[key.group][key.model] = addCounters(currentModel, value)
+	}
+
+	groupNames := make([]string, 0, len(metadata)+len(groupBuckets))
+	seen := make(map[string]struct{}, len(metadata)+len(groupBuckets))
+	for group := range metadata {
+		groupNames = append(groupNames, group)
+		seen[group] = struct{}{}
+	}
+	for group := range groupBuckets {
+		if _, ok := seen[group]; ok {
+			continue
+		}
+		groupNames = append(groupNames, group)
+		seen[group] = struct{}{}
+	}
+
+	groups := make([]GroupSummary, 0, len(groupNames))
+	var overall counters
+	for _, group := range groupNames {
+		total := counters{}
+		for _, value := range groupBuckets[group] {
+			total = addCounters(total, value)
+		}
+
+		series := make([]GroupSeriesPoint, 0, len(groupBuckets[group]))
+		timestamps := make([]int64, 0, len(groupBuckets[group]))
+		for ts := range groupBuckets[group] {
+			timestamps = append(timestamps, ts)
+		}
+		sort.Slice(timestamps, func(i, j int) bool { return timestamps[i] < timestamps[j] })
+		for _, ts := range timestamps {
+			value := groupBuckets[group][ts]
+			series = append(series, GroupSeriesPoint{
+				Ts:           ts,
+				RequestCount: value.requestCount,
+				AvgLatencyMs: avg(value.totalLatencyMs, value.requestCount),
+				SuccessRate:  successRate(value),
+			})
+		}
+
+		models := make([]GroupModelSummary, 0, len(groupModels[group]))
+		for modelName, value := range groupModels[group] {
+			models = append(models, GroupModelSummary{
+				ModelName:     modelName,
+				RequestCount:  value.requestCount,
+				SuccessRate:   successRate(value),
+				AvgTtftMs:     avg(value.ttftSumMs, value.ttftCount),
+				AvgLatencyMs:  avg(value.totalLatencyMs, value.requestCount),
+				AvgTps:        avgTps(value),
+				CacheObserved: cacheObserved(value),
+				CacheHitRate:  math.Round(cacheHitRate(value)*100) / 100,
+			})
+		}
+		sort.Slice(models, func(i, j int) bool {
+			if models[i].RequestCount != models[j].RequestCount {
+				return models[i].RequestCount > models[j].RequestCount
+			}
+			return models[i].ModelName < models[j].ModelName
+		})
+
+		meta := metadata[group]
+		description := meta.Description
+		if description == "" {
+			description = group
+		}
+		overall = addCounters(overall, total)
+		groups = append(groups, GroupSummary{
+			Group:         group,
+			Description:   description,
+			Ratio:         meta.Ratio,
+			RequestCount:  total.requestCount,
+			SuccessCount:  total.successCount,
+			AvgTtftMs:     avg(total.ttftSumMs, total.ttftCount),
+			AvgLatencyMs:  avg(total.totalLatencyMs, total.requestCount),
+			SuccessRate:   successRate(total),
+			AvgTps:        avgTps(total),
+			CacheObserved: cacheObserved(total),
+			CacheHitRate:  math.Round(cacheHitRate(total)*100) / 100,
+			Series:        series,
+			Models:        models,
+		})
+	}
+
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].RequestCount != groups[j].RequestCount {
+			return groups[i].RequestCount > groups[j].RequestCount
+		}
+		return groups[i].Group < groups[j].Group
+	})
+
+	return GroupsResult{
+		Groups:        groups,
+		CacheObserved: cacheObserved(overall),
+		CacheHitRate:  math.Round(cacheHitRate(overall)*100) / 100,
+		StartTs:       startTs,
+		EndTs:         endTs,
+		BucketSeconds: int64(perf_metrics_setting.GetBucketSeconds()),
+	}, nil
+}
+
+func metadataKeys(metadata map[string]GroupMetadata) []string {
+	if metadata == nil {
+		return nil
+	}
+	groups := make([]string, 0, len(metadata))
+	for group := range metadata {
+		groups = append(groups, group)
+	}
+	sort.Strings(groups)
+	return groups
+}
+
+func addCounters(current, value counters) counters {
+	current.requestCount += value.requestCount
+	current.successCount += value.successCount
+	current.totalLatencyMs += value.totalLatencyMs
+	current.ttftSumMs += value.ttftSumMs
+	current.ttftCount += value.ttftCount
+	current.outputTokens += value.outputTokens
+	current.generationMs += value.generationMs
+	current.cacheTokens += value.cacheTokens
+	current.promptTokens += value.promptTokens
+	return current
+}
+
 func mergeModelTotals(totals map[string]counters, modelName string, value counters) {
 	if value.requestCount == 0 {
 		return
@@ -210,6 +419,8 @@ func mergeModelTotals(totals map[string]counters, modelName string, value counte
 	current.ttftCount += value.ttftCount
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
+	current.cacheTokens += value.cacheTokens
+	current.promptTokens += value.promptTokens
 	totals[modelName] = current
 }
 
@@ -228,6 +439,8 @@ func mergeModelBucket(modelBuckets map[string]map[int64]counters, modelName stri
 	current.ttftCount += value.ttftCount
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
+	current.cacheTokens += value.cacheTokens
+	current.promptTokens += value.promptTokens
 	modelBuckets[modelName][bucketTs] = current
 }
 
@@ -283,6 +496,8 @@ func mergeCounters(merged map[bucketKey]counters, key bucketKey, value counters)
 	current.ttftCount += value.ttftCount
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
+	current.cacheTokens += value.cacheTokens
+	current.promptTokens += value.promptTokens
 	merged[key] = current
 }
 
@@ -349,6 +564,7 @@ func buildQueryResult(modelName string, merged map[bucketKey]counters) QueryResu
 func bucketPoint(ts int64, value counters) BucketPoint {
 	return BucketPoint{
 		Ts:           ts,
+		RequestCount: value.requestCount,
 		AvgTtftMs:    avg(value.ttftSumMs, value.ttftCount),
 		AvgLatencyMs: avg(value.totalLatencyMs, value.requestCount),
 		SuccessRate:  successRate(value),
@@ -377,6 +593,22 @@ func avgTps(value counters) float64 {
 	return float64(value.outputTokens) / (float64(value.generationMs) / 1000)
 }
 
+// cacheObserved reports whether any cache or non-cached prompt token count was
+// recorded, so the UI can distinguish "0% cache hit" from "no cache data".
+func cacheObserved(value counters) bool {
+	return value.promptTokens > 0 || value.cacheTokens > 0
+}
+
+// cacheHitRate returns the fraction of prompt input tokens served from the
+// prompt cache: cacheTokens / (cacheTokens + promptTokens) * 100.
+func cacheHitRate(value counters) float64 {
+	total := value.promptTokens + value.cacheTokens
+	if total <= 0 {
+		return 0
+	}
+	return float64(value.cacheTokens) / float64(total) * 100
+}
+
 func recordRedis(key bucketKey, sample Sample) {
 	if !common.RedisEnabled || common.RDB == nil {
 		return
@@ -400,6 +632,12 @@ func recordRedis(key bucketKey, sample Sample) {
 	if sample.OutputTokens > 0 && sample.GenerationMs > 0 {
 		pipe.HIncrBy(ctx, redisKey, "out", sample.OutputTokens)
 		pipe.HIncrBy(ctx, redisKey, "gen_ms", sample.GenerationMs)
+	}
+	if sample.CacheTokens > 0 {
+		pipe.HIncrBy(ctx, redisKey, "cache", sample.CacheTokens)
+	}
+	if sample.PromptTokens > 0 {
+		pipe.HIncrBy(ctx, redisKey, "prompt", sample.PromptTokens)
 	}
 	pipe.Expire(ctx, redisKey, time.Hour)
 	_, _ = pipe.Exec(ctx)
