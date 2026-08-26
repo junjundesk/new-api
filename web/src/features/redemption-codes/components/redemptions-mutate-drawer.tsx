@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { CalendarClock, Layers3, Tag } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +26,7 @@ import { toast } from 'sonner'
 import { DateTimePicker } from '@/components/datetime-picker'
 import {
   SideDrawerSection,
+  SideDrawerSectionHeader,
   sideDrawerContentClassName,
   sideDrawerFooterClassName,
   sideDrawerFormClassName,
@@ -50,6 +52,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import {
   formatQuota,
@@ -155,6 +158,15 @@ export function RedemptionsMutateDrawer({
     (redemptionLoadState === 'ready' && loadedRedemption?.id === redemptionId)
   const isLoadingRedemption = redemptionLoadState === 'loading'
 
+  const copyCreatedCodes = async (codes: string[]) => {
+    const copied = await copyToClipboard(codes.join('\n'))
+    if (copied) {
+      toast.success(t('Codes copied!'))
+    } else {
+      toast.error(t('Failed to copy to clipboard'))
+    }
+  }
+
   const onSubmit = async (data: RedemptionFormValues) => {
     if (isUpdate && (!currentRow || !loadedRedemption || !isUpdateReady)) {
       return
@@ -188,7 +200,17 @@ export function RedemptionsMutateDrawer({
               ? t('Successfully created {{count}} redemption codes', {
                   count,
                 })
-              : t(SUCCESS_MESSAGES.REDEMPTION_CREATED)
+              : t(SUCCESS_MESSAGES.REDEMPTION_CREATED),
+            result.data?.length
+              ? {
+                  action: {
+                    label: t('Copy'),
+                    onClick: () => {
+                      void copyCreatedCodes(result.data ?? [])
+                    },
+                  },
+                }
+              : undefined
           )
           onOpenChange(false)
           triggerRefresh()
@@ -214,6 +236,10 @@ export function RedemptionsMutateDrawer({
   const handleSetExpiry = (months: number, days: number, hours: number) => {
     const newDate = addTimeToDate(months, days, hours)
     form.setValue('expired_time', newDate)
+  }
+
+  const handleNeverExpire = () => {
+    form.setValue('expired_time', undefined, { shouldDirty: true })
   }
 
   const { meta: currencyMeta } = getCurrencyDisplay()
@@ -269,6 +295,11 @@ export function RedemptionsMutateDrawer({
               className='contents'
             >
               <SideDrawerSection>
+                <SideDrawerSectionHeader
+                  title={t('Details')}
+                  icon={<Tag />}
+                  iconTone='info'
+                />
                 <FormField
                   control={form.control}
                   name='name'
@@ -296,6 +327,7 @@ export function RedemptionsMutateDrawer({
                         <Input
                           {...field}
                           type='number'
+                          min='0'
                           step={quotaStep}
                           placeholder={quotaPlaceholder}
                           onChange={(e) =>
@@ -316,7 +348,14 @@ export function RedemptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
+              </SideDrawerSection>
 
+              <SideDrawerSection>
+                <SideDrawerSectionHeader
+                  title={t('Validity')}
+                  icon={<CalendarClock />}
+                  iconTone='warning'
+                />
                 <FormField
                   control={form.control}
                   name='expired_time'
@@ -336,7 +375,7 @@ export function RedemptionsMutateDrawer({
                             type='button'
                             variant='outline'
                             size='sm'
-                            onClick={() => handleSetExpiry(0, 0, 0)}
+                            onClick={handleNeverExpire}
                           >
                             {t('Never')}
                           </Button>
@@ -373,8 +412,15 @@ export function RedemptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
+              </SideDrawerSection>
 
-                {!isUpdate && (
+              {!isUpdate && (
+                <SideDrawerSection>
+                  <SideDrawerSectionHeader
+                    title={t('Quantity')}
+                    icon={<Layers3 />}
+                    iconTone='success'
+                  />
                   <FormField
                     control={form.control}
                     name='count'
@@ -404,8 +450,8 @@ export function RedemptionsMutateDrawer({
                       </FormItem>
                     )}
                   />
-                )}
-              </SideDrawerSection>
+                </SideDrawerSection>
+              )}
             </fieldset>
           </form>
         </Form>

@@ -97,6 +97,7 @@ type ApiMethod = (url: string, data?: unknown) => Promise<{ data: unknown }>
 type MockableApi = {
   get: ApiMethod
   put: ApiMethod
+  post: ApiMethod
 }
 type RenderedDrawer = {
   host: HTMLDivElement
@@ -110,6 +111,7 @@ type CurrencyFixture = {
 const apiClient = api as unknown as MockableApi
 const originalGet = apiClient.get
 const originalPut = apiClient.put
+const originalPost = apiClient.post
 const originalConsoleLog = Reflect.get(console, 'log')
 let renderedDrawer: RenderedDrawer | null = null
 
@@ -138,7 +140,7 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
-function drawerTree(currentRow: Redemption) {
+function drawerTree(currentRow?: Redemption) {
   return (
     <I18nextProvider i18n={i18n}>
       <RedemptionsProvider>
@@ -154,7 +156,7 @@ function drawerTree(currentRow: Redemption) {
 }
 
 async function renderDrawer(
-  currentRow: Redemption,
+  currentRow?: Redemption,
   currency: CurrencyFixture = {
     quotaDisplayType: 'USD',
     usdExchangeRate: 1,
@@ -276,6 +278,7 @@ async function waitForLoadedForm(): Promise<void> {
 afterEach(async () => {
   apiClient.get = originalGet
   apiClient.put = originalPut
+  apiClient.post = originalPost
   Reflect.set(console, 'log', originalConsoleLog)
   toast.dismiss()
   domWindow.localStorage.clear()
@@ -436,4 +439,32 @@ test('redemption drawer ignores an older response after switching records', asyn
 
   assert.equal(updates[0]?.id, 2)
   assert.equal(updates[0]?.quota, 1000001)
+})
+
+test('redemption drawer keeps Never as an unlimited expiration', async () => {
+  const creations: Array<Record<string, unknown>> = []
+  apiClient.post = async (_url, data) => {
+    assert.ok(data && typeof data === 'object')
+    creations.push(data as Record<string, unknown>)
+    return { data: { success: true, data: ['generated-code'] } }
+  }
+
+  await renderDrawer()
+  await waitForLoadedForm()
+
+  const neverButton = [
+    ...document.querySelectorAll<HTMLButtonElement>('button'),
+  ].find((button) => button.textContent?.trim() === 'Never')
+  assert.ok(neverButton)
+  await act(async () => neverButton.click())
+
+  await submitForm()
+  await act(async () =>
+    waitForCondition(
+      () => creations.length === 1,
+      'create request was not submitted'
+    )
+  )
+
+  assert.equal(creations[0]?.expired_time, 0)
 })
