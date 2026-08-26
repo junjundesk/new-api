@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
+import { Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -28,6 +29,7 @@ import {
   DataTablePage,
   useDataTable,
 } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
@@ -56,7 +58,7 @@ function isDisabledRedemptionRow(redemption: Redemption) {
 export function RedemptionsTable() {
   const { t } = useTranslation()
   const columns = useRedemptionsColumns()
-  const { refreshTrigger } = useRedemptions()
+  const { refreshTrigger, setOpen } = useRedemptions()
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const {
@@ -156,6 +158,22 @@ export function RedemptionsTable() {
     () => getRedemptionStatusOptions(t),
     [t]
   )
+  const normalizedFilter = globalFilter?.trim() ?? ''
+  const hasActiveFilters = normalizedFilter.length > 0 || !!statusFilterValue
+  const emptyTitle = hasActiveFilters
+    ? t('No matching results')
+    : t('No Redemption Codes Found')
+  let emptyDescription = t(
+    'No redemption codes available. Create your first redemption code to get started.'
+  )
+  if (normalizedFilter) {
+    emptyDescription = t(
+      'No results for "{{query}}". Try adjusting your search or filters.',
+      { query: normalizedFilter }
+    )
+  } else if (hasActiveFilters) {
+    emptyDescription = t('No records found. Try adjusting your filters.')
+  }
 
   return (
     <DataTablePage
@@ -163,10 +181,16 @@ export function RedemptionsTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
-      emptyTitle={t('No Redemption Codes Found')}
-      emptyDescription={t(
-        'No redemption codes available. Create your first redemption code to get started.'
-      )}
+      emptyTitle={emptyTitle}
+      emptyDescription={emptyDescription}
+      emptyAction={
+        !hasActiveFilters ? (
+          <Button size='sm' onClick={() => setOpen('create')}>
+            <Plus className='size-4' />
+            {t('Create Code')}
+          </Button>
+        ) : undefined
+      }
       skeletonKeyPrefix='redemptions-skeleton'
       applyHeaderSize
       toolbarProps={{
@@ -181,7 +205,15 @@ export function RedemptionsTable() {
           },
         ],
       }}
-      mobile={<RedemptionsMobileList table={table} isLoading={isLoading} />}
+      mobile={
+        <RedemptionsMobileList
+          table={table}
+          isLoading={isLoading}
+          emptyTitle={emptyTitle}
+          emptyDescription={emptyDescription}
+          showCreateAction={!hasActiveFilters}
+        />
+      }
       getRowClassName={(row, { isMobile }) => {
         if (!isDisabledRedemptionRow(row.original)) return undefined
         return isMobile ? DISABLED_ROW_MOBILE : DISABLED_ROW_DESKTOP

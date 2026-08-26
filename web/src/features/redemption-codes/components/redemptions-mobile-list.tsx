@@ -17,12 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Table as TanstackTable } from '@tanstack/react-table'
-import { Database } from 'lucide-react'
+import { Database, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { DISABLED_ROW_MOBILE } from '@/components/data-table'
 import { MaskedValueDisplay } from '@/components/masked-value-display'
 import { StatusBadge } from '@/components/status-badge'
+import { Button } from '@/components/ui/button'
 import {
   Empty,
   EmptyDescription,
@@ -31,13 +32,14 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
+import { formatQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { REDEMPTION_STATUS, REDEMPTION_STATUSES } from '../constants'
 import { isRedemptionExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import { useRedemptions } from './redemptions-provider'
 
 const MOBILE_SKELETON_KEYS = [
   'redemption-mobile-skeleton-1',
@@ -73,10 +75,14 @@ function RedemptionsMobileSkeleton() {
 interface RedemptionsMobileListProps {
   table: TanstackTable<Redemption>
   isLoading: boolean
+  emptyTitle?: string
+  emptyDescription?: string
+  showCreateAction?: boolean
 }
 
 export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
   const { t } = useTranslation()
+  const { setOpen } = useRedemptions()
   const rows = props.table.getRowModel().rows
 
   if (props.isLoading) return <RedemptionsMobileSkeleton />
@@ -89,13 +95,22 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
             <EmptyMedia variant='icon'>
               <Database className='size-6' />
             </EmptyMedia>
-            <EmptyTitle>{t('No Redemption Codes Found')}</EmptyTitle>
+            <EmptyTitle>
+              {props.emptyTitle ?? t('No Redemption Codes Found')}
+            </EmptyTitle>
             <EmptyDescription>
-              {t(
-                'No redemption codes available. Create your first redemption code to get started.'
-              )}
+              {props.emptyDescription ??
+                t(
+                  'No redemption codes available. Create your first redemption code to get started.'
+                )}
             </EmptyDescription>
           </EmptyHeader>
+          {props.showCreateAction !== false && (
+            <Button size='sm' onClick={() => setOpen('create')}>
+              <Plus className='size-4' />
+              {t('Create Code')}
+            </Button>
+          )}
         </Empty>
       </div>
     )
@@ -161,11 +176,47 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
               <DataTableRowActions row={row} />
             </div>
 
-            <div className='flex items-center justify-between gap-2 text-xs'>
-              <span className='text-muted-foreground'>{t('Quota')}</span>
-              <span className='font-medium tabular-nums'>
-                {formatQuota(redemption.quota)}
-              </span>
+            <div className='grid grid-cols-2 gap-x-4 gap-y-1 text-xs'>
+              <div className='flex min-w-0 items-center justify-between gap-2'>
+                <span className='text-muted-foreground'>{t('Quota')}</span>
+                <span className='font-medium tabular-nums'>
+                  {formatQuota(redemption.quota)}
+                </span>
+              </div>
+              <div className='flex min-w-0 items-center justify-between gap-2'>
+                <span className='text-muted-foreground'>{t('Expires')}</span>
+                <span
+                  className={cn(
+                    'truncate font-medium tabular-nums',
+                    expired && 'text-destructive'
+                  )}
+                  title={
+                    redemption.expired_time === 0
+                      ? t('Never')
+                      : formatTimestampToDate(redemption.expired_time)
+                  }
+                >
+                  {redemption.expired_time === 0
+                    ? t('Never')
+                    : formatTimestampToDate(redemption.expired_time)}
+                </span>
+              </div>
+              {redemption.used_user_id > 0 && (
+                <div className='col-span-2 flex min-w-0 items-center justify-between gap-2'>
+                  <span className='text-muted-foreground'>
+                    {t('Redeemed By')}
+                  </span>
+                  <span className='truncate font-medium'>
+                    {t('User {{id}}', { id: redemption.used_user_id })}
+                    {redemption.redeemed_time > 0 && (
+                      <span className='text-muted-foreground font-normal'>
+                        {' · '}
+                        {formatTimestampToDate(redemption.redeemed_time)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )
