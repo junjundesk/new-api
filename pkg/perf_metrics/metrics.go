@@ -16,9 +16,21 @@ import (
 
 var hotBuckets sync.Map
 
-// seriesSchema is a stable client cache/schema marker. Do not change it when
-// hiding fields or making response-only privacy hardening changes.
-const seriesSchema = "dbcd0a3c01b55203"
+const (
+	seriesSchema        = "dbcd0a3c01b55203"
+	performanceMaxRows  = 100
+	performanceCacheTTL = time.Minute
+)
+
+var groupsCache = struct {
+	sync.Mutex
+	entries map[string]groupsCacheEntry
+}{entries: make(map[string]groupsCacheEntry)}
+
+type groupsCacheEntry struct {
+	result    GroupsResult
+	expiresAt time.Time
+}
 
 func Init() {
 	go flushLoop()
@@ -200,43 +212,50 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 	return SummaryAllResult{Models: models}, nil
 }
 
-// QueryGroups aggregates the same persisted and in-memory buckets as the
-// model performance APIs, but pivots the result by usable group. The
-// metadata map also lets the caller return empty usable groups so the UI can
-// distinguish "no requests" from a missing group.
-func QueryGroups(hours int, metadata map[string]GroupMetadata) (GroupsResult, error) {
-	return queryGroups(hours, metadata, true)
+// QueryGroups aggregates the latest persisted performance records by usable
+// group. Results are cached for one minute per effective group visibility set.
+func QueryGroups(metadata map[string]GroupMetadata) (GroupsResult, error) {
+	return queryGroups(metadata, true)
 }
 
 // QueryGroupsAll returns the same group summaries without restricting the
-// persisted/in-memory rows to metadata keys. It is reserved for administrator
-// views so historical groups remain inspectable after being disabled.
-func QueryGroupsAll(hours int, metadata map[string]GroupMetadata) (GroupsResult, error) {
-	return queryGroups(hours, metadata, false)
+// persisted rows to metadata keys. It is reserved for administrator views so
+// historical groups remain inspectable after being disabled.
+func QueryGroupsAll(metadata map[string]GroupMetadata) (GroupsResult, error) {
+	return queryGroups(metadata, false)
 }
 
-func queryGroups(hours int, metadata map[string]GroupMetadata, filterGroups bool) (GroupsResult, error) {
-	if hours <= 0 {
-		hours = 24
-	}
-	if hours > 24*30 {
-		hours = 24 * 30
-	}
-
-	endTs := time.Now().Unix()
-	startTs := endTs - int64(hours)*3600
+func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsResult, error) {
 	groupFilter := metadataKeys(metadata)
 	if !filterGroups {
 		groupFilter = nil
 	}
-	allowedGroups := allowedGroupSet(groupFilter)
-	rows, err := model.GetPerfMetricsGroupSummaryBucketsAll(startTs, endTs, groupFilter)
+	cacheKey := fmt.Sprintf("%t:%v", filterGroups, groupFilter)
+	now := time.Now()
+	groupsCache.Lock()
+	if cached, ok := groupsCache.entries[cacheKey]; ok && now.Before(cached.expiresAt) {
+		result := cloneGroupsResult(cached.result)
+		groupsCache.Unlock()
+		return result, nil
+	}
+
+	rows, err := model.GetPerfMetricsGroupSummaryBucketsLatest(performanceMaxRows, groupFilter)
 	if err != nil {
+		groupsCache.Unlock()
 		return GroupsResult{}, err
 	}
 
+	allowedGroups := allowedGroupSet(groupFilter)
 	merged := map[bucketKey]counters{}
+	startTs := int64(0)
+	endTs := int64(0)
 	for _, row := range rows {
+		if startTs == 0 || row.BucketTs < startTs {
+			startTs = row.BucketTs
+		}
+		if row.BucketTs > endTs {
+			endTs = row.BucketTs
+		}
 		mergeCounters(merged, bucketKey{
 			model:    row.ModelName,
 			group:    row.Group,
@@ -249,14 +268,13 @@ func queryGroups(hours int, metadata map[string]GroupMetadata, filterGroups bool
 			ttftCount:      row.TtftCount,
 			outputTokens:   row.OutputTokens,
 			generationMs:   row.GenerationMs,
+			cacheTokens:    row.CacheTokens,
+			promptTokens:   row.PromptTokens,
 		})
 	}
 
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
-		if k.bucketTs < startTs || k.bucketTs > endTs {
-			return true
-		}
 		if allowedGroups != nil {
 			if _, ok := allowedGroups[k.group]; !ok {
 				return true
@@ -372,14 +390,31 @@ func queryGroups(hours int, metadata map[string]GroupMetadata, filterGroups bool
 		return groups[i].Group < groups[j].Group
 	})
 
-	return GroupsResult{
+	result := GroupsResult{
 		Groups:        groups,
 		CacheObserved: cacheObserved(overall),
 		CacheHitRate:  math.Round(cacheHitRate(overall)*100) / 100,
 		StartTs:       startTs,
 		EndTs:         endTs,
 		BucketSeconds: int64(perf_metrics_setting.GetBucketSeconds()),
-	}, nil
+	}
+	groupsCache.entries[cacheKey] = groupsCacheEntry{
+		result:    cloneGroupsResult(result),
+		expiresAt: now.Add(performanceCacheTTL),
+	}
+	groupsCache.Unlock()
+	return result, nil
+}
+
+func cloneGroupsResult(result GroupsResult) GroupsResult {
+	cloned := result
+	cloned.Groups = make([]GroupSummary, len(result.Groups))
+	copy(cloned.Groups, result.Groups)
+	for i := range cloned.Groups {
+		cloned.Groups[i].Series = append([]GroupSeriesPoint(nil), result.Groups[i].Series...)
+		cloned.Groups[i].Models = append([]GroupModelSummary(nil), result.Groups[i].Models...)
+	}
+	return cloned
 }
 
 func metadataKeys(metadata map[string]GroupMetadata) []string {

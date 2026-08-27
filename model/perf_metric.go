@@ -142,6 +142,28 @@ func GetPerfMetricsSummaryBucketsAll(startTs int64, endTs int64, groups []string
 	return summaries, err
 }
 
+func GetPerfMetricsGroupSummaryBucketsLatest(limit int, groups []string) ([]PerfMetricGroupSummaryBucket, error) {
+	var summaries []PerfMetricGroupSummaryBucket
+	if limit <= 0 {
+		limit = 100
+	}
+	query := DB.Model(&PerfMetric{}).
+		Select("model_name, " + commonGroupCol + ", bucket_ts, request_count, success_count, total_latency_ms, ttft_sum_ms, ttft_count, output_tokens, generation_ms, cache_tokens, prompt_tokens")
+	if groups != nil {
+		if len(groups) == 0 {
+			return summaries, nil
+		}
+		query = query.Where(commonGroupCol+" IN ?", groups)
+	}
+	err := query.
+		Where("request_count > 0").
+		Order("bucket_ts DESC").
+		Order("id DESC").
+		Limit(limit).
+		Find(&summaries).Error
+	return summaries, err
+}
+
 func GetPerfMetricsGroupSummaryBucketsAll(startTs int64, endTs int64, groups []string) ([]PerfMetricGroupSummaryBucket, error) {
 	var summaries []PerfMetricGroupSummaryBucket
 	query := DB.Model(&PerfMetric{}).
