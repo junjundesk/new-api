@@ -59,8 +59,6 @@ import {
 import type { PerformanceGroupSummary } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
-type TimeWindow = 24 | 168
-
 type GroupSummary = PerformanceGroupSummary & {
   modelCount: number
 }
@@ -73,26 +71,23 @@ type PerformanceSnapshot = {
 
 type GroupStatus = 'running' | 'degraded' | 'noData'
 
-const TIME_WINDOWS: Array<{ value: TimeWindow; label: string }> = [
-  { value: 24, label: '24h' },
-  { value: 168, label: '7d' },
-]
-
 function getGroupStatus(group: PerformanceGroupSummary): GroupStatus {
-  if (group.series.length === 0) return 'noData'
+  if (!group.series?.length) return 'noData'
   if (!Number.isFinite(group.success_rate)) return 'noData'
   if (group.success_rate >= 90) return 'running'
   return 'degraded'
 }
 
-async function fetchSnapshot(hours: TimeWindow): Promise<PerformanceSnapshot> {
-  const response = await getPerfMetricsGroups(hours)
+async function fetchSnapshot(): Promise<PerformanceSnapshot> {
+  const response = await getPerfMetricsGroups()
   const data = response.data
   const groups = data?.groups ?? []
   return {
     groups: groups.map((group) => ({
       ...group,
-      modelCount: group.models.length,
+      series: group.series ?? [],
+      models: group.models ?? [],
+      modelCount: group.models?.length ?? 0,
     })),
     cacheObserved: data?.cache_observed ?? false,
     cacheHitRate: data?.cache_hit_rate ?? 0,
@@ -101,10 +96,9 @@ async function fetchSnapshot(hours: TimeWindow): Promise<PerformanceSnapshot> {
 
 export function Performance() {
   const { t } = useTranslation()
-  const [hours, setHours] = useState<TimeWindow>(24)
   const snapshotQuery = useQuery({
-    queryKey: ['performance-page', hours],
-    queryFn: () => fetchSnapshot(hours),
+    queryKey: ['performance-page'],
+    queryFn: fetchSnapshot,
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000,
     retry: false,
@@ -143,7 +137,7 @@ export function Performance() {
         ))}
       </div>
     )
-  } else if (snapshotQuery.isError) {
+  } else if (snapshotQuery.isError && !snapshotQuery.data) {
     performanceBody = (
       <Card>
         <CardContent className='text-muted-foreground flex flex-col items-center gap-2 py-12 text-center text-sm'>
@@ -178,19 +172,6 @@ export function Performance() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Performance')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
-        <div className='flex items-center gap-1 rounded-lg border p-0.5'>
-          {TIME_WINDOWS.map((window) => (
-            <Button
-              key={window.value}
-              size='xs'
-              variant={hours === window.value ? 'secondary' : 'ghost'}
-              aria-pressed={hours === window.value}
-              onClick={() => setHours(window.value)}
-            >
-              {window.label}
-            </Button>
-          ))}
-        </div>
         <Button
           variant='outline'
           size='sm'
@@ -207,9 +188,7 @@ export function Performance() {
         <div className='space-y-4'>
           <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
             <span>
-              {hours === 24
-                ? t('Performance metrics for the last 24 hours')
-                : t('Performance metrics for the last 7 days')}
+              {t('Performance metrics for the latest 100 records')}
             </span>
             <span aria-hidden='true'>·</span>
             <span>

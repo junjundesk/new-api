@@ -3382,6 +3382,7 @@
     "Performance": "Performance",
     "Performance data is not yet available for this model.": "Performance data is not yet available for this model.",
     "Performance health": "Performance health",
+    "Performance metrics for the latest 100 records": "Performance metrics for the latest 100 records",
     "Performance metrics for the last 24 hours": "Performance metrics for the last 24 hours",
     "Performance metrics for the last 7 days": "Performance metrics for the last 7 days",
     "Performance metrics shown here are simulated for preview purposes and will be replaced with live observability data once the backend integration is complete.": "Performance metrics shown here are simulated for preview purposes and will be replaced with live observability data once the backend integration is complete.",

@@ -3382,6 +3382,7 @@
     "Performance": "性能",
     "Performance data is not yet available for this model.": "该模型暂无性能数据。",
     "Performance health": "性能健康",
+    "Performance metrics for the latest 100 records": "最近 100 条记录的性能指标",
     "Performance metrics for the last 24 hours": "最近 24 小时的性能指标",
     "Performance metrics for the last 7 days": "最近 7 天的性能指标",
     "Performance metrics shown here are simulated for preview purposes and will be replaced with live observability data once the backend integration is complete.": "此处展示的性能指标为预览模拟数据，待后端对接完成后将替换为真实可观测数据。",

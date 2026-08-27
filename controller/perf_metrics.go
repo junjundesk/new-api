@@ -82,20 +82,13 @@ func GetPerfMetrics(c *gin.Context) {
 // this single request, while the model list inside each group supports the
 // drill-down view without exposing inactive groups.
 func GetPerfMetricsGroups(c *gin.Context) {
-	hours := 24
-	if rawHours := c.Query("hours"); rawHours != "" {
-		if parsed, err := strconv.Atoi(rawHours); err == nil {
-			hours = parsed
-		}
-	}
-
 	metadata := getPerformanceGroupMetadata(c)
 	var result perfmetrics.GroupsResult
 	var err error
 	if c.GetInt("role") >= common.RoleAdminUser {
-		result, err = perfmetrics.QueryGroupsAll(hours, metadata)
+		result, err = perfmetrics.QueryGroupsAll(metadata)
 	} else {
-		result, err = perfmetrics.QueryGroups(hours, metadata)
+		result, err = perfmetrics.QueryGroups(metadata)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
