@@ -406,6 +406,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
 	summary := calculateTextQuotaSummary(ctx, relayInfo, billingUsage)
+	legacyClaudeDerived := isLegacyClaudeDerivedOpenAIUsage(relayInfo, billingUsage)
 
 	var tieredResult *billingexpr.TieredResult
 	tieredBillingApplied := false
@@ -538,6 +539,13 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Other:            other,
 	})
 	gopool.Go(func() {
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens), int64(summary.CacheTokens), int64(summary.PromptTokens))
+		promptTokens := summary.PromptTokens
+		if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+			promptTokens -= summary.CacheTokens + summary.CacheCreationTokens
+			if promptTokens < 0 {
+				promptTokens = 0
+			}
+		}
+		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens), int64(summary.CacheTokens), int64(summary.CacheCreationTokens), int64(promptTokens))
 	})
 }

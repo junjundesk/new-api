@@ -8,16 +8,17 @@ type Store interface {
 }
 
 type Sample struct {
-	Model        string
-	Group        string
-	LatencyMs    int64
-	TtftMs       int64
-	HasTtft      bool
-	Success      bool
-	OutputTokens int64
-	GenerationMs int64
-	CacheTokens  int64 // prompt cache 命中 token
-	PromptTokens int64 // 输入 token（未命中缓存部分）
+	Model               string
+	Group               string
+	LatencyMs           int64
+	TtftMs              int64
+	HasTtft             bool
+	Success             bool
+	OutputTokens        int64
+	GenerationMs        int64
+	CacheTokens         int64 // prompt cache 命中 token
+	CacheCreationTokens int64 // prompt cache 创建 token
+	PromptTokens        int64 // 输入 token（未命中缓存部分）
 }
 
 type QueryParams struct {
@@ -118,27 +119,29 @@ type bucketKey struct {
 }
 
 type counters struct {
-	requestCount   int64
-	successCount   int64
-	totalLatencyMs int64
-	ttftSumMs      int64
-	ttftCount      int64
-	outputTokens   int64
-	generationMs   int64
-	cacheTokens    int64
-	promptTokens   int64
+	requestCount        int64
+	successCount        int64
+	totalLatencyMs      int64
+	ttftSumMs           int64
+	ttftCount           int64
+	outputTokens        int64
+	generationMs        int64
+	cacheTokens         int64
+	cacheCreationTokens int64
+	promptTokens        int64
 }
 
 type atomicBucket struct {
-	requestCount   atomic.Int64
-	successCount   atomic.Int64
-	totalLatencyMs atomic.Int64
-	ttftSumMs      atomic.Int64
-	ttftCount      atomic.Int64
-	outputTokens   atomic.Int64
-	generationMs   atomic.Int64
-	cacheTokens    atomic.Int64
-	promptTokens   atomic.Int64
+	requestCount        atomic.Int64
+	successCount        atomic.Int64
+	totalLatencyMs      atomic.Int64
+	ttftSumMs           atomic.Int64
+	ttftCount           atomic.Int64
+	outputTokens        atomic.Int64
+	generationMs        atomic.Int64
+	cacheTokens         atomic.Int64
+	cacheCreationTokens atomic.Int64
+	promptTokens        atomic.Int64
 }
 
 func (b *atomicBucket) add(sample Sample) {
@@ -160,6 +163,9 @@ func (b *atomicBucket) add(sample Sample) {
 	if sample.CacheTokens > 0 {
 		b.cacheTokens.Add(sample.CacheTokens)
 	}
+	if sample.CacheCreationTokens > 0 {
+		b.cacheCreationTokens.Add(sample.CacheCreationTokens)
+	}
 	if sample.PromptTokens > 0 {
 		b.promptTokens.Add(sample.PromptTokens)
 	}
@@ -167,29 +173,31 @@ func (b *atomicBucket) add(sample Sample) {
 
 func (b *atomicBucket) snapshot() counters {
 	return counters{
-		requestCount:   b.requestCount.Load(),
-		successCount:   b.successCount.Load(),
-		totalLatencyMs: b.totalLatencyMs.Load(),
-		ttftSumMs:      b.ttftSumMs.Load(),
-		ttftCount:      b.ttftCount.Load(),
-		outputTokens:   b.outputTokens.Load(),
-		generationMs:   b.generationMs.Load(),
-		cacheTokens:    b.cacheTokens.Load(),
-		promptTokens:   b.promptTokens.Load(),
+		requestCount:        b.requestCount.Load(),
+		successCount:        b.successCount.Load(),
+		totalLatencyMs:      b.totalLatencyMs.Load(),
+		ttftSumMs:           b.ttftSumMs.Load(),
+		ttftCount:           b.ttftCount.Load(),
+		outputTokens:        b.outputTokens.Load(),
+		generationMs:        b.generationMs.Load(),
+		cacheTokens:         b.cacheTokens.Load(),
+		cacheCreationTokens: b.cacheCreationTokens.Load(),
+		promptTokens:        b.promptTokens.Load(),
 	}
 }
 
 func (b *atomicBucket) drain() counters {
 	return counters{
-		requestCount:   b.requestCount.Swap(0),
-		successCount:   b.successCount.Swap(0),
-		totalLatencyMs: b.totalLatencyMs.Swap(0),
-		ttftSumMs:      b.ttftSumMs.Swap(0),
-		ttftCount:      b.ttftCount.Swap(0),
-		outputTokens:   b.outputTokens.Swap(0),
-		generationMs:   b.generationMs.Swap(0),
-		cacheTokens:    b.cacheTokens.Swap(0),
-		promptTokens:   b.promptTokens.Swap(0),
+		requestCount:        b.requestCount.Swap(0),
+		successCount:        b.successCount.Swap(0),
+		totalLatencyMs:      b.totalLatencyMs.Swap(0),
+		ttftSumMs:           b.ttftSumMs.Swap(0),
+		ttftCount:           b.ttftCount.Swap(0),
+		outputTokens:        b.outputTokens.Swap(0),
+		generationMs:        b.generationMs.Swap(0),
+		cacheTokens:         b.cacheTokens.Swap(0),
+		cacheCreationTokens: b.cacheCreationTokens.Swap(0),
+		promptTokens:        b.promptTokens.Swap(0),
 	}
 }
 
@@ -217,6 +225,9 @@ func (b *atomicBucket) addCounters(c counters) {
 	}
 	if c.cacheTokens != 0 {
 		b.cacheTokens.Add(c.cacheTokens)
+	}
+	if c.cacheCreationTokens != 0 {
+		b.cacheCreationTokens.Add(c.cacheCreationTokens)
 	}
 	if c.promptTokens != 0 {
 		b.promptTokens.Add(c.promptTokens)
