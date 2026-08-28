@@ -388,7 +388,8 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		if promptTokens < 0 {
 			promptTokens = 0
 		}
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(usage.CompletionTokens), int64(cacheTokens), promptTokens)
+		cacheCreationTokens := int64(usage.PromptTokensDetails.CacheCreationTokensTotal())
+		perfmetrics.RecordRelaySample(relayInfo, true, int64(usage.CompletionTokens), int64(cacheTokens), cacheCreationTokens, promptTokens)
 	})
 }
 

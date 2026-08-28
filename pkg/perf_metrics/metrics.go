@@ -36,7 +36,7 @@ func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, cacheTokens, promptTokens int64) {
+func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, cacheTokens, cacheCreationTokens, promptTokens int64) {
 	if info == nil {
 		return
 	}
@@ -55,16 +55,17 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, 
 		generationMs = latencyMs
 	}
 	Record(Sample{
-		Model:        info.OriginModelName,
-		Group:        info.UsingGroup,
-		LatencyMs:    latencyMs,
-		TtftMs:       ttftMs,
-		HasTtft:      hasTtft,
-		Success:      success,
-		OutputTokens: outputTokens,
-		GenerationMs: generationMs,
-		CacheTokens:  cacheTokens,
-		PromptTokens: promptTokens,
+		Model:               info.OriginModelName,
+		Group:               info.UsingGroup,
+		LatencyMs:           latencyMs,
+		TtftMs:              ttftMs,
+		HasTtft:             hasTtft,
+		Success:             success,
+		OutputTokens:        outputTokens,
+		GenerationMs:        generationMs,
+		CacheTokens:         cacheTokens,
+		CacheCreationTokens: cacheCreationTokens,
+		PromptTokens:        promptTokens,
 	})
 }
 
@@ -156,11 +157,14 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 	modelBuckets := map[string]map[int64]counters{}
 	for _, row := range rows {
 		value := counters{
-			requestCount:   row.RequestCount,
-			successCount:   row.SuccessCount,
-			totalLatencyMs: row.TotalLatencyMs,
-			outputTokens:   row.OutputTokens,
-			generationMs:   row.GenerationMs,
+			requestCount:        row.RequestCount,
+			successCount:        row.SuccessCount,
+			totalLatencyMs:      row.TotalLatencyMs,
+			outputTokens:        row.OutputTokens,
+			generationMs:        row.GenerationMs,
+			cacheTokens:         row.CacheTokens,
+			cacheCreationTokens: row.CacheCreationTokens,
+			promptTokens:        row.PromptTokens,
 		}
 		mergeModelTotals(totals, row.ModelName, value)
 		mergeModelBucket(modelBuckets, row.ModelName, row.BucketTs, value)
@@ -261,15 +265,16 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsRe
 			group:    row.Group,
 			bucketTs: row.BucketTs,
 		}, counters{
-			requestCount:   row.RequestCount,
-			successCount:   row.SuccessCount,
-			totalLatencyMs: row.TotalLatencyMs,
-			ttftSumMs:      row.TtftSumMs,
-			ttftCount:      row.TtftCount,
-			outputTokens:   row.OutputTokens,
-			generationMs:   row.GenerationMs,
-			cacheTokens:    row.CacheTokens,
-			promptTokens:   row.PromptTokens,
+			requestCount:        row.RequestCount,
+			successCount:        row.SuccessCount,
+			totalLatencyMs:      row.TotalLatencyMs,
+			ttftSumMs:           row.TtftSumMs,
+			ttftCount:           row.TtftCount,
+			outputTokens:        row.OutputTokens,
+			generationMs:        row.GenerationMs,
+			cacheTokens:         row.CacheTokens,
+			cacheCreationTokens: row.CacheCreationTokens,
+			promptTokens:        row.PromptTokens,
 		})
 	}
 
@@ -438,6 +443,7 @@ func addCounters(current, value counters) counters {
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
 	current.cacheTokens += value.cacheTokens
+	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
 	return current
 }
@@ -455,6 +461,7 @@ func mergeModelTotals(totals map[string]counters, modelName string, value counte
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
 	current.cacheTokens += value.cacheTokens
+	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
 	totals[modelName] = current
 }
@@ -475,6 +482,7 @@ func mergeModelBucket(modelBuckets map[string]map[int64]counters, modelName stri
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
 	current.cacheTokens += value.cacheTokens
+	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
 	modelBuckets[modelName][bucketTs] = current
 }
@@ -532,6 +540,7 @@ func mergeCounters(merged map[bucketKey]counters, key bucketKey, value counters)
 	current.outputTokens += value.outputTokens
 	current.generationMs += value.generationMs
 	current.cacheTokens += value.cacheTokens
+	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
 	merged[key] = current
 }
@@ -631,13 +640,13 @@ func avgTps(value counters) float64 {
 // cacheObserved reports whether any cache or non-cached prompt token count was
 // recorded, so the UI can distinguish "0% cache hit" from "no cache data".
 func cacheObserved(value counters) bool {
-	return value.promptTokens > 0 || value.cacheTokens > 0
+	return value.promptTokens > 0 || value.cacheTokens > 0 || value.cacheCreationTokens > 0
 }
 
 // cacheHitRate returns the fraction of prompt input tokens served from the
-// prompt cache: cacheTokens / (cacheTokens + promptTokens) * 100.
+// prompt cache, excluding cache creation tokens from the numerator.
 func cacheHitRate(value counters) float64 {
-	total := value.promptTokens + value.cacheTokens
+	total := value.promptTokens + value.cacheTokens + value.cacheCreationTokens
 	if total <= 0 {
 		return 0
 	}
@@ -670,6 +679,9 @@ func recordRedis(key bucketKey, sample Sample) {
 	}
 	if sample.CacheTokens > 0 {
 		pipe.HIncrBy(ctx, redisKey, "cache", sample.CacheTokens)
+	}
+	if sample.CacheCreationTokens > 0 {
+		pipe.HIncrBy(ctx, redisKey, "cache_creation", sample.CacheCreationTokens)
 	}
 	if sample.PromptTokens > 0 {
 		pipe.HIncrBy(ctx, redisKey, "prompt", sample.PromptTokens)
