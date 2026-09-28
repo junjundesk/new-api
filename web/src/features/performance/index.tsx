@@ -26,10 +26,8 @@ import {
   CircleX,
   Clock3,
   Database,
-  Gauge,
   Info,
   RefreshCw,
-  Timer,
   Zap,
 } from 'lucide-react'
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
@@ -504,24 +502,17 @@ function PerformanceGroupCard(props: {
       aria-expanded={modelsExpanded}
       onClick={toggleModels}
     >
-      <CardHeader className='gap-2 border-b pb-3'>
+      <CardHeader className='gap-1.5 pb-3'>
         <div className='flex items-start gap-2'>
-          <div className='min-w-0 flex-1'>
-            <CardTitle
-              className='truncate text-sm font-semibold'
-              title={group.group}
-            >
-              {group.group}
-              <span className='text-muted-foreground ms-1.5 font-mono text-xs font-medium'>
-                ×{formatRatio(group.ratio)}
-              </span>
-            </CardTitle>
-            {group.description && (
-              <CardDescription className='mt-1 line-clamp-2 text-xs'>
-                {group.description}
-              </CardDescription>
-            )}
-          </div>
+          <CardTitle
+            className='min-w-0 flex-1 truncate text-sm font-semibold'
+            title={group.group}
+          >
+            {group.group}
+            <span className='text-muted-foreground ms-1.5 font-mono text-xs font-medium'>
+              ×{formatRatio(group.ratio)}
+            </span>
+          </CardTitle>
           <Badge variant='outline' className={cn(statusColor(status))}>
             <span
               className={cn(
@@ -532,24 +523,47 @@ function PerformanceGroupCard(props: {
             {statusLabel}
           </Badge>
         </div>
+        {group.description && (
+          <CardDescription className='text-muted-foreground text-xs leading-relaxed'>
+            {group.description}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className='space-y-3 pt-3'>
-        <div className='grid grid-cols-3 gap-2'>
-          <Metric
-            label={t('Latency')}
-            value={formatLatency(group.avg_latency_ms)}
-            icon={Timer}
-          />
-          <Metric
-            label='TTFT'
-            value={formatLatency(group.avg_ttft_ms)}
-            icon={Clock3}
-          />
-          <Metric
-            label={t('Throughput short')}
-            value={formatThroughput(group.avg_tps)}
-            icon={Gauge}
-          />
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
+          <span>
+            <span className='text-muted-foreground'>{t('Latency')}</span>{' '}
+            <span className='font-mono font-medium tabular-nums'>
+              {formatLatency(group.avg_latency_ms)}
+            </span>
+          </span>
+          <span>
+            <span className='text-muted-foreground'>TTFT</span>{' '}
+            <span className='font-mono font-medium tabular-nums'>
+              {formatLatency(group.avg_ttft_ms)}
+            </span>
+          </span>
+          <span>
+            <span className='text-muted-foreground'>TPS</span>{' '}
+            <span className='font-mono font-medium tabular-nums'>
+              {formatThroughput(group.avg_tps)}
+            </span>
+          </span>
+          <span>
+            <span className='text-muted-foreground'>{t('Availability')}</span>{' '}
+            <span className='font-mono font-medium tabular-nums'>
+              {formatCompactCount(group.success_count)}/
+              {formatCompactCount(group.request_count)}
+            </span>
+          </span>
+          <span
+            className={cn(
+              'font-mono font-semibold tabular-nums',
+              getSuccessRateTextClass(group.success_rate)
+            )}
+          >
+            {formatUptimePct(group.success_rate)}
+          </span>
         </div>
         <div className='text-muted-foreground flex items-center justify-between text-[10px]'>
           <span>{t('Past')}</span>
@@ -577,50 +591,50 @@ function PerformanceGroupCard(props: {
             <span className='bg-muted h-7 w-full rounded-sm' />
           )}
         </div>
-        <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
-          <span>
-            {formatCompactCount(group.success_count)}/
-            {formatCompactCount(group.request_count)} {t('Requests success')}
-          </span>
-          <span
-            className={cn(
-              'font-mono font-semibold tabular-nums',
-              getSuccessRateTextClass(group.success_rate)
-            )}
-          >
-            {t('Success')} {formatUptimePct(group.success_rate)}
-          </span>
-        </div>
-        <div className='text-muted-foreground flex items-center justify-between gap-2 border-t pt-2 text-xs'>
-          <span className='flex items-center gap-1.5'>
-            <Database className='size-3.5' />
-            {t('Cache hit rate')}
-          </span>
-          <span
-            className={cn(
-              'font-mono font-semibold tabular-nums',
-              cacheRateClass(group, cacheBelowReference)
-            )}
-          >
-            {formatUptimePct(group.cache_hit_rate)}
-          </span>
-        </div>
-        <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
-          <span className='flex items-center gap-1.5'>
-            <Zap className='size-3.5' />
-            {t('Coding cache')}
-          </span>
-          <span
-            className={cn(
-              'font-mono font-semibold tabular-nums',
-              !group.coding_cache_observed
-                ? 'text-muted-foreground'
-                : getSuccessRateTextClass(group.coding_cache_hit_rate ?? 0)
-            )}
-          >
-            {formatUptimePct(group.coding_cache_hit_rate ?? 0)}
-          </span>
-        </div>
+        <dl className='grid grid-cols-2 gap-x-4 gap-y-2 text-xs'>
+          <div className='flex items-center justify-between gap-2'>
+            <dt className='text-muted-foreground flex items-center gap-1.5'>
+              <Database className='size-3.5' />
+              {t('Cache hit rate')}
+            </dt>
+            <dd
+              className={cn(
+                'font-mono font-semibold tabular-nums',
+                cacheRateClass(group, cacheBelowReference)
+              )}
+            >
+              {formatUptimePct(group.cache_hit_rate)}
+            </dd>
+          </div>
+          <div className='flex items-center justify-between gap-2'>
+            <dt className='text-muted-foreground flex items-center gap-1.5'>
+              <Zap className='size-3.5' />
+              {t('Coding cache')}
+            </dt>
+            <dd
+              className={cn(
+                'font-mono font-semibold tabular-nums',
+                !group.coding_cache_observed
+                  ? 'text-muted-foreground'
+                  : getSuccessRateTextClass(group.coding_cache_hit_rate ?? 0)
+              )}
+            >
+              {formatUptimePct(group.coding_cache_hit_rate ?? 0)}
+            </dd>
+          </div>
+          <div className='flex items-center justify-between gap-2'>
+            <dt className='text-muted-foreground'>{t('Observed input ratio')}</dt>
+            <dd className='font-mono tabular-nums' title={t('Requires per-request ratio data. Not collected yet.')}>
+              —
+            </dd>
+          </div>
+          <div className='flex items-center justify-between gap-2'>
+            <dt className='text-muted-foreground'>{t('Reference adjusted ratio')}</dt>
+            <dd className='font-mono tabular-nums'>
+              ×{formatRatio(group.ratio)}
+            </dd>
+          </div>
+        </dl>
         <div className='flex items-center justify-between gap-2 border-t pt-2'>
           <span className='text-muted-foreground text-xs'>
             {group.modelCount} {t('Models with traffic')}
@@ -747,25 +761,6 @@ function statusColor(status: GroupStatus) {
     return 'border-destructive/40 text-destructive'
   }
   return 'border-muted-foreground/20 text-muted-foreground'
-}
-
-function Metric(props: {
-  label: string
-  value: string
-  icon: React.ComponentType<{ className?: string }>
-}) {
-  const Icon = props.icon
-  return (
-    <div className='bg-muted/40 rounded-lg p-2'>
-      <div className='text-muted-foreground flex items-center gap-1 text-[10px] font-medium'>
-        <Icon className='size-3' />
-        <span className='truncate'>{props.label}</span>
-      </div>
-      <div className='mt-1 truncate font-mono text-xs font-semibold tabular-nums'>
-        {props.value}
-      </div>
-    </div>
-  )
 }
 
 function PerformanceCardSkeleton() {

@@ -5328,6 +5328,10 @@
     "Coding cache": "Coding 缓存",
     "Requests success": "次请求成功",
     "Past": "过去",
-    "Now": "现在"
+    "Now": "现在",
+    "Observed input ratio": "实测输入倍率",
+    "Reference adjusted ratio": "参考调整倍率",
+    "Requires per-request ratio data. Not collected yet.": "需要按请求记录倍率数据，暂未采集。",
+    "Availability": "可用性"
   }
 }
