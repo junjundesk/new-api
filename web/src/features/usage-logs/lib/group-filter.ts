@@ -26,13 +26,16 @@ export interface GroupFilterOption {
 
 /**
  * Builds the options of the log page group filter. The "all" entry always comes
- * first so the filter can be cleared, followed by the user's usable groups.
+ * first so the filter can be cleared, followed by the model groups (the group
+ * names of the pricing table, which is what log rows record).
  */
 export function buildGroupFilterOptions(
-  groups: Record<string, unknown> | undefined,
+  groups: readonly string[] | Record<string, unknown> | undefined,
   allLabel: string
 ): GroupFilterOption[] {
-  const names = Object.keys(groups ?? {}).sort((a, b) => a.localeCompare(b))
+  const names = (Array.isArray(groups) ? [...groups] : Object.keys(groups ?? {}))
+    .filter((name) => name.length > 0)
+    .sort()
   return [
     { value: GROUP_FILTER_ALL_VALUE, label: allLabel },
     ...names.map((name) => ({ value: name, label: name })),
