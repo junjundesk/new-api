@@ -389,7 +389,14 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 			promptTokens = 0
 		}
 		cacheCreationTokens := int64(usage.PromptTokensDetails.CacheCreationTokensTotal())
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(usage.CompletionTokens), int64(cacheTokens), cacheCreationTokens, promptTokens)
+		perfmetrics.RecordRelaySample(relayInfo, perfmetrics.RelaySampleInput{
+			UserAgent:           ctx.Request.UserAgent(),
+			Success:             true,
+			OutputTokens:        int64(usage.CompletionTokens),
+			CacheTokens:         int64(cacheTokens),
+			CacheCreationTokens: cacheCreationTokens,
+			PromptTokens:        promptTokens,
+		})
 	})
 }
 

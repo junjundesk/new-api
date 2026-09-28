@@ -3,8 +3,10 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/service"
@@ -89,6 +91,13 @@ func GetPerfMetricsGroups(c *gin.Context) {
 			hours = parsed
 		}
 	}
+	// The reference performance page sends lang so the server could localize
+	// copy. The payload is language-neutral, so the value is only validated and
+	// consumed for logging — a missing or malformed lang must never fail the
+	// request.
+	if lang := normalizePerfMetricsLang(c.Query("lang")); lang != "" {
+		logger.LogDebug(c, "perf-metrics groups lang=%s", lang)
+	}
 	var result perfmetrics.GroupsResult
 	var err error
 	if c.GetInt("role") >= common.RoleAdminUser {
@@ -108,6 +117,24 @@ func GetPerfMetricsGroups(c *gin.Context) {
 		"success": true,
 		"data":    result,
 	})
+}
+
+// normalizePerfMetricsLang accepts an optional BCP-47-ish language tag from the
+// performance page. Anything outside [A-Za-z0-9_-] (or longer than 35 characters)
+// is ignored instead of being rejected, because the payload does not depend on it.
+func normalizePerfMetricsLang(lang string) string {
+	lang = strings.TrimSpace(lang)
+	if lang == "" || len(lang) > 35 {
+		return ""
+	}
+	for i := 0; i < len(lang); i++ {
+		switch c := lang[i]; {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_':
+		default:
+			return ""
+		}
+	}
+	return lang
 }
 
 func getPerformanceGroupMetadata(c *gin.Context) map[string]perfmetrics.GroupMetadata {

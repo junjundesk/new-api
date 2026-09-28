@@ -78,10 +78,24 @@ export type PerformanceGroupModelSummary = {
   cache_hit_rate: number
   coding_cache_observed?: boolean
   coding_cache_hit_rate?: number
+  /** Normalized share of the group Coding input tokens, (0, 1]. */
+  coding_input_weight?: number
+  /** Must be exactly true before the sample counts as a cost observation. */
+  coding_cost_observed?: boolean
+  /** Cost-observed share of the group input, (0, coding_input_weight]. */
+  coding_cost_input_weight?: number
+  /** Settled input price, USD per 1M input tokens (group multiplier applied). */
+  coding_observed_input_price?: number
+  /** Input price with 0% cache reads, USD per 1M input tokens. */
+  coding_cache0_input_price?: number
+  /** Input price with 100% cache reads, USD per 1M input tokens. */
+  coding_cache100_input_price?: number
 }
 
 export type PerformanceGroupSummary = {
   group: string
+  /** Display name; falls back to group when the backend omits it. */
+  name?: string
   description: string
   ratio: number
   request_count: number

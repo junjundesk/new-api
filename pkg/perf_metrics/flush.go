@@ -52,6 +52,12 @@ func flushCompletedBuckets() {
 			CacheTokens:         drained.cacheTokens,
 			CacheCreationTokens: drained.cacheCreationTokens,
 			PromptTokens:        drained.promptTokens,
+
+			CodingInputTokens:     drained.codingInputTokens,
+			CodingCostInputTokens: drained.codingCostInputTokens,
+			CodingObservedCost:    drained.codingObservedCost,
+			CodingCache0Cost:      drained.codingCache0Cost,
+			CodingCache100Cost:    drained.codingCache100Cost,
 		})
 		if err != nil {
 			bucket.addCounters(drained)
@@ -92,6 +98,12 @@ func redisCounters(values map[string]string) counters {
 		cacheTokens:         parseRedisInt(values["cache"]),
 		cacheCreationTokens: parseRedisInt(values["cache_creation"]),
 		promptTokens:        parseRedisInt(values["prompt"]),
+
+		codingInputTokens:     parseRedisInt(values["coding_in"]),
+		codingCostInputTokens: parseRedisInt(values["coding_cost_in"]),
+		codingObservedCost:    parseRedisInt(values["coding_cost_observed"]),
+		codingCache0Cost:      parseRedisInt(values["coding_cost_cache0"]),
+		codingCache100Cost:    parseRedisInt(values["coding_cost_cache100"]),
 	}
 }
 

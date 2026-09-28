@@ -23,6 +23,22 @@ type PerfMetric struct {
 	CacheTokens         int64  `json:"-" gorm:"default:0"` // prompt cache 命中 token 累计
 	CacheCreationTokens int64  `json:"-" gorm:"default:0"` // prompt cache 创建 token 累计
 	PromptTokens        int64  `json:"-" gorm:"default:0"` // 输入 token（未命中缓存部分）累计
+
+	// Coding 输入成本观测（语义见 pkg/perf_metrics/coding_pricing.go）。
+	// CodingInputTokens 是 Coding 客户端请求的输入 token 总量
+	// （未命中缓存输入 + 缓存读取 + 缓存写入），用于还原 coding_input_weight；
+	// CodingCostInputTokens 是其中输入单价可观测的那部分，用于还原
+	// coding_cost_input_weight 与覆盖率。
+	//
+	// 三个 Cost 列是「token 数 × USD/1M 单价 × 1e6」的整数和：聚合后除以
+	// CodingCostInputTokens 即得 USD/1M 单价，因此可以直接求和下发。
+	CodingInputTokens     int64 `json:"-" gorm:"default:0"`
+	CodingCostInputTokens int64 `json:"-" gorm:"default:0"`
+	// 结算价（含分组倍率与请求级倍率）的分子。
+	CodingObservedCost int64 `json:"-" gorm:"default:0"`
+	// 0% / 100% 缓存参考价（不含分组倍率）的分子。
+	CodingCache0Cost   int64 `json:"-" gorm:"default:0"`
+	CodingCache100Cost int64 `json:"-" gorm:"default:0"`
 }
 
 func (PerfMetric) TableName() string {
@@ -50,6 +66,12 @@ func UpsertPerfMetric(metric *PerfMetric) error {
 			"cache_tokens":          gorm.Expr("perf_metrics.cache_tokens + ?", metric.CacheTokens),
 			"cache_creation_tokens": gorm.Expr("perf_metrics.cache_creation_tokens + ?", metric.CacheCreationTokens),
 			"prompt_tokens":         gorm.Expr("perf_metrics.prompt_tokens + ?", metric.PromptTokens),
+
+			"coding_input_tokens":      gorm.Expr("perf_metrics.coding_input_tokens + ?", metric.CodingInputTokens),
+			"coding_cost_input_tokens": gorm.Expr("perf_metrics.coding_cost_input_tokens + ?", metric.CodingCostInputTokens),
+			"coding_observed_cost":     gorm.Expr("perf_metrics.coding_observed_cost + ?", metric.CodingObservedCost),
+			"coding_cache0_cost":       gorm.Expr("perf_metrics.coding_cache0_cost + ?", metric.CodingCache0Cost),
+			"coding_cache100_cost":     gorm.Expr("perf_metrics.coding_cache100_cost + ?", metric.CodingCache100Cost),
 		}),
 	}).Create(metric).Error
 }
@@ -108,6 +130,12 @@ type PerfMetricGroupSummaryBucket struct {
 	CacheTokens         int64  `json:"cache_tokens"`
 	CacheCreationTokens int64  `json:"cache_creation_tokens"`
 	PromptTokens        int64  `json:"prompt_tokens"`
+
+	CodingInputTokens     int64 `json:"coding_input_tokens"`
+	CodingCostInputTokens int64 `json:"coding_cost_input_tokens"`
+	CodingObservedCost    int64 `json:"coding_observed_cost"`
+	CodingCache0Cost      int64 `json:"coding_cache0_cost"`
+	CodingCache100Cost    int64 `json:"coding_cache100_cost"`
 }
 
 func GetPerfMetricsSummaryAll(startTs int64, endTs int64, groups []string) ([]PerfMetricSummary, error) {
@@ -153,7 +181,7 @@ func GetPerfMetricsGroupSummaryBucketsLatest(limit int, groups []string) ([]Perf
 		limit = 100
 	}
 	query := DB.Model(&PerfMetric{}).
-		Select("model_name, " + commonGroupCol + ", bucket_ts, request_count, success_count, total_latency_ms, ttft_sum_ms, ttft_count, output_tokens, generation_ms, cache_tokens, cache_creation_tokens, prompt_tokens")
+		Select("model_name, " + commonGroupCol + ", bucket_ts, request_count, success_count, total_latency_ms, ttft_sum_ms, ttft_count, output_tokens, generation_ms, cache_tokens, cache_creation_tokens, prompt_tokens, coding_input_tokens, coding_cost_input_tokens, coding_observed_cost, coding_cache0_cost, coding_cache100_cost")
 	if groups != nil {
 		if len(groups) == 0 {
 			return summaries, nil
@@ -172,7 +200,7 @@ func GetPerfMetricsGroupSummaryBucketsLatest(limit int, groups []string) ([]Perf
 func GetPerfMetricsGroupSummaryBucketsAll(startTs int64, endTs int64, groups []string) ([]PerfMetricGroupSummaryBucket, error) {
 	var summaries []PerfMetricGroupSummaryBucket
 	query := DB.Model(&PerfMetric{}).
-		Select("model_name, "+commonGroupCol+", bucket_ts, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(ttft_sum_ms) as ttft_sum_ms, SUM(ttft_count) as ttft_count, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms, SUM(cache_tokens) as cache_tokens, SUM(cache_creation_tokens) as cache_creation_tokens, SUM(prompt_tokens) as prompt_tokens").
+		Select("model_name, "+commonGroupCol+", bucket_ts, SUM(request_count) as request_count, SUM(success_count) as success_count, SUM(total_latency_ms) as total_latency_ms, SUM(ttft_sum_ms) as ttft_sum_ms, SUM(ttft_count) as ttft_count, SUM(output_tokens) as output_tokens, SUM(generation_ms) as generation_ms, SUM(cache_tokens) as cache_tokens, SUM(cache_creation_tokens) as cache_creation_tokens, SUM(prompt_tokens) as prompt_tokens, SUM(coding_input_tokens) as coding_input_tokens, SUM(coding_cost_input_tokens) as coding_cost_input_tokens, SUM(coding_observed_cost) as coding_observed_cost, SUM(coding_cache0_cost) as coding_cache0_cost, SUM(coding_cache100_cost) as coding_cache100_cost").
 		Where("bucket_ts >= ? AND bucket_ts <= ?", startTs, endTs)
 	if groups != nil {
 		if len(groups) == 0 {
