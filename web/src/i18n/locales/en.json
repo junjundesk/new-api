@@ -5328,6 +5328,10 @@
     "Coding cache": "Coding cache",
     "Requests success": "Requests success",
     "Past": "Past",
-    "Now": "Now"
+    "Now": "Now",
+    "Observed input ratio": "Observed input ratio",
+    "Reference adjusted ratio": "Reference adjusted ratio",
+    "Requires per-request ratio data. Not collected yet.": "Requires per-request ratio data. Not collected yet.",
+    "Availability": "Availability"
   }
 }
