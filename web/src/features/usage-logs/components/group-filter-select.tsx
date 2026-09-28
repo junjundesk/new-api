@@ -36,7 +36,7 @@ import {
 
 interface GroupFilterSelectProps {
   value?: string
-  groups?: Record<string, unknown>
+  groups?: readonly string[] | Record<string, unknown>
   onChange: (group: string | undefined) => void
 }
 

@@ -74,7 +74,7 @@ reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
 
 type HarnessProps = {
   value?: string
-  groups?: Record<string, unknown>
+  groups?: readonly string[] | Record<string, unknown>
 }
 
 function Harness(props: HarnessProps): ReactNode {
@@ -109,7 +109,7 @@ describe('log group filter select', () => {
 
   test('shows the all-groups label when no group filter is applied', async () => {
     const text = await renderTriggerText({
-      groups: { default: {}, vip: {} },
+      groups: ['default', 'VIP', 'k12'],
     })
 
     assert.equal(text, 'All Groups')
@@ -117,17 +117,17 @@ describe('log group filter select', () => {
 
   test('shows the selected group name in the trigger', async () => {
     const text = await renderTriggerText({
-      value: 'vip',
-      groups: { default: {}, vip: {} },
+      value: 'VIP',
+      groups: ['default', 'VIP', 'k12'],
     })
 
-    assert.equal(text, 'vip')
+    assert.equal(text, 'VIP')
   })
 
   test('keeps a deep-linked group visible even when it is not in the usable list', async () => {
     const text = await renderTriggerText({
       value: 'legacy-group',
-      groups: { default: {} },
+      groups: ['default'],
     })
 
     assert.equal(text, 'legacy-group')

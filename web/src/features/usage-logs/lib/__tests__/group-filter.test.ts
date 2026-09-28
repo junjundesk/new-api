@@ -26,23 +26,44 @@ import {
 } from '../group-filter'
 
 describe('log group filter options', () => {
-  test('offers only the all-groups entry while the usable groups are still loading', () => {
+  test('offers only the all-groups entry while the group list is still loading', () => {
     assert.deepEqual(buildGroupFilterOptions(undefined, 'All Groups'), [
       { value: GROUP_FILTER_ALL_VALUE, label: 'All Groups' },
     ])
   })
 
-  test('keeps the all-groups entry first and lists usable groups in stable order', () => {
+  test('lists the model groups in stable order after the all-groups entry', () => {
     const options = buildGroupFilterOptions(
-      { vip: {}, default: {}, svip: {} },
+      ['VIP', 'default', 'k12', '柠檬公益'],
       'All Groups'
     )
 
     assert.deepEqual(
       options.map((option) => option.value),
-      [GROUP_FILTER_ALL_VALUE, 'default', 'svip', 'vip']
+      [GROUP_FILTER_ALL_VALUE, 'VIP', 'default', 'k12', '柠檬公益']
     )
     assert.equal(options[0].label, 'All Groups')
-    assert.equal(options[1].label, 'default')
+    assert.equal(options[1].label, 'VIP')
+  })
+
+  test('ignores blank group names coming from the group list', () => {
+    const options = buildGroupFilterOptions(['default', ''], 'All Groups')
+
+    assert.deepEqual(
+      options.map((option) => option.value),
+      [GROUP_FILTER_ALL_VALUE, 'default']
+    )
+  })
+
+  test('still accepts the usable-group map used by the non-admin fallback', () => {
+    const options = buildGroupFilterOptions(
+      { vip: {}, default: {} },
+      'All Groups'
+    )
+
+    assert.deepEqual(
+      options.map((option) => option.value),
+      [GROUP_FILTER_ALL_VALUE, 'default', 'vip']
+    )
   })
 })

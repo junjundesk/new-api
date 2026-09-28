@@ -37,6 +37,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getGroups as getModelGroupNames } from '@/features/users/api'
 import { getUserGroups } from '@/lib/api'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
@@ -121,9 +122,17 @@ export function CommonLogsFilterBar<TData>(
   const { isAdminView: isAdmin } = useLogsViewScope()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
+  // 分组选项的来源是模型侧的分组表（分组定价 / 模型分组），不是用户的可用分组。
+  // 该列表仅管理员接口暴露，普通用户视图退化为自己的可用分组。
+  const { data: modelGroupNames } = useQuery({
+    queryKey: ['model-group-names'],
+    queryFn: getModelGroupNames,
+    enabled: isAdmin,
+  })
   const { data: userGroups } = useQuery({
     queryKey: ['user-groups'],
     queryFn: getUserGroups,
+    enabled: !isAdmin,
   })
 
   const searchState = useMemo<CommonLogDraft>(() => {
@@ -323,7 +332,7 @@ export function CommonLogsFilterBar<TData>(
     <LogsFilterField>
       <GroupFilterSelect
         value={filters.group}
-        groups={userGroups?.data}
+        groups={isAdmin ? modelGroupNames?.data : userGroups?.data}
         onChange={(group) => handleChange('group', group)}
       />
     </LogsFilterField>
