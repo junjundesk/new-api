@@ -59,6 +59,7 @@ import {
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
+import { LogClientBadge } from '../log-client-badge'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
@@ -307,6 +308,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               copyable={false}
               className='-ml-1.5 !text-xs [&_span]:!text-xs'
             />
+            {log.type === 2 || log.type === 5 ? <LogClientBadge log={log} /> : null}
           </div>
         )
       },

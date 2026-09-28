@@ -324,6 +324,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	requestIP := requestClientIP(c)
 	other = attachRequestIPForAdmin(other, requestIP)
+	common.AttachClientInfoToOther(other, c.GetHeader("User-Agent"))
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
