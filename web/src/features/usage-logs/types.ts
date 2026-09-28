@@ -163,6 +163,15 @@ export interface LogOtherData {
   user_agent?: string
   request_path?: string
   request_conversion?: string[]
+  // Client recognition (parsed from User-Agent by the backend)
+  client?: {
+    name: string
+    category: string
+    variant?: string
+    version?: string
+    source: string
+    confidence: string
+  }
   ws?: boolean
   audio?: boolean
   audio_input?: number

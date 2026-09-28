@@ -572,4 +572,19 @@ export const STATIC_I18N_KEYS = [
   'This user account is disabled.',
   'Telegram binding failed. Please try again.',
   'Verification scope is missing',
+
+  // Usage log client recognition (dynamic category/confidence keys)
+  'Client Category coding',
+  'Client Category chat',
+  'Client Category browser',
+  'Client Category agent',
+  'Client Category media',
+  'Client Category office',
+  'Client Category translation',
+  'Client Category gateway',
+  'Client Category library',
+  'Client Category other',
+  'Client Confidence identified',
+  'Client Confidence guessed',
+  'Client Confidence unknown',
 ] as const

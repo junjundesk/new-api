@@ -42,6 +42,16 @@ export const usageLogSchema = z.object({
   token_id: z.number().default(0),
   group: z.string().default(''),
   ip: z.string().default(''),
+  client: z
+    .object({
+      name: z.string(),
+      category: z.string(),
+      variant: z.string().optional(),
+      version: z.string().optional(),
+      source: z.string(),
+      confidence: z.string(),
+    })
+    .nullish(),
   other: z.string().default(''),
   request_id: z.string().default(''),
   upstream_request_id: z.string().default(''),
