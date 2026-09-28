@@ -101,6 +101,7 @@ type User struct {
 	AffQuota         int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
 	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
 	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	InviterUsername  string                     `json:"inviter_username,omitempty" gorm:"-:all"` // 管理员列表展示的邀请人用户名，不落库
 	DeletedAt        gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`
@@ -418,7 +419,43 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 		return nil, 0, err
 	}
 
+	fillInviterUsernames(users)
+
 	return users, total, nil
+}
+
+// fillInviterUsernames resolves the inviter's username for one page of users so
+// admin lists can show who invited each user instead of only an ID.
+func fillInviterUsernames(users []*User) {
+	inviterIds := make([]int, 0, len(users))
+	seen := make(map[int]struct{}, len(users))
+	for _, user := range users {
+		if user.InviterId <= 0 {
+			continue
+		}
+		if _, ok := seen[user.InviterId]; ok {
+			continue
+		}
+		seen[user.InviterId] = struct{}{}
+		inviterIds = append(inviterIds, user.InviterId)
+	}
+	if len(inviterIds) == 0 {
+		return
+	}
+
+	var inviters []User
+	if err := DB.Unscoped().Select("id", "username").Where("id IN ?", inviterIds).Find(&inviters).Error; err != nil {
+		common.SysError("failed to load inviter usernames: " + err.Error())
+		return
+	}
+
+	usernames := make(map[int]string, len(inviters))
+	for _, inviter := range inviters {
+		usernames[inviter.Id] = inviter.Username
+	}
+	for _, user := range users {
+		user.InviterUsername = usernames[user.InviterId]
+	}
 }
 
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
@@ -486,6 +523,8 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
+
+	fillInviterUsernames(users)
 
 	return users, total, nil
 }
