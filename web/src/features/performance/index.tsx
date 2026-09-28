@@ -494,8 +494,16 @@ function PerformanceGroupCard(props: {
   const cacheBelowReference =
     group.cache_observed && group.cache_hit_rate < props.cacheThreshold
 
+  const toggleModels = () => {
+    if (group.modelCount > 0) setModelsExpanded((value) => !value)
+  }
+
   return (
-    <Card className='group transition-shadow hover:shadow-md'>
+    <Card
+      className='group cursor-pointer transition-shadow hover:shadow-md'
+      aria-expanded={modelsExpanded}
+      onClick={toggleModels}
+    >
       <CardHeader className='gap-2 border-b pb-3'>
         <div className='flex items-start gap-2'>
           <div className='min-w-0 flex-1'>
@@ -542,6 +550,10 @@ function PerformanceGroupCard(props: {
             value={formatThroughput(group.avg_tps)}
             icon={Gauge}
           />
+        </div>
+        <div className='text-muted-foreground flex items-center justify-between text-[10px]'>
+          <span>{t('Past')}</span>
+          <span>{t('Now')}</span>
         </div>
         <div
           className='flex items-end gap-1'
@@ -618,7 +630,10 @@ function PerformanceGroupCard(props: {
               variant='ghost'
               size='xs'
               aria-expanded={modelsExpanded}
-              onClick={() => setModelsExpanded((value) => !value)}
+              onClick={(event) => {
+                event.stopPropagation()
+                setModelsExpanded((value) => !value)
+              }}
             >
               {modelsExpanded ? (
                 <ChevronUp className='size-3.5' />
@@ -639,7 +654,10 @@ function ModelTable(props: { group: GroupSummary }) {
   const { t } = useTranslation()
   const models = props.group.models
   return (
-    <div className='bg-muted/40 overflow-hidden rounded-lg'>
+    <div
+      className='bg-muted/40 overflow-hidden rounded-lg'
+      onClick={(event) => event.stopPropagation()}
+    >
       <table className='w-full text-xs'>
         <thead>
           <tr className='text-muted-foreground border-b text-left'>
@@ -649,6 +667,13 @@ function ModelTable(props: { group: GroupSummary }) {
             </th>
             <th className='px-2 py-1.5 text-right font-medium'>
               {t('Success')}
+            </th>
+            <th className='px-2 py-1.5 text-right font-medium'>
+              {t('Latency')}
+            </th>
+            <th className='px-2 py-1.5 text-right font-medium'>TTFT</th>
+            <th className='px-2 py-1.5 text-right font-medium'>
+              {t('Throughput short')}
             </th>
             <th className='px-3 py-1.5 text-right font-medium'>
               {t('Cache hit rate')}
@@ -677,6 +702,15 @@ function ModelTable(props: { group: GroupSummary }) {
                 )}
               >
                 {formatUptimePct(model.success_rate)}
+              </td>
+              <td className='px-2 py-1.5 text-right font-mono tabular-nums'>
+                {formatLatency(model.avg_latency_ms)}
+              </td>
+              <td className='px-2 py-1.5 text-right font-mono tabular-nums'>
+                {formatLatency(model.avg_ttft_ms)}
+              </td>
+              <td className='px-2 py-1.5 text-right font-mono tabular-nums'>
+                {formatThroughput(model.avg_tps)}
               </td>
               <td
                 className={cn(
