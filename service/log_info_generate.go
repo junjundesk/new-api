@@ -122,7 +122,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 // appendClientInfo 将从 User-Agent 识别出的客户端信息写入日志 other 字段。
 // 识别结果与原始 UA 均存为用户侧可见字段（非 admin_info）。
 func appendClientInfo(ctx *gin.Context, other map[string]interface{}) {
-	if ctx == nil || other == nil {
+	if ctx == nil || other == nil || ctx.Request == nil {
 		return
 	}
 	AttachClientInfoToOther(other, ctx.GetHeader("User-Agent"))

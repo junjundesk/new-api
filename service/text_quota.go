@@ -546,6 +546,13 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 				promptTokens = 0
 			}
 		}
-		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens), int64(summary.CacheTokens), int64(summary.CacheCreationTokens), int64(promptTokens))
+		perfmetrics.RecordRelaySample(relayInfo, perfmetrics.RelaySampleInput{
+			UserAgent:           ctx.Request.UserAgent(),
+			Success:             true,
+			OutputTokens:        int64(summary.CompletionTokens),
+			CacheTokens:         int64(summary.CacheTokens),
+			CacheCreationTokens: int64(summary.CacheCreationTokens),
+			PromptTokens:        int64(promptTokens),
+		})
 	})
 }

@@ -718,3 +718,84 @@ For commercial licensing, please contact support@quantumnous.com
     display: none;
   }
 }
+
+/* ── Performance page entrance animations ──
+ * The reference page drives these four classes with a --perf-delay custom
+ * property. The original keyframes are not part of the captured artifacts,
+ * so the motion below is a faithful equivalent of the documented behaviour:
+ * a short rise-in, a value roll, a bar grow and a dialog pop, always
+ * disabled when the user prefers reduced motion. */
+@keyframes perf-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.perf-rise-in {
+  animation: perf-rise-in 0.3s ease-out both;
+  animation-delay: var(--perf-delay, 0ms);
+}
+
+@keyframes perf-value-roll {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.perf-value-roll {
+  display: inline-block;
+  animation: perf-value-roll 0.35s ease-out both;
+}
+
+@keyframes perf-bar-grow {
+  from {
+    transform: scaleY(0.1);
+    transform-origin: bottom;
+  }
+  to {
+    transform: none;
+    transform-origin: bottom;
+  }
+}
+
+.perf-bar-grow {
+  animation: perf-bar-grow 0.45s ease-out both;
+  animation-delay: var(--perf-delay, 0ms);
+}
+
+/* The dialog is centred by Tailwind's `translate` property, so this keyframe
+ * must stay on `scale`/`opacity`: animating `transform` here would add a second
+ * translation and push the popup off centre. */
+@keyframes perf-dialog-pop {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.perf-dialog-pop {
+  animation: perf-dialog-pop 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perf-rise-in,
+  .perf-value-roll,
+  .perf-bar-grow,
+  .perf-dialog-pop {
+    animation: none !important;
+  }
+}

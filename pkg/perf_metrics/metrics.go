@@ -36,7 +36,22 @@ func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, cacheTokens, cacheCreationTokens, promptTokens int64) {
+// RelaySampleInput carries the raw token split the settle path already computed.
+// Every value is an observable token count; no derived price or ratio.
+type RelaySampleInput struct {
+	UserAgent           string
+	Success             bool
+	OutputTokens        int64
+	CacheTokens         int64 // prompt cache 命中 token（缓存读取）
+	CacheCreationTokens int64 // prompt cache 创建 token（缓存写入）
+	PromptTokens        int64 // 未命中缓存的输入 token
+}
+
+// RecordRelaySample records one settled request. Cost observation is optional:
+// it is only attempted for Coding clients whose settlement price is a per-token
+// price (see ObserveCodingInputPrice), and a request that fails those gates is
+// still recorded as a plain performance sample.
+func RecordRelaySample(info *relaycommon.RelayInfo, in RelaySampleInput) {
 	if info == nil {
 		return
 	}
@@ -54,19 +69,34 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens, 
 	if generationMs <= 0 {
 		generationMs = latencyMs
 	}
-	Record(Sample{
+	sample := Sample{
 		Model:               info.OriginModelName,
 		Group:               info.UsingGroup,
 		LatencyMs:           latencyMs,
 		TtftMs:              ttftMs,
 		HasTtft:             hasTtft,
-		Success:             success,
-		OutputTokens:        outputTokens,
+		Success:             in.Success,
+		OutputTokens:        in.OutputTokens,
 		GenerationMs:        generationMs,
-		CacheTokens:         cacheTokens,
-		CacheCreationTokens: cacheCreationTokens,
-		PromptTokens:        promptTokens,
-	})
+		CacheTokens:         in.CacheTokens,
+		CacheCreationTokens: in.CacheCreationTokens,
+		PromptTokens:        in.PromptTokens,
+	}
+	if in.Success && common.IsCodingClientUserAgent(in.UserAgent) {
+		codingInputTokens := in.PromptTokens + in.CacheTokens + in.CacheCreationTokens
+		if codingInputTokens > 0 {
+			sample.CodingInputTokens = codingInputTokens
+			observation := ObserveCodingInputPrice(info.PriceData, in.CacheTokens, in.CacheCreationTokens)
+			amounts, ok := observation.CostAmounts(codingInputTokens, in.CacheTokens, in.CacheCreationTokens)
+			if ok {
+				sample.CodingCostInputTokens = codingInputTokens
+				sample.CodingObservedCostPrice = amounts.ObservedCost
+				sample.CodingCache0CostPrice = amounts.Cache0Cost
+				sample.CodingCache100CostPrice = amounts.Cache100Cost
+			}
+		}
+	}
+	Record(sample)
 }
 
 func Record(sample Sample) {
@@ -283,6 +313,12 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool, hours int
 			cacheTokens:         row.CacheTokens,
 			cacheCreationTokens: row.CacheCreationTokens,
 			promptTokens:        row.PromptTokens,
+
+			codingInputTokens:     row.CodingInputTokens,
+			codingCostInputTokens: row.CodingCostInputTokens,
+			codingObservedCost:    row.CodingObservedCost,
+			codingCache0Cost:      row.CodingCache0Cost,
+			codingCache100Cost:    row.CodingCache100Cost,
 		})
 	}
 
@@ -371,6 +407,19 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool, hours int
 				CodingCacheHitRate:  math.Round(codingCacheHitRate(value)*100) / 100,
 			})
 		}
+		samples := buildCodingModelSamples(groupModels[group])
+		for i := range models {
+			sample, ok := samples[models[i].ModelName]
+			if !ok {
+				continue
+			}
+			models[i].CodingInputWeight = sample.CodingInputWeight
+			models[i].CodingCostInputWeight = sample.CodingCostInputWeight
+			models[i].CodingCostObserved = sample.CodingCostObserved
+			models[i].CodingObservedInputPrice = sample.CodingObservedInputPrice
+			models[i].CodingCache0InputPrice = sample.CodingCache0InputPrice
+			models[i].CodingCache100InputPrice = sample.CodingCache100InputPrice
+		}
 		sort.Slice(models, func(i, j int) bool {
 			if models[i].RequestCount != models[j].RequestCount {
 				return models[i].RequestCount > models[j].RequestCount
@@ -384,20 +433,33 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool, hours int
 			description = group
 		}
 		overall = addCounters(overall, total)
-		groups = append(groups, GroupSummary{
-			Group:               group,
-			Description:         description,
-			Ratio:               meta.Ratio,
+		summary := GroupMetricSummary{
 			RequestCount:        total.requestCount,
 			SuccessCount:        total.successCount,
+			SuccessRate:         successRate(total),
 			AvgTtftMs:           avg(total.ttftSumMs, total.ttftCount),
 			AvgLatencyMs:        avg(total.totalLatencyMs, total.requestCount),
-			SuccessRate:         successRate(total),
 			AvgTps:              avgTps(total),
 			CacheObserved:       cacheObserved(total),
 			CacheHitRate:        math.Round(cacheHitRate(total)*100) / 100,
 			CodingCacheObserved: codingCacheObserved(total),
 			CodingCacheHitRate:  math.Round(codingCacheHitRate(total)*100) / 100,
+		}
+		groups = append(groups, GroupSummary{
+			Group:               group,
+			Description:         description,
+			Ratio:               meta.Ratio,
+			RequestCount:        summary.RequestCount,
+			SuccessCount:        summary.SuccessCount,
+			AvgTtftMs:           summary.AvgTtftMs,
+			AvgLatencyMs:        summary.AvgLatencyMs,
+			SuccessRate:         summary.SuccessRate,
+			AvgTps:              summary.AvgTps,
+			CacheObserved:       summary.CacheObserved,
+			CacheHitRate:        summary.CacheHitRate,
+			CodingCacheObserved: summary.CodingCacheObserved,
+			CodingCacheHitRate:  summary.CodingCacheHitRate,
+			Summary:             &summary,
 			Series:              series,
 			Models:              models,
 		})
@@ -431,8 +493,18 @@ func cloneGroupsResult(result GroupsResult) GroupsResult {
 	cloned.Groups = make([]GroupSummary, len(result.Groups))
 	copy(cloned.Groups, result.Groups)
 	for i := range cloned.Groups {
+		summary := *result.Groups[i].Summary
+		cloned.Groups[i].Summary = &summary
 		cloned.Groups[i].Series = append([]GroupSeriesPoint(nil), result.Groups[i].Series...)
 		cloned.Groups[i].Models = append([]GroupModelSummary(nil), result.Groups[i].Models...)
+		for j := range cloned.Groups[i].Models {
+			source := result.Groups[i].Models[j]
+			cloned.Groups[i].Models[j].CodingInputWeight = cloneFloat(source.CodingInputWeight)
+			cloned.Groups[i].Models[j].CodingCostInputWeight = cloneFloat(source.CodingCostInputWeight)
+			cloned.Groups[i].Models[j].CodingObservedInputPrice = cloneFloat(source.CodingObservedInputPrice)
+			cloned.Groups[i].Models[j].CodingCache0InputPrice = cloneFloat(source.CodingCache0InputPrice)
+			cloned.Groups[i].Models[j].CodingCache100InputPrice = cloneFloat(source.CodingCache100InputPrice)
+		}
 	}
 	return cloned
 }
@@ -460,6 +532,11 @@ func addCounters(current, value counters) counters {
 	current.cacheTokens += value.cacheTokens
 	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
+	current.codingInputTokens += value.codingInputTokens
+	current.codingCostInputTokens += value.codingCostInputTokens
+	current.codingObservedCost += value.codingObservedCost
+	current.codingCache0Cost += value.codingCache0Cost
+	current.codingCache100Cost += value.codingCache100Cost
 	return current
 }
 
@@ -478,6 +555,11 @@ func mergeModelTotals(totals map[string]counters, modelName string, value counte
 	current.cacheTokens += value.cacheTokens
 	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
+	current.codingInputTokens += value.codingInputTokens
+	current.codingCostInputTokens += value.codingCostInputTokens
+	current.codingObservedCost += value.codingObservedCost
+	current.codingCache0Cost += value.codingCache0Cost
+	current.codingCache100Cost += value.codingCache100Cost
 	totals[modelName] = current
 }
 
@@ -499,6 +581,11 @@ func mergeModelBucket(modelBuckets map[string]map[int64]counters, modelName stri
 	current.cacheTokens += value.cacheTokens
 	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
+	current.codingInputTokens += value.codingInputTokens
+	current.codingCostInputTokens += value.codingCostInputTokens
+	current.codingObservedCost += value.codingObservedCost
+	current.codingCache0Cost += value.codingCache0Cost
+	current.codingCache100Cost += value.codingCache100Cost
 	modelBuckets[modelName][bucketTs] = current
 }
 
@@ -557,6 +644,11 @@ func mergeCounters(merged map[bucketKey]counters, key bucketKey, value counters)
 	current.cacheTokens += value.cacheTokens
 	current.cacheCreationTokens += value.cacheCreationTokens
 	current.promptTokens += value.promptTokens
+	current.codingInputTokens += value.codingInputTokens
+	current.codingCostInputTokens += value.codingCostInputTokens
+	current.codingObservedCost += value.codingObservedCost
+	current.codingCache0Cost += value.codingCache0Cost
+	current.codingCache100Cost += value.codingCache100Cost
 	merged[key] = current
 }
 
@@ -717,6 +809,15 @@ func recordRedis(key bucketKey, sample Sample) {
 	}
 	if sample.PromptTokens > 0 {
 		pipe.HIncrBy(ctx, redisKey, "prompt", sample.PromptTokens)
+	}
+	if sample.CodingInputTokens > 0 {
+		pipe.HIncrBy(ctx, redisKey, "coding_in", sample.CodingInputTokens)
+	}
+	if sample.CodingCostInputTokens > 0 {
+		pipe.HIncrBy(ctx, redisKey, "coding_cost_in", sample.CodingCostInputTokens)
+		pipe.HIncrBy(ctx, redisKey, "coding_cost_observed", sample.CodingObservedCostPrice)
+		pipe.HIncrBy(ctx, redisKey, "coding_cost_cache0", sample.CodingCache0CostPrice)
+		pipe.HIncrBy(ctx, redisKey, "coding_cost_cache100", sample.CodingCache100CostPrice)
 	}
 	pipe.Expire(ctx, redisKey, time.Hour)
 	_, _ = pipe.Exec(ctx)
