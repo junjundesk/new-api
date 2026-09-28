@@ -20,11 +20,11 @@ func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 	channelRoute := apiRouter.Group("/channel")
 	channelRoute.Use(middleware.AdminAuth())
 
+	// 查看渠道密钥不要求安全验证（Passkey/2FA），仅需 root 身份。
 	channelRoute.POST("/:id/key",
 		middleware.RootAuth(),
 		middleware.CriticalRateLimit(),
 		middleware.DisableCache(),
-		middleware.SecureVerificationRequired(),
 		controller.GetChannelKey,
 	)
 
