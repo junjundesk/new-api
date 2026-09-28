@@ -5315,6 +5315,17 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Real-time availability and latency for your usable groups.": "Real-time availability and latency for your usable groups.",
+    "Time range": "Time range",
+    "Sort groups": "Sort groups",
+    "Cache stats explanation": "Cache stats explanation",
+    "Cache hit rate is the share of prompt input tokens served from the prompt cache. Higher means cheaper and faster.": "Cache hit rate is the share of prompt input tokens served from the prompt cache. Higher means cheaper and faster.",
+    "Coding cache is the share of cacheable tokens written to the cache (5m/1h creation). Coding workloads reuse context heavily, so a healthy creation share keeps future hits high.": "Coding cache is the share of cacheable tokens written to the cache (5m/1h creation). Coding workloads reuse context heavily, so a healthy creation share keeps future hits high.",
+    "The reference cache rate marks the healthy level for this gateway. Groups below it are highlighted.": "The reference cache rate marks the healthy level for this gateway. Groups below it are highlighted.",
+    "Reference cache rate": "Reference cache rate",
+    "Error status": "Error status",
+    "Coding cache": "Coding cache",
+    "Requests success": "Requests success"
   }
 }

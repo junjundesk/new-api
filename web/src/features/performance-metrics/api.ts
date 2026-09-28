@@ -46,7 +46,9 @@ export async function getPerfMetrics(
   return res.data
 }
 
-export async function getPerfMetricsGroups(): Promise<PerfGroupsData> {
-  const res = await api.get<PerfGroupsData>('/api/perf-metrics/groups')
+export async function getPerfMetricsGroups(hours?: number): Promise<PerfGroupsData> {
+  const res = await api.get<PerfGroupsData>('/api/perf-metrics/groups', {
+    params: hours && hours > 0 ? { hours } : undefined,
+  })
   return res.data
 }
