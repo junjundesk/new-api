@@ -85,6 +85,11 @@ type GroupModelSummary struct {
 	AvgTps        float64 `json:"avg_tps"`
 	CacheObserved bool    `json:"cache_observed"`
 	CacheHitRate  float64 `json:"cache_hit_rate"`
+	// CodingCacheObserved/CodingCacheHitRate observe the cache-creation
+	// (5m/1h write) share of cacheable prompt tokens, matching the "Coding
+	// cache" metric on the reference performance page.
+	CodingCacheObserved bool    `json:"coding_cache_observed"`
+	CodingCacheHitRate  float64 `json:"coding_cache_hit_rate"`
 }
 
 type GroupSummary struct {
@@ -99,6 +104,10 @@ type GroupSummary struct {
 	AvgTps        float64             `json:"avg_tps"`
 	CacheObserved bool                `json:"cache_observed"`
 	CacheHitRate  float64             `json:"cache_hit_rate"`
+	// Coding-cache metrics aggregate the cache-creation share over the
+	// whole group window (see GroupModelSummary).
+	CodingCacheObserved bool    `json:"coding_cache_observed"`
+	CodingCacheHitRate  float64 `json:"coding_cache_hit_rate"`
 	Series        []GroupSeriesPoint  `json:"series"`
 	Models        []GroupModelSummary `json:"models"`
 }

@@ -218,23 +218,24 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 
 // QueryGroups aggregates the latest persisted performance records by usable
 // group. Results are cached for one minute per effective group visibility set.
-func QueryGroups(metadata map[string]GroupMetadata) (GroupsResult, error) {
-	return queryGroups(metadata, true)
+// hours limits the aggregation window to the most recent N hours (0 = default).
+func QueryGroups(metadata map[string]GroupMetadata, hours int) (GroupsResult, error) {
+	return queryGroups(metadata, true, hours)
 }
 
 // QueryGroupsAll returns the same group summaries without restricting the
 // persisted rows to metadata keys. It is reserved for administrator views so
 // historical groups remain inspectable after being disabled.
-func QueryGroupsAll(metadata map[string]GroupMetadata) (GroupsResult, error) {
-	return queryGroups(metadata, false)
+func QueryGroupsAll(metadata map[string]GroupMetadata, hours int) (GroupsResult, error) {
+	return queryGroups(metadata, false, hours)
 }
 
-func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsResult, error) {
+func queryGroups(metadata map[string]GroupMetadata, filterGroups bool, hours int) (GroupsResult, error) {
 	groupFilter := metadataKeys(metadata)
 	if !filterGroups {
 		groupFilter = nil
 	}
-	cacheKey := fmt.Sprintf("%t:%v", filterGroups, groupFilter)
+	cacheKey := fmt.Sprintf("%t:%v:%d", filterGroups, groupFilter, hours)
 	now := time.Now()
 	groupsCache.Lock()
 	if cached, ok := groupsCache.entries[cacheKey]; ok && now.Before(cached.expiresAt) {
@@ -250,10 +251,17 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsRe
 	}
 
 	allowedGroups := allowedGroupSet(groupFilter)
+	windowStart := int64(0)
+	if hours > 0 {
+		windowStart = time.Now().Unix() - int64(hours)*3600
+	}
 	merged := map[bucketKey]counters{}
 	startTs := int64(0)
 	endTs := int64(0)
 	for _, row := range rows {
+		if windowStart > 0 && row.BucketTs < windowStart {
+			continue
+		}
 		if startTs == 0 || row.BucketTs < startTs {
 			startTs = row.BucketTs
 		}
@@ -280,6 +288,9 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsRe
 
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
+		if windowStart > 0 && k.bucketTs < windowStart {
+			return true
+		}
 		if allowedGroups != nil {
 			if _, ok := allowedGroups[k.group]; !ok {
 				return true
@@ -348,14 +359,16 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsRe
 		models := make([]GroupModelSummary, 0, len(groupModels[group]))
 		for modelName, value := range groupModels[group] {
 			models = append(models, GroupModelSummary{
-				ModelName:     modelName,
-				RequestCount:  value.requestCount,
-				SuccessRate:   successRate(value),
-				AvgTtftMs:     avg(value.ttftSumMs, value.ttftCount),
-				AvgLatencyMs:  avg(value.totalLatencyMs, value.requestCount),
-				AvgTps:        avgTps(value),
-				CacheObserved: cacheObserved(value),
-				CacheHitRate:  math.Round(cacheHitRate(value)*100) / 100,
+				ModelName:           modelName,
+				RequestCount:        value.requestCount,
+				SuccessRate:         successRate(value),
+				AvgTtftMs:           avg(value.ttftSumMs, value.ttftCount),
+				AvgLatencyMs:        avg(value.totalLatencyMs, value.requestCount),
+				AvgTps:              avgTps(value),
+				CacheObserved:       cacheObserved(value),
+				CacheHitRate:        math.Round(cacheHitRate(value)*100) / 100,
+				CodingCacheObserved: codingCacheObserved(value),
+				CodingCacheHitRate:  math.Round(codingCacheHitRate(value)*100) / 100,
 			})
 		}
 		sort.Slice(models, func(i, j int) bool {
@@ -372,19 +385,21 @@ func queryGroups(metadata map[string]GroupMetadata, filterGroups bool) (GroupsRe
 		}
 		overall = addCounters(overall, total)
 		groups = append(groups, GroupSummary{
-			Group:         group,
-			Description:   description,
-			Ratio:         meta.Ratio,
-			RequestCount:  total.requestCount,
-			SuccessCount:  total.successCount,
-			AvgTtftMs:     avg(total.ttftSumMs, total.ttftCount),
-			AvgLatencyMs:  avg(total.totalLatencyMs, total.requestCount),
-			SuccessRate:   successRate(total),
-			AvgTps:        avgTps(total),
-			CacheObserved: cacheObserved(total),
-			CacheHitRate:  math.Round(cacheHitRate(total)*100) / 100,
-			Series:        series,
-			Models:        models,
+			Group:               group,
+			Description:         description,
+			Ratio:               meta.Ratio,
+			RequestCount:        total.requestCount,
+			SuccessCount:        total.successCount,
+			AvgTtftMs:           avg(total.ttftSumMs, total.ttftCount),
+			AvgLatencyMs:        avg(total.totalLatencyMs, total.requestCount),
+			SuccessRate:         successRate(total),
+			AvgTps:              avgTps(total),
+			CacheObserved:       cacheObserved(total),
+			CacheHitRate:        math.Round(cacheHitRate(total)*100) / 100,
+			CodingCacheObserved: codingCacheObserved(total),
+			CodingCacheHitRate:  math.Round(codingCacheHitRate(total)*100) / 100,
+			Series:              series,
+			Models:              models,
 		})
 	}
 
@@ -651,6 +666,23 @@ func cacheHitRate(value counters) float64 {
 		return 0
 	}
 	return float64(value.cacheTokens) / float64(total) * 100
+}
+
+// codingCacheObserved reports whether any cache-creation token count was
+// recorded, so the UI can distinguish "0% coding cache" from "no data".
+func codingCacheObserved(value counters) bool {
+	return value.cacheCreationTokens > 0
+}
+
+// codingCacheHitRate returns the fraction of cacheable prompt tokens written
+// to the cache (5m/1h creation), the "Coding cache" metric on the reference
+// performance page.
+func codingCacheHitRate(value counters) float64 {
+	total := value.promptTokens + value.cacheTokens + value.cacheCreationTokens
+	if total <= 0 || value.cacheCreationTokens <= 0 {
+		return 0
+	}
+	return float64(value.cacheCreationTokens) / float64(total) * 100
 }
 
 func recordRedis(key bucketKey, sample Sample) {

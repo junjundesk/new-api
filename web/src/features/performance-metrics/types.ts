@@ -76,6 +76,8 @@ export type PerformanceGroupModelSummary = {
   avg_tps: number
   cache_observed: boolean
   cache_hit_rate: number
+  coding_cache_observed?: boolean
+  coding_cache_hit_rate?: number
 }
 
 export type PerformanceGroupSummary = {
@@ -90,6 +92,8 @@ export type PerformanceGroupSummary = {
   avg_tps: number
   cache_observed: boolean
   cache_hit_rate: number
+  coding_cache_observed?: boolean
+  coding_cache_hit_rate?: number
   series: PerformanceGroupSeriesPoint[]
   models: PerformanceGroupModelSummary[]
 }

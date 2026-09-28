@@ -65,3 +65,29 @@ func TestAtomicBucketAccumulatesCacheTokens(t *testing.T) {
 	require.Equal(t, int64(35), snap.promptTokens)
 	require.InDelta(t, 65.38, math.Round(cacheHitRate(snap)*100)/100, 0.01)
 }
+
+func TestCodingCacheHitRate(t *testing.T) {
+	cases := []struct {
+		name         string
+		cache        int64
+		prompt       int64
+		creation     int64
+		expectedRate float64
+	}{
+		{name: "no data", cache: 0, prompt: 0, creation: 0, expectedRate: 0},
+		{name: "creation only", cache: 0, prompt: 0, creation: 50, expectedRate: 100},
+		{name: "no creation", cache: 50, prompt: 50, creation: 0, expectedRate: 0},
+		{name: "mixed", cache: 60, prompt: 20, creation: 20, expectedRate: 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			value := counters{
+				cacheTokens:         tc.cache,
+				promptTokens:        tc.prompt,
+				cacheCreationTokens: tc.creation,
+			}
+			require.InDelta(t, tc.expectedRate, codingCacheHitRate(value), 1e-6)
+			require.Equal(t, tc.creation > 0, codingCacheObserved(value))
+		})
+	}
+}

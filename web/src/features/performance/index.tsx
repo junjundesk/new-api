@@ -27,7 +27,7 @@ import {
   Clock3,
   Database,
   Gauge,
-  HeartPulse,
+  Info,
   RefreshCw,
   Timer,
   Zap,
@@ -46,6 +46,19 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { getPerfMetricsGroups } from '@/features/performance-metrics/api'
 import {
   formatCompactCount,
@@ -69,17 +82,36 @@ type PerformanceSnapshot = {
   cacheHitRate: number
 }
 
-type GroupStatus = 'running' | 'degraded' | 'noData'
+// Status taxonomy mirrors the reference performance page:
+// running >= 90% / fluctuating 70-90% / error < 70% / no data.
+type GroupStatus = 'running' | 'fluctuating' | 'error' | 'noData'
+
+const STATUS_ORDER: GroupStatus[] = ['running', 'fluctuating', 'error', 'noData']
 
 function getGroupStatus(group: PerformanceGroupSummary): GroupStatus {
   if (!group.series?.length) return 'noData'
   if (!Number.isFinite(group.success_rate)) return 'noData'
   if (group.success_rate >= 90) return 'running'
-  return 'degraded'
+  if (group.success_rate >= 70) return 'fluctuating'
+  return 'error'
 }
 
-async function fetchSnapshot(): Promise<PerformanceSnapshot> {
-  const response = await getPerfMetricsGroups()
+type TimeRange = 1 | 24 | 168
+
+type SortKey = 'requests' | 'success' | 'latency' | 'ttft' | 'tps'
+
+const SORT_OPTIONS: { value: SortKey; labelKey: string }[] = [
+  { value: 'requests', labelKey: 'Requests' },
+  { value: 'success', labelKey: 'Success rate' },
+  { value: 'latency', labelKey: 'Latency' },
+  { value: 'ttft', labelKey: 'TTFT' },
+  { value: 'tps', labelKey: 'Throughput' },
+]
+
+const CACHE_RATE_THRESHOLDS = [80, 85, 90, 95] as const
+
+async function fetchSnapshot(hours: TimeRange): Promise<PerformanceSnapshot> {
+  const response = await getPerfMetricsGroups(hours)
   const data = response.data
   const groups = data?.groups ?? []
   return {
@@ -96,9 +128,13 @@ async function fetchSnapshot(): Promise<PerformanceSnapshot> {
 
 export function Performance() {
   const { t } = useTranslation()
+  const [timeRange, setTimeRange] = useState<TimeRange>(24)
+  const [statusFilter, setStatusFilter] = useState<GroupStatus | null>(null)
+  const [sortKey, setSortKey] = useState<SortKey>('requests')
+  const [cacheThreshold, setCacheThreshold] = useState<number>(90)
   const snapshotQuery = useQuery({
-    queryKey: ['performance-page'],
-    queryFn: fetchSnapshot,
+    queryKey: ['performance-page', timeRange],
+    queryFn: () => fetchSnapshot(timeRange),
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000,
     retry: false,
@@ -116,9 +152,36 @@ export function Performance() {
         counts[getGroupStatus(group)] += 1
         return counts
       },
-      { running: 0, degraded: 0, noData: 0 } as Record<GroupStatus, number>
+      {
+        running: 0,
+        fluctuating: 0,
+        error: 0,
+        noData: 0,
+      } as Record<GroupStatus, number>
     )
   }, [groups])
+
+  const visibleGroups = useMemo(() => {
+    const filtered = statusFilter
+      ? groups.filter((group) => getGroupStatus(group) === statusFilter)
+      : groups
+    const sorted = [...filtered]
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case 'success':
+          return (b.success_rate ?? 0) - (a.success_rate ?? 0)
+        case 'latency':
+          return (a.avg_latency_ms ?? 0) - (b.avg_latency_ms ?? 0)
+        case 'ttft':
+          return (a.avg_ttft_ms ?? 0) - (b.avg_ttft_ms ?? 0)
+        case 'tps':
+          return (b.avg_tps ?? 0) - (a.avg_tps ?? 0)
+        default:
+          return (b.request_count ?? 0) - (a.request_count ?? 0)
+      }
+    })
+    return sorted
+  }, [groups, statusFilter, sortKey])
 
   const updatedLabel = snapshotQuery.dataUpdatedAt
     ? new Date(snapshotQuery.dataUpdatedAt).toLocaleTimeString([], {
@@ -149,7 +212,7 @@ export function Performance() {
         </CardContent>
       </Card>
     )
-  } else if (groups.length === 0) {
+  } else if (visibleGroups.length === 0) {
     performanceBody = (
       <Card>
         <CardContent className='text-muted-foreground flex flex-col items-center gap-2 py-12 text-center text-sm'>
@@ -161,8 +224,12 @@ export function Performance() {
   } else {
     performanceBody = (
       <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-        {groups.map((group) => (
-          <PerformanceGroupCard key={group.group} group={group} />
+        {visibleGroups.map((group) => (
+          <PerformanceGroupCard
+            key={group.group}
+            group={group}
+            cacheThreshold={cacheThreshold}
+          />
         ))}
       </div>
     )
@@ -172,6 +239,7 @@ export function Performance() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Performance')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <TimeRangeSwitch value={timeRange} onChange={setTimeRange} />
         <Button
           variant='outline'
           size='sm'
@@ -188,7 +256,7 @@ export function Performance() {
         <div className='space-y-4'>
           <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
             <span>
-              {t('Performance metrics for the latest 100 records')}
+              {t('Real-time availability and latency for your usable groups.')}
             </span>
             <span aria-hidden='true'>·</span>
             <span>
@@ -198,27 +266,29 @@ export function Performance() {
             <span>{t('Auto refresh')} · 1m</span>
           </div>
 
-          <CacheDiscountCard
-            cacheObserved={snapshot?.cacheObserved ?? false}
-            cacheHitRate={snapshot?.cacheHitRate ?? 0}
-          />
+          <div className='flex flex-wrap items-center gap-2'>
+            <SortSelect value={sortKey} onChange={setSortKey} />
+            <CacheHelpPopover />
+            <CacheThresholdButton
+              value={cacheThreshold}
+              onChange={setCacheThreshold}
+            />
+          </div>
 
           <div className='flex flex-wrap items-center gap-2'>
-            <StatusBadge
-              status='running'
-              count={statusCounts.running}
-              label={t('Running')}
-            />
-            <StatusBadge
-              status='degraded'
-              count={statusCounts.degraded}
-              label={t('Fluctuating')}
-            />
-            <StatusBadge
-              status='noData'
-              count={statusCounts.noData}
-              label={t('No data')}
-            />
+            {STATUS_ORDER.map((status) => (
+              <StatusFilterButton
+                key={status}
+                status={status}
+                count={statusCounts[status]}
+                active={statusFilter === status}
+                onToggle={() =>
+                  setStatusFilter((current) =>
+                    current === status ? null : status
+                  )
+                }
+              />
+            ))}
             <span className='text-muted-foreground ms-auto text-xs'>
               {groups.length} {t('Groups')}
             </span>
@@ -231,92 +301,198 @@ export function Performance() {
   )
 }
 
-function CacheDiscountCard(props: {
-  cacheObserved: boolean
-  cacheHitRate: number
+function TimeRangeSwitch(props: {
+  value: TimeRange
+  onChange: (value: TimeRange) => void
 }) {
   const { t } = useTranslation()
   return (
-    <Card className='from-primary/10 via-card to-card border-primary/20 bg-gradient-to-r'>
-      <CardHeader className='flex flex-row items-start gap-3 space-y-0 border-b pb-4'>
-        <div className='bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg'>
-          <Zap className='size-4' />
-        </div>
-        <div className='min-w-0'>
-          <CardTitle className='text-sm'>{t('Cache discount')}</CardTitle>
-          <CardDescription className='mt-1 text-xs'>
-            {t('Cache discount description')}
-          </CardDescription>
-        </div>
-        <Badge variant='outline' className='ms-auto shrink-0'>
-          {t('Cache')}
-        </Badge>
-      </CardHeader>
-      <CardContent className='flex flex-wrap items-center gap-x-4 gap-y-2 pt-4'>
-        <div className='flex items-center gap-2'>
-          <HeartPulse className='size-4 text-emerald-500' />
-          <span className='text-sm font-medium'>
-            {t('Prompt cache hit rate')}
-          </span>
-        </div>
-        {props.cacheObserved ? (
-          <span
-            className={cn(
-              'font-mono text-lg font-semibold tabular-nums',
-              getSuccessRateTextClass(props.cacheHitRate)
-            )}
-          >
-            {formatUptimePct(props.cacheHitRate)}
-          </span>
-        ) : (
-          <span className='text-muted-foreground text-sm'>
-            {t('No cache data yet')}
-          </span>
-        )}
-      </CardContent>
-    </Card>
+    <div
+      role='group'
+      aria-label={t('Time range')}
+      className='border-border/60 inline-flex items-center rounded-md border p-0.5'
+    >
+      {TIME_RANGES.map((range) => (
+        <button
+          key={range.value}
+          type='button'
+          aria-pressed={props.value === range.value}
+          onClick={() => props.onChange(range.value)}
+          className={cn(
+            'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+            props.value === range.value
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          {range.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
-function StatusBadge(props: {
+const TIME_RANGES: { value: TimeRange; label: string }[] = [
+  { value: 1, label: '1h' },
+  { value: 24, label: '24h' },
+  { value: 168, label: '7d' },
+]
+
+function SortSelect(props: {
+  value: SortKey
+  onChange: (value: SortKey) => void
+}) {
+  const { t } = useTranslation()
+  const current = SORT_OPTIONS.find((option) => option.value === props.value)
+  return (
+    <Select
+      items={SORT_OPTIONS.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      }))}
+      value={props.value}
+      onValueChange={(value) => {
+        if (typeof value === 'string') props.onChange(value as SortKey)
+      }}
+    >
+      <SelectTrigger size='sm' aria-label={t('Sort groups')} className='h-8 w-40'>
+        <SelectValue>
+          <span className='text-muted-foreground'>{t('Sort groups')}:</span>
+          {t(current?.labelKey ?? 'Requests')}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {SORT_OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
+}
+
+function CacheHelpPopover() {
+  const { t } = useTranslation()
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant='ghost' size='sm'>
+            <Info className='size-3.5' />
+            {t('Cache stats explanation')}
+          </Button>
+        }
+      />
+      <PopoverContent align='start' className='w-96 text-sm'>
+        <p className='text-sm font-semibold'>{t('Cache stats explanation')}</p>
+        <div className='text-muted-foreground space-y-2 text-xs'>
+          <p>
+            {t(
+              'Cache hit rate is the share of prompt input tokens served from the prompt cache. Higher means cheaper and faster.'
+            )}
+          </p>
+          <p>
+            {t(
+              'Coding cache is the share of cacheable tokens written to the cache (5m/1h creation). Coding workloads reuse context heavily, so a healthy creation share keeps future hits high.'
+            )}
+          </p>
+          <p>
+            {t(
+              'The reference cache rate marks the healthy level for this gateway. Groups below it are highlighted.'
+            )}
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function CacheThresholdButton(props: {
+  value: number
+  onChange: (value: number) => void
+}) {
+  const { t } = useTranslation()
+  const next = () => {
+    const idx = CACHE_RATE_THRESHOLDS.indexOf(
+      props.value as (typeof CACHE_RATE_THRESHOLDS)[number]
+    )
+    props.onChange(
+      CACHE_RATE_THRESHOLDS[(idx + 1) % CACHE_RATE_THRESHOLDS.length]
+    )
+  }
+  return (
+    <Button variant='outline' size='sm' onClick={next}>
+      <Zap className='size-3.5 text-amber-500' />
+      {t('Reference cache rate')}: {props.value}%
+    </Button>
+  )
+}
+
+function StatusFilterButton(props: {
   status: GroupStatus
   count: number
-  label: string
+  active: boolean
+  onToggle: () => void
 }) {
-  const icon = {
+  const { t } = useTranslation()
+  const label = {
+    running: t('Running'),
+    fluctuating: t('Fluctuating'),
+    error: t('Error status'),
+    noData: t('No data'),
+  }[props.status]
+  const Icon = {
     running: CheckCircle2,
-    degraded: CircleAlert,
+    fluctuating: CircleAlert,
+    error: CircleX,
     noData: Clock3,
   }[props.status]
-  const Icon = icon
-  const className = {
+  const activeClass = {
     running:
-      'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    degraded:
-      'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    noData: 'border-muted-foreground/20 bg-muted text-muted-foreground',
+      'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    fluctuating:
+      'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300',
+    error: 'border-destructive/40 bg-destructive/10 text-destructive',
+    noData: 'border-muted-foreground/30 bg-muted text-foreground',
   }[props.status]
-
   return (
-    <Badge variant='outline' className={cn('gap-1.5', className)}>
-      <Icon className='size-3.5' />
-      <span>{props.count}</span>
-      <span className='max-w-44 truncate'>{props.label}</span>
-    </Badge>
+    <button
+      type='button'
+      aria-pressed={props.active}
+      onClick={props.onToggle}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+        props.active
+          ? activeClass
+          : 'border-border/60 bg-background text-muted-foreground hover:text-foreground'
+      )}
+    >
+      <Icon className='size-3.5' aria-hidden='true' />
+      <span className='font-mono'>{props.count}</span>
+      <span>{label}</span>
+    </button>
   )
 }
-
-function PerformanceGroupCard(props: { group: GroupSummary }) {
+function PerformanceGroupCard(props: {
+  group: GroupSummary
+  cacheThreshold: number
+}) {
   const { t } = useTranslation()
   const group = props.group
   const status = getGroupStatus(group)
   const [modelsExpanded, setModelsExpanded] = useState(false)
   const statusLabel = {
     running: t('Running'),
-    degraded: t('Fluctuating'),
+    fluctuating: t('Fluctuating'),
+    error: t('Error status'),
     noData: t('No data'),
   }[status]
-  const latestSeries = group.series.slice(-12)
+  const latestSeries = group.series.slice(-24)
+  const cacheBelowReference =
+    group.cache_observed && group.cache_hit_rate < props.cacheThreshold
 
   return (
     <Card className='group transition-shadow hover:shadow-md'>
@@ -329,18 +505,14 @@ function PerformanceGroupCard(props: { group: GroupSummary }) {
             >
               {group.group}
               <span className='text-muted-foreground ms-1.5 font-mono text-xs font-medium'>
-                {formatRatio(group.ratio)}
+                ×{formatRatio(group.ratio)}
               </span>
             </CardTitle>
-            <CardDescription className='mt-1 flex min-w-0 items-center gap-1.5 text-xs'>
-              <span className='truncate' title={group.description}>
+            {group.description && (
+              <CardDescription className='mt-1 line-clamp-2 text-xs'>
                 {group.description}
-              </span>
-              <span aria-hidden='true'>·</span>
-              <span>
-                {group.modelCount} {t('Models')}
-              </span>
-            </CardDescription>
+              </CardDescription>
+            )}
           </div>
           <Badge variant='outline' className={cn(statusColor(status))}>
             <span
@@ -396,7 +568,7 @@ function PerformanceGroupCard(props: { group: GroupSummary }) {
         <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
           <span>
             {formatCompactCount(group.success_count)}/
-            {formatCompactCount(group.request_count)} {t('Requests')}
+            {formatCompactCount(group.request_count)} {t('Requests success')}
           </span>
           <span
             className={cn(
@@ -415,12 +587,26 @@ function PerformanceGroupCard(props: { group: GroupSummary }) {
           <span
             className={cn(
               'font-mono font-semibold tabular-nums',
-              group.cache_observed
-                ? getSuccessRateTextClass(group.cache_hit_rate)
-                : 'text-muted-foreground'
+              cacheRateClass(group, cacheBelowReference)
             )}
           >
             {formatUptimePct(group.cache_hit_rate)}
+          </span>
+        </div>
+        <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
+          <span className='flex items-center gap-1.5'>
+            <Zap className='size-3.5' />
+            {t('Coding cache')}
+          </span>
+          <span
+            className={cn(
+              'font-mono font-semibold tabular-nums',
+              !group.coding_cache_observed
+                ? 'text-muted-foreground'
+                : getSuccessRateTextClass(group.coding_cache_hit_rate ?? 0)
+            )}
+          >
+            {formatUptimePct(group.coding_cache_hit_rate ?? 0)}
           </span>
         </div>
         <div className='flex items-center justify-between gap-2 border-t pt-2'>
@@ -510,12 +696,21 @@ function ModelTable(props: { group: GroupSummary }) {
   )
 }
 
+function cacheRateClass(group: GroupSummary, belowReference: boolean) {
+  if (!group.cache_observed) return 'text-muted-foreground'
+  if (belowReference) return 'text-warning'
+  return getSuccessRateTextClass(group.cache_hit_rate)
+}
+
 function statusColor(status: GroupStatus) {
   if (status === 'running') {
     return 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
   }
-  if (status === 'degraded') {
+  if (status === 'fluctuating') {
     return 'border-amber-500/30 text-amber-700 dark:text-amber-300'
+  }
+  if (status === 'error') {
+    return 'border-destructive/40 text-destructive'
   }
   return 'border-muted-foreground/20 text-muted-foreground'
 }

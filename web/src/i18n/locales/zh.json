@@ -5315,6 +5315,17 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Real-time availability and latency for your usable groups.": "当前账号可用分组的实时可用率与延迟。",
+    "Time range": "时间范围",
+    "Sort groups": "排序分组",
+    "Cache stats explanation": "缓存统计说明",
+    "Cache hit rate is the share of prompt input tokens served from the prompt cache. Higher means cheaper and faster.": "缓存命中率：输入 token 中由缓存直接供给的比例。越高越省钱、越快。",
+    "Coding cache is the share of cacheable tokens written to the cache (5m/1h creation). Coding workloads reuse context heavily, so a healthy creation share keeps future hits high.": "Coding 缓存：可缓存 token 中写入缓存的占比（5m/1h 创建）。编程类请求上下文高度复用，健康的创建占比能维持后续高命中。",
+    "The reference cache rate marks the healthy level for this gateway. Groups below it are highlighted.": "参考缓存率是本网关的健康水位，低于该值的分组会被高亮提示。",
+    "Reference cache rate": "参考缓存率",
+    "Error status": "异常",
+    "Coding cache": "Coding 缓存",
+    "Requests success": "次请求成功"
   }
 }
