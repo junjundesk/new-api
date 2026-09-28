@@ -5326,6 +5326,8 @@
     "Reference cache rate": "Reference cache rate",
     "Error status": "Error status",
     "Coding cache": "Coding cache",
-    "Requests success": "Requests success"
+    "Requests success": "Requests success",
+    "Past": "Past",
+    "Now": "Now"
   }
 }

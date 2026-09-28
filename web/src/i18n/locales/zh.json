@@ -5326,6 +5326,8 @@
     "Reference cache rate": "参考缓存率",
     "Error status": "异常",
     "Coding cache": "Coding 缓存",
-    "Requests success": "次请求成功"
+    "Requests success": "次请求成功",
+    "Past": "过去",
+    "Now": "现在"
   }
 }
