@@ -226,6 +226,10 @@ export function useUsersColumns(): ColumnDef<User>[] {
         const affCount = user.aff_count || 0
         const affHistoryQuota = user.aff_history_quota || 0
         const inviterId = user.inviter_id || 0
+        const inviterUsername = user.inviter_username?.trim()
+        const inviterLabel = inviterUsername
+          ? `${t('Inviter ID')}: ${inviterId} ${t('Inviter username')}: ${inviterUsername}`
+          : `${t('Inviter ID')}: ${inviterId}`
 
         return (
           <div className='flex max-w-full min-w-0 flex-wrap items-center gap-1 overflow-hidden'>
@@ -264,7 +268,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
                 <TooltipTrigger
                   render={
                     <StatusBadge
-                      label={`${t('Inviter')}: ${inviterId}`}
+                      label={inviterLabel}
                       variant='neutral'
                       copyable={false}
                       className='cursor-help'
