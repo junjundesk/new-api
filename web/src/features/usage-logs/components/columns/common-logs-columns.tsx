@@ -590,44 +590,46 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
       return (
         <div className='flex max-w-[200px] flex-col gap-0.5'>
-          <TooltipProvider delay={300}>
-            <Tooltip>
-              <TooltipTrigger render={<div className='max-w-full' />}>
-                <StatusBadge
-                  label={displayName}
-                  icon={KeyRound}
-                  copyText={sensitiveVisible ? tokenName : undefined}
-                  size='sm'
-                  showDot={false}
-                  className='border-border/60 bg-muted/30 text-foreground h-6 max-w-full gap-1.5 overflow-hidden rounded-md border px-2 py-0.5 [font-family:var(--font-body)]'
-                />
-              </TooltipTrigger>
-              {sensitiveVisible && tokenName.length > 16 && (
-                <TooltipContent side='top' className='max-w-xs break-all'>
-                  {tokenName}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-          {(group || groupRatio != null) && (
+          <div className='flex max-w-full items-center gap-1'>
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger render={<div className='max-w-full min-w-0' />}>
+                  <StatusBadge
+                    label={displayName}
+                    icon={KeyRound}
+                    copyText={sensitiveVisible ? tokenName : undefined}
+                    size='sm'
+                    showDot={false}
+                    className='border-border/60 bg-muted/30 text-foreground h-6 max-w-full gap-1.5 overflow-hidden rounded-md border px-2 py-0.5 [font-family:var(--font-body)]'
+                  />
+                </TooltipTrigger>
+                {sensitiveVisible && tokenName.length > 16 && (
+                  <TooltipContent side='top' className='max-w-xs break-all'>
+                    {tokenName}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+            {groupRatio != null ? (
+              <span
+                className='text-muted-foreground/60 shrink-0 text-xs leading-none tabular-nums'
+                data-log-group-ratio
+              >
+                {formatRatioCompact(groupRatio)}x
+              </span>
+            ) : null}
+          </div>
+          {group ? (
             <span className='block max-w-full truncate text-xs leading-none'>
-              {group ? (
-                <GroupBadge
-                  group={group}
-                  label={sensitiveVisible ? undefined : '••••'}
-                  type='text'
-                  size='sm'
-                  className='inline align-baseline text-xs leading-none [&>span]:leading-none'
-                />
-              ) : null}
-              {group && groupRatio != null ? ' ' : null}
-              {groupRatio != null ? (
-                <span className='text-muted-foreground/60 relative top-px align-baseline tabular-nums'>
-                  {formatRatioCompact(groupRatio)}x
-                </span>
-              ) : null}
+              <GroupBadge
+                group={group}
+                label={sensitiveVisible ? undefined : '••••'}
+                type='text'
+                size='sm'
+                className='inline align-baseline text-xs leading-none [&>span]:leading-none'
+              />
             </span>
-          )}
+          ) : null}
         </div>
       )
     },
