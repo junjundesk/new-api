@@ -157,15 +157,20 @@ export function UsersMutateDrawer({
   const targetIsAdmin = (selectedRole ?? currentRow?.role ?? 0) >= ROLE.ADMIN
 
   const onSubmit = async (data: UserFormValues) => {
-    if (!isUpdate) {
-      const passwordLength = data.password?.length || 0
-      if (passwordLength < 8 || passwordLength > 20) {
-        form.setError('password', {
-          type: 'manual',
-          message: t('Password must be between 8 and 20 characters'),
-        })
-        return
-      }
+    const passwordLength = data.password?.length ?? 0
+    const hasPassword = passwordLength > 0
+    const passwordOutOfRange =
+      hasPassword && (passwordLength < 8 || passwordLength > 20)
+
+    // The backend validates User.Password as 8-20 characters. Creating a user
+    // always sends one; updating only replaces it when a password was typed,
+    // so an untouched field must stay valid without any entered value.
+    if (passwordOutOfRange || (!isUpdate && !hasPassword)) {
+      form.setError('password', {
+        type: 'manual',
+        message: t('Password must be between 8 and 20 characters'),
+      })
+      return
     }
 
     setIsSubmitting(true)
