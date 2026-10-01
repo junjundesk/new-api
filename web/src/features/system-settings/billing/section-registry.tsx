@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { parseCurrencyDisplayType } from '@/lib/currency'
 
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
+import { EnterpriseSettingsSection } from '../general/enterprise-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
@@ -208,6 +209,19 @@ const BILLING_SECTIONS = [
           enabled: settings['checkin_setting.enabled'],
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'enterprise',
+    titleKey: 'Enterprise Identity',
+    build: (settings: BillingSettings) => (
+      <EnterpriseSettingsSection
+        defaultValues={{
+          enabled: settings['enterprise_setting.enabled'],
+          totalRechargeThreshold:
+            settings['enterprise_setting.total_recharge_threshold'],
         }}
       />
     ),

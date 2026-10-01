@@ -712,3 +712,17 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 
 	return nil
 }
+
+// GetUserTotalRechargeMoney 统计用户累计成功充值金额(与 Price 同单位的实付金额)。
+// 仅统计 status=success 的订单；查询失败时返回 0 且不阻断主流程。
+func GetUserTotalRechargeMoney(userId int) float64 {
+	var total *float64
+	err := DB.Model(&TopUp{}).
+		Select("COALESCE(SUM(money), 0)").
+		Where("user_id = ? AND status = ?", userId, common.TopUpStatusSuccess).
+		Scan(&total).Error
+	if err != nil || total == nil {
+		return 0
+	}
+	return *total
+}

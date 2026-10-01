@@ -545,6 +545,13 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 			}
 		}
 	}
+	// 企业身份：按累充金额门槛自动识别。失败不影响主流程（视为未解锁）。
+	var totalRecharge float64
+	var enterpriseUnlocked bool
+	if operation_setting.IsEnterpriseEnabled() {
+		totalRecharge = model.GetUserTotalRechargeMoney(user.Id)
+		enterpriseUnlocked = totalRecharge >= operation_setting.GetEnterpriseTotalRechargeThreshold()
+	}
 	return map[string]interface{}{
 		"id":                    user.Id,
 		"username":              user.Username,
@@ -574,6 +581,8 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 		"bonus_expiring_quota":  bonusExpiring,
 		"bonus_permanent_quota": bonusPermanent,
 		"bonus_expire_time":     bonusNearestExpire,
+		"total_recharge":        totalRecharge,
+		"enterprise_unlocked":   enterpriseUnlocked,
 		"permissions":           permissions,
 	}
 }

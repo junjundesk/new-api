@@ -77,6 +77,14 @@ export const THEME_PRESETS = [
     name: 'Lavender Dream',
     swatches: ['oklch(0.5709 0.1808 306.89)', 'oklch(0.811 0.0589 201.14)'],
   },
+  {
+    // Corporate black-and-gold identity: near-black product surface with a
+    // metallic gold accent. Unlocked for enterprise accounts by cumulative
+    // recharge (see the enterprise identity gate).
+    value: 'enterprise',
+    name: 'Enterprise (Black & Gold)',
+    swatches: ['oklch(0.155 0.004 80)', 'oklch(0.8 0.135 88)'],
+  },
 ] as const
 
 export type ThemePreset = (typeof THEME_PRESETS)[number]['value']
