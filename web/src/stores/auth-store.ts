@@ -52,6 +52,8 @@ export interface AuthUser {
   setting?: Record<string, unknown> | string
   stripe_customer?: string
   sidebar_modules?: string
+  total_recharge?: number
+  enterprise_unlocked?: boolean
   permissions?: UserPermissions
 }
 

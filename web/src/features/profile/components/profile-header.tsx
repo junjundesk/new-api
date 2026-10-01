@@ -137,6 +137,11 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
                 variant='neutral'
                 copyable={false}
               />
+              {profile.enterprise_unlocked === true && (
+                <span className='border-primary/50 text-primary rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wider'>
+                  ENTERPRISE
+                </span>
+              )}
               <StatusBadge
                 label={`${t('User ID')} ${profile.id}`}
                 variant='info'

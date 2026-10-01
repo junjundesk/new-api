@@ -26,6 +26,7 @@ import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CheckinCalendarCard } from './components/checkin-calendar-card'
+import { EnterpriseBenefitsCard } from './components/enterprise-benefits-card'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { LoginSessionsCard } from './components/login-sessions-card'
 import { PasskeyCard } from './components/passkey-card'
@@ -47,6 +48,11 @@ export function Profile() {
   )
   const turnstileSiteKey = status?.turnstile_site_key || ''
   const canConfigureSidebar = permissions?.sidebar_settings !== false
+  const enterpriseEnabled = status?.enterprise_enabled === true
+  const enterpriseThreshold =
+    typeof status?.enterprise_total_recharge_threshold === 'number'
+      ? (status.enterprise_total_recharge_threshold as number)
+      : 0
 
   return (
     <Main>
@@ -55,6 +61,16 @@ export function Profile() {
           <CardStaggerItem>
             <ProfileHeader profile={profile} loading={loading} />
           </CardStaggerItem>
+
+          {enterpriseEnabled && (
+            <CardStaggerItem>
+              <EnterpriseBenefitsCard
+                unlocked={profile?.enterprise_unlocked === true}
+                totalRecharge={profile?.total_recharge ?? 0}
+                threshold={enterpriseThreshold}
+              />
+            </CardStaggerItem>
+          )}
 
           <CardStaggerItem>
             <BonusBalanceCard
