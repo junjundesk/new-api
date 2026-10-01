@@ -71,6 +71,13 @@ const BILLING_SECTIONS = [
             enable_free_model_pre_consume:
               settings['quota_setting.enable_free_model_pre_consume'],
           },
+          bonus_setting: {
+            signup_bonus_enabled:
+              settings['bonus_setting.signup_bonus_enabled'],
+            signup_bonus_amount: settings['bonus_setting.signup_bonus_amount'],
+            signup_bonus_duration:
+              settings['bonus_setting.signup_bonus_duration'],
+          },
         }}
         complianceConfirmed={
           (settings['payment_setting.compliance_confirmed'] ?? false) &&

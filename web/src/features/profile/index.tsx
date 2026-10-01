@@ -21,6 +21,7 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
+import { BonusBalanceCard } from '@/features/bonus/components/bonus-balance-card'
 import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -53,6 +54,15 @@ export function Profile() {
         <CardStaggerContainer className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-6'>
           <CardStaggerItem>
             <ProfileHeader profile={profile} loading={loading} />
+          </CardStaggerItem>
+
+          <CardStaggerItem>
+            <BonusBalanceCard
+              bonusQuota={profile?.bonus_quota ?? 0}
+              expiringQuota={profile?.bonus_expiring_quota ?? 0}
+              permanentQuota={profile?.bonus_permanent_quota ?? 0}
+              expireTime={profile?.bonus_expire_time ?? 0}
+            />
           </CardStaggerItem>
 
           <CardStaggerItem>

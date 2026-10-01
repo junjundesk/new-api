@@ -49,6 +49,14 @@ export interface UserProfile {
   quota: number
   /** Total used quota */
   used_quota: number
+  /** Expiring bonus quota (赠金) */
+  bonus_quota?: number
+  /** Remaining bonus that expires */
+  bonus_expiring_quota?: number
+  /** Remaining bonus that never expires */
+  bonus_permanent_quota?: number
+  /** Nearest bonus expiry timestamp (0 = never expires / no bonus) */
+  bonus_expire_time?: number
   /** Total request count */
   request_count: number
   /** Account status (1=启用, 2=禁用, 3=待审核, 4=已删除) */

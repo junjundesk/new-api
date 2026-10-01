@@ -137,3 +137,49 @@ func refundWithRetry(fn func() error) error {
 	}
 	return lastErr
 }
+
+// ---------------------------------------------------------------------------
+// BonusFunding — 赠金资金来源实现
+// ---------------------------------------------------------------------------
+
+type BonusFunding struct {
+	requestId string
+	userId    int
+	amount    int64 // 预扣的赠金额度
+
+	grantId         int
+	preConsumed     int64
+	AmountTotal     int64
+	AmountUsedAfter int64
+}
+
+func (b *BonusFunding) Source() string { return BillingSourceBonus }
+
+func (b *BonusFunding) PreConsume(_ int) error {
+	// amount 参数被忽略，使用内部 b.amount（已在构造时根据 preConsumedQuota 计算）
+	res, err := model.PreConsumeUserBonus(b.requestId, b.userId, b.amount)
+	if err != nil {
+		return err
+	}
+	b.grantId = res.GrantId
+	b.preConsumed = res.PreConsumed
+	b.AmountTotal = res.AmountTotal
+	b.AmountUsedAfter = res.AmountUsedAfter
+	return nil
+}
+
+func (b *BonusFunding) Settle(delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	return model.ApplyUserBonusDelta(b.requestId, int64(delta))
+}
+
+func (b *BonusFunding) Refund() error {
+	if b.preConsumed <= 0 {
+		return nil
+	}
+	return refundWithRetry(func() error {
+		return model.RefundBonusPreConsume(b.requestId)
+	})
+}

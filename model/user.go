@@ -716,6 +716,7 @@ func (user *User) finishInsert(inviterId int) {
 	if common.QuotaForNewUser > 0 {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
+	grantSignupBonus(user.Id)
 	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
@@ -727,6 +728,30 @@ func (user *User) finishInsert(inviterId int) {
 			_ = inviteUser(inviterId)
 		}
 	}
+}
+
+// grantSignupBonus issues the configured signup bonus (赠金) to a new user.
+// It is a no-op unless the master switch is on and the amount is positive.
+// Failures are logged and never block registration.
+func grantSignupBonus(userId int) {
+	bonusSetting := operation_setting.GetBonusSetting()
+	if bonusSetting == nil || !bonusSetting.SignupBonusEnabled || bonusSetting.SignupBonusAmount <= 0 {
+		return
+	}
+	expireTime := int64(0)
+	if strings.TrimSpace(bonusSetting.SignupBonusDuration) != "" {
+		d, err := ParseBonusDuration(bonusSetting.SignupBonusDuration)
+		if err != nil {
+			common.SysError(fmt.Sprintf("invalid signup bonus duration %q: %s", bonusSetting.SignupBonusDuration, err.Error()))
+			return
+		}
+		expireTime = common.GetTimestamp() + int64(d.Seconds())
+	}
+	if _, err := GrantBonus(userId, bonusSetting.SignupBonusAmount, expireTime, BonusSourceSignup, "注册赠送"); err != nil {
+		common.SysError(fmt.Sprintf("failed to grant signup bonus to user %d: %s", userId, err.Error()))
+		return
+	}
+	RecordLog(userId, LogTypeSystem, fmt.Sprintf("新用户注册赠送赠金 %s", logger.LogQuota(int(bonusSetting.SignupBonusAmount))))
 }
 
 func (user *User) FinishInsert(inviterId int) {
@@ -773,6 +798,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 	if common.QuotaForNewUser > 0 {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
+	grantSignupBonus(user.Id)
 	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)

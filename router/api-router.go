@@ -132,6 +132,9 @@ func SetApiRouter(router *gin.Engine) {
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
+
+				// Bonus (赠金) — self summary
+				selfRoute.GET("/self/bonus", controller.GetSelfBonus)
 			}
 
 			adminRoute := userRoute.Group("/")
@@ -141,6 +144,9 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/topup", controller.GetAllTopUps)
 				adminRoute.POST("/topup/complete", controller.AdminCompleteTopUp)
 				adminRoute.GET("/search", controller.SearchUsers)
+				adminRoute.POST("/bonus/grant_all", controller.AdminGrantBonusAll)
+				adminRoute.GET("/:id/bonus", controller.AdminListUserBonus)
+				adminRoute.POST("/:id/bonus", controller.AdminGrantBonus)
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)

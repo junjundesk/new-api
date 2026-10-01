@@ -254,6 +254,9 @@ export type BillingSettings = {
   TopUpLink: string
   'general_setting.docs_link': string
   'quota_setting.enable_free_model_pre_consume': boolean
+  'bonus_setting.signup_bonus_enabled': boolean
+  'bonus_setting.signup_bonus_amount': number
+  'bonus_setting.signup_bonus_duration': string
   QuotaPerUnit: number
   USDExchangeRate: number
   'general_setting.quota_display_type': string
