@@ -228,6 +228,12 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
+	// 白名单含 qq.com 时，QQ 邮箱只接受纯数字邮箱名（验证码阶段已拦一次，
+	// 这里再拦一次，避免验证码签发后规则变更或直接构造请求绕过）。
+	if err := common.ValidateQQEmailLocalPart(user.Email); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserEmailQQNotNumeric)
+		return
+	}
 	if common.EmailVerificationEnabled {
 		if user.Email == "" || user.VerificationCode == "" {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
@@ -1312,6 +1318,11 @@ func EmailBind(c *gin.Context) {
 	code := req.Code
 	if !common.VerifyCodeWithKey(email, code, common.EmailVerificationPurpose) {
 		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
+		return
+	}
+	// 与发验证码/注册保持一致：白名单含 qq.com 时只接受纯数字邮箱名。
+	if err := common.ValidateQQEmailLocalPart(email); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserEmailQQNotNumeric)
 		return
 	}
 	user := model.User{
