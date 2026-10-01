@@ -135,11 +135,19 @@ export function EnterpriseBenefitsCard({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className='text-muted-foreground text-xs'>
-              {t('{{remaining}} remaining', {
-                remaining: formatLocalCurrencyAmount(remaining),
-              })}
-            </p>
+            <div className='text-muted-foreground flex items-center justify-between text-xs'>
+              <span>
+                {t('Recharged {{current}} / {{target}}', {
+                  current: formatLocalCurrencyAmount(totalRecharge),
+                  target: formatLocalCurrencyAmount(threshold),
+                })}
+              </span>
+              <span>
+                {t('{{remaining}} remaining', {
+                  remaining: formatLocalCurrencyAmount(remaining),
+                })}
+              </span>
+            </div>
           </div>
         )}
       </CardHeader>

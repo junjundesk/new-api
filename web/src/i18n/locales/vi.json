@@ -5473,6 +5473,7 @@
     "Unlimited RPM": "RPM không giới hạn",
     "Verified enterprise account": "Tài khoản doanh nghiệp đã xác minh",
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Tài khoản có tổng nạp (nạp trực tuyến, mã đổi thưởng và cấp bởi quản trị viên) đạt mức này sẽ mở khóa danh tính doanh nghiệp",
+    "Recharged {{current}} / {{target}}": "Đã nạp {{current}} / {{target}}",
     "Zoom": "Zoom"
   }
 }
