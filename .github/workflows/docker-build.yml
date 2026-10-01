@@ -18,15 +18,6 @@ on:
         options:
           - ghcr
           - dockerhub
-      arch:
-        description: 'Architectures to build (tag-push builds always use all)'
-        required: false
-        type: choice
-        default: all
-        options:
-          - all
-          - amd64
-          - arm64
       image:
         description: 'Override image name (default: ghcr.io/<repository>, or calciumion/new-api for dockerhub)'
         required: false
@@ -52,7 +43,6 @@ jobs:
           INPUT_REGISTRY: ${{ inputs.registry }}
           INPUT_IMAGE: ${{ inputs.image }}
           INPUT_DOCKERHUB_USERNAME: ${{ inputs.dockerhub_username }}
-          INPUT_ARCH: ${{ inputs.arch }}
           VAR_DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
           VAR_DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           SECRET_DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -79,16 +69,9 @@ jobs:
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "dockerhub_username=$DOCKERHUB_USERNAME" >> "$GITHUB_OUTPUT"
-          case "$INPUT_ARCH" in
-            amd64)
-              BUILD_MATRIX='{"include":[{"arch":"amd64","platform":"linux/amd64","runner":"ubuntu-latest"}]}' ;;
-            arm64)
-              BUILD_MATRIX='{"include":[{"arch":"arm64","platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]}' ;;
-            *)
-              BUILD_MATRIX='{"include":[{"arch":"amd64","platform":"linux/amd64","runner":"ubuntu-latest"},{"arch":"arm64","platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]}' ;;
-          esac
+          BUILD_MATRIX='{"include":[{"arch":"amd64","platform":"linux/amd64","runner":"ubuntu-latest"}]}'
           echo "build_matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
-          echo "Publishing to $REGISTRY as $IMAGE (arch: ${INPUT_ARCH:-all})"
+          echo "Publishing to $REGISTRY as $IMAGE (amd64 only)"
 
   build_single_arch:
     name: Build & push (${{ matrix.arch }})
@@ -220,13 +203,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve selected architectures
-        env:
-          ARCH_INPUT: ${{ inputs.arch }}
-        run: |
-          case "$ARCH_INPUT" in
-            amd64|arm64) echo "ARCHES=$ARCH_INPUT" >> "$GITHUB_ENV" ;;
-            *) echo "ARCHES=amd64 arm64" >> "$GITHUB_ENV" ;;
-          esac
+        run: echo "ARCHES=amd64" >> "$GITHUB_ENV"
 
       - name: Create & push manifest (version)
         run: |
