@@ -98,9 +98,6 @@ export function BonusBalanceCard(props: BonusBalanceCardProps) {
             })}
           </div>
         )}
-        {permanent > 0 && (
-          <div className='text-muted-foreground'>{t('Never expires')}</div>
-        )}
       </div>
     </div>
   )
