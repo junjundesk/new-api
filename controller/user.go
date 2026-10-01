@@ -331,6 +331,10 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 赠金余额仅用于展示，查询失败不影响用户列表本身。
+	if err := model.AttachActiveBonus(users); err != nil {
+		common.SysLog("failed to attach bonus quota to user list: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -361,6 +365,10 @@ func SearchUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 赠金余额仅用于展示，查询失败不影响搜索结果本身。
+	if err := model.AttachActiveBonus(users); err != nil {
+		common.SysLog("failed to attach bonus quota to user search: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -389,6 +397,9 @@ func GetUser(c *gin.Context) {
 		return
 	}
 	user.AdminPermissions = authz.Capabilities(user.Id, user.Role)
+	if err := model.AttachActiveBonus([]*model.User{user}); err != nil {
+		common.SysLog("failed to attach bonus quota to user detail: " + err.Error())
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

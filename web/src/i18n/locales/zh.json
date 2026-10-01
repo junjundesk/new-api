@@ -658,6 +658,7 @@
     "Blocked keywords": "已阻止的关键词",
     "Blocks messages when sensitive keywords are detected.": "检测到敏感关键词时阻止消息。",
     "Body param": "请求体参数",
+    "Bonus": "赠金",
     "Bonus Amount": "赠金额度",
     "Bonus granted successfully": "赠金发放成功",
     "Bonus granted to {{count}} users": "已向 {{count}} 位用户发放赠金",

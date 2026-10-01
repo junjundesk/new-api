@@ -428,6 +428,11 @@ export function UsersMutateDrawer({
                         <FormDescription>
                           {formatQuota(parseQuotaFromDollars(field.value || 0))}
                         </FormDescription>
+                        {(currentRow?.bonus_quota ?? 0) > 0 && (
+                          <p className='text-xs text-amber-600 dark:text-amber-400'>
+                            ({t('Bonus')}: {formatQuota(currentRow?.bonus_quota ?? 0)})
+                          </p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
