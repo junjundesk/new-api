@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 type UserQuotaCellProps = {
   used: number
   remaining: number
+  /** Remaining bonus quota, shown as a separate "(赠金: ...)" note. */
+  bonus?: number
 }
 
 function getQuotaProgressColor(percentage: number): string {
@@ -76,6 +78,11 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
           value={percentage}
           className={cn('h-1.5', getQuotaProgressColor(percentage))}
         />
+        {props.bonus !== undefined && props.bonus > 0 && (
+          <div className='truncate text-[11px] text-amber-600 tabular-nums dark:text-amber-400'>
+            ({t('Bonus')}: {formatQuota(props.bonus)})
+          </div>
+        )}
       </TooltipTrigger>
       <TooltipContent>
         <div className='space-y-1 text-xs'>
@@ -88,6 +95,11 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
           <div>
             {t('Total:')} {formattedTotal}
           </div>
+          {props.bonus !== undefined && props.bonus > 0 && (
+            <div className='text-amber-600 dark:text-amber-400'>
+              {t('Bonus')}: {formatQuota(props.bonus)}
+            </div>
+          )}
           <div>
             {t('Percentage:')} {percentage.toFixed(1)}%
           </div>

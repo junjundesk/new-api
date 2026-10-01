@@ -658,6 +658,7 @@
     "Blocked keywords": "ブロックされたキーワード",
     "Blocks messages when sensitive keywords are detected.": "機密性の高いキーワードが検出された場合にメッセージをブロックします。",
     "Body param": "ボディパラメータ",
+    "Bonus": "ボーナス",
     "Bonus Amount": "ボーナス額",
     "Bonus granted successfully": "ボーナスを付与しました",
     "Bonus granted to {{count}} users": "{{count}} ユーザーにボーナスを付与しました",

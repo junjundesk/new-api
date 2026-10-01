@@ -421,5 +421,6 @@ export interface UserInfo {
   aff_code?: string
   aff_count?: number
   aff_quota?: number
+  bonus_quota?: number
   remark?: string
 }

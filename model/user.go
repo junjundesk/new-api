@@ -102,6 +102,7 @@ type User struct {
 	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
 	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
 	InviterUsername  string                     `json:"inviter_username,omitempty" gorm:"-:all"` // 管理员列表展示的邀请人用户名，不落库
+	BonusQuota       int64                      `json:"bonus_quota,omitempty" gorm:"-:all"`      // 管理员视图展示的赠金余额，不落库
 	DeletedAt        gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`

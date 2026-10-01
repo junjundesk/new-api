@@ -458,3 +458,45 @@ func GetAllActiveUsersForBonus() ([]User, error) {
 		Find(&users).Error
 	return users, err
 }
+
+// AttachActiveBonus fills each user's BonusQuota with their remaining unexpired
+// bonus. Admin list views call this once per page; the single grouped query
+// keeps the lookup O(1) instead of degrading into N+1 per-row queries.
+func AttachActiveBonus(users []*User) error {
+	ids := make([]int, 0, len(users))
+	for _, u := range users {
+		if u != nil {
+			ids = append(ids, u.Id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	now := GetDBTimestamp()
+	var rows []struct {
+		UserId int
+		Remain int64
+	}
+	err := DB.Model(&UserBonusGrant{}).
+		Select("user_id, COALESCE(SUM(amount_total - amount_used), 0) AS remain").
+		Where("user_id IN ? AND status = ? AND (expire_time = 0 OR expire_time > ?)", ids, BonusStatusActive, now).
+		Group("user_id").
+		Scan(&rows).Error
+	if err != nil {
+		return err
+	}
+
+	remainByUser := make(map[int]int64, len(rows))
+	for _, r := range rows {
+		if r.Remain > 0 {
+			remainByUser[r.UserId] = r.Remain
+		}
+	}
+	for _, u := range users {
+		if u != nil {
+			u.BonusQuota = remainByUser[u.Id]
+		}
+	}
+	return nil
+}

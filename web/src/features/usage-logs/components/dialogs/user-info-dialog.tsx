@@ -155,6 +155,13 @@ export function UserInfoDialog({
                 label={t('Used Quota')}
                 value={formatQuota(userInfo.used_quota)}
               />
+              {userInfo.bonus_quota !== undefined &&
+                userInfo.bonus_quota > 0 && (
+                  <InfoItem
+                    label={t('Bonus')}
+                    value={formatQuota(userInfo.bonus_quota)}
+                  />
+                )}
             </div>
 
             {/* Statistics */}

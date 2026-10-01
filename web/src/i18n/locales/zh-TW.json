@@ -658,6 +658,7 @@
     "Blocked keywords": "已阻止的關鍵詞",
     "Blocks messages when sensitive keywords are detected.": "偵測到敏感關鍵詞時阻止訊息。",
     "Body param": "請求體參數",
+    "Bonus": "贈金",
     "Bonus Amount": "贈金額度",
     "Bonus granted successfully": "贈金發放成功",
     "Bonus granted to {{count}} users": "已向 {{count}} 位使用者發放贈金",

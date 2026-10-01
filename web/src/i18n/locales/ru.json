@@ -658,6 +658,7 @@
     "Blocked keywords": "Заблокированные ключевые слова",
     "Blocks messages when sensitive keywords are detected.": "Блокирует сообщения при обнаружении конфиденциальных ключевых слов.",
     "Body param": "Параметр тела запроса",
+    "Bonus": "Бонус",
     "Bonus Amount": "Сумма бонуса",
     "Bonus granted successfully": "Бонус успешно начислен",
     "Bonus granted to {{count}} users": "Бонус начислен {{count}} пользователям",
