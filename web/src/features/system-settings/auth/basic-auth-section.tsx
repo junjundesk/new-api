@@ -257,6 +257,10 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
                   {t(
                     'One domain per line (only used when domain restriction is enabled)'
                   )}
+                  <br />
+                  {t(
+                    'Including qq.com restricts QQ mailboxes to a pure numeric QQ number as the mailbox name (e.g. 123456@qq.com); aliases such as ferfnj@qq.com are rejected.'
+                  )}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

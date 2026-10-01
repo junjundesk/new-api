@@ -2415,6 +2415,7 @@
     "Includes request rules": "Inclut des règles de requête",
     "Includes tool-call surcharge": "Inclut un supplément pour appel d’outil",
     "Including failed requests, 0 = unlimited": "Y compris les requêtes échouées, 0 = illimité",
+    "Including qq.com restricts QQ mailboxes to a pure numeric QQ number as the mailbox name (e.g. 123456@qq.com); aliases such as ferfnj@qq.com are rejected.": "Inclure qq.com impose une adresse QQ composée uniquement d'un numéro QQ (ex. 123456@qq.com) ; les alias comme ferfnj@qq.com sont refusés.",
     "Incoming path": "Chemin entrant",
     "Incoming path is required": "Le chemin entrant est requis",
     "Incoming path must be unique": "Le chemin entrant doit etre unique",

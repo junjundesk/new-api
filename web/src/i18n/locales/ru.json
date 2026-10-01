@@ -2415,6 +2415,7 @@
     "Includes request rules": "Включает правила запросов",
     "Includes tool-call surcharge": "Включает доплату за вызов инструмента",
     "Including failed requests, 0 = unlimited": "Включая неудачные запросы, 0 = без ограничений",
+    "Including qq.com restricts QQ mailboxes to a pure numeric QQ number as the mailbox name (e.g. 123456@qq.com); aliases such as ferfnj@qq.com are rejected.": "Если добавить qq.com, то имя ящика QQ должно состоять только из цифр QQ (например, 123456@qq.com); псевдонимы вроде ferfnj@qq.com отклоняются.",
     "Incoming path": "Входящий путь",
     "Incoming path is required": "Входящий путь обязателен",
     "Incoming path must be unique": "Входящий путь должен быть уникальным",

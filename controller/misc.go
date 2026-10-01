@@ -276,6 +276,12 @@ func SendEmailVerification(c *gin.Context) {
 			return
 		}
 	}
+	// 白名单含 qq.com 时，QQ 邮箱只接受纯数字邮箱名，避免一个 QQ 号
+	// 通过别名无限注册站点账号。
+	if err := common.ValidateQQEmailLocalPart(email); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserEmailQQNotNumeric)
+		return
+	}
 
 	if model.IsEmailAlreadyTaken(email) {
 		common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)

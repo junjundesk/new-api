@@ -2415,6 +2415,7 @@
     "Includes request rules": "包含請求規則",
     "Includes tool-call surcharge": "包含工具呼叫附加費",
     "Including failed requests, 0 = unlimited": "包括失敗的請求，0 = 無限制",
+    "Including qq.com restricts QQ mailboxes to a pure numeric QQ number as the mailbox name (e.g. 123456@qq.com); aliases such as ferfnj@qq.com are rejected.": "包含 qq.com 後，QQ 信箱的信箱名稱必須是純數字 QQ 號（如 123456@qq.com），ferfnj@qq.com 這類別名會被拒絕。",
     "Incoming path": "入口路徑",
     "Incoming path is required": "入口路徑不能為空",
     "Incoming path must be unique": "入口路徑必須唯一",

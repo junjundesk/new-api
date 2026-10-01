@@ -2415,6 +2415,7 @@
     "Includes request rules": "リクエストルールを含む",
     "Includes tool-call surcharge": "ツール呼び出しの追加料金を含む",
     "Including failed requests, 0 = unlimited": "失敗したリクエストを含む、0 = 無制限",
+    "Including qq.com restricts QQ mailboxes to a pure numeric QQ number as the mailbox name (e.g. 123456@qq.com); aliases such as ferfnj@qq.com are rejected.": "qq.com を含めると、QQ メールのメールボックス名は数字のみの QQ 番号（例：123456@qq.com）に限定され、ferfnj@qq.com のようなエイリアスは拒否されます。",
     "Incoming path": "受信パス",
     "Incoming path is required": "受信パスは必須です",
     "Incoming path must be unique": "受信パスは一意である必要があります",
