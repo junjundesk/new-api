@@ -2615,6 +2615,7 @@
     "Limited": "受限",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "仅限制令牌专属的 Auto 快照；继承全局 Auto 时不受此限制。",
     "Limits token selection to a probability mass": "按概率质量限制词元选择范围",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "换行会被保留：直接回车，或写 \\n，都会渲染为换行。",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "您的文档站点链接",
     "LinuxDO": "LinuxDO",

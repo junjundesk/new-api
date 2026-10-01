@@ -291,6 +291,11 @@ export function Email() {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={t('HTML is supported')}
               />
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Line breaks are preserved: pressing Enter or writing \\n both render as a new line.'
+                )}
+              </p>
             </div>
           </div>
 

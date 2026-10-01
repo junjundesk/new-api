@@ -93,6 +93,16 @@ func SendEmail(subject string, receiver string, content string) error {
 	if SMTPServer == "" && SMTPAccount == "" {
 		return fmt.Errorf("SMTP 服务器未配置")
 	}
+
+	// 正文常由管理员在表单里撰写，可能带着字面量 "\n" 或直接回车换行，
+	// 统一在这里还原成预期的换行；主题不能跨行，多余换行收成空格。
+	// 同时清掉头部字段里的 CR/LF，避免头部注入。
+	subject = NormalizeEmailSubject(subject)
+	content = NormalizeEmailHTMLContent(content)
+	receiver = StripEmailHeaderBreaks(receiver)
+	from := StripEmailHeaderBreaks(SMTPFrom)
+	senderName := StripEmailHeaderBreaks(SystemName)
+
 	encodedSubject := fmt.Sprintf("=?UTF-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(subject)))
 	mail := []byte(fmt.Sprintf("To: %s\r\n"+
 		"From: %s <%s>\r\n"+
@@ -100,7 +110,7 @@ func SendEmail(subject string, receiver string, content string) error {
 		"Date: %s\r\n"+
 		"Message-ID: %s\r\n"+ // 添加 Message-ID 头
 		"Content-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n",
-		receiver, SystemName, SMTPFrom, encodedSubject, time.Now().Format(time.RFC1123Z), id, content))
+		receiver, senderName, from, encodedSubject, time.Now().Format(time.RFC1123Z), id, content))
 	auth := getSMTPAuth()
 	addr := fmt.Sprintf("%s:%d", SMTPServer, SMTPPort)
 	to := strings.Split(receiver, ";")
@@ -115,7 +125,7 @@ func SendEmail(subject string, receiver string, content string) error {
 			return err
 		}
 	}
-	if err = client.Mail(SMTPFrom); err != nil {
+	if err = client.Mail(from); err != nil {
 		return err
 	}
 	for _, receiver := range to {

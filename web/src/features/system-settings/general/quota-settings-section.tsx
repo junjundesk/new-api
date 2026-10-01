@@ -400,6 +400,10 @@ export function QuotaSettingsSection({
                       {t(
                         'HTML body of the bonus arrival email. Leave empty to use the built-in template.'
                       )}
+                      <br />
+                      {t(
+                        'Line breaks are preserved: pressing Enter or writing \\n both render as a new line.'
+                      )}
                     </FormDescription>
                     <div className='text-muted-foreground space-y-1 text-xs'>
                       <div className='font-medium'>

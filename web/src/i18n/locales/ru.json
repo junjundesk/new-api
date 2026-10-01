@@ -2615,6 +2615,7 @@
     "Limited": "Ограничено",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "Ограничивает только снимки Auto для отдельных токенов. Глобальное наследование Auto не ограничено.",
     "Limits token selection to a probability mass": "Ограничивает выбор токенов суммарной вероятностью",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "Переносы строк сохраняются: и Enter, и запись \\n дают перенос строки.",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "Ссылка на ваш сайт документации",
     "LinuxDO": "LinuxDO",

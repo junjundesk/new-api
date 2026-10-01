@@ -2615,6 +2615,7 @@
     "Limited": "Giới hạn",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "Chỉ giới hạn cấu hình Auto riêng của token. Việc kế thừa Auto toàn cục không bị giới hạn.",
     "Limits token selection to a probability mass": "Giới hạn lựa chọn token theo khối xác suất",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "Ngắt dòng được giữ nguyên: nhấn Enter hoặc viết \\n đều tạo ngắt dòng.",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "Liên kết đến trang web tài liệu của bạn",
     "LinuxDO": "LinuxDO",
