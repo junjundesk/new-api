@@ -44,6 +44,7 @@ jobs:
       registry: ${{ steps.resolve.outputs.registry }}
       image: ${{ steps.resolve.outputs.image }}
       dockerhub_username: ${{ steps.resolve.outputs.dockerhub_username }}
+      build_matrix: ${{ steps.resolve.outputs.build_matrix }}
     steps:
       - name: Resolve Docker target
         id: resolve
@@ -51,6 +52,7 @@ jobs:
           INPUT_REGISTRY: ${{ inputs.registry }}
           INPUT_IMAGE: ${{ inputs.image }}
           INPUT_DOCKERHUB_USERNAME: ${{ inputs.dockerhub_username }}
+          INPUT_ARCH: ${{ inputs.arch }}
           VAR_DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
           VAR_DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           SECRET_DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -77,22 +79,23 @@ jobs:
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "dockerhub_username=$DOCKERHUB_USERNAME" >> "$GITHUB_OUTPUT"
-          echo "Publishing to $REGISTRY as $IMAGE"
+          case "$INPUT_ARCH" in
+            amd64)
+              BUILD_MATRIX='{"include":[{"arch":"amd64","platform":"linux/amd64","runner":"ubuntu-latest"}]}' ;;
+            arm64)
+              BUILD_MATRIX='{"include":[{"arch":"arm64","platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]}' ;;
+            *)
+              BUILD_MATRIX='{"include":[{"arch":"amd64","platform":"linux/amd64","runner":"ubuntu-latest"},{"arch":"arm64","platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]}' ;;
+          esac
+          echo "build_matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "Publishing to $REGISTRY as $IMAGE (arch: ${INPUT_ARCH:-all})"
 
   build_single_arch:
     name: Build & push (${{ matrix.arch }})
     needs: [prepare]
-    if: ${{ (inputs.arch || 'all') == 'all' || inputs.arch == matrix.arch }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
+      matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     runs-on: ${{ matrix.runner }}
     outputs:
       tag: ${{ steps.version.outputs.tag }}
