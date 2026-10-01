@@ -334,6 +334,13 @@ func InitResources() error {
 		return err
 	}
 
+	// 企业累充历史数据回填（管理员加额审计日志 -> 记账表，仅执行一次）
+	if common.IsMasterNode {
+		if err := model.BackfillAdminRechargeRecords(); err != nil {
+			common.SysError("failed to backfill admin recharge records: " + err.Error())
+		}
+	}
+
 	// Initialize Redis
 	err = common.InitRedisClient()
 	if err != nil {

@@ -1223,6 +1223,10 @@ func ManageUser(c *gin.Context) {
 			recordManageAuditFor(c, user.Id, "user.quota_add", map[string]interface{}{
 				"quota": logger.LogQuota(req.Value),
 			})
+			// 管理员加额计入企业累充（与充值、兑换码同口径）。
+			if err := model.RecordAdminQuotaRecharge(user.Id, req.Value); err != nil {
+				common.SysError(fmt.Sprintf("failed to record admin quota recharge for user %d: %s", user.Id, err.Error()))
+			}
 		case "subtract":
 			if req.Value <= 0 {
 				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)

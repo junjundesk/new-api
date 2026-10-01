@@ -5472,6 +5472,7 @@
     "This account has the enterprise tier enabled.": "Для этого аккаунта включён корпоративный уровень.",
     "Unlimited RPM": "Без ограничений RPM",
     "Verified enterprise account": "Подтверждённый корпоративный аккаунт",
+    "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Аккаунты, суммарное пополнение которых (онлайн-платежи, активированные коды и начисления администратора) достигает этой суммы, получают корпоративный статус",
     "Zoom": "Zoom"
   }
 }

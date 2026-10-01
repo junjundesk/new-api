@@ -5472,6 +5472,7 @@
     "This account has the enterprise tier enabled.": "目前帳戶已啟用企業層級。",
     "Unlimited RPM": "無限制 RPM",
     "Verified enterprise account": "已認證企業帳戶",
+    "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "累計儲值（線上儲值、兌換碼兌換、管理員增加額度均計入）達到此數值的帳戶將解鎖企業身份",
     "Zoom": "縮放"
   }
 }

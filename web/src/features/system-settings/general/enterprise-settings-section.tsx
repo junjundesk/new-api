@@ -155,7 +155,7 @@ export function EnterpriseSettingsSection({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Accounts whose cumulative successfully paid recharge reaches this amount unlock the enterprise identity'
+                      'Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count'
                     )}
                   </FormDescription>
                   <FormMessage />
