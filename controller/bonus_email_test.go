@@ -3,6 +3,7 @@ package controller
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,6 +30,22 @@ func TestRenderBonusEmailSubstitutesPlaceholders(t *testing.T) {
 	// $expire_text carries the full sentence, $expire_time only the stamp.
 	assert.Contains(t, got, "到期")
 	assert.NotContains(t, got, "$", "every placeholder must be substituted")
+}
+
+// TestRenderBonusEmailBaseURL covers the site-wide $base_url token: it must be
+// the configured address without a trailing slash, so templates can append
+// paths directly.
+func TestRenderBonusEmailBaseURL(t *testing.T) {
+	prev := system_setting.ServerAddress
+	t.Cleanup(func() { system_setting.ServerAddress = prev })
+
+	system_setting.ServerAddress = "https://api.example.com/"
+	got := renderBonusEmail("<a href=\"$base_url/wallet\">wallet</a>", bonusEmailVars{})
+	assert.Equal(t, "<a href=\"https://api.example.com/wallet\">wallet</a>", got)
+
+	// A bare address without a path must render as-is.
+	system_setting.ServerAddress = "https://api.example.com"
+	assert.Equal(t, "https://api.example.com", renderBonusEmail("$base_url", bonusEmailVars{}))
 }
 
 // TestRenderBonusEmailEmptyValues covers the never-expires and no-remark paths,

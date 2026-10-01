@@ -5474,6 +5474,7 @@
     "Verified enterprise account": "Verified enterprise account",
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count",
     "Recharged {{current}} / {{target}}": "Recharged {{current}} / {{target}}",
+    "Site base URL (no trailing slash), for absolute links": "Site base URL (no trailing slash), for absolute links",
     "Zoom": "Zoom"
   }
 }

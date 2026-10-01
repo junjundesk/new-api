@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 )
 
 // bonusEmailVars holds the values available to the bonus email template.
@@ -55,8 +56,15 @@ func renderBonusEmail(template string, vars bonusEmailVars) string {
 		"$remark_block", remarkBlock,
 		"$remark", strings.TrimSpace(vars.Remark),
 		"$site_name", common.SystemName,
+		"$base_url", siteBaseURL(),
 	)
 	return replacer.Replace(template)
+}
+
+// siteBaseURL returns the configured site address without a trailing slash,
+// so templates can build absolute links (e.g. "$base_url/wallet").
+func siteBaseURL() string {
+	return strings.TrimRight(strings.TrimSpace(system_setting.ServerAddress), "/")
 }
 
 // resolveBonusEmailTemplate returns the configured subject/content, falling

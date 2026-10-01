@@ -85,13 +85,29 @@ $remark_block`
 // Mirrors the placeholders substituted by renderBonusEmail in the backend.
 const BONUS_EMAIL_VARIABLES = [
   { token: '$username', description: 'Login username' },
-  { token: '$display_name', description: 'Display name (falls back to username)' },
+  {
+    token: '$display_name',
+    description: 'Display name (falls back to username)',
+  },
   { token: '$amount', description: 'Bonus amount granted' },
-  { token: '$expire_time', description: 'Expiry timestamp (empty if permanent)' },
-  { token: '$expire_text', description: 'Expiry sentence, e.g. "… expires" or "Never expires"' },
+  {
+    token: '$expire_time',
+    description: 'Expiry timestamp (empty if permanent)',
+  },
+  {
+    token: '$expire_text',
+    description: 'Expiry sentence, e.g. "… expires" or "Never expires"',
+  },
   { token: '$remark', description: 'Grant remark text' },
-  { token: '$remark_block', description: 'Remark paragraph, empty when there is no remark' },
+  {
+    token: '$remark_block',
+    description: 'Remark paragraph, empty when there is no remark',
+  },
   { token: '$site_name', description: 'Site name' },
+  {
+    token: '$base_url',
+    description: 'Site base URL (no trailing slash), for absolute links',
+  },
 ] as const
 
 function formatQuotaInputValue(value: QuotaInputValue): string {
@@ -333,9 +349,12 @@ export function QuotaSettingsSection({
                     />
                   </FormControl>
                   <FormDescription>
-                    {t('Bonus quota granted to new users ({{formattedQuota}})', {
-                      formattedQuota: formatQuotaInputValue(field.value),
-                    })}
+                    {t(
+                      'Bonus quota granted to new users ({{formattedQuota}})',
+                      {
+                        formattedQuota: formatQuotaInputValue(field.value),
+                      }
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -412,8 +431,8 @@ export function QuotaSettingsSection({
                       <ul className='grid gap-0.5 sm:grid-cols-2'>
                         {BONUS_EMAIL_VARIABLES.map((v) => (
                           <li key={v.token}>
-                            <code className='text-foreground'>{v.token}</code>{' '}
-                            — {t(v.description)}
+                            <code className='text-foreground'>{v.token}</code> —{' '}
+                            {t(v.description)}
                           </li>
                         ))}
                       </ul>

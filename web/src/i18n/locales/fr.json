@@ -5474,6 +5474,7 @@
     "Verified enterprise account": "Compte d'entreprise vérifié",
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Les comptes dont le rechargement cumulé (recharges en ligne, codes échangés et attributions d'administration inclus) atteint ce montant débloquent l'identité entreprise",
     "Recharged {{current}} / {{target}}": "Rechargé {{current}} / {{target}}",
+    "Site base URL (no trailing slash), for absolute links": "URL de base du site (sans barre oblique finale), pour les liens absolus",
     "Zoom": "Zoom"
   }
 }

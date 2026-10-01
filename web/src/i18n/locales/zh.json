@@ -5474,6 +5474,7 @@
     "Verified enterprise account": "已认证企业账户",
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "累计充值（在线充值、兑换码兑换、管理员增加额度均计入）达到该数值的账户将解锁企业身份",
     "Recharged {{current}} / {{target}}": "已累充 {{current}} / {{target}}",
+    "Site base URL (no trailing slash), for absolute links": "网站基础地址（不含结尾斜杠），用于拼接绝对链接",
     "Zoom": "缩放"
   }
 }

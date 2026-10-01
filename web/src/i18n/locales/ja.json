@@ -5474,6 +5474,7 @@
     "Verified enterprise account": "認証済みエンタープライズアカウント",
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "累計チャージ（オンラインチャージ、引換コード、管理者による付与を含む）がこの金額に達したアカウントはエンタープライズ身份を解除します",
     "Recharged {{current}} / {{target}}": "累計チャージ {{current}} / {{target}}",
+    "Site base URL (no trailing slash), for absolute links": "サイトのベースURL（末尾スラッシュなし）。絶対リンクの組み立てに使用",
     "Zoom": "ズーム"
   }
 }
