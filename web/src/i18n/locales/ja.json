@@ -2615,6 +2615,7 @@
     "Limited": "制限",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "トークン固有の Auto スナップショットだけを制限します。グローバル Auto の継承には上限がありません。",
     "Limits token selection to a probability mass": "確率質量でトークン選択を制限します",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "改行は保持されます。Enter キーまたは \\n のいずれも改行になります。",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "ドキュメントサイトへのリンク",
     "LinuxDO": "LinuxDO",

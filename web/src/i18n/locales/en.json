@@ -2615,6 +2615,7 @@
     "Limited": "Limited",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.",
     "Limits token selection to a probability mass": "Limits token selection to a probability mass",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "Link to your documentation site",
     "LinuxDO": "LinuxDO",

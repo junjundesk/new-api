@@ -2615,6 +2615,7 @@
     "Limited": "Limité",
     "Limits only token-specific Auto snapshots. Global Auto inheritance remains unlimited.": "Limite uniquement les instantanés Auto propres aux jetons. L’héritage Auto global reste illimité.",
     "Limits token selection to a probability mass": "Limite la sélection des tokens par masse de probabilité",
+    "Line breaks are preserved: pressing Enter or writing \\n both render as a new line.": "Les sauts de ligne sont conservés : appuyer sur Entrée ou écrire \\n produit un saut de ligne.",
     "LingYiWanWu": "LingYiWanWu",
     "Link to your documentation site": "Lien vers votre site de documentation",
     "LinuxDO": "LinuxDO",
