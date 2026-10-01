@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -216,34 +215,4 @@ func AdminListUserBonus(c *gin.Context) {
 	summary := bonusSummary(activeGrants)
 	summary["grants"] = grants
 	common.ApiSuccess(c, summary)
-}
-
-// sendBonusGrantEmail notifies the user their bonus arrived. Best-effort: a
-// missing email or SMTP config must never fail the grant.
-func sendBonusGrantEmail(user *model.User, amount int64, expireTime int64, remark string) {
-	if user == nil || strings.TrimSpace(user.Email) == "" {
-		return
-	}
-	expireText := "永久有效"
-	if expireTime > 0 {
-		expireText = fmt.Sprintf("%s 到期", time.Unix(expireTime, 0).Format("2006-01-02 15:04:05"))
-	}
-	displayName := user.DisplayName
-	if strings.TrimSpace(displayName) == "" {
-		displayName = user.Username
-	}
-	content := fmt.Sprintf(
-		"<p>您好 %s，</p><p>您已收到一笔赠金：<b>%s</b>，有效期至：%s。</p>",
-		displayName,
-		logger.FormatQuota(int(amount)),
-		expireText,
-	)
-	if strings.TrimSpace(remark) != "" {
-		content += fmt.Sprintf("<p>备注：%s</p>", remark)
-	}
-	go func() {
-		if err := common.SendEmail("赠金到账通知", user.Email, content); err != nil {
-			common.SysError(fmt.Sprintf("failed to send bonus email to user %d: %s", user.Id, err.Error()))
-		}
-	}()
 }
