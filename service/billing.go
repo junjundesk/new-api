@@ -76,11 +76,15 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			return err
 		}
 
-		// 发送额度通知（订阅计费使用订阅剩余额度）
+		// 发送额度通知：订阅/赠金各自使用对应来源的剩余额度，
+		// 否则会用钱包余额（赠金计费时钱包分文未动）误报「额度即将用尽」。
 		if actualQuota != 0 {
-			if relayInfo.BillingSource == BillingSourceSubscription {
+			switch relayInfo.BillingSource {
+			case BillingSourceSubscription:
 				checkAndSendSubscriptionQuotaNotify(relayInfo)
-			} else {
+			case BillingSourceBonus:
+				checkAndSendBonusQuotaNotify(relayInfo)
+			default:
 				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
 			}
 		}
