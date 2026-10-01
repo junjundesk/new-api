@@ -436,8 +436,9 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 
 func postConsumeQuotaWithResult(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (result postConsumeQuotaResult, err error) {
 
-	// 1) Consume from wallet quota OR subscription item
-	if relayInfo != nil && relayInfo.BillingSource == BillingSourceSubscription {
+	// 1) Consume from wallet quota, subscription item, or bonus grant
+	switch {
+	case relayInfo != nil && relayInfo.BillingSource == BillingSourceSubscription:
 		if relayInfo.SubscriptionId == 0 {
 			return result, errors.New("subscription id is missing")
 		}
@@ -448,7 +449,16 @@ func postConsumeQuotaWithResult(relayInfo *relaycommon.RelayInfo, quota int, pre
 			}
 			relayInfo.SubscriptionPostDelta += delta
 		}
-	} else {
+	case relayInfo != nil && relayInfo.BillingSource == BillingSourceBonus && quota > 0:
+		// 赠金计费下的追加扣费（如违规费）。本次请求的预扣记录可能已随失败
+		// 退款，所以用独立的 requestId 记一笔新账，避免与预扣/退款互相干扰。
+		// 赠金不足时回退钱包，保留「费用必收、差额记为欠费」的既有语义。
+		if _, bonusErr := model.PreConsumeUserBonus(relayInfo.RequestId+":post", relayInfo.UserId, int64(quota)); bonusErr != nil {
+			if err := model.DecreaseUserQuota(relayInfo.UserId, quota, false); err != nil {
+				return result, err
+			}
+		}
+	default:
 		// Wallet
 		if quota > 0 {
 			err = model.DecreaseUserQuota(relayInfo.UserId, quota, false)
@@ -473,8 +483,15 @@ func postConsumeQuotaWithResult(relayInfo *relaycommon.RelayInfo, quota int, pre
 		result.TokenApplied = true
 	}
 
-	if sendEmail {
-		if (quota + preConsumedQuota) != 0 {
+	// 额度提醒按资金来源取数：赠金/订阅计费时钱包分文未动，
+	// 用钱包余额会误报「剩余额度 0」。
+	if sendEmail && (quota+preConsumedQuota) != 0 {
+		switch relayInfo.BillingSource {
+		case BillingSourceSubscription:
+			checkAndSendSubscriptionQuotaNotify(relayInfo)
+		case BillingSourceBonus:
+			checkAndSendBonusQuotaNotify(relayInfo)
+		default:
 			checkAndSendQuotaNotify(relayInfo, quota, preConsumedQuota)
 		}
 	}
@@ -551,29 +568,77 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 			return
 		}
 
-		prompt := "您的订阅额度即将用尽"
-		topUpLink := PaymentReturnURL("/wallet")
-
-		var content string
-		var values []interface{}
-		notifyType := userSetting.NotifyType
-		if notifyType == "" {
-			notifyType = dto.NotifyTypeEmail
-		}
-
-		if notifyType == dto.NotifyTypeBark {
-			content = "{{value}}，剩余额度：{{value}}，请及时充值"
-			values = []interface{}{prompt, logger.FormatQuota(int(remaining))}
-		} else if notifyType == dto.NotifyTypeGotify {
-			content = "{{value}}，当前剩余额度为 {{value}}，请及时充值。"
-			values = []interface{}{prompt, logger.FormatQuota(int(remaining))}
-		} else {
-			content = "{{value}}，当前剩余额度为 {{value}}，为了不影响您的使用，请及时充值。<br/>充值链接：<a href='{{value}}'>{{value}}</a>"
-			values = []interface{}{prompt, logger.FormatQuota(int(remaining)), topUpLink, topUpLink}
-		}
-
-		if err := NotifyUser(relayInfo.UserId, relayInfo.UserEmail, relayInfo.UserSetting, dto.NewNotify(dto.NotifyTypeQuotaExceed, prompt, content, values)); err != nil {
+		notification := buildFundingQuotaNotify(relayInfo, remaining, "您的订阅额度即将用尽", "额度")
+		if err := NotifyUser(relayInfo.UserId, relayInfo.UserEmail, relayInfo.UserSetting, notification); err != nil {
 			common.SysError(fmt.Sprintf("failed to send subscription quota notify to user %d: %s", relayInfo.UserId, err.Error()))
+		}
+	})
+}
+
+// buildFundingQuotaNotify assembles the low-quota warning for a limited funding
+// bucket (subscription or bonus), reporting that bucket's remaining amount.
+//
+// It exists so the warning can never report the wallet balance: a bucket-billed
+// request leaves the wallet untouched, so quoting relayInfo.UserQuota would tell
+// a user with bonus (but no wallet balance) that their remaining quota is zero.
+func buildFundingQuotaNotify(relayInfo *relaycommon.RelayInfo, remaining int64, prompt string, bucketLabel string) dto.Notify {
+	topUpLink := PaymentReturnURL("/wallet")
+	formatted := logger.FormatQuota(int(remaining))
+
+	var content string
+	var values []interface{}
+	switch relayInfo.UserSetting.NotifyType {
+	case dto.NotifyTypeBark:
+		// Bark 推送使用简短文本，不支持 HTML
+		content = "{{value}}，剩余" + bucketLabel + "：{{value}}，请及时充值"
+		values = []interface{}{prompt, formatted}
+	case dto.NotifyTypeGotify:
+		content = "{{value}}，当前剩余" + bucketLabel + "为 {{value}}，请及时充值。"
+		values = []interface{}{prompt, formatted}
+	default:
+		// 默认内容格式，适用于 Email 和 Webhook（支持 HTML）
+		content = "{{value}}，当前剩余" + bucketLabel + "为 {{value}}，为了不影响您的使用，请及时充值。<br/>充值链接：<a href='{{value}}'>{{value}}</a>"
+		values = []interface{}{prompt, formatted, topUpLink, topUpLink}
+	}
+	return dto.NewNotify(dto.NotifyTypeQuotaExceed, prompt, content, values)
+}
+
+// checkAndSendBonusQuotaNotify warns the user when their remaining bonus quota
+// runs low.
+//
+// It must not read relayInfo.UserQuota like the wallet path does: when a
+// request is billed from bonus the wallet balance is untouched, so a user
+// holding bonus but no wallet balance would otherwise be told their remaining
+// quota is zero on every request.
+//
+// The remaining amount is recomputed from the active grants after settlement
+// rather than taken from relayInfo.BonusAmountTotal, because a single request
+// can drain several grants and those fields only describe the first one.
+func checkAndSendBonusQuotaNotify(relayInfo *relaycommon.RelayInfo) {
+	gopool.Go(func() {
+		if relayInfo == nil {
+			return
+		}
+
+		userSetting := relayInfo.UserSetting
+		threshold := common.QuotaRemindThreshold
+		if userSetting.QuotaWarningThreshold != 0 {
+			threshold = int(userSetting.QuotaWarningThreshold)
+		}
+
+		remaining, err := model.GetActiveBonusRemaining(relayInfo.UserId)
+		if err != nil {
+			common.SysError(fmt.Sprintf("failed to query remaining bonus for user %d: %s", relayInfo.UserId, err.Error()))
+			return
+		}
+		if remaining >= int64(threshold) {
+			return
+		}
+
+		prompt := "您的赠金额度即将用尽"
+		notification := buildFundingQuotaNotify(relayInfo, remaining, prompt, "赠金")
+		if err := NotifyUser(relayInfo.UserId, relayInfo.UserEmail, relayInfo.UserSetting, notification); err != nil {
+			common.SysError(fmt.Sprintf("failed to send bonus quota notify to user %d: %s", relayInfo.UserId, err.Error()))
 		}
 	})
 }
