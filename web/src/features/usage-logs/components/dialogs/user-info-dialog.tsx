@@ -134,7 +134,14 @@ export function UserInfoDialog({
           <div className='space-y-4 py-4'>
             {/* Basic Info */}
             <div className='grid grid-cols-2 gap-4'>
-              <InfoItem label={t('Username')} value={userInfo.username} />
+              <InfoItem
+                label={t('Username')}
+                value={
+                  userInfo.email
+                    ? `${userInfo.username}(${userInfo.email})`
+                    : userInfo.username
+                }
+              />
               <InfoItem label={t('User ID')} value={userInfo.id} />
             </div>
 
