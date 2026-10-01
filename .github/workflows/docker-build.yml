@@ -18,6 +18,15 @@ on:
         options:
           - ghcr
           - dockerhub
+      arch:
+        description: 'Architectures to build (tag-push builds always use all)'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - amd64
+          - arm64
       image:
         description: 'Override image name (default: ghcr.io/<repository>, or calciumion/new-api for dockerhub)'
         required: false
@@ -73,6 +82,7 @@ jobs:
   build_single_arch:
     name: Build & push (${{ matrix.arch }})
     needs: [prepare]
+    if: ${{ (inputs.arch || 'all') == 'all' || inputs.arch == matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
@@ -206,19 +216,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve selected architectures
+        env:
+          ARCH_INPUT: ${{ inputs.arch }}
+        run: |
+          case "$ARCH_INPUT" in
+            amd64|arm64) echo "ARCHES=$ARCH_INPUT" >> "$GITHUB_ENV" ;;
+            *) echo "ARCHES=amd64 arm64" >> "$GITHUB_ENV" ;;
+          esac
+
       - name: Create & push manifest (version)
         run: |
+          ARCH_REFS=""
+          for a in $ARCHES; do
+            ARCH_REFS="$ARCH_REFS ${DOCKER_IMAGE}:${TAG}-$a"
+          done
           docker buildx imagetools create \
             -t ${DOCKER_IMAGE}:${TAG} \
-            ${DOCKER_IMAGE}:${TAG}-amd64 \
-            ${DOCKER_IMAGE}:${TAG}-arm64
+            $ARCH_REFS
 
       - name: Create & push manifest (latest)
         run: |
+          ARCH_REFS=""
+          for a in $ARCHES; do
+            ARCH_REFS="$ARCH_REFS ${DOCKER_IMAGE}:latest-$a"
+          done
           docker buildx imagetools create \
             -t ${DOCKER_IMAGE}:latest \
-            ${DOCKER_IMAGE}:latest-amd64 \
-            ${DOCKER_IMAGE}:latest-arm64
+            $ARCH_REFS
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
