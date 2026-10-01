@@ -47,15 +47,25 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
   const percentage = total > 0 ? (props.remaining / total) * 100 : 0
   const formattedRemaining = formatQuota(props.remaining)
   const formattedTotal = formatQuota(total)
+  const hasBonus = props.bonus !== undefined && props.bonus > 0
+  const bonus = props.bonus ?? 0
 
+  // 无正式额度时，赠金仍要展示——否则持有赠金的用户会被误判为完全没额度。
   if (total === 0) {
     return (
-      <StatusBadge
-        label={t('No Quota')}
-        variant='neutral'
-        copyable={false}
-        className='-ml-1.5'
-      />
+      <div className='min-w-0 space-y-0.5 overflow-hidden'>
+        <StatusBadge
+          label={t('No Quota')}
+          variant='neutral'
+          copyable={false}
+          className='-ml-1.5'
+        />
+        {hasBonus && (
+          <div className='truncate text-[11px] text-amber-600 tabular-nums dark:text-amber-400'>
+            ({t('Bonus')}: {formatQuota(bonus)})
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -78,9 +88,9 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
           value={percentage}
           className={cn('h-1.5', getQuotaProgressColor(percentage))}
         />
-        {props.bonus !== undefined && props.bonus > 0 && (
+        {hasBonus && (
           <div className='truncate text-[11px] text-amber-600 tabular-nums dark:text-amber-400'>
-            ({t('Bonus')}: {formatQuota(props.bonus)})
+            ({t('Bonus')}: {formatQuota(bonus)})
           </div>
         )}
       </TooltipTrigger>
