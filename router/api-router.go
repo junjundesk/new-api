@@ -144,6 +144,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/topup", controller.GetAllTopUps)
 				adminRoute.POST("/topup/complete", controller.AdminCompleteTopUp)
 				adminRoute.GET("/search", controller.SearchUsers)
+				adminRoute.POST("/email/send", controller.AdminSendEmail)
 				adminRoute.POST("/bonus/grant_all", controller.AdminGrantBonusAll)
 				adminRoute.GET("/:id/bonus", controller.AdminListUserBonus)
 				adminRoute.POST("/:id/bonus", controller.AdminGrantBonus)
