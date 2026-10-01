@@ -26,6 +26,7 @@ import {
   Key,
   LayoutDashboard,
   ListTodo,
+  Mail,
   MessageSquare,
   Radio,
   ServerCog,
@@ -139,6 +140,11 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: t('Send Email'),
+            url: '/email',
+            icon: Mail,
           },
           {
             title: t('Redemption Codes'),

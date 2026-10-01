@@ -75,6 +75,13 @@ func newSMTPClient(addr string) (*smtp.Client, error) {
 	return client, nil
 }
 
+// IsEmailConfigured reports whether SMTP is configured well enough to attempt
+// a send. Callers use it to fail fast with an actionable message instead of
+// letting a batch of sends fail one by one.
+func IsEmailConfigured() bool {
+	return SMTPServer != "" || SMTPAccount != ""
+}
+
 func SendEmail(subject string, receiver string, content string) error {
 	if SMTPFrom == "" { // for compatibility
 		SMTPFrom = SMTPAccount

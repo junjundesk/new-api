@@ -459,6 +459,36 @@ func GetAllActiveUsersForBonus() ([]User, error) {
 	return users, err
 }
 
+// GetUsersByIdsForEmail loads the users an admin selected as email recipients.
+// Deleted users are excluded; unknown ids are simply absent from the result.
+func GetUsersByIdsForEmail(ids []int) ([]User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	unique := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return nil, nil
+	}
+
+	var users []User
+	err := DB.Model(&User{}).
+		Select("id", "username", "display_name", "email").
+		Where("id IN ?", unique).
+		Find(&users).Error
+	return users, err
+}
+
 // AttachActiveBonus fills each user's BonusQuota with their remaining unexpired
 // bonus. Admin list views call this once per page; the single grouped query
 // keeps the lookup O(1) instead of degrading into N+1 per-row queries.

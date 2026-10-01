@@ -30,6 +30,9 @@ var auditContentTemplates = map[string]string{
 	"user.reset_passkey":    "Reset the user passkey",
 	"option.update":         "Updated system setting ${key}",
 
+	"user.email_send":     "Sent email ${subject} to ${sent}/${targeted} recipients (failed: ${failed}, skipped: ${skipped})",
+	"user.email_send_all": "Sent email ${subject} to all users (targeted: ${targeted}, skipped: ${skipped})",
+
 	"channel.create":             "Created channel ${name} (type ${type}, count ${count})",
 	"channel.update":             "Updated channel ${name} (ID: ${id})",
 	"channel.delete":             "Deleted channel ${name} (ID: ${id})",
