@@ -77,6 +77,10 @@ const BILLING_SECTIONS = [
             signup_bonus_amount: settings['bonus_setting.signup_bonus_amount'],
             signup_bonus_duration:
               settings['bonus_setting.signup_bonus_duration'],
+            bonus_email_subject:
+              settings['bonus_setting.bonus_email_subject'],
+            bonus_email_content:
+              settings['bonus_setting.bonus_email_content'],
           },
         }}
         complianceConfirmed={

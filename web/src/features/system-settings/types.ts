@@ -257,6 +257,8 @@ export type BillingSettings = {
   'bonus_setting.signup_bonus_enabled': boolean
   'bonus_setting.signup_bonus_amount': number
   'bonus_setting.signup_bonus_duration': string
+  'bonus_setting.bonus_email_subject': string
+  'bonus_setting.bonus_email_content': string
   QuotaPerUnit: number
   USDExchangeRate: number
   'general_setting.quota_display_type': string

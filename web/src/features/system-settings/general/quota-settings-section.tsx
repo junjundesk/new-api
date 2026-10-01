@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { formatQuota } from '@/lib/format'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
@@ -66,11 +67,32 @@ const quotaSchema = z.object({
     signup_bonus_enabled: z.boolean(),
     signup_bonus_amount: z.coerce.number().min(0),
     signup_bonus_duration: z.string(),
+    bonus_email_subject: z.string(),
+    bonus_email_content: z.string(),
   }),
 })
 
 type QuotaFormValues = z.infer<typeof quotaSchema>
 type QuotaInputValue = number | ''
+
+// Mirrors operation_setting.DefaultBonusEmailContent on the backend, which is
+// used when the admin leaves the template empty.
+const DEFAULT_BONUS_EMAIL_CONTENT = `<p>您好 $display_name，</p>
+<p>您已收到一笔赠金：<b>$amount</b>。</p>
+<p>有效期：$expire_text</p>
+$remark_block`
+
+// Mirrors the placeholders substituted by renderBonusEmail in the backend.
+const BONUS_EMAIL_VARIABLES = [
+  { token: '$username', description: 'Login username' },
+  { token: '$display_name', description: 'Display name (falls back to username)' },
+  { token: '$amount', description: 'Bonus amount granted' },
+  { token: '$expire_time', description: 'Expiry timestamp (empty if permanent)' },
+  { token: '$expire_text', description: 'Expiry sentence, e.g. "… expires" or "Never expires"' },
+  { token: '$remark', description: 'Grant remark text' },
+  { token: '$remark_block', description: 'Remark paragraph, empty when there is no remark' },
+  { token: '$site_name', description: 'Site name' },
+] as const
 
 function formatQuotaInputValue(value: QuotaInputValue): string {
   return formatQuota(value === '' ? 0 : value)
@@ -338,6 +360,65 @@ export function QuotaSettingsSection({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name='bonus_setting.bonus_email_subject'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Bonus Email Subject')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('Bonus arrival notification')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Leave empty to use the built-in default subject')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <SettingsFormGridItem span='full'>
+              <FormField
+                control={form.control}
+                name='bonus_setting.bonus_email_content'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Bonus Email Template')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={8}
+                        className='font-mono text-xs'
+                        placeholder={DEFAULT_BONUS_EMAIL_CONTENT}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'HTML body of the bonus arrival email. Leave empty to use the built-in template.'
+                      )}
+                    </FormDescription>
+                    <div className='text-muted-foreground space-y-1 text-xs'>
+                      <div className='font-medium'>
+                        {t('Available variables:')}
+                      </div>
+                      <ul className='grid gap-0.5 sm:grid-cols-2'>
+                        {BONUS_EMAIL_VARIABLES.map((v) => (
+                          <li key={v.token}>
+                            <code className='text-foreground'>{v.token}</code>{' '}
+                            — {t(v.description)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SettingsFormGridItem>
 
             <FormField
               control={form.control}

@@ -35,6 +35,8 @@ const defaultBillingSettings: BillingSettings = {
   'bonus_setting.signup_bonus_enabled': false,
   'bonus_setting.signup_bonus_amount': 0,
   'bonus_setting.signup_bonus_duration': '24',
+  'bonus_setting.bonus_email_subject': '',
+  'bonus_setting.bonus_email_content': '',
   QuotaPerUnit: 500000,
   USDExchangeRate: 7,
   'general_setting.quota_display_type': 'USD',
