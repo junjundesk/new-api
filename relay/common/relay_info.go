@@ -141,13 +141,19 @@ type RelayInfo struct {
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
 	SubscriptionAmountTotal               int64
 	SubscriptionAmountUsedAfterPreConsume int64
-	IsClaudeBetaQuery                     bool // /v1/messages?beta=true
-	IsChannelTest                         bool // channel test request
-	RetryIndex                            int
-	LastError                             *types.NewAPIError
-	RuntimeHeadersOverride                map[string]interface{}
-	UseRuntimeHeadersOverride             bool
-	ParamOverrideAudit                    []string
+	// BonusGrantId / BonusPreConsumed / BonusAmountTotal / BonusAmountUsedAfterPreConsume
+	// describe the bonus grant used when BillingSource == "bonus".
+	BonusGrantId                   int
+	BonusPreConsumed               int64
+	BonusAmountTotal               int64
+	BonusAmountUsedAfterPreConsume int64
+	IsClaudeBetaQuery              bool // /v1/messages?beta=true
+	IsChannelTest                  bool // channel test request
+	RetryIndex                     int
+	LastError                      *types.NewAPIError
+	RuntimeHeadersOverride         map[string]interface{}
+	UseRuntimeHeadersOverride      bool
+	ParamOverrideAudit             []string
 
 	PriceData hosttypes.PriceData
 

@@ -214,6 +214,24 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 		// Wallet quota is not deducted when billed from subscription.
 		other["wallet_quota_deducted"] = 0
 	}
+	if relayInfo.BillingSource == BillingSourceBonus {
+		if relayInfo.BonusGrantId != 0 {
+			other["bonus_grant_id"] = relayInfo.BonusGrantId
+		}
+		if relayInfo.BonusPreConsumed > 0 {
+			other["bonus_pre_consumed"] = relayInfo.BonusPreConsumed
+		}
+		if relayInfo.BonusAmountTotal > 0 {
+			remain := relayInfo.BonusAmountTotal - relayInfo.BonusAmountUsedAfterPreConsume
+			if remain < 0 {
+				remain = 0
+			}
+			other["bonus_total"] = relayInfo.BonusAmountTotal
+			other["bonus_remain"] = remain
+		}
+		// Wallet quota is not deducted when billed from bonus.
+		other["wallet_quota_deducted"] = 0
+	}
 }
 
 func appendRequestConversionChain(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {

@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { BonusBalanceCard } from '@/features/bonus/components/bonus-balance-card'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -289,6 +290,13 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
             <WalletStatsCard user={user} loading={userLoading} />
+
+            <BonusBalanceCard
+              bonusQuota={user?.bonus_quota ?? 0}
+              expiringQuota={user?.bonus_expiring_quota ?? 0}
+              permanentQuota={user?.bonus_permanent_quota ?? 0}
+              expireTime={user?.bonus_expire_time ?? 0}
+            />
 
             <div
               className={

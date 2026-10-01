@@ -86,6 +86,16 @@ func runSubscriptionQuotaResetOnce() {
 		if _, err := model.CleanupSubscriptionPreConsumeRecords(7 * 24 * 3600); err == nil {
 			subscriptionCleanupLast.Store(time.Now().Unix())
 		}
+		if _, err := model.CleanupBonusPreConsumeRecords(7 * 24 * 3600); err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("bonus pre-consume cleanup failed: %v", err))
+		}
+	}
+	// 赠金过期：把到期未用完的赠金标记为 expired。实时扣费用的是
+	// expire_time > now 的过滤，这里只是让管理端列表状态保持准确。
+	if n, err := model.ExpireDueBonusGrants(); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("bonus expire task failed: %v", err))
+	} else if n > 0 {
+		totalExpired += int(n)
 	}
 	if common.DebugEnabled && (totalReset > 0 || totalExpired > 0) {
 		logger.LogDebug(ctx, "subscription maintenance: reset_count=%d, expired_count=%d", totalReset, totalExpired)

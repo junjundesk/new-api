@@ -108,9 +108,18 @@ func (s *BillingSession) Refund(c *gin.Context) {
 		if err := funding.Refund(); err != nil {
 			common.SysLog("error refunding billing source: " + err.Error())
 		}
-		if extraReserved > 0 && funding.Source() == BillingSourceSubscription && subscriptionId > 0 {
-			if err := model.PostConsumeUserSubscriptionDelta(subscriptionId, -int64(extraReserved)); err != nil {
-				common.SysLog("error refunding subscription extra reserved quota: " + err.Error())
+		if extraReserved > 0 {
+			switch f := funding.(type) {
+			case *SubscriptionFunding:
+				if subscriptionId > 0 {
+					if err := model.PostConsumeUserSubscriptionDelta(subscriptionId, -int64(extraReserved)); err != nil {
+						common.SysLog("error refunding subscription extra reserved quota: " + err.Error())
+					}
+				}
+			case *BonusFunding:
+				if err := model.ApplyUserBonusDelta(f.requestId, -int64(extraReserved)); err != nil {
+					common.SysLog("error refunding bonus extra reserved quota: " + err.Error())
+				}
 			}
 		}
 		// 2) 退还令牌额度
@@ -139,6 +148,10 @@ func (s *BillingSession) needsRefundLocked() bool {
 	}
 	// 订阅可能在 tokenConsumed=0 时仍预扣了额度
 	if sub, ok := s.funding.(*SubscriptionFunding); ok && sub.preConsumed > 0 {
+		return true
+	}
+	// 赠金同理：amount>0 时才创建预扣记录
+	if bonus, ok := s.funding.(*BonusFunding); ok && bonus.preConsumed > 0 {
 		return true
 	}
 	return false
@@ -218,6 +231,9 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 		if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
 			return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
+		if strings.Contains(errMsg, "bonus quota insufficient") {
+			return types.NewErrorWithStatusCode(fmt.Errorf("赠金额度不足: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
 		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
 
@@ -252,6 +268,17 @@ func (s *BillingSession) reserveFunding(delta int) error {
 			)
 		}
 		return nil
+	case *BonusFunding:
+		if err := model.ApplyUserBonusDelta(funding.requestId, int64(delta)); err != nil {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("赠金额度不足: %s", err.Error()),
+				types.ErrorCodeInsufficientUserQuota,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoRecordErrorLog(),
+			)
+		}
+		return nil
 	default:
 		return types.NewError(fmt.Errorf("unsupported funding source: %s", s.funding.Source()), types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
@@ -268,6 +295,10 @@ func (s *BillingSession) rollbackFundingReserve(delta int) {
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(delta)); err != nil {
 			common.SysLog("error rolling back subscription funding reserve: " + err.Error())
+		}
+	case *BonusFunding:
+		if err := model.ApplyUserBonusDelta(funding.requestId, -int64(delta)); err != nil {
+			common.SysLog("error rolling back bonus funding reserve: " + err.Error())
 		}
 	}
 }
@@ -313,6 +344,9 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 		// 2. SubscriptionFunding.PreConsume 忽略参数，始终用 s.amount 预扣
 		// 3. 若信任旁路将 effectiveQuota 设为 0，会导致 preConsumedQuota 与实际订阅预扣不一致
 		return false
+	case BillingSourceBonus:
+		// 赠金是限时额度，必须逐笔预扣，不能走信任旁路。
+		return false
 	default:
 		return false
 	}
@@ -335,6 +369,16 @@ func (s *BillingSession) syncRelayInfo() {
 	} else {
 		info.SubscriptionId = 0
 		info.SubscriptionPreConsumed = 0
+	}
+
+	if bonus, ok := s.funding.(*BonusFunding); ok {
+		info.BonusGrantId = bonus.grantId
+		info.BonusPreConsumed = bonus.preConsumed + int64(s.extraReserved)
+		info.BonusAmountTotal = bonus.AmountTotal
+		info.BonusAmountUsedAfterPreConsume = bonus.AmountUsedAfter + int64(s.extraReserved)
+	} else {
+		info.BonusGrantId = 0
+		info.BonusPreConsumed = 0
 	}
 }
 
@@ -400,6 +444,45 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			return nil, apiErr
 		}
 		return session, nil
+	}
+
+	// tryBonus 优先消耗限时赠金。仅当赠金余额足以覆盖本次预扣费时才使用赠金，
+	// 否则返回 ErrorCodeInsufficientUserQuota 让调用方回退到订阅/钱包。
+	tryBonus := func() (*BillingSession, *types.NewAPIError) {
+		bonusConsume := int64(preConsumedQuota)
+		if bonusConsume <= 0 {
+			bonusConsume = 1
+		}
+		remaining, err := model.GetActiveBonusRemaining(relayInfo.UserId)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if remaining < bonusConsume {
+			return nil, types.NewErrorWithStatusCode(
+				fmt.Errorf("赠金额度不足, 剩余赠金: %s", logger.FormatQuota(int(remaining))),
+				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
+		session := &BillingSession{
+			relayInfo: relayInfo,
+			funding: &BonusFunding{
+				requestId: relayInfo.RequestId,
+				userId:    relayInfo.UserId,
+				amount:    bonusConsume,
+			},
+		}
+		if apiErr := session.preConsume(c, int(bonusConsume)); apiErr != nil {
+			return nil, apiErr
+		}
+		return session, nil
+	}
+
+	// 赠金优先扣：只要用户有未过期赠金且足以覆盖本次预扣费，就先扣赠金。
+	// 赠金不足时回退到用户配置的计费偏好（订阅/钱包）。
+	if bonusSession, bonusErr := tryBonus(); bonusErr == nil {
+		return bonusSession, nil
+	} else if bonusErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
+		return nil, bonusErr
 	}
 
 	switch pref {

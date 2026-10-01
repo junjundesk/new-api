@@ -509,32 +509,55 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 	userSetting := user.GetSetting()
 	permissions := calculateUserPermissions(user.Role)
 	permissions["admin_permissions"] = authz.Capabilities(user.Id, user.Role)
+	// 赠金余额：区分「限时」与「永久」两部分，避免把两者混成一个数字加一个
+	// 到期时间。失败不影响主流程（返回 0）。
+	var bonusExpiring, bonusPermanent, bonusNearestExpire int64
+	if grants, err := model.ListActiveBonusGrants(user.Id); err == nil {
+		for _, g := range grants {
+			remaining := g.Remaining()
+			if remaining <= 0 {
+				continue
+			}
+			if g.ExpireTime == 0 {
+				bonusPermanent += remaining
+				continue
+			}
+			bonusExpiring += remaining
+			if bonusNearestExpire == 0 || g.ExpireTime < bonusNearestExpire {
+				bonusNearestExpire = g.ExpireTime
+			}
+		}
+	}
 	return map[string]interface{}{
-		"id":                user.Id,
-		"username":          user.Username,
-		"display_name":      user.DisplayName,
-		"role":              user.Role,
-		"status":            user.Status,
-		"email":             user.Email,
-		"github_id":         user.GitHubId,
-		"discord_id":        user.DiscordId,
-		"oidc_id":           user.OidcId,
-		"wechat_id":         user.WeChatId,
-		"telegram_id":       user.TelegramId,
-		"group":             user.Group,
-		"quota":             user.Quota,
-		"used_quota":        user.UsedQuota,
-		"request_count":     user.RequestCount,
-		"aff_code":          user.AffCode,
-		"aff_count":         user.AffCount,
-		"aff_quota":         user.AffQuota,
-		"aff_history_quota": user.AffHistoryQuota,
-		"inviter_id":        user.InviterId,
-		"linux_do_id":       user.LinuxDOId,
-		"setting":           user.Setting,
-		"stripe_customer":   user.StripeCustomer,
-		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":       permissions,
+		"id":                    user.Id,
+		"username":              user.Username,
+		"display_name":          user.DisplayName,
+		"role":                  user.Role,
+		"status":                user.Status,
+		"email":                 user.Email,
+		"github_id":             user.GitHubId,
+		"discord_id":            user.DiscordId,
+		"oidc_id":               user.OidcId,
+		"wechat_id":             user.WeChatId,
+		"telegram_id":           user.TelegramId,
+		"group":                 user.Group,
+		"quota":                 user.Quota,
+		"used_quota":            user.UsedQuota,
+		"request_count":         user.RequestCount,
+		"aff_code":              user.AffCode,
+		"aff_count":             user.AffCount,
+		"aff_quota":             user.AffQuota,
+		"aff_history_quota":     user.AffHistoryQuota,
+		"inviter_id":            user.InviterId,
+		"linux_do_id":           user.LinuxDOId,
+		"setting":               user.Setting,
+		"stripe_customer":       user.StripeCustomer,
+		"sidebar_modules":       userSetting.SidebarModules, // 正确提取sidebar_modules字段
+		"bonus_quota":           bonusExpiring + bonusPermanent,
+		"bonus_expiring_quota":  bonusExpiring,
+		"bonus_permanent_quota": bonusPermanent,
+		"bonus_expire_time":     bonusNearestExpire,
+		"permissions":           permissions,
 	}
 }
 

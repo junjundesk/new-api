@@ -62,6 +62,11 @@ const quotaSchema = z.object({
   quota_setting: z.object({
     enable_free_model_pre_consume: z.boolean(),
   }),
+  bonus_setting: z.object({
+    signup_bonus_enabled: z.boolean(),
+    signup_bonus_amount: z.coerce.number().min(0),
+    signup_bonus_duration: z.string(),
+  }),
 })
 
 type QuotaFormValues = z.infer<typeof quotaSchema>
@@ -262,6 +267,77 @@ export function QuotaSettingsSection({
                 )}
               />
             </SettingsFormGridItem>
+
+            <SettingsFormGridItem span='full'>
+              <FormField
+                control={form.control}
+                name='bonus_setting.signup_bonus_enabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Signup Bonus')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'When enabled, new users receive an expiring bonus on registration.'
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={updateOption.isPending}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+            </SettingsFormGridItem>
+
+            <FormField
+              control={form.control}
+              name='bonus_setting.signup_bonus_amount'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Signup Bonus Amount')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      value={field.value ?? ''}
+                      onChange={handleNumberChange(field.onChange)}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Bonus quota granted to new users ({{formattedQuota}})', {
+                      formattedQuota: formatQuotaInputValue(field.value),
+                    })}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='bonus_setting.signup_bonus_duration'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Signup Bonus Validity')}</FormLabel>
+                  <FormControl>
+                    <Input placeholder='24' {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Default unit is hours: "1" = 1 hour, "1d" = 24 hours. Leave empty to never expire.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
