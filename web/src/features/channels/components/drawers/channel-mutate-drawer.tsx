@@ -958,7 +958,9 @@ export function ChannelMutateDrawer({
   const providerRequiresOther = [3, 18, 21, 39, 41, 49].includes(currentType)
   const identityComplete = Boolean(currentName?.trim() && currentType > 0)
   const credentialsComplete = Boolean(
-    (isEditing || currentKey?.trim()) &&
+    // A single space is an allowed special-case key (some providers accept
+    // it), so it must not be treated as empty here.
+    (isEditing || currentKey?.trim() || currentKey === ' ') &&
     (!providerRequiresBaseUrl || currentBaseUrl?.trim()) &&
     (!providerRequiresOther || currentOther?.trim())
   )
@@ -1607,8 +1609,9 @@ export function ChannelMutateDrawer({
   // Submit handler
   const onSubmit = useCallback(
     async (data: ChannelFormValues) => {
-      // Validate key is required when creating
-      if (!isEditing && !data.key?.trim()) {
+      // Validate key is required when creating. A single space is an allowed
+      // special-case key (some providers accept it), so it passes this check.
+      if (!isEditing && !data.key?.trim() && data.key !== ' ') {
         form.setError('key', {
           type: 'manual',
           message: ERROR_MESSAGES.REQUIRED_KEY,
