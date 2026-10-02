@@ -100,7 +100,9 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		var matchName string
 		modelRatio, success, matchName = ratio_setting.GetModelRatio(info.OriginModelName)
 		if !success {
-			acceptUnsetRatio := false
+			// 渠道测试只验证连通性，不产生真实计费（模型 ratio 视为 0，
+			// 测试结算为 0 额度），因此即使价格未配置也放行；普通调用路径不变。
+			acceptUnsetRatio := info.IsChannelTest
 			if info.UserSetting.AcceptUnsetRatioModel {
 				acceptUnsetRatio = true
 			}
