@@ -74,6 +74,14 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if s.funding.Source() == BillingSourceSubscription {
 		s.relayInfo.SubscriptionPostDelta += int64(delta)
 	}
+	// 混合来源：更新钱包实际净扣减（补扣计入，退款先冲减钱包部分）
+	if mw, ok := s.funding.(*BonusWalletFunding); ok {
+		net := int64(mw.wallet.consumed) + int64(delta)
+		if net < 0 {
+			net = 0
+		}
+		s.relayInfo.BonusWalletDeducted = net
+	}
 	s.settled = true
 	return tokenErr
 }
@@ -108,6 +116,8 @@ func (s *BillingSession) Refund(c *gin.Context) {
 		if err := funding.Refund(); err != nil {
 			common.SysLog("error refunding billing source: " + err.Error())
 		}
+		// extraReserved 对订阅/纯赠金需要单独回滚（其 Refund 只覆盖原始预扣）；
+		// 混合来源的预留全部由钱包承担且计入 wallet.consumed，funding.Refund 已覆盖。
 		if extraReserved > 0 {
 			switch f := funding.(type) {
 			case *SubscriptionFunding:
@@ -152,6 +162,10 @@ func (s *BillingSession) needsRefundLocked() bool {
 	}
 	// 赠金同理：amount>0 时才创建预扣记录
 	if bonus, ok := s.funding.(*BonusFunding); ok && bonus.preConsumed > 0 {
+		return true
+	}
+	// 赠金+钱包混合：任一部分有实际预扣即需要退款
+	if mw, ok := s.funding.(*BonusWalletFunding); ok && (mw.bonus.preConsumed > 0 || mw.wallet.consumed > 0) {
 		return true
 	}
 	return false
@@ -279,6 +293,13 @@ func (s *BillingSession) reserveFunding(delta int) error {
 			)
 		}
 		return nil
+	case *BonusWalletFunding:
+		// 赠金已在预扣阶段扣完，追加预留全部由钱包承担（语义同钱包路径的欠费补扣）
+		if err := model.DecreaseUserQuota(funding.wallet.userId, delta, false); err != nil {
+			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
+		funding.wallet.consumed += delta
+		return nil
 	default:
 		return types.NewError(fmt.Errorf("unsupported funding source: %s", s.funding.Source()), types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
@@ -299,6 +320,13 @@ func (s *BillingSession) rollbackFundingReserve(delta int) {
 	case *BonusFunding:
 		if err := model.ApplyUserBonusDelta(funding.requestId, -int64(delta)); err != nil {
 			common.SysLog("error rolling back bonus funding reserve: " + err.Error())
+		}
+	case *BonusWalletFunding:
+		// 预留只动过钱包，回滚钱包部分即可
+		if err := model.IncreaseUserQuota(funding.wallet.userId, delta, false); err != nil {
+			common.SysLog("error rolling back wallet funding reserve: " + err.Error())
+		} else {
+			funding.wallet.consumed -= delta
 		}
 	}
 }
@@ -376,6 +404,13 @@ func (s *BillingSession) syncRelayInfo() {
 		info.BonusPreConsumed = bonus.preConsumed + int64(s.extraReserved)
 		info.BonusAmountTotal = bonus.AmountTotal
 		info.BonusAmountUsedAfterPreConsume = bonus.AmountUsedAfter + int64(s.extraReserved)
+	} else if mw, ok := s.funding.(*BonusWalletFunding); ok {
+		// 混合来源的追加预留只动钱包，赠金字段不含 extraReserved
+		info.BonusGrantId = mw.bonus.grantId
+		info.BonusPreConsumed = mw.bonus.preConsumed
+		info.BonusAmountTotal = mw.bonus.AmountTotal
+		info.BonusAmountUsedAfterPreConsume = mw.bonus.AmountUsedAfter
+		info.BonusWalletDeducted = int64(mw.wallet.consumed)
 	} else {
 		info.BonusGrantId = 0
 		info.BonusPreConsumed = 0
@@ -446,8 +481,44 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		return session, nil
 	}
 
-	// tryBonus 优先消耗限时赠金。仅当赠金余额足以覆盖本次预扣费时才使用赠金，
-	// 否则返回 ErrorCodeInsufficientUserQuota 让调用方回退到订阅/钱包。
+	// tryBonusWallet 创建赠金+钱包混合预扣会话：赠金承担 bonusPart（剩余赠金全部扣完），
+	// 差额由钱包补足。钱包余额不足以补足差额时返回额度不足，回退用户偏好路径。
+	tryBonusWallet := func(bonusPart int64) (*BillingSession, *types.NewAPIError) {
+		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		walletPart := preConsumedQuota - int(bonusPart)
+		if userQuota < walletPart {
+			return nil, types.NewErrorWithStatusCode(
+				fmt.Errorf("赠金加余额不足, 剩余赠金: %s, 用户额度: %s, 需要预扣费额度: %s",
+					logger.FormatQuota(int(bonusPart)), logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
+				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
+		relayInfo.UserQuota = userQuota
+
+		session := &BillingSession{
+			relayInfo: relayInfo,
+			funding: &BonusWalletFunding{
+				bonus: &BonusFunding{
+					requestId: relayInfo.RequestId,
+					userId:    relayInfo.UserId,
+					amount:    bonusPart,
+				},
+				wallet:     &WalletFunding{userId: relayInfo.UserId},
+				bonusShare: int(bonusPart),
+			},
+		}
+		if apiErr := session.preConsume(c, preConsumedQuota); apiErr != nil {
+			return nil, apiErr
+		}
+		return session, nil
+	}
+
+	// tryBonus 优先消耗限时赠金。赠金足以覆盖本次预扣费时使用纯赠金；
+	// 赠金不足但赠金+钱包余额足够时走混合扣除（赠金剩余部分优先扣完，差额由钱包补足）；
+	// 两者都不足时返回 ErrorCodeInsufficientUserQuota 让调用方回退到订阅/钱包。
 	tryBonus := func() (*BillingSession, *types.NewAPIError) {
 		bonusConsume := int64(preConsumedQuota)
 		if bonusConsume <= 0 {
@@ -458,6 +529,10 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
 		if remaining < bonusConsume {
+			// 赠金不足以单独覆盖预扣费：若剩余赠金为正且钱包能补足差额，则混合扣除
+			if remaining > 0 && preConsumedQuota > 0 {
+				return tryBonusWallet(remaining)
+			}
 			return nil, types.NewErrorWithStatusCode(
 				fmt.Errorf("赠金额度不足, 剩余赠金: %s", logger.FormatQuota(int(remaining))),
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
@@ -477,8 +552,9 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		return session, nil
 	}
 
-	// 赠金优先扣：只要用户有未过期赠金且足以覆盖本次预扣费，就先扣赠金。
-	// 赠金不足时回退到用户配置的计费偏好（订阅/钱包）。
+	// 赠金优先扣：只要用户有未过期赠金，就先扣赠金——足以覆盖时扣纯赠金，
+	// 不足但赠金+钱包足够时混合扣除（赠金扣完、差额走钱包）。
+	// 两者都不足时回退到用户配置的计费偏好（订阅/钱包）。
 	if bonusSession, bonusErr := tryBonus(); bonusErr == nil {
 		return bonusSession, nil
 	} else if bonusErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {

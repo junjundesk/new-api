@@ -147,13 +147,17 @@ type RelayInfo struct {
 	BonusPreConsumed               int64
 	BonusAmountTotal               int64
 	BonusAmountUsedAfterPreConsume int64
-	IsClaudeBetaQuery              bool // /v1/messages?beta=true
-	IsChannelTest                  bool // channel test request
-	RetryIndex                     int
-	LastError                      *types.NewAPIError
-	RuntimeHeadersOverride         map[string]interface{}
-	UseRuntimeHeadersOverride      bool
-	ParamOverrideAudit             []string
+	// BonusWalletDeducted is the net wallet quota deducted when active bonus
+	// alone could not cover the pre-consume and the wallet covered the
+	// shortfall (mixed bonus+wallet billing). 0 for pure bonus billing.
+	BonusWalletDeducted       int64
+	IsClaudeBetaQuery         bool // /v1/messages?beta=true
+	IsChannelTest             bool // channel test request
+	RetryIndex                int
+	LastError                 *types.NewAPIError
+	RuntimeHeadersOverride    map[string]interface{}
+	UseRuntimeHeadersOverride bool
+	ParamOverrideAudit        []string
 
 	PriceData hosttypes.PriceData
 

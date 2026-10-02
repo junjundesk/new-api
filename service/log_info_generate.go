@@ -229,8 +229,8 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 			other["bonus_total"] = relayInfo.BonusAmountTotal
 			other["bonus_remain"] = remain
 		}
-		// Wallet quota is not deducted when billed from bonus.
-		other["wallet_quota_deducted"] = 0
+		// 纯赠金计费时钱包分文未动（0）；赠金不足混合钱包补扣时为钱包实际净扣减
+		other["wallet_quota_deducted"] = relayInfo.BonusWalletDeducted
 	}
 }
 

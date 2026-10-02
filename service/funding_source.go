@@ -3,6 +3,7 @@ package service
 import (
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -182,4 +183,80 @@ func (b *BonusFunding) Refund() error {
 	return refundWithRetry(func() error {
 		return model.RefundBonusPreConsume(b.requestId)
 	})
+}
+
+// ---------------------------------------------------------------------------
+// BonusWalletFunding — 赠金+钱包混合资金来源
+// ---------------------------------------------------------------------------
+
+// BonusWalletFunding 用于赠金不足以单独覆盖预扣费、但赠金+钱包余额足够的场景：
+// 预扣时先扣完赠金剩余部分（bonusShare），差额由钱包补足。
+// 结算补扣（delta>0）全部走钱包——赠金已在预扣阶段扣完；
+// 结算退款（delta<0）先退钱包、再退赠金，与「赠金优先消耗」互为逆序，
+// 保证限时赠金被最大限度利用，而不是被退款回填后过期作废。
+type BonusWalletFunding struct {
+	bonus      *BonusFunding
+	wallet     *WalletFunding
+	bonusShare int // 预扣额度中由赠金承担的部分
+}
+
+func (m *BonusWalletFunding) Source() string { return BillingSourceBonus }
+
+func (m *BonusWalletFunding) PreConsume(amount int) error {
+	if amount <= 0 {
+		return nil
+	}
+	bonusPart := m.bonusShare
+	if bonusPart > amount {
+		bonusPart = amount
+	}
+	if bonusPart > 0 {
+		if err := m.bonus.PreConsume(bonusPart); err != nil {
+			return err
+		}
+	}
+	walletPart := amount - bonusPart
+	if walletPart > 0 {
+		if err := m.wallet.PreConsume(walletPart); err != nil {
+			// 钱包扣减失败，回滚已成功的赠金预扣
+			if refundErr := m.bonus.Refund(); refundErr != nil {
+				common.SysLog("error rolling back bonus pre-consume after wallet failure: " + refundErr.Error())
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *BonusWalletFunding) Settle(delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	if delta > 0 {
+		// 赠金在预扣阶段已扣完，补扣走钱包（余额不足部分记为欠费，与钱包路径语义一致）
+		return m.wallet.Settle(delta)
+	}
+	// 退款先退钱包，赠金保持已消耗状态；钱包部分退完后才退赠金
+	walletRefund := -delta
+	if walletRefund > m.wallet.consumed {
+		walletRefund = m.wallet.consumed
+	}
+	if walletRefund > 0 {
+		if err := m.wallet.Settle(-walletRefund); err != nil {
+			return err
+		}
+	}
+	bonusRefund := -delta - walletRefund
+	if bonusRefund > 0 {
+		return m.bonus.Settle(-bonusRefund)
+	}
+	return nil
+}
+
+func (m *BonusWalletFunding) Refund() error {
+	// wallet.consumed 包含预扣与后续追加预留的全部钱包扣减，全额退还
+	if err := m.wallet.Refund(); err != nil {
+		return err
+	}
+	return m.bonus.Refund()
 }
