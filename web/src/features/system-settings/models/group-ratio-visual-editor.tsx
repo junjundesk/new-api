@@ -164,7 +164,7 @@ function buildGroupPricingRows(
     ...Object.keys(topupMap),
   ])
 
-  return [...names].map((name) => ({
+  const rows = [...names].map((name) => ({
     _id: createGroupPricingId(),
     name,
     ratio: String(normalizeRatio(ratioMap[name])),
@@ -172,6 +172,9 @@ function buildGroupPricingRows(
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
   }))
+  // 用户可选的分组优先展示；稳定排序，各自分区内保持 JSON 中的原有顺序
+  rows.sort((a, b) => Number(b.selectable) - Number(a.selectable))
+  return rows
 }
 
 function serializeGroupPricingRows(rows: GroupPricingRow[]) {
