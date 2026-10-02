@@ -545,12 +545,22 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 			}
 		}
 	}
-	// 企业身份：按累充金额门槛自动识别。失败不影响主流程（视为未解锁）。
+	// 企业身份：按累充金额门槛自动识别；首次达标即写入用户 setting 的永久
+	// 标记，之后阈值上调或累充口径变化都不再回收身份。失败不影响主流程。
 	var totalRecharge float64
 	var enterpriseUnlocked bool
 	if operation_setting.IsEnterpriseEnabled() {
 		totalRecharge = model.GetUserTotalRechargeMoney(user.Id)
-		enterpriseUnlocked = totalRecharge >= operation_setting.GetEnterpriseTotalRechargeThreshold()
+		enterpriseUnlocked = userSetting.EnterpriseUnlocked ||
+			totalRecharge >= operation_setting.GetEnterpriseTotalRechargeThreshold()
+		if enterpriseUnlocked && !userSetting.EnterpriseUnlocked {
+			userSetting.EnterpriseUnlocked = true
+			user.SetSetting(userSetting)
+			if err := model.UpdateUserSetting(user.Id, userSetting); err != nil {
+				common.SysError("failed to persist enterprise unlock mark for user " +
+					fmt.Sprintf("%d", user.Id) + ": " + err.Error())
+			}
+		}
 	}
 	return map[string]interface{}{
 		"id":                    user.Id,
