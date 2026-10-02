@@ -58,7 +58,14 @@ const (
 	ChannelTypeAdvancedCustom = 58
 	ChannelTypeSub2API        = 59
 	ChannelTypeNewAPI         = 60
-	ChannelTypeDummy          // this one is only for count, do not add any channel after this
+	// ChannelTypeOpenAIChat 固定以 OpenAI Chat Completions 格式请求上游：
+	// 客户端无论用 chat / responses / claude 哪种格式，非 chat 格式会先转换为
+	// chat 再发送上游。
+	ChannelTypeOpenAIChat = 61
+	// ChannelTypeOpenAIResponses 固定以 OpenAI Responses 格式请求上游：
+	// 非 responses 格式的客户端请求会先转换为 responses 再发送上游。
+	ChannelTypeOpenAIResponses = 62
+	ChannelTypeDummy           // this one is only for count, do not add any channel after this
 
 )
 
@@ -124,66 +131,70 @@ var ChannelBaseURLs = []string{
 	"",                                          //58
 	"",                                          //59
 	"",                                          //60
+	"https://api.openai.com",                    //61
+	"https://api.openai.com",                    //62
 }
 
 var ChannelTypeNames = map[int]string{
-	ChannelTypeUnknown:        "Unknown",
-	ChannelTypeOpenAI:         "OpenAI",
-	ChannelTypeMidjourney:     "Midjourney",
-	ChannelTypeAzure:          "Azure",
-	ChannelTypeOllama:         "Ollama",
-	ChannelTypeMidjourneyPlus: "MidjourneyPlus",
-	ChannelTypeOpenAIMax:      "OpenAIMax",
-	ChannelTypeOhMyGPT:        "OhMyGPT",
-	ChannelTypeCustom:         "Custom",
-	ChannelTypeAILS:           "AILS",
-	ChannelTypeAIProxy:        "AIProxy",
-	ChannelTypePaLM:           "PaLM",
-	ChannelTypeAPI2GPT:        "API2GPT",
-	ChannelTypeAIGC2D:         "AIGC2D",
-	ChannelTypeAnthropic:      "Anthropic",
-	ChannelTypeBaidu:          "Baidu",
-	ChannelTypeZhipu:          "Zhipu",
-	ChannelTypeAli:            "Ali",
-	ChannelTypeXunfei:         "Xunfei",
-	ChannelType360:            "360",
-	ChannelTypeOpenRouter:     "OpenRouter",
-	ChannelTypeAIProxyLibrary: "AIProxyLibrary",
-	ChannelTypeFastGPT:        "FastGPT",
-	ChannelTypeTencent:        "Tencent",
-	ChannelTypeGemini:         "Gemini",
-	ChannelTypeMoonshot:       "Moonshot",
-	ChannelTypeZhipu_v4:       "ZhipuV4",
-	ChannelTypePerplexity:     "Perplexity",
-	ChannelTypeLingYiWanWu:    "LingYiWanWu",
-	ChannelTypeAws:            "AWS",
-	ChannelTypeCohere:         "Cohere",
-	ChannelTypeMiniMax:        "MiniMax",
-	ChannelTypeSunoAPI:        "SunoAPI",
-	ChannelTypeDify:           "Dify",
-	ChannelTypeJina:           "Jina",
-	ChannelCloudflare:         "Cloudflare",
-	ChannelTypeSiliconFlow:    "SiliconFlow",
-	ChannelTypeVertexAi:       "VertexAI",
-	ChannelTypeMistral:        "Mistral",
-	ChannelTypeDeepSeek:       "DeepSeek",
-	ChannelTypeMokaAI:         "MokaAI",
-	ChannelTypeVolcEngine:     "VolcEngine",
-	ChannelTypeBaiduV2:        "BaiduV2",
-	ChannelTypeXinference:     "Xinference",
-	ChannelTypeXai:            "xAI",
-	ChannelTypeCoze:           "Coze",
-	ChannelTypeKling:          "Kling",
-	ChannelTypeJimeng:         "Jimeng",
-	ChannelTypeVidu:           "Vidu",
-	ChannelTypeSubmodel:       "Submodel",
-	ChannelTypeDoubaoVideo:    "DoubaoVideo",
-	ChannelTypeSora:           "Sora",
-	ChannelTypeReplicate:      "Replicate",
-	ChannelTypeCodex:          "ChatGPT Subscription (Codex)",
-	ChannelTypeAdvancedCustom: "Advanced Custom",
-	ChannelTypeSub2API:        "Sub2API",
-	ChannelTypeNewAPI:         "New API",
+	ChannelTypeUnknown:         "Unknown",
+	ChannelTypeOpenAI:          "OpenAI",
+	ChannelTypeMidjourney:      "Midjourney",
+	ChannelTypeAzure:           "Azure",
+	ChannelTypeOllama:          "Ollama",
+	ChannelTypeMidjourneyPlus:  "MidjourneyPlus",
+	ChannelTypeOpenAIMax:       "OpenAIMax",
+	ChannelTypeOhMyGPT:         "OhMyGPT",
+	ChannelTypeCustom:          "Custom",
+	ChannelTypeAILS:            "AILS",
+	ChannelTypeAIProxy:         "AIProxy",
+	ChannelTypePaLM:            "PaLM",
+	ChannelTypeAPI2GPT:         "API2GPT",
+	ChannelTypeAIGC2D:          "AIGC2D",
+	ChannelTypeAnthropic:       "Anthropic",
+	ChannelTypeBaidu:           "Baidu",
+	ChannelTypeZhipu:           "Zhipu",
+	ChannelTypeAli:             "Ali",
+	ChannelTypeXunfei:          "Xunfei",
+	ChannelType360:             "360",
+	ChannelTypeOpenRouter:      "OpenRouter",
+	ChannelTypeAIProxyLibrary:  "AIProxyLibrary",
+	ChannelTypeFastGPT:         "FastGPT",
+	ChannelTypeTencent:         "Tencent",
+	ChannelTypeGemini:          "Gemini",
+	ChannelTypeMoonshot:        "Moonshot",
+	ChannelTypeZhipu_v4:        "ZhipuV4",
+	ChannelTypePerplexity:      "Perplexity",
+	ChannelTypeLingYiWanWu:     "LingYiWanWu",
+	ChannelTypeAws:             "AWS",
+	ChannelTypeCohere:          "Cohere",
+	ChannelTypeMiniMax:         "MiniMax",
+	ChannelTypeSunoAPI:         "SunoAPI",
+	ChannelTypeDify:            "Dify",
+	ChannelTypeJina:            "Jina",
+	ChannelCloudflare:          "Cloudflare",
+	ChannelTypeSiliconFlow:     "SiliconFlow",
+	ChannelTypeVertexAi:        "VertexAI",
+	ChannelTypeMistral:         "Mistral",
+	ChannelTypeDeepSeek:        "DeepSeek",
+	ChannelTypeMokaAI:          "MokaAI",
+	ChannelTypeVolcEngine:      "VolcEngine",
+	ChannelTypeBaiduV2:         "BaiduV2",
+	ChannelTypeXinference:      "Xinference",
+	ChannelTypeXai:             "xAI",
+	ChannelTypeCoze:            "Coze",
+	ChannelTypeKling:           "Kling",
+	ChannelTypeJimeng:          "Jimeng",
+	ChannelTypeVidu:            "Vidu",
+	ChannelTypeSubmodel:        "Submodel",
+	ChannelTypeDoubaoVideo:     "DoubaoVideo",
+	ChannelTypeSora:            "Sora",
+	ChannelTypeReplicate:       "Replicate",
+	ChannelTypeCodex:           "ChatGPT Subscription (Codex)",
+	ChannelTypeAdvancedCustom:  "Advanced Custom",
+	ChannelTypeSub2API:         "Sub2API",
+	ChannelTypeNewAPI:          "New API",
+	ChannelTypeOpenAIChat:      "OpenAI Chat",
+	ChannelTypeOpenAIResponses: "OpenAI Responses",
 }
 
 func GetChannelTypeName(channelType int) string {

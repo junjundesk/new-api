@@ -5475,6 +5475,8 @@
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Аккаунты, суммарное пополнение которых (онлайн-платежи, активированные коды и начисления администратора) достигает этой суммы, получают корпоративный статус",
     "Recharged {{current}} / {{target}}": "Пополнено {{current}} / {{target}}",
     "Site base URL (no trailing slash), for absolute links": "Базовый URL сайта (без завершающего слэша) для абсолютных ссылок",
+    "OpenAI Chat": "OpenAI Chat (формат chat)",
+    "OpenAI Responses": "OpenAI Responses (формат responses)",
     "Zoom": "Zoom"
   }
 }

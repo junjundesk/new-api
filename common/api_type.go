@@ -81,6 +81,12 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeSub2API
 	case constant.ChannelTypeNewAPI:
 		apiType = constant.APITypeNewAPI
+	case constant.ChannelTypeOpenAIChat:
+		apiType = constant.APITypeOpenAIChat
+	// ChannelTypeOpenAIResponses 复用 OpenAI adaptor：responses 客户端原生透传，
+	// chat/claude 客户端由 chat→responses 策略强制转换。
+	case constant.ChannelTypeOpenAIResponses:
+		apiType = constant.APITypeOpenAI
 	}
 	if apiType == -1 {
 		return constant.APITypeOpenAI, false

@@ -5475,6 +5475,8 @@
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "累計儲值（線上儲值、兌換碼兌換、管理員增加額度均計入）達到此數值的帳戶將解鎖企業身份",
     "Recharged {{current}} / {{target}}": "已累充 {{current}} / {{target}}",
     "Site base URL (no trailing slash), for absolute links": "網站基礎位址（不含結尾斜線），用於拼接絕對連結",
+    "OpenAI Chat": "OpenAI Chat（固定 chat 格式）",
+    "OpenAI Responses": "OpenAI Responses（固定 responses 格式）",
     "Zoom": "縮放"
   }
 }

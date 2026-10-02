@@ -39,5 +39,7 @@ const (
 	APITypeAdvancedCustom
 	APITypeSub2API
 	APITypeNewAPI
+	// APITypeOpenAIChat 固定 chat completions 线上格式的渠道（见 ChannelTypeOpenAIChat）
+	APITypeOpenAIChat
 	APITypeDummy // this one is only for count, do not add any channel after this
 )

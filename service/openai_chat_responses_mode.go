@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 )
 
@@ -38,6 +39,11 @@ func matchAnyModelPattern(patterns []string, model string) bool {
 }
 
 func ShouldChatCompletionsUseResponsesPolicy(policy model_setting.ChatCompletionsToResponsesPolicy, channelID int, channelType int, model string) bool {
+	// 固定 responses 格式的渠道：chat / claude 客户端请求一律先转换为
+	// responses 再发送上游（responses 客户端在 responses 流程原生透传）。
+	if channelType == constant.ChannelTypeOpenAIResponses {
+		return true
+	}
 	if !policy.IsChannelEnabled(channelID, channelType) {
 		return false
 	}

@@ -5475,6 +5475,8 @@
     "Accounts whose cumulative recharge reaches this amount unlock the enterprise identity; online top-ups, redeemed codes, and admin quota grants all count": "Tài khoản có tổng nạp (nạp trực tuyến, mã đổi thưởng và cấp bởi quản trị viên) đạt mức này sẽ mở khóa danh tính doanh nghiệp",
     "Recharged {{current}} / {{target}}": "Đã nạp {{current}} / {{target}}",
     "Site base URL (no trailing slash), for absolute links": "URL cơ sở của trang (không có dấu gạch chéo cuối), dùng cho liên kết tuyệt đối",
+    "OpenAI Chat": "OpenAI Chat (định dạng chat)",
+    "OpenAI Responses": "OpenAI Responses (định dạng responses)",
     "Zoom": "Zoom"
   }
 }

@@ -109,6 +109,12 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 
 	endpointType = normalizeChannelTestEndpoint(channel, endpointType)
 
+	// 固定 responses 格式的渠道：测试请求也按 responses 端点构造，
+	// 才能与真实转发路径一致。
+	if channel.Type == constant.ChannelTypeOpenAIResponses && endpointType == "" {
+		endpointType = string(constant.EndpointTypeOpenAIResponse)
+	}
+
 	requestPath := "/v1/chat/completions"
 
 	// 如果指定了端点类型，使用指定的端点类型
