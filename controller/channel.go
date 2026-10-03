@@ -1344,6 +1344,25 @@ func FetchModels(c *gin.Context) {
 			Key:     key,
 			BaseURL: &baseURL,
 		}
+		if req.HeaderOverride != nil {
+			rawHeaderOverride := strings.TrimSpace(*req.HeaderOverride)
+			if rawHeaderOverride != "" {
+				var headerOverride map[string]any
+				if err := common.UnmarshalJsonStr(rawHeaderOverride, &headerOverride); err != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("header_override must be a JSON object: %s", err.Error()),
+					})
+					return
+				}
+				channel.HeaderOverride = &rawHeaderOverride
+			}
+		}
+		if req.Proxy != nil {
+			channelSettings := channel.GetSetting()
+			channelSettings.Proxy = strings.TrimSpace(*req.Proxy)
+			channel.SetSetting(channelSettings)
+		}
 	}
 
 	models, err := fetchChannelUpstreamModelIDs(channel)

@@ -320,6 +320,45 @@ func TestFetchModelsAdvancedCustomEditPreviewUsesSavedKeyAndExplicitClears(t *te
 	require.Empty(t, headers.Get("X-Saved"))
 }
 
+func TestFetchModelsAppliesHeaderOverrideForPlainChannelCreatePreview(t *testing.T) {
+	receivedHeaders := make(chan http.Header, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders <- r.Header.Clone()
+		_, _ = w.Write([]byte(`{"data":[{"id":"override-model"}]}`))
+	}))
+	defer server.Close()
+
+	baseURL := server.URL
+	headerOverride := `{"X-Static":"static-value","Authorization":"Bearer {api_key}"}`
+	req := fetchModelsRequest{
+		BaseURL:        &baseURL,
+		Type:           constant.ChannelTypeOpenAIChat,
+		Key:            "plain-key",
+		HeaderOverride: &headerOverride,
+	}
+	body, err := common.Marshal(req)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/channel/fetch_models", bytes.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	FetchModels(ctx)
+
+	var response struct {
+		Success bool     `json:"success"`
+		Message string   `json:"message"`
+		Data    []string `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, response.Message)
+	require.Equal(t, []string{"override-model"}, response.Data)
+
+	headers := <-receivedHeaders
+	require.Equal(t, "static-value", headers.Get("X-Static"))
+	require.Equal(t, "Bearer plain-key", headers.Get("Authorization"))
+}
+
 func TestFailedAdvancedCustomDetectionDoesNotStageFullRemoval(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
