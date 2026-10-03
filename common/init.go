@@ -60,6 +60,9 @@ func InitEnv() {
 	if os.Getenv("CRYPTO_SECRET") != "" {
 		CryptoSecret = os.Getenv("CRYPTO_SECRET")
 	} else {
+		// 回退到 SessionSecret 会使加密密钥与会话密钥共用，泄露一个即全部泄露
+		log.Println("WARNING: CRYPTO_SECRET is not set, falling back to SESSION_SECRET. It is recommended to set a separate random CRYPTO_SECRET.")
+		log.Println("警告：未设置 CRYPTO_SECRET，将回退使用 SESSION_SECRET。建议单独设置随机的 CRYPTO_SECRET。")
 		CryptoSecret = SessionSecret
 	}
 	if err := InitSessionCookieSettings(); err != nil {

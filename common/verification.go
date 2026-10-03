@@ -1,6 +1,7 @@
 package common
 
 import (
+	"crypto/subtle"
 	"strings"
 	"sync"
 	"time"
@@ -9,13 +10,17 @@ import (
 )
 
 type verificationValue struct {
-	code string
-	time time.Time
+	code     string
+	time     time.Time
+	attempts int
 }
 
 const (
 	EmailVerificationPurpose = "v"
 	PasswordResetPurpose     = "r"
+
+	// 单个验证码允许的最大失败尝试次数，超过后作废
+	verificationMaxAttempts = 5
 )
 
 var verificationMutex sync.Mutex
@@ -44,15 +49,27 @@ func RegisterVerificationCodeWithKey(key string, code string, purpose string) {
 	}
 }
 
+// VerifyCodeWithKey 校验验证码，成功即消费删除；失败累计尝试次数，超限作废。
 func VerifyCodeWithKey(key string, code string, purpose string) bool {
 	verificationMutex.Lock()
 	defer verificationMutex.Unlock()
-	value, okay := verificationMap[purpose+key]
+	mapKey := purpose + key
+	value, okay := verificationMap[mapKey]
 	now := time.Now()
 	if !okay || int(now.Sub(value.time).Seconds()) >= VerificationValidMinutes*60 {
 		return false
 	}
-	return code == value.code
+	if subtle.ConstantTimeCompare([]byte(code), []byte(value.code)) != 1 {
+		value.attempts++
+		if value.attempts >= verificationMaxAttempts {
+			delete(verificationMap, mapKey)
+		} else {
+			verificationMap[mapKey] = value
+		}
+		return false
+	}
+	delete(verificationMap, mapKey)
+	return true
 }
 
 func DeleteKey(key string, purpose string) {
