@@ -5477,6 +5477,11 @@
     "Site base URL (no trailing slash), for absolute links": "网站基础地址（不含结尾斜杠），用于拼接绝对链接",
     "OpenAI Chat": "OpenAI Chat（固定 chat 格式）",
     "OpenAI Responses": "OpenAI Responses（固定 responses 格式）",
+    "All group names live here. Ratio applies when calls are billed as this group; forbid non-streaming rejects non-streaming API requests billed as this group with 403.": "所有分组名称都在这里。倍率在按该分组计费时生效；禁止非流式会将按该分组计费的非流式 API 请求以 403 拒绝。",
+    "decides whether non-streaming access is forbidden, which groups the user can pick for tokens, and whether an override ratio applies.": "决定是否禁止非流式访问、用户可选哪些令牌分组，以及是否应用覆盖倍率。",
+    "Forbid non-streaming": "禁止非流式访问",
+    "Forbid non-streaming groups": "禁止非流式访问分组",
+    "Groups configured with 0 forbid non-streaming access: any non-streaming API request billed as that group is rejected with 403. Channel tests in the admin panel are not affected.": "配置为 0 的分组禁止非流式访问：按该分组计费的任何非流式 API 请求都会返回 403。后台渠道测试不受影响。",
     "Zoom": "缩放"
   }
 }

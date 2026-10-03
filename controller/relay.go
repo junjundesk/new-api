@@ -126,6 +126,23 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	if !relayInfo.IsStream {
+		billingGroup := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
+		if billingGroup == "" {
+			billingGroup = relayInfo.TokenGroup
+		}
+		if common.IsNonStreamingForbidden(billingGroup) {
+			logger.LogWarn(c, fmt.Sprintf("分组 %s 禁止非流式请求，已拒绝", billingGroup))
+			newAPIError = types.NewErrorWithStatusCode(
+				fmt.Errorf("非流式请求已被禁止，请使用流式 (stream) 访问该分组"),
+				types.ErrorCodeAccessDenied,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+			)
+			return
+		}
+	}
+
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.

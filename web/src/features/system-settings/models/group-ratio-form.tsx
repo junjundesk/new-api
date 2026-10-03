@@ -269,7 +269,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               name='TopupGroupRatio'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Top-up group ratios')}</FormLabel>
+                  <FormLabel>{t('Forbid non-streaming groups')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
                       value={field.value}
@@ -282,9 +282,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Optional multiplier per user group used when calculating recharge pricing. Provide a JSON object such as'
+                      'Groups configured with 0 forbid non-streaming access: any non-streaming API request billed as that group is rejected with 403. Channel tests in the admin panel are not affected.'
                     )}
-                    {` { "default": 1, "vip": 1.2 }`}.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -523,7 +522,7 @@ function GroupPricingGuide({ open, onOpenChange }: GroupPricingGuideProps) {
                 </span>
                 {': '}
                 {t(
-                  'decides the top-up ratio, which groups the user can pick for tokens, and whether an override ratio applies.'
+                  'decides whether non-streaming access is forbidden, which groups the user can pick for tokens, and whether an override ratio applies.'
                 )}
               </p>
             </div>

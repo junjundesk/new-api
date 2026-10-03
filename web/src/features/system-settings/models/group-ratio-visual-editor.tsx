@@ -97,7 +97,7 @@ type GroupPricingRow = {
   _id: string
   name: string
   ratio: string
-  topupRatio: string
+  nonStreamingForbidden: boolean
   selectable: boolean
   description: string
 }
@@ -168,7 +168,9 @@ function buildGroupPricingRows(
     _id: createGroupPricingId(),
     name,
     ratio: String(normalizeRatio(ratioMap[name])),
-    topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
+    nonStreamingForbidden: Object.hasOwn(topupMap, name)
+      ? topupMap[name] === 0
+      : false,
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
   }))
@@ -189,9 +191,8 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
     if (row.selectable) {
       userUsableGroups[name] = row.description
     }
-    const topup = row.topupRatio.trim()
-    if (topup !== '' && Number.isFinite(Number(topup))) {
-      topupGroupRatio[name] = Number(topup)
+    if (row.nonStreamingForbidden) {
+      topupGroupRatio[name] = 0
     }
   }
 
@@ -567,7 +568,7 @@ function GroupPricingTable({
         _id: createGroupPricingId(),
         name,
         ratio: '1',
-        topupRatio: '',
+        nonStreamingForbidden: false,
         selectable: true,
         description: '',
       },
@@ -601,7 +602,7 @@ function GroupPricingTable({
             <CardTitle>{t('Pricing groups')}</CardTitle>
             <CardDescription>
               {t(
-                'All group names live here. Ratio applies when calls are billed as this group; top-up ratio applies to users whose account is in this group.'
+                'All group names live here. Ratio applies when calls are billed as this group; forbid non-streaming rejects non-streaming API requests billed as this group with 403.'
               )}
             </CardDescription>
           </div>
@@ -684,20 +685,23 @@ function GroupPricingTable({
                 ),
               },
               {
-                id: 'topup-ratio',
-                header: t('Top-up ratio'),
-                className: 'w-28',
+                id: 'non-streaming-forbidden',
+                header: t('Forbid non-streaming'),
+                className: 'w-28 text-center',
                 cell: (row) => (
-                  <Input
-                    type='number'
-                    min={0}
-                    step={0.1}
-                    value={row.topupRatio}
-                    placeholder={t('Not set')}
-                    onChange={(event) =>
-                      updateRow(row._id, 'topupRatio', event.target.value)
-                    }
-                  />
+                  <div className='flex justify-center'>
+                    <Checkbox
+                      checked={row.nonStreamingForbidden}
+                      onCheckedChange={(checked) =>
+                        updateRow(
+                          row._id,
+                          'nonStreamingForbidden',
+                          checked === true
+                        )
+                      }
+                      aria-label={t('Forbid non-streaming')}
+                    />
+                  </div>
                 ),
               },
               {
@@ -1301,7 +1305,9 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
 
     return {
       ratio: entry?.ratio,
-      topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : null,
+      nonStreamingForbidden: Object.hasOwn(topupMap, name)
+        ? topupMap[name] === 0
+        : false,
       selectable: Object.hasOwn(usableMap, name),
       description: String(usableMap[name] ?? ''),
       incomingOverrides,
@@ -1345,9 +1351,11 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                   <dd className='font-medium'>{detail.ratio ?? '-'}</dd>
                 </div>
                 <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>{t('Top-up ratio')}</dt>
+                  <dt className='text-muted-foreground'>
+                    {t('Forbid non-streaming')}
+                  </dt>
                   <dd className='font-medium'>
-                    {detail.topupRatio ?? t('Not set')}
+                    {detail.nonStreamingForbidden ? t('Yes') : t('No')}
                   </dd>
                 </div>
                 <div className='flex justify-between'>

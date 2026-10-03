@@ -5477,6 +5477,11 @@
     "Site base URL (no trailing slash), for absolute links": "Site base URL (no trailing slash), for absolute links",
     "OpenAI Chat": "OpenAI Chat",
     "OpenAI Responses": "OpenAI Responses",
+    "All group names live here. Ratio applies when calls are billed as this group; forbid non-streaming rejects non-streaming API requests billed as this group with 403.": "All group names live here. Ratio applies when calls are billed as this group; forbid non-streaming rejects non-streaming API requests billed as this group with 403.",
+    "decides whether non-streaming access is forbidden, which groups the user can pick for tokens, and whether an override ratio applies.": "decides whether non-streaming access is forbidden, which groups the user can pick for tokens, and whether an override ratio applies.",
+    "Forbid non-streaming": "Forbid non-streaming",
+    "Forbid non-streaming groups": "Forbid non-streaming groups",
+    "Groups configured with 0 forbid non-streaming access: any non-streaming API request billed as that group is rejected with 403. Channel tests in the admin panel are not affected.": "Groups configured with 0 forbid non-streaming access: any non-streaming API request billed as that group is rejected with 403. Channel tests in the admin panel are not affected.",
     "Zoom": "Zoom"
   }
 }
