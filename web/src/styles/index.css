@@ -475,6 +475,17 @@ For commercial licensing, please contact support@quantumnous.com
     transform: translateY(0);
   }
 }
+/* Above-the-fold variant: transform only, so first-screen content is painted
+   (and can be measured as LCP) immediately instead of waiting for the
+   animation's opacity ramp. */
+@keyframes landing-rise {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
 @keyframes landing-fade-in {
   from {
     opacity: 0;
@@ -517,6 +528,9 @@ For commercial licensing, please contact support@quantumnous.com
 .landing-animate-fade-up {
   animation: landing-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+.landing-animate-rise {
+  animation: landing-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .landing-animate-fade-in {
   animation: landing-fade-in 0.6s ease-out both;
 }
@@ -532,6 +546,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 @media (prefers-reduced-motion: reduce) {
   .landing-animate-fade-up,
+  .landing-animate-rise,
   .landing-animate-fade-in,
   .landing-animate-scale-in,
   .landing-animate-fade-left,
