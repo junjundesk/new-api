@@ -43,3 +43,18 @@ export function getUserAvatarStyle(name: string): UserAvatarStyle {
 export function getUserAvatarFallback(name: string): string {
   return name.trim().charAt(0).toUpperCase() || '?'
 }
+
+const QQ_EMAIL_REGEX = /^(\d{5,12})@qq\.com$/
+
+/**
+ * Returns the QQ avatar URL for a QQ email address, or null if the email is
+ * not a QQ email. The avatar is loaded directly from QQ's servers.
+ */
+export function getQQAvatarUrl(
+  email: string | null | undefined
+): string | null {
+  if (!email) return null
+  const match = email.trim().toLowerCase().match(QQ_EMAIL_REGEX)
+  if (!match) return null
+  return `https://q1.qlogo.cn/g?b=qq&nk=${match[1]}&s=100`
+}
