@@ -39,7 +39,7 @@ services:
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-} # 可信反向代理 IP/CIDR；生产环境请填写实际代理地址 (Trusted proxy IP/CIDRs; set the actual proxy address in production)
       - TRUSTED_PROXY_HEADERS=${TRUSTED_PROXY_HEADERS:-} # 可信代理客户端 IP 请求头；Cloudflare 通常使用 CF-Connecting-IP (Trusted proxy client-IP headers; Cloudflare commonly uses CF-Connecting-IP)
 #      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值 （Streaming timeout in seconds, default is 120s. Increase if experiencing empty completions）
-#      - RELAY_IDLE_CONN_TIMEOUT=90  # Relay HTTP 客户端空闲连接超时时间，单位秒，默认跟随 Go 标准库，设置为0表示不限制 (Relay HTTP client idle keep-alive timeout in seconds, defaults to Go standard library; set 0 to disable)
+#      - RELAY_IDLE_CONN_TIMEOUT=900  # Relay HTTP 客户端空闲连接超时时间，单位秒，默认 900，设置为0表示不限制 (Relay HTTP client idle keep-alive timeout in seconds, defaults to 900; set 0 to disable)
 #      - SESSION_SECRET=random_string  # 多机部署时设置，必须修改这个随机字符串！！ （multi-node deployment, set this to a random string!!!!!!!）
 #      - SESSION_COOKIE_SECURE=true  # true：启用 Secure Refresh Cookie 和严格 refresh/logout OriginGuard；false/未配置：关闭 OriginGuard，仅用于本地 HTTP (true: Secure cookie + strict refresh/logout OriginGuard; false/unset: guard disabled for local HTTP only)
 #      - SESSION_COOKIE_TRUSTED_URL=https://example.com,https://admin.example.com  # Secure=true 时必填的精确 HTTPS Origin；不是 relay CORS 白名单，不支持通配符/路径 (Required exact HTTPS origins when Secure=true; not a relay CORS allowlist, no wildcard/path)

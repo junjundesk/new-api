@@ -92,6 +92,14 @@ func newRelayHTTPTransport() *http.Transport {
 	transport.MaxIdleConnsPerHost = common.RelayMaxIdleConnsPerHost
 	transport.IdleConnTimeout = time.Duration(common.RelayIdleConnTimeout) * time.Second
 	transport.ForceAttemptHTTP2 = true
+	// Idle HTTP/2 connections are health-checked with a PING frame so that
+	// connections silently dropped by an upstream (or a middlebox) are closed
+	// instead of being handed out to the next request; the periodic PING also
+	// keeps otherwise-idle connections alive upstream.
+	transport.HTTP2 = &http.HTTP2Config{
+		SendPingTimeout: 45 * time.Second,
+		PingTimeout:     15 * time.Second,
+	}
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig
 	}
