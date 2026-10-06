@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -290,6 +291,22 @@ func ListModels(c *gin.Context, modelType int) {
 			continue
 		}
 		userModelNames = append(userModelNames, modelName)
+	}
+
+	// Apply token model mappings if present
+	mappings, hasMappings := common.GetContextKey(c, constant.ContextKeyTokenModelMappings)
+	if hasMappings {
+		if tokenMappings, ok := mappings.([]setting.TokenModelMapping); ok && len(tokenMappings) > 0 {
+			mappingIndex := make(map[string]string, len(tokenMappings))
+			for _, m := range tokenMappings {
+				mappingIndex[m.SourceModel] = m.TargetModel
+			}
+			for i, modelName := range userModelNames {
+				if targetModel, mapped := mappingIndex[modelName]; mapped {
+					userModelNames[i] = targetModel
+				}
+			}
+		}
 	}
 
 	ownerByModel := map[string]string{}
