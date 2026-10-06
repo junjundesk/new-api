@@ -392,6 +392,38 @@ func TestListModelsUsesAdvancedCustomEndpointTypesFromPricingCache(t *testing.T)
 	}, payload.Data[0].SupportedEndpointTypes)
 }
 
+func TestListModelsAdvertisesMappedSourceModelName(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "zz-routed-model", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "zz-second-routed-model", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "zz-untouched-model", ChannelId: 1, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyTokenModelMappings, []setting.TokenModelMapping{
+		{SourceModel: "zz-alias-model", TargetModel: "zz-routed-model"},
+		{SourceModel: "zz-other-alias-model", TargetModel: "zz-routed-model"},
+		{SourceModel: "zz-second-alias-model", TargetModel: "zz-second-routed-model"},
+	})
+
+	ListModels(ctx, constant.ChannelTypeOpenAI)
+
+	ids := decodeListModelsResponse(t, recorder)
+	require.Contains(t, ids, "zz-alias-model")
+	require.Contains(t, ids, "zz-other-alias-model")
+	require.Contains(t, ids, "zz-second-alias-model")
+	require.Contains(t, ids, "zz-untouched-model")
+	require.NotContains(t, ids, "zz-routed-model")
+	require.NotContains(t, ids, "zz-second-routed-model")
+}
+
 func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	withSelfUseModeDisabled(t)
 	withTieredBillingConfig(t, map[string]string{

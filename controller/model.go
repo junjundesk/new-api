@@ -172,6 +172,46 @@ func buildOpenAIModel(modelName string, ownerByModel map[string]string) dto.Open
 	return oaiModel
 }
 
+// applyTokenModelMappings advertises the names a key's client is expected to send
+// in place of the models they are routed to. A mapping's source model is the
+// client facing name and its target model is the routed model, so each target
+// entry is replaced by one entry per source name and keeps the target's metadata
+// (owner, endpoint types). The routed name itself is dropped, matching the
+// channel-level model mapping, which also hides the mapped-away names.
+func applyTokenModelMappings(apiModels []dto.OpenAIModels, mappings []setting.TokenModelMapping) []dto.OpenAIModels {
+	if len(apiModels) == 0 || len(mappings) == 0 {
+		return apiModels
+	}
+	sourcesByTarget := make(map[string][]string, len(mappings))
+	for _, mapping := range mappings {
+		if mapping.SourceModel == "" || mapping.TargetModel == "" {
+			continue
+		}
+		sourcesByTarget[mapping.TargetModel] = append(sourcesByTarget[mapping.TargetModel], mapping.SourceModel)
+	}
+	if len(sourcesByTarget) == 0 {
+		return apiModels
+	}
+	mapped := make([]dto.OpenAIModels, 0, len(apiModels))
+	seen := make(map[string]struct{}, len(apiModels))
+	for _, apiModel := range apiModels {
+		sources, isTarget := sourcesByTarget[apiModel.Id]
+		if !isTarget {
+			sources = []string{apiModel.Id}
+		}
+		for _, source := range sources {
+			if _, duplicate := seen[source]; duplicate {
+				continue
+			}
+			seen[source] = struct{}{}
+			item := apiModel
+			item.Id = source
+			mapped = append(mapped, item)
+		}
+	}
+	return mapped
+}
+
 type modelListGroups struct {
 	userGroup   string
 	tokenGroup  string
@@ -293,22 +333,6 @@ func ListModels(c *gin.Context, modelType int) {
 		userModelNames = append(userModelNames, modelName)
 	}
 
-	// Apply token model mappings if present
-	mappings, hasMappings := common.GetContextKey(c, constant.ContextKeyTokenModelMappings)
-	if hasMappings {
-		if tokenMappings, ok := mappings.([]setting.TokenModelMapping); ok && len(tokenMappings) > 0 {
-			mappingIndex := make(map[string]string, len(tokenMappings))
-			for _, m := range tokenMappings {
-				mappingIndex[m.SourceModel] = m.TargetModel
-			}
-			for i, modelName := range userModelNames {
-				if targetModel, mapped := mappingIndex[modelName]; mapped {
-					userModelNames[i] = targetModel
-				}
-			}
-		}
-	}
-
 	ownerByModel := map[string]string{}
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
@@ -316,6 +340,9 @@ func ListModels(c *gin.Context, modelType int) {
 	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
 	for _, modelName := range userModelNames {
 		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
+	}
+	if tokenMappings, ok := common.GetContextKeyType[[]setting.TokenModelMapping](c, constant.ContextKeyTokenModelMappings); ok {
+		userOpenAiModels = applyTokenModelMappings(userOpenAiModels, tokenMappings)
 	}
 
 	switch modelType {
