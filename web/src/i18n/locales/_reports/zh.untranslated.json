@@ -1,0 +1,7 @@
+{
+  "Client Category library": "SDK / 库",
+  "Copy User-Agent": "复制 User-Agent",
+  "Raw User-Agent": "原始 User-Agent",
+  "This is the User-Agent received by this gateway. Upstream proxies may have modified it.": "这是本网关收到的 User-Agent，更上游的代理可能已修改过该值。",
+  "View client details of {{name}}": "查看 {{name}} 的客户端详情"
+}

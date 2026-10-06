@@ -535,6 +535,14 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, tokenGroup)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
+	if token.ModelMappings != "" {
+		mappings, err := token.GetModelMappings()
+		if err != nil {
+			common.SysError(fmt.Sprintf("failed to parse model mappings for token %d: %v", token.Id, err))
+		} else if len(mappings) > 0 {
+			common.SetContextKey(c, constant.ContextKeyTokenModelMappings, mappings)
+		}
+	}
 	if tokenGroup == "auto" && token.AutoGroups != "" {
 		autoGroups, err := token.GetAutoGroups()
 		if err != nil {

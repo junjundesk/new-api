@@ -18,7 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  ChevronDown,
+  KeyRound,
+  Settings2,
+  WalletCards,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +78,7 @@ import {
   updateApiKey,
   getApiKey,
   getTokenAutoGroups,
+  getTokenModelMappingOptions,
 } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -81,7 +88,12 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
+import {
+  getModelMappingIssueMessage,
+  getModelMappingIssues,
+} from '../lib/model-mapping'
 import type { ApiKey } from '../types'
+import { ApiKeyModelMappingSection } from './api-key-model-mapping-section'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -261,6 +273,13 @@ export function ApiKeysMutateDrawer({
   const isFormInitialized = initializedTarget === formTarget
   const selectedGroup = form.watch('group')
 
+  const mappingOptionsQuery = useQuery({
+    queryKey: ['token-model-mapping-options', selectedGroup || ''],
+    queryFn: () => getTokenModelMappingOptions(selectedGroup || ''),
+    enabled: open,
+    staleTime: 0,
+  })
+
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
     if (groups.length === 0) return
@@ -280,6 +299,29 @@ export function ApiKeysMutateDrawer({
   }, [groups, form, selectedGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
+    if (data.model_mappings.length > 0) {
+      if (
+        !mappingOptionsQuery.data ||
+        mappingOptionsQuery.isFetching ||
+        mappingOptionsQuery.isError
+      ) {
+        toast.error(t('Load available target models before saving mappings'))
+        return
+      }
+      const issues = getModelMappingIssues(
+        data.model_mappings,
+        mappingOptionsQuery.data.models
+      )
+      for (const issue of issues) {
+        form.setError(`model_mappings.${issue.index}.${issue.field}`, {
+          message: getModelMappingIssueMessage(issue, t),
+        })
+      }
+      if (issues.length > 0) {
+        toast.error(t('Please fix the highlighted fields before saving'))
+        return
+      }
+    }
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
@@ -601,6 +643,37 @@ export function ApiKeysMutateDrawer({
                   )}
                 />
               )}
+            </SideDrawerSection>
+
+            <SideDrawerSection>
+              <SideDrawerSectionHeader
+                title={t('Model mapping')}
+                description={t(
+                  'Use a different model for specific client model names'
+                )}
+                icon={<ArrowRightLeft className='size-4' />}
+              />
+              <FormField
+                control={form.control}
+                name='model_mappings'
+                render={({ field }) => (
+                  <FormItem>
+                    <ApiKeyModelMappingSection
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={mappingOptionsQuery.data}
+                      loading={mappingOptionsQuery.isFetching}
+                      failed={mappingOptionsQuery.isError}
+                      onRetry={() => {
+                        void mappingOptionsQuery.refetch()
+                      }}
+                      disabled={isSubmitting}
+                      showValidation={form.formState.submitCount > 0}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </SideDrawerSection>
 
             <SideDrawerSection>

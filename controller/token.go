@@ -34,7 +34,8 @@ func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 
 type tokenRequest struct {
 	model.Token
-	AutoGroups tokenAutoGroupsInput `json:"auto_groups"`
+	AutoGroups    tokenAutoGroupsInput         `json:"auto_groups"`
+	ModelMappings *[]setting.TokenModelMapping `json:"model_mappings"`
 }
 
 var validTokenNamePattern = regexp.MustCompile(`^[\p{L}\p{N} _\-\.\(\)\[\]@#+]{1,50}$`)
@@ -49,8 +50,9 @@ func normalizeTokenName(name string) (string, bool) {
 
 type tokenResponse struct {
 	*model.Token
-	AutoGroups     []string `json:"auto_groups"`
-	TodayUsedQuota int64    `json:"today_used_quota"`
+	AutoGroups     []string                    `json:"auto_groups"`
+	ModelMappings  []setting.TokenModelMapping `json:"model_mappings"`
+	TodayUsedQuota int64                       `json:"today_used_quota"`
 }
 
 func buildMaskedTokenResponseWithUsage(token *model.Token, todayUsedQuota int64) *tokenResponse {
@@ -67,9 +69,17 @@ func buildMaskedTokenResponseWithUsage(token *model.Token, todayUsedQuota int64)
 	if len(autoGroups) == 0 {
 		autoGroups = nil
 	}
+	modelMappings, err := token.GetModelMappings()
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to parse model mappings for token %d: %v", token.Id, err))
+	}
+	if modelMappings == nil {
+		modelMappings = []setting.TokenModelMapping{}
+	}
 	return &tokenResponse{
 		Token:          &maskedToken,
 		AutoGroups:     autoGroups,
+		ModelMappings:  modelMappings,
 		TodayUsedQuota: todayUsedQuota,
 	}
 }
@@ -189,6 +199,114 @@ func validateTokenChannelChain(c *gin.Context, token *model.Token) bool {
 	token.CrossGroupRetry = false
 	_ = token.SetAutoGroups(nil)
 	return true
+}
+
+// getTokenGroupModels resolves the models a key can reach through its group,
+// auto group list or group chain. Mapping targets must come from this set.
+func getTokenGroupModels(c *gin.Context, tokenGroup string, autoGroups []string) ([]string, error) {
+	userGroup, err := getTokenRequestUserGroup(c)
+	if err != nil {
+		return nil, err
+	}
+	var groups []string
+	switch {
+	case tokenGroup == "":
+		groups = []string{userGroup}
+	case tokenGroup == "auto":
+		if len(autoGroups) > 0 {
+			groups = service.FilterUserTokenAutoGroups(userGroup, autoGroups)
+		} else {
+			groups = service.GetUserAutoGroup(userGroup)
+		}
+	case strings.HasPrefix(tokenGroup, "chain:"):
+		chainId, ok := model.ParseUserChannelChain(tokenGroup)
+		if !ok {
+			return nil, fmt.Errorf("invalid group chain")
+		}
+		chain, err := model.GetUserChannelChain(c.GetInt("id"), chainId)
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range chain.GetGroupList() {
+			if service.GroupInUserUsableGroups(userGroup, group) {
+				groups = append(groups, group)
+			}
+		}
+	default:
+		if service.GroupInUserUsableGroups(userGroup, tokenGroup) {
+			groups = []string{tokenGroup}
+		}
+	}
+	return service.GetGroupsEnabledModels(groups), nil
+}
+
+func setTokenModelMappings(c *gin.Context, token *model.Token, mappings []setting.TokenModelMapping) bool {
+	normalized, err := setting.NormalizeTokenModelMappings(mappings)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	if len(normalized) > 0 {
+		autoGroups, _ := token.GetAutoGroups()
+		available, err := getTokenGroupModels(c, token.Group, autoGroups)
+		if err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		availableSet := make(map[string]struct{}, len(available))
+		for _, name := range available {
+			availableSet[name] = struct{}{}
+		}
+		for _, mapping := range normalized {
+			if _, ok := availableSet[mapping.TargetModel]; !ok {
+				common.ApiError(c, fmt.Errorf("target model %s is unavailable in the selected group", mapping.TargetModel))
+				return false
+			}
+		}
+	}
+	if err := token.SetModelMappings(normalized); err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	return true
+}
+
+func GetTokenModelMappingOptions(c *gin.Context) {
+	group := c.Query("group")
+	var autoGroups []string
+	if group == "auto" {
+		if tokenId, err := strconv.Atoi(c.Query("token_id")); err == nil && tokenId > 0 {
+			if token, err := model.GetTokenByIds(tokenId, c.GetInt("id")); err == nil {
+				autoGroups, _ = token.GetAutoGroups()
+			}
+		}
+	}
+	models, err := getTokenGroupModels(c, group, autoGroups)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	modelSet := make(map[string]struct{}, len(models))
+	for _, name := range models {
+		modelSet[name] = struct{}{}
+	}
+	presets := make([]setting.TokenModelMappingPreset, 0)
+	for _, preset := range setting.GetTokenModelMappingPresetsCopy() {
+		available := true
+		for _, mapping := range preset.Mappings {
+			if _, ok := modelSet[mapping.TargetModel]; !ok {
+				available = false
+				break
+			}
+		}
+		if available {
+			presets = append(presets, preset)
+		}
+	}
+	common.ApiSuccess(c, gin.H{
+		"models":  models,
+		"presets": presets,
+	})
 }
 
 func GetAllTokens(c *gin.Context) {
@@ -414,6 +532,11 @@ func AddToken(c *gin.Context) {
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
 	}
+	if request.ModelMappings != nil {
+		if !setTokenModelMappings(c, &cleanToken, *request.ModelMappings) {
+			return
+		}
+	}
 	err = cleanToken.Insert()
 	if err != nil {
 		common.ApiError(c, err)
@@ -524,6 +647,11 @@ func UpdateToken(c *gin.Context) {
 			}
 		} else if request.AutoGroups.Set {
 			if !setTokenAutoGroups(c, cleanToken, request.AutoGroups.Groups) {
+				return
+			}
+		}
+		if request.ModelMappings != nil {
+			if !setTokenModelMappings(c, cleanToken, *request.ModelMappings) {
 				return
 			}
 		}

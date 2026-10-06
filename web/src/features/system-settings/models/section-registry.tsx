@@ -25,6 +25,7 @@ import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
+import { TokenModelMappingPresetsCard } from './token-model-mapping-presets-card'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -62,6 +63,15 @@ const MODELS_SECTIONS = [
               settings['general_setting.ping_interval_seconds'],
           },
         }}
+      />
+    ),
+  },
+  {
+    id: 'model-mapping-presets',
+    titleKey: 'API Key Model Mapping Presets',
+    build: (settings: ModelSettings) => (
+      <TokenModelMappingPresetsCard
+        value={settings.TokenModelMappingPresets ?? '[]'}
       />
     ),
   },

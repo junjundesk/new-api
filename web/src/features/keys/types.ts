@@ -19,6 +19,35 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 
 // ============================================================================
+// Model Mapping Schema & Types
+// ============================================================================
+
+export const tokenModelMappingSchema = z.object({
+  source_model: z.string(),
+  target_model: z.string(),
+  reasoning_effort: z.string().optional(),
+})
+
+export type TokenModelMapping = z.infer<typeof tokenModelMappingSchema>
+
+export const tokenModelMappingPresetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  recommended: z.boolean(),
+  mappings: z.array(tokenModelMappingSchema),
+})
+
+export type TokenModelMappingPreset = z.infer<
+  typeof tokenModelMappingPresetSchema
+>
+
+export interface TokenModelMappingOptions {
+  models: string[]
+  presets: TokenModelMappingPreset[]
+}
+
+// ============================================================================
 // API Key Schema & Types
 // ============================================================================
 
@@ -47,6 +76,7 @@ export const apiKeySchema = z.object({
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
+  model_mappings: z.array(tokenModelMappingSchema).nullish().default([]),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
@@ -95,6 +125,7 @@ export interface ApiKeyFormData {
   group: string
   auto_groups: string[]
   cross_group_retry: boolean
+  model_mappings: TokenModelMapping[]
 }
 
 export interface TokenAutoGroupsConfig {

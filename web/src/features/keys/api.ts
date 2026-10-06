@@ -29,6 +29,7 @@ import type {
   ChannelChain,
   ChannelChainsResponse,
   ChannelChainInput,
+  TokenModelMappingOptions,
 } from './types'
 
 // ============================================================================
@@ -70,6 +71,19 @@ export async function getTokenAutoGroups(): Promise<
 > {
   const res = await api.get('/api/token/auto-groups')
   return res.data
+}
+
+// Get the mapping targets and admin presets available to a key group.
+export async function getTokenModelMappingOptions(
+  group: string
+): Promise<TokenModelMappingOptions> {
+  const res = await api.get('/api/token/model-mapping/options', {
+    params: { group },
+  })
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.message || 'Failed to load available models')
+  }
+  return res.data.data
 }
 
 // Get the current user's channel chains.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
@@ -30,7 +31,32 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
+	ModelMappings      string         `json:"-" gorm:"type:text"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+func (token *Token) GetModelMappings() ([]setting.TokenModelMapping, error) {
+	if token.ModelMappings == "" {
+		return nil, nil
+	}
+	var mappings []setting.TokenModelMapping
+	if err := common.UnmarshalJsonStr(token.ModelMappings, &mappings); err != nil {
+		return nil, err
+	}
+	return mappings, nil
+}
+
+func (token *Token) SetModelMappings(mappings []setting.TokenModelMapping) error {
+	if len(mappings) == 0 {
+		token.ModelMappings = ""
+		return nil
+	}
+	data, err := common.Marshal(mappings)
+	if err != nil {
+		return err
+	}
+	token.ModelMappings = string(data)
+	return nil
 }
 
 // GetTokenTodayUsedQuota returns today's consumed quota for the supplied
@@ -349,7 +375,7 @@ func (token *Token) Insert() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() (err error) {
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups", "model_mappings").Updates(token).Error
 	if shouldUpdateRedis(true, err) {
 		if cacheErr := cacheSetToken(*token); cacheErr != nil {
 			common.SysLog("failed to update token cache: " + cacheErr.Error())
