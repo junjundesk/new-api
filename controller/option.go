@@ -227,6 +227,18 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "CustomCallbackAddress":
+		// 回调地址会被拼进易支付 return_url/notify_url，只允许站点 origin，
+		// 拒绝 path、query 与 fragment，避免把用户可控参数带进支付回调。
+		if strings.TrimSpace(option.Value.(string)) != "" {
+			if _, err = common.NormalizeOrigin(option.Value.(string)); err != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": "回调地址只能填写站点域名，例如 https://api.example.com，不能包含路径或查询参数",
+				})
+				return
+			}
+		}
 	case "GroupRatio":
 		err = ratio_setting.CheckGroupRatio(option.Value.(string))
 		if err != nil {

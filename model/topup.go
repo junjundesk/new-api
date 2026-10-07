@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -47,7 +48,20 @@ var (
 	ErrTopUpStatusInvalid      = errors.New("topup status invalid")
 	ErrInvalidTopUpQuota       = errors.New("invalid top-up quota")
 	ErrTopUpQuotaLimitExceeded = errors.New("top-up quota limit exceeded")
+	ErrTopUpMoneyMismatch      = errors.New("top-up money mismatch")
 )
+
+// epayMoneyMatches reports whether a callback money string equals the locally
+// recorded order amount. The callback value is attacker-reachable once a
+// signature leaks, so an unparsable or differing amount must reject the
+// callback rather than be ignored.
+func epayMoneyMatches(expectedMoney string, storedMoney float64) bool {
+	expected, err := decimal.NewFromString(strings.TrimSpace(expectedMoney))
+	if err != nil {
+		return false
+	}
+	return expected.Equal(decimal.NewFromFloat(storedMoney).Round(2))
+}
 
 func (topUp *TopUp) Insert() error {
 	var err error
@@ -172,8 +186,9 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 // RechargeEpay 原子完成易支付订单：订单行锁、状态校验、成功更新与用户额度增加
 // 在同一个事务内完成，因此同一订单的并发/重复回调（包括多实例部署下）最多充值一次。
 // alreadyDone=true 表示订单此前已完成，本次为幂等重复回调。
+// callbackMoney 为回调声明的支付金额，必须与本地订单金额一致，否则拒绝入账。
 // 进程内的 LockOrder 只是优化，正确性由本函数的数据库行锁保证。
-func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
+func RechargeEpay(tradeNo string, actualPaymentMethod string, callbackMoney string, callerIp string) (alreadyDone bool, err error) {
 	if tradeNo == "" {
 		return false, errors.New("未提供支付单号")
 	}
@@ -198,6 +213,9 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 		}
 		if topUp.Status != common.TopUpStatusPending {
 			return ErrTopUpStatusInvalid
+		}
+		if !epayMoneyMatches(callbackMoney, topUp.Money) {
+			return ErrTopUpMoneyMismatch
 		}
 		if actualPaymentMethod != "" && topUp.PaymentMethod != actualPaymentMethod {
 			topUp.PaymentMethod = actualPaymentMethod
