@@ -161,7 +161,6 @@
     "active users": "活跃用户",
     "Actual Amount": "实付金额",
     "Actual Model": "实际模型",
-    "Actual Model:": "实际模型：",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "将带 `-thinking` 后缀的请求适配为 Anthropic 原生思考请求，并保持计费可预测。",
     "Add": "添加",
     "Add \"{{value}}\"": "添加 \"{{value}}\"",
@@ -3965,7 +3964,6 @@
     "Request ID": "请求 ID",
     "Request Limits": "请求限制",
     "Request Model": "请求模型",
-    "Request Model:": "请求模型：",
     "Request overrides, routing behavior, and upstream model automation": "请求覆盖、路由行为和上游模型自动化",
     "Request retry": "请求重试",
     "Request rule pricing": "请求规则计费",
@@ -5554,6 +5552,8 @@
     "Add Fallback Model": "添加备用模型",
     "Remove model": "移除模型",
     "When the first model is unavailable, the request automatically retries the same channel with the next model in order.": "当第一个模型不可用时，会自动在同一渠道内按顺序尝试下一个模型。",
+    "Mapped": "已映射",
+    "This channel maps the requested model to the upstream model.": "该渠道把请求的模型映射为以下上游模型。",
     "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models.": "模板中的源模型名仅为示例。请核对客户端真实发送的模型名，再从已启用模型中选择目标。"
   }
 }

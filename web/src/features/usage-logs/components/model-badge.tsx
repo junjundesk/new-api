@@ -16,15 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Route } from 'lucide-react'
+import { ArrowRight, Route } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -153,6 +153,12 @@ function ModelBadgeContent(props: ModelBadgeProps) {
   )
 }
 
+/**
+ * Renders the model a request asked for, plus a conversion flag when the
+ * selected channel rewrote it. The upstream model the request was actually sent
+ * with stays behind the flag and is revealed on hover, focus or tap, so an
+ * enabled model mapping is discoverable without widening the column.
+ */
 export function ModelBadge(props: ModelBadgeProps) {
   const { t } = useTranslation()
 
@@ -160,36 +166,78 @@ export function ModelBadge(props: ModelBadgeProps) {
     return <ModelBadgeContent {...props} />
   }
 
+  const actualProvider = resolveModelProvider(props.actualModel)
+
   return (
-    <Popover>
-      <PopoverTrigger
+    <HoverCard>
+      <HoverCardTrigger
+        delay={100}
+        closeDelay={80}
         render={
-          <button type='button' className='inline-flex items-center gap-1' />
+          <button
+            type='button'
+            aria-haspopup='dialog'
+            aria-label={t('Mapped')}
+            data-log-model-mapped
+            className='focus-visible:ring-ring inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md outline-none focus-visible:ring-2'
+            onClick={(e) => e.stopPropagation()}
+          />
         }
       >
         <ModelBadgeContent {...props} />
-        <Route className='text-muted-foreground size-3 shrink-0' />
-      </PopoverTrigger>
-      <PopoverContent className='w-72'>
-        <div className='space-y-2'>
-          <div className='flex items-start justify-between gap-3'>
-            <span className='text-muted-foreground text-xs'>
-              {t('Request Model:')}
+        <Route
+          className='text-info size-3.5 shrink-0'
+          aria-hidden='true'
+          data-log-model-mapped-flag
+        />
+      </HoverCardTrigger>
+      <HoverCardContent
+        side='top'
+        align='start'
+        className='w-80'
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'This channel maps the requested model to the upstream model.'
+          )}
+        </p>
+        <div className='mt-2 flex flex-col gap-2'>
+          <div className='flex items-center gap-2'>
+            <span className='text-muted-foreground w-20 shrink-0 text-xs'>
+              {t('Request Model')}
             </span>
-            <span className='truncate font-mono text-xs font-medium'>
-              {props.modelName}
+            <span className='flex min-w-0 flex-1 items-center gap-1.5'>
+              <span className='truncate font-mono text-xs font-medium'>
+                {props.modelName}
+              </span>
             </span>
           </div>
-          <div className='flex items-start justify-between gap-3'>
-            <span className='text-muted-foreground text-xs'>
-              {t('Actual Model:')}
+          <div className='flex items-center gap-2'>
+            <span className='text-muted-foreground w-20 shrink-0 text-xs'>
+              {t('Actual Model')}
             </span>
-            <span className='truncate font-mono text-xs font-medium'>
-              {props.actualModel}
+            <span className='flex min-w-0 flex-1 items-center gap-1.5'>
+              <ArrowRight
+                className='text-muted-foreground size-3 shrink-0'
+                aria-hidden='true'
+              />
+              {actualProvider && (
+                <span
+                  className='flex h-4 w-4 shrink-0 items-center justify-center'
+                  title={actualProvider.label}
+                  aria-label={actualProvider.label}
+                >
+                  {getLobeIcon(actualProvider.icon, 16)}
+                </span>
+              )}
+              <span className='truncate font-mono text-xs font-medium'>
+                {props.actualModel}
+              </span>
             </span>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      </HoverCardContent>
+    </HoverCard>
   )
 }

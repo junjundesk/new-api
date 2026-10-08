@@ -131,6 +131,7 @@ function DetailSection(props: {
   icon?: React.ReactNode
   iconTone?: IconBadgeTone
   label: string
+  badge?: React.ReactNode
   variant?: 'default' | 'danger'
   children: React.ReactNode
 }) {
@@ -150,6 +151,7 @@ function DetailSection(props: {
           </IconBadge>
         )}
         {props.label}
+        {props.badge}
       </Label>
       <div
         className={cn(
@@ -1050,7 +1052,17 @@ export function DetailsDialog(props: DetailsDialogProps) {
 
         {/* Model mapping */}
         {other?.is_model_mapped && other?.upstream_model_name && (
-          <DetailSection label={t('Model Mapping')}>
+          <DetailSection
+            label={t('Model Mapping')}
+            badge={
+              <StatusBadge
+                label={t('Mapped')}
+                variant='info'
+                size='sm'
+                copyable={false}
+              />
+            }
+          >
             <DetailRow
               label={t('Request Model')}
               value={props.log.model_name}

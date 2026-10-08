@@ -161,7 +161,6 @@
     "active users": "active users",
     "Actual Amount": "Actual Amount",
     "Actual Model": "Actual Model",
-    "Actual Model:": "Actual Model:",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.",
     "Add": "Add",
     "Add \"{{value}}\"": "Add \"{{value}}\"",
@@ -3965,7 +3964,6 @@
     "Request ID": "Request ID",
     "Request Limits": "Request Limits",
     "Request Model": "Request Model",
-    "Request Model:": "Request Model:",
     "Request overrides, routing behavior, and upstream model automation": "Request overrides, routing behavior, and upstream model automation",
     "Request retry": "Request retry",
     "Request rule pricing": "Request rule pricing",
@@ -5554,6 +5552,8 @@
     "Add Fallback Model": "Add Fallback Model",
     "Remove model": "Remove model",
     "When the first model is unavailable, the request automatically retries the same channel with the next model in order.": "When the first model is unavailable, the request automatically retries the same channel with the next model in order.",
+    "Mapped": "Mapped",
+    "This channel maps the requested model to the upstream model.": "This channel maps the requested model to the upstream model.",
     "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models.": "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models."
   }
 }
