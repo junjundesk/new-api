@@ -71,8 +71,12 @@ func resolveMappedModel(info *common.RelayInfo, modelMap model.ChannelModelMappi
 		mappedModel := candidates[0]
 		if visitedModels[mappedModel] {
 			if mappedModel == currentModel {
-				// 自映射不是映射，保持原模型名
-				return "", false, nil
+				// 链尾自映射（a -> b -> b）是合法终点，保留链尾模型；
+				// 只有首个模型自映射（a -> a）才视为未配置映射。
+				if currentModel == info.OriginModelName {
+					return "", false, nil
+				}
+				return currentModel, true, nil
 			}
 			return "", false, errors.New("model_mapping_contains_cycle")
 		}

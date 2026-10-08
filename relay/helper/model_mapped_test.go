@@ -53,6 +53,21 @@ func TestModelMappedHelperSelfMappingIsNotMapped(t *testing.T) {
 	assert.Equal(t, "client-model", request.Model)
 }
 
+func TestModelMappedHelperKeepsTailOfChainEndingInSelfMapping(t *testing.T) {
+	// a -> b -> b 是合法链，链尾 b 即为上游模型
+	c := newMappingTestContext(t, `{"client-model":"upstream-alias","upstream-alias":"upstream-alias"}`)
+	request := newMappingTestRequest("client-model")
+	info := &common.RelayInfo{
+		ChannelMeta:     &common.ChannelMeta{UpstreamModelName: "client-model"},
+		OriginModelName: "client-model",
+	}
+
+	require.NoError(t, ModelMappedHelper(c, info, request))
+	assert.True(t, info.IsModelMapped)
+	assert.Equal(t, "upstream-alias", info.UpstreamModelName)
+	assert.Equal(t, "upstream-alias", request.Model)
+}
+
 func TestModelMappedHelperDetectsCycle(t *testing.T) {
 	c := newMappingTestContext(t, `{"a":"b","b":"a"}`)
 	request := newMappingTestRequest("a")
