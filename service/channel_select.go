@@ -24,8 +24,19 @@ type RetryParam struct {
 	PinnedChannel *model.Channel
 }
 
-// SetPinnedChannel binds the next attempt to the given channel.
+// SetPinnedChannel binds the next attempt to the given channel. The stored
+// channel is resolved from the cache so the retried attempt has its base URL,
+// key and model mapping available: the relay may pass a channel synthesized
+// from the request context, which carries only the identity fields.
 func (p *RetryParam) SetPinnedChannel(channel *model.Channel) {
+	if channel == nil {
+		p.PinnedChannel = nil
+		return
+	}
+	if cached, err := model.CacheGetChannel(channel.Id); err == nil && cached != nil {
+		p.PinnedChannel = cached
+		return
+	}
 	p.PinnedChannel = channel
 }
 

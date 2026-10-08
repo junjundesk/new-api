@@ -5546,11 +5546,14 @@
     "Recommend this preset": "推荐此预设",
     "Add preset": "添加预设",
     "Use Codex / Luna template": "使用 Codex / Luna 模板",
-    "Add several replacement models to try them in order when the upstream reports the previous one as unavailable.": "可添加多个替换模型：当前一个模型上游返回不可用时，会按顺序尝试下一个。",
     "Model mapping must be a JSON object whose values are model names or arrays of model names": "模型映射必须是 JSON 对象，其值为模型名称或模型名称数组",
     "Model mapping values must be a model name or an array of model names": "模型映射的值必须是模型名称或模型名称数组",
     "Model names must not contain spaces": "模型名称不能包含空格",
     "Use at most {{count}} candidate models per source": "每个源模型最多配置 {{count}} 个候选模型",
+    "{{count}} models, tried in order": "{{count}} 个模型，按顺序尝试",
+    "Add Fallback Model": "添加备用模型",
+    "Remove model": "移除模型",
+    "When the first model is unavailable, the request automatically retries the same channel with the next model in order.": "当第一个模型不可用时，会自动在同一渠道内按顺序尝试下一个模型。",
     "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models.": "模板中的源模型名仅为示例。请核对客户端真实发送的模型名，再从已启用模型中选择目标。"
   }
 }

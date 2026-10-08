@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Code, Plus, Table, Trash2 } from 'lucide-react'
+import { ArrowRight, Code, Plus, Table, Trash2, X } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
-import { TagInput } from '@/components/tag-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -76,11 +76,13 @@ function normalizeCandidateList(value: unknown): string[] | null {
 export function ModelMappingEditor(props: ModelMappingEditorProps) {
   const { t } = useTranslation()
   const sourceListId = useId()
+  const targetListId = useId()
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<MappingRow[]>([])
   const [jsonValue, setJsonValue] = useState(props.value)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const nextRowIdRef = useRef(0)
+  const lastEmittedJsonRef = useRef<string | null>(null)
   const duplicateSources = useMemo(() => getDuplicateSources(rows), [rows])
 
   const createRowId = () => {
@@ -148,8 +150,14 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     }
   }
 
-  // Parse JSON to rows when value changes externally
+  // Parse JSON to rows when value changes externally. Values this component
+  // just emitted are ignored: re-parsing them would rebuild the rows from JSON,
+  // which cannot carry an empty candidate slot and would collapse rows the user
+  // is still filling in.
   useEffect(() => {
+    if (props.value === lastEmittedJsonRef.current) {
+      return
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJsonValue(props.value)
     parseJsonToRows(props.value)
@@ -180,6 +188,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     if (duplicates.length > 0) {
       setJsonError(t('Duplicate source model mappings are not allowed'))
       setJsonValue(DUPLICATE_MAPPING_SENTINEL)
+      lastEmittedJsonRef.current = DUPLICATE_MAPPING_SENTINEL
       props.onChange(DUPLICATE_MAPPING_SENTINEL)
       return
     }
@@ -187,6 +196,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     const json = convertRowsToJson(updatedRows)
     setJsonError(null)
     setJsonValue(json)
+    lastEmittedJsonRef.current = json
     props.onChange(json)
   }
 
@@ -210,15 +220,36 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     syncRows(updatedRows)
   }
 
-  const handleCandidatesChange = (id: string, tos: string[]) => {
+  const handleCandidateChange = (id: string, index: number, value: string) => {
+    const updatedRows = rows.map((row) => {
+      if (row.id !== id) return row
+      const tos = [...row.tos]
+      tos[index] = value
+      return { ...row, tos }
+    })
+    syncRows(updatedRows)
+  }
+
+  const handleAddCandidate = (id: string) => {
     const updatedRows = rows.map((row) =>
-      row.id === id ? { ...row, tos } : row
+      row.id === id ? { ...row, tos: [...row.tos, ''] } : row
     )
+    syncRows(updatedRows)
+  }
+
+  const handleRemoveCandidate = (id: string, index: number) => {
+    const updatedRows = rows.map((row) => {
+      if (row.id !== id) return row
+      const tos = row.tos.filter((_, itemIndex) => itemIndex !== index)
+      // 至少要保留一个输入框，清空最后一个候选等同于取消该映射
+      return { ...row, tos: tos.length > 0 ? tos : [''] }
+    })
     syncRows(updatedRows)
   }
 
   const handleJsonChange = (newJson: string) => {
     setJsonValue(newJson)
+    lastEmittedJsonRef.current = newJson
     props.onChange(newJson)
     parseJsonToRows(newJson)
   }
@@ -236,6 +267,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       2
     )
     setJsonValue(template)
+    lastEmittedJsonRef.current = template
     props.onChange(template)
     parseJsonToRows(template)
   }
@@ -247,6 +279,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       if (duplicates.length === 0) {
         const json = convertRowsToJson(rows)
         setJsonValue(json)
+        lastEmittedJsonRef.current = json
         props.onChange(json)
       }
       setMode('json')
@@ -318,49 +351,113 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           </Alert>
         )}
 
-        <TabsContent value='visual' className='space-y-2'>
+        <TabsContent value='visual' className='space-y-3'>
           {rows.length > 0 ? (
-            <div className='space-y-2'>
-              <div className='grid grid-cols-[1fr_1.4fr_auto] gap-2 text-sm font-medium'>
-                <div>{t('Original Model')}</div>
-                <div>{t('Replacement Model')}</div>
-                <div className='w-10'></div>
-              </div>
-              {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className='grid grid-cols-[1fr_1.4fr_auto] items-start gap-2'
-                >
-                  <Input
-                    value={row.from}
-                    onChange={(e) => handleSourceChange(row.id, e.target.value)}
-                    placeholder='gpt-3.5-turbo'
-                    disabled={props.disabled}
-                    list={sourceListId}
-                  />
-                  <TagInput
-                    value={row.tos}
-                    onChange={(tos) => handleCandidatesChange(row.id, tos)}
-                    placeholder='gpt-3.5-turbo-0125'
-                    disabled={props.disabled}
-                    suggestions={props.targetModelOptions}
-                  />
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='icon'
-                    onClick={() => handleDeleteRow(row.id)}
-                    disabled={props.disabled}
-                    className='h-10 w-10'
-                    aria-label={t('Delete mapping')}
+            <div className='space-y-3'>
+              {rows.map((row) => {
+                const candidates = row.tos.length > 0 ? row.tos : ['']
+                const atCandidateLimit =
+                  candidates.filter((item) => item.trim()).length >=
+                  MAX_CANDIDATE_MODELS_PER_SOURCE
+                return (
+                  <div
+                    key={row.id}
+                    className='bg-muted/30 space-y-2 rounded-lg border p-3'
                   >
-                    <Trash2 className='h-4 w-4' aria-hidden='true' />
-                  </Button>
-                </div>
-              ))}
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        value={row.from}
+                        onChange={(e) =>
+                          handleSourceChange(row.id, e.target.value)
+                        }
+                        placeholder={t('Original Model')}
+                        disabled={props.disabled}
+                        list={sourceListId}
+                        className='max-w-xs'
+                        aria-label={t('Original Model')}
+                      />
+                      <ArrowRight
+                        className='text-muted-foreground h-4 w-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                      <span className='text-muted-foreground text-xs'>
+                        {candidates.filter((item) => item.trim()).length > 1
+                          ? t('{{count}} models, tried in order', {
+                              count: candidates.filter((item) => item.trim())
+                                .length,
+                            })
+                          : t('Replacement Model')}
+                      </span>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        onClick={() => handleDeleteRow(row.id)}
+                        disabled={props.disabled}
+                        className='ml-auto h-8 w-8'
+                        aria-label={t('Delete mapping')}
+                      >
+                        <Trash2 className='h-4 w-4' aria-hidden='true' />
+                      </Button>
+                    </div>
+
+                    <div className='space-y-2'>
+                      {candidates.map((candidate, index) => (
+                        <div
+                          key={`${row.id}-${index}`}
+                          className='flex items-center gap-2'
+                        >
+                          <Badge
+                            variant={index === 0 ? 'default' : 'secondary'}
+                            className='w-6 shrink-0 justify-center px-0 tabular-nums'
+                          >
+                            {index + 1}
+                          </Badge>
+                          <Input
+                            value={candidate}
+                            onChange={(e) =>
+                              handleCandidateChange(
+                                row.id,
+                                index,
+                                e.target.value
+                              )
+                            }
+                            placeholder='gpt-3.5-turbo-0125'
+                            disabled={props.disabled}
+                            list={targetListId}
+                            aria-label={t('Replacement Model')}
+                          />
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => handleRemoveCandidate(row.id, index)}
+                            disabled={props.disabled}
+                            className='h-9 w-9 shrink-0'
+                            aria-label={t('Remove model')}
+                          >
+                            <X className='h-4 w-4' aria-hidden='true' />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type='button'
+                        variant='outline'
+                        size='sm'
+                        onClick={() => handleAddCandidate(row.id)}
+                        disabled={props.disabled || atCandidateLimit}
+                        className='ml-8'
+                      >
+                        <Plus className='mr-2 h-3.5 w-3.5' />
+                        {t('Add Fallback Model')}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
               <p className='text-muted-foreground text-xs'>
                 {t(
-                  'Add several replacement models to try them in order when the upstream reports the previous one as unavailable.'
+                  'When the first model is unavailable, the request automatically retries the same channel with the next model in order.'
                 )}
               </p>
             </div>
@@ -399,6 +496,13 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       {props.sourceModelOptions && props.sourceModelOptions.length > 0 && (
         <datalist id={sourceListId}>
           {props.sourceModelOptions.map((model) => (
+            <option key={model} value={model} />
+          ))}
+        </datalist>
+      )}
+      {props.targetModelOptions && props.targetModelOptions.length > 0 && (
+        <datalist id={targetListId}>
+          {props.targetModelOptions.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>

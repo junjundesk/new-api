@@ -206,15 +206,14 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 func TestCacheGetRandomSatisfiedChannelKeepsPinnedChannel(t *testing.T) {
 	db := setupChannelSelectAutoGroupsTest(t)
 	const modelName = "pinned-channel-runtime-model"
+	baseURL := "http://upstream.example.com"
+	mapping := `{"alias-model":["candidate-a","candidate-b"]}`
 	createChannelSelectAutoGroupsChannel(t, db, 2501, "default", modelName)
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 2501).Updates(map[string]any{
+		"base_url":      baseURL,
+		"model_mapping": mapping,
+	}).Error)
 	model.InitChannelCache()
-
-	pinned := &model.Channel{
-		Id:     9999,
-		Type:   constant.ChannelTypeOpenAI,
-		Name:   "pinned-candidate-channel",
-		Status: common.ChannelStatusEnabled,
-	}
 
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -222,18 +221,30 @@ func TestCacheGetRandomSatisfiedChannelKeepsPinnedChannel(t *testing.T) {
 
 	retry := 3
 	param := &RetryParam{
-		Ctx:           ctx,
-		TokenGroup:    "default",
-		ModelName:     modelName,
-		RequestPath:   "/v1/chat/completions",
-		Retry:         &retry,
-		PinnedChannel: pinned,
+		Ctx:         ctx,
+		TokenGroup:  "default",
+		ModelName:   modelName,
+		RequestPath: "/v1/chat/completions",
+		Retry:       &retry,
 	}
+
+	// 请求上下文里的渠道只有身份字段：pin 必须解析出带地址与映射的完整渠道，
+	// 否则重试时会用空的 base URL 发往上游。
+	param.SetPinnedChannel(&model.Channel{
+		Id:     2501,
+		Type:   constant.ChannelTypeOpenAI,
+		Name:   "context-synthesized-channel",
+		Status: common.ChannelStatusEnabled,
+	})
+	require.NotNil(t, param.PinnedChannel)
+	assert.Equal(t, baseURL, param.PinnedChannel.GetBaseURL())
+	assert.Equal(t, mapping, param.PinnedChannel.GetModelMapping())
 
 	selected, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
-	assert.Same(t, pinned, selected)
+	assert.Equal(t, 2501, selected.Id)
+	assert.Equal(t, baseURL, selected.GetBaseURL())
 	assert.Equal(t, "default", selectedGroup)
 
 	param.ClearPinnedChannel()
