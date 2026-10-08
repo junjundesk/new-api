@@ -198,3 +198,47 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", selectedGroup)
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
+
+// TestCacheGetRandomSatisfiedChannelKeepsPinnedChannel covers the model
+// candidate failover path: the relay pins the current channel so the next
+// attempt tries another upstream model of the same channel instead of letting
+// the group selection pick a different one.
+func TestCacheGetRandomSatisfiedChannelKeepsPinnedChannel(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "pinned-channel-runtime-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2501, "default", modelName)
+	model.InitChannelCache()
+
+	pinned := &model.Channel{
+		Id:     9999,
+		Type:   constant.ChannelTypeOpenAI,
+		Name:   "pinned-candidate-channel",
+		Status: common.ChannelStatusEnabled,
+	}
+
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+
+	retry := 3
+	param := &RetryParam{
+		Ctx:           ctx,
+		TokenGroup:    "default",
+		ModelName:     modelName,
+		RequestPath:   "/v1/chat/completions",
+		Retry:         &retry,
+		PinnedChannel: pinned,
+	}
+
+	selected, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Same(t, pinned, selected)
+	assert.Equal(t, "default", selectedGroup)
+
+	param.ClearPinnedChannel()
+	selected, _, err = CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, 2501, selected.Id)
+}

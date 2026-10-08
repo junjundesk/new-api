@@ -524,15 +524,17 @@ func TestNormalizeChannelModelMapping(t *testing.T) {
 	modelMapping := `{
 		" alias-model ": " upstream-model ",
 		"": "invalid",
-		"invalid-target": ""
+		"invalid-target": "",
+		"multi-candidate": [" upstream-a ", "upstream-b", "upstream-a", ""]
 	}`
 	channel := &model.Channel{
 		ModelMapping: &modelMapping,
 	}
 
 	result := normalizeChannelModelMapping(channel)
-	require.Equal(t, map[string]string{
-		"alias-model": "upstream-model",
+	require.Equal(t, model.ChannelModelMapping{
+		"alias-model":     {"upstream-model"},
+		"multi-candidate": {"upstream-a", "upstream-b"},
 	}, result)
 }
 
@@ -541,13 +543,29 @@ func TestCollectPendingUpstreamModelChangesFromModels_WithModelMapping(t *testin
 		[]string{"alias-model", "gpt-4o", "stale-model"},
 		[]string{"gpt-4o", "gpt-4.1", "mapped-target"},
 		[]string{"gpt-4.1"},
-		map[string]string{
-			"alias-model": "mapped-target",
+		model.ChannelModelMapping{
+			"alias-model": {"mapped-target"},
 		},
 	)
 
 	require.Equal(t, []string{}, pendingAddModels)
 	require.Equal(t, []string{"stale-model"}, pendingRemoveModels)
+}
+
+func TestCollectPendingUpstreamModelChangesFromModels_MultiCandidateMappingCovered(t *testing.T) {
+	pendingAddModels, pendingRemoveModels := collectPendingUpstreamModelChangesFromModels(
+		[]string{"alias-model", "gpt-4o"},
+		[]string{"gpt-4o", "candidate-a", "candidate-b", "unrelated-model"},
+		nil,
+		model.ChannelModelMapping{
+			"alias-model": {"candidate-a", "candidate-b"},
+		},
+	)
+
+	// 所有候选模型都算已覆盖，只有未被覆盖的上游模型需要新增；
+	// 别名源不作为真实上游模型，不应因缺失而被移除。
+	require.Equal(t, []string{"unrelated-model"}, pendingAddModels)
+	require.Equal(t, []string{}, pendingRemoveModels)
 }
 
 func TestCollectPendingUpstreamModelChangesFromModels_WithIgnoredRegexPatterns(t *testing.T) {

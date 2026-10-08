@@ -165,6 +165,7 @@ import {
   findMissingModelsInMapping,
   validateModelMappingJson,
   hasAdvancedSettingsErrors,
+  normalizeCandidateModels,
 } from '../../lib'
 import {
   collectInvalidStatusCodeEntries,
@@ -198,7 +199,7 @@ type ChannelMutateDrawerProps = {
 
 type ModelMappingGuardrail = {
   invalidJson: boolean
-  entries: Array<{ source: string; target: string }>
+  entries: Array<{ source: string; targets: string[] }>
   missingSourceModels: string[]
   exposedTargetModels: string[]
 }
@@ -235,8 +236,8 @@ const formatModelNames = (models: string[]): string =>
 
 const MODEL_MAPPING_PREVIEW_FALLBACK: Array<{
   source: string
-  target: string
-}> = [{ source: 'client-model', target: 'upstream-model' }]
+  targets: string[]
+}> = [{ source: 'client-model', targets: ['upstream-model'] }]
 
 const ADVANCED_SETTINGS_EXPANDED_KEY = 'channel-advanced-settings-expanded'
 const CHANNEL_EDITOR_SECTION_IDS = {
@@ -1143,16 +1144,21 @@ export function ChannelMutateDrawer({
       }
 
       const entries = Object.entries(parsed).reduce<
-        Array<{ source: string; target: string }>
-      >((acc, [rawSource, rawTarget]) => {
+        Array<{ source: string; targets: string[] }>
+      >((acc, [rawSource, rawValue]) => {
         const source = String(rawSource).trim()
-        const target = String(rawTarget ?? '').trim()
-
-        if (!source || !target) {
+        const targets = normalizeCandidateModels(rawValue)
+        if (!source || targets === null) {
+          return acc
+        }
+        const trimmedTargets = targets
+          .map((target) => target.trim())
+          .filter(Boolean)
+        if (trimmedTargets.length === 0) {
           return acc
         }
 
-        acc.push({ source, target })
+        acc.push({ source, targets: trimmedTargets })
         return acc
       }, [])
 
@@ -1170,13 +1176,11 @@ export function ChannelMutateDrawer({
 
       const exposedTargetModels = [
         ...new Set(
-          entries
-            .filter(
-              (entry) =>
-                Boolean(entry.target) &&
-                currentModelsArray.includes(entry.target)
+          entries.flatMap((entry) =>
+            entry.targets.filter((target) =>
+              currentModelsArray.includes(target)
             )
-            .map((entry) => entry.target)
+          )
         ),
       ]
 
@@ -1333,29 +1337,26 @@ export function ChannelMutateDrawer({
     }
   }
 
-  const fetchChannelKey = useCallback(
-    async () => {
-      if (!channelId) {
-        throw new Error('Channel is not selected')
+  const fetchChannelKey = useCallback(async () => {
+    if (!channelId) {
+      throw new Error('Channel is not selected')
+    }
+
+    setIsChannelKeyLoading(true)
+    try {
+      const res = await getChannelKey(channelId)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to fetch channel key'))
       }
 
-      setIsChannelKeyLoading(true)
-      try {
-        const res = await getChannelKey(channelId)
-        if (!res.success) {
-          throw new Error(res.message || t('Failed to fetch channel key'))
-        }
-
-        const keyValue = res.data?.key ?? ''
-        setChannelKey(keyValue)
-        toast.success(t('Channel key unlocked'))
-        return res
-      } finally {
-        setIsChannelKeyLoading(false)
-      }
-    },
-    [channelId, t]
-  )
+      const keyValue = res.data?.key ?? ''
+      setChannelKey(keyValue)
+      toast.success(t('Channel key unlocked'))
+      return res
+    } finally {
+      setIsChannelKeyLoading(false)
+    }
+  }, [channelId, t])
 
   const handleRevealKey = useCallback(async () => {
     if (!channelId) return
@@ -3479,7 +3480,7 @@ export function ChannelMutateDrawer({
                                               {mappingPreviewPairs.map(
                                                 (pair) => (
                                                   <div
-                                                    key={`${pair.source}-${pair.target}`}
+                                                    key={`${pair.source}-${pair.targets.join('|')}`}
                                                     className='flex items-center gap-1'
                                                   >
                                                     <span>{pair.source}</span>
@@ -3487,7 +3488,9 @@ export function ChannelMutateDrawer({
                                                       className='h-3.5 w-3.5 opacity-70'
                                                       aria-hidden='true'
                                                     />
-                                                    <span>{pair.target}</span>
+                                                    <span>
+                                                      {pair.targets.join(' → ')}
+                                                    </span>
                                                   </div>
                                                 )
                                               )}

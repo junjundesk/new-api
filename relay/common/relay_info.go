@@ -75,6 +75,18 @@ type ChannelMeta struct {
 	SupportStreamOptions bool // 是否支持流式选项
 }
 
+// ModelCandidateState tracks the upstream model candidates a channel model
+// mapping resolved for this request. When the upstream reports the selected
+// model as unavailable, the relay advances Index and retries the same channel
+// with the next candidate. It lives on RelayInfo rather than ChannelMeta
+// because every attempt rebuilds ChannelMeta, while the candidate position has
+// to survive those rebuilds.
+type ModelCandidateState struct {
+	ChannelId  int
+	Index      int
+	Candidates []string
+}
+
 type TokenCountMeta struct {
 	//promptTokens int
 	estimatePromptTokens int
@@ -173,6 +185,11 @@ type RelayInfo struct {
 	BillingRequestInput   *billingexpr.RequestInput
 
 	Request dto.Request
+
+	// ModelCandidate holds the upstream model candidates selected from the
+	// channel model mapping, and how far through them this request has
+	// progressed. Nil when the channel has no usable mapping.
+	ModelCandidate *ModelCandidateState
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].

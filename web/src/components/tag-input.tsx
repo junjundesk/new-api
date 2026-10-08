@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { X } from 'lucide-react'
-import { useState, useRef, type KeyboardEvent } from 'react'
+import { useId, useState, useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,7 @@ interface TagInputProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  suggestions?: string[]
 }
 
 export function TagInput({
@@ -38,11 +39,13 @@ export function TagInput({
   placeholder,
   className,
   disabled = false,
+  suggestions,
 }: TagInputProps) {
   const { t } = useTranslation()
   const placeholderText = placeholder ?? t('Add tags...')
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const suggestionsListId = useId()
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim()
@@ -108,8 +111,18 @@ export function TagInput({
         onBlur={handleBlur}
         placeholder={value.length === 0 ? placeholderText : ''}
         disabled={disabled}
+        list={
+          suggestions && suggestions.length > 0 ? suggestionsListId : undefined
+        }
         className='placeholder:text-muted-foreground min-w-[120px] flex-1 border-0 bg-transparent shadow-none outline-none focus-visible:ring-0'
       />
+      {suggestions && suggestions.length > 0 && (
+        <datalist id={suggestionsListId}>
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      )}
     </div>
   )
 }

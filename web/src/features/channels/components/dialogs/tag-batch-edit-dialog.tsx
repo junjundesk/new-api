@@ -37,7 +37,7 @@ import {
   getAllModels,
   getGroups,
 } from '../../api'
-import { channelsQueryKeys } from '../../lib'
+import { channelsQueryKeys, validateModelMappingJson } from '../../lib'
 import type { TagOperationParams } from '../../types'
 import { useChannels } from '../channels-provider'
 import { ModelMappingEditor } from '../model-mapping-editor'
@@ -119,10 +119,9 @@ export function TagBatchEditDialog({
 
     // Validate model mapping JSON if provided
     if (modelMapping.trim()) {
-      try {
-        JSON.parse(modelMapping)
-      } catch (_error) {
-        toast.error(t('Model mapping must be valid JSON'))
+      const validation = validateModelMappingJson(modelMapping)
+      if (!validation.valid) {
+        toast.error(t(validation.error ?? 'Model mapping must be valid JSON'))
         return
       }
     }

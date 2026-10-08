@@ -21,6 +21,27 @@ For commercial licensing, please contact support@quantumnous.com
 // ============================================================================
 
 /**
+ * Upper bound for the replacement candidates of a single source model. The
+ * relay tries them in order, so the backend rejects longer lists.
+ */
+export const MAX_CANDIDATE_MODELS_PER_SOURCE = 32
+
+/**
+ * Normalize one model_mapping value into a candidate list.
+ * A single replacement is stored as a string, several as an array.
+ */
+export function normalizeCandidateModels(value: unknown): string[] | null {
+  if (typeof value === 'string') return [value]
+  if (!Array.isArray(value)) return null
+  const candidates: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') return null
+    candidates.push(item)
+  }
+  return candidates
+}
+
+/**
  * Parse models string to array
  */
 export function parseModelsString(modelsStr: string): string[] {
@@ -72,7 +93,8 @@ export function extractMappingSourceModels(modelMapping: string): string[] {
 }
 
 /**
- * Extract redirect models from model_mapping JSON
+ * Extract redirect models from model_mapping JSON.
+ * Sources with several candidates expand to every candidate.
  */
 export function extractRedirectModels(modelMapping: string): string[] {
   const mapping = modelMapping
@@ -87,7 +109,8 @@ export function extractRedirectModels(modelMapping: string): string[] {
     }
 
     const values = Object.values(parsed)
-      .map((value) => (typeof value === 'string' ? value.trim() : undefined))
+      .flatMap((value) => normalizeCandidateModels(value) ?? [])
+      .map((value) => value.trim())
       .filter((value): value is string => Boolean(value))
 
     return Array.from(new Set(values))
@@ -179,10 +202,41 @@ export function validateModelMappingJson(modelMapping: string): {
         error: 'Model mapping must be a valid JSON object',
       }
     }
-    if (Object.values(parsed).some((value) => typeof value !== 'string')) {
+    const hasInvalidValue = Object.values(parsed).some(
+      (value) => normalizeCandidateModels(value) === null
+    )
+    if (hasInvalidValue) {
       return {
         valid: false,
-        error: 'Model mapping values must be strings',
+        error:
+          'Model mapping values must be a model name or an array of model names',
+      }
+    }
+    // Blank sources and blank candidates are dropped instead of rejected, which
+    // matches how the backend normalizes the payload.
+    for (const [rawSource, value] of Object.entries(parsed)) {
+      const source = rawSource.trim()
+      const candidates = (normalizeCandidateModels(value) ?? [])
+        .map((candidate) => candidate.trim())
+        .filter(Boolean)
+      if (!source) continue
+      if (!isUsableModelName(source)) {
+        return {
+          valid: false,
+          error: 'Model names must not contain spaces',
+        }
+      }
+      if (candidates.length > MAX_CANDIDATE_MODELS_PER_SOURCE) {
+        return {
+          valid: false,
+          error: `Use at most ${MAX_CANDIDATE_MODELS_PER_SOURCE} candidate models per source`,
+        }
+      }
+      if (candidates.some((candidate) => !isUsableModelName(candidate))) {
+        return {
+          valid: false,
+          error: 'Model names must not contain spaces',
+        }
       }
     }
     return { valid: true }
@@ -192,6 +246,11 @@ export function validateModelMappingJson(modelMapping: string): {
       error: 'Model mapping must be valid JSON format',
     }
   }
+}
+
+function isUsableModelName(name: string): boolean {
+  if (name.length > 255) return false
+  return !/\s/.test(name)
 }
 
 /**

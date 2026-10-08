@@ -17,6 +17,21 @@ type RetryParam struct {
 	RequestPath  string
 	Retry        *int
 	resetNextTry bool
+	// PinnedChannel keeps the next attempt on the same channel. The relay sets
+	// it when a candidate model failed and the request should try the next
+	// upstream model of that channel before falling back to normal channel
+	// selection.
+	PinnedChannel *model.Channel
+}
+
+// SetPinnedChannel binds the next attempt to the given channel.
+func (p *RetryParam) SetPinnedChannel(channel *model.Channel) {
+	p.PinnedChannel = channel
+}
+
+// ClearPinnedChannel releases the channel binding so channel selection resumes.
+func (p *RetryParam) ClearPinnedChannel() {
+	p.PinnedChannel = nil
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -85,6 +100,10 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	var err error
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
+
+	if param.PinnedChannel != nil {
+		return param.PinnedChannel, selectGroup, nil
+	}
 
 	if chainChannel, chainGroup, chainErr, isChain := getChannelChainSelection(param); isChain {
 		return chainChannel, chainGroup, chainErr

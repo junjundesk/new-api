@@ -149,38 +149,26 @@ func applySelectedModelChanges(originModels []string, addModels []string, remove
 	return subtractModelNames(mergeModelNames(originModels, normalizedAdd), normalizedRemove)
 }
 
-func normalizeChannelModelMapping(channel *model.Channel) map[string]string {
+// normalizeChannelModelMapping decodes a channel model mapping into source ->
+// candidate models. Unlike the relay path, an unparsable mapping yields nil
+// instead of an error: upstream model sync only uses the mapping to classify
+// models, so a broken mapping must not block the sync.
+func normalizeChannelModelMapping(channel *model.Channel) model.ChannelModelMapping {
 	if channel == nil || channel.ModelMapping == nil {
 		return nil
 	}
-	rawMapping := strings.TrimSpace(*channel.ModelMapping)
-	if rawMapping == "" || rawMapping == "{}" {
+	mapping, err := model.ParseChannelModelMapping(*channel.ModelMapping)
+	if err != nil {
 		return nil
 	}
-	parsed := make(map[string]string)
-	if err := common.UnmarshalJsonStr(rawMapping, &parsed); err != nil {
-		return nil
-	}
-	normalized := make(map[string]string, len(parsed))
-	for source, target := range parsed {
-		normalizedSource := strings.TrimSpace(source)
-		normalizedTarget := strings.TrimSpace(target)
-		if normalizedSource == "" || normalizedTarget == "" {
-			continue
-		}
-		normalized[normalizedSource] = normalizedTarget
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-	return normalized
+	return mapping
 }
 
 func collectPendingUpstreamModelChangesFromModels(
 	localModels []string,
 	upstreamModels []string,
 	ignoredModels []string,
-	modelMapping map[string]string,
+	modelMapping model.ChannelModelMapping,
 ) (pendingAddModels []string, pendingRemoveModels []string) {
 	localSet := make(map[string]struct{})
 	localModels = normalizeModelNames(localModels)
@@ -197,9 +185,11 @@ func collectPendingUpstreamModelChangesFromModels(
 
 	redirectSourceSet := make(map[string]struct{}, len(modelMapping))
 	redirectTargetSet := make(map[string]struct{}, len(modelMapping))
-	for source, target := range modelMapping {
+	for source, candidates := range modelMapping {
 		redirectSourceSet[source] = struct{}{}
-		redirectTargetSet[target] = struct{}{}
+		for _, candidate := range candidates {
+			redirectTargetSet[candidate] = struct{}{}
+		}
 	}
 
 	coveredUpstreamSet := make(map[string]struct{}, len(localSet)+len(redirectTargetSet))

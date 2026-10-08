@@ -21,6 +21,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
+import { TagInput } from '@/components/tag-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,8 +38,10 @@ type ModelMappingEditorProps = {
 type MappingRow = {
   id: string
   from: string
-  to: string
+  tos: string[]
 }
+
+export const MAX_CANDIDATE_MODELS_PER_SOURCE = 32
 
 const DUPLICATE_MAPPING_SENTINEL = '{ "duplicate_source_models": '
 
@@ -59,10 +62,20 @@ function getDuplicateSources(rows: MappingRow[]): string[] {
   return Array.from(duplicates)
 }
 
+function normalizeCandidateList(value: unknown): string[] | null {
+  if (typeof value === 'string') return [value]
+  if (!Array.isArray(value)) return null
+  const candidates: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') return null
+    candidates.push(item)
+  }
+  return candidates
+}
+
 export function ModelMappingEditor(props: ModelMappingEditorProps) {
   const { t } = useTranslation()
   const sourceListId = useId()
-  const targetListId = useId()
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<MappingRow[]>([])
   const [jsonValue, setJsonValue] = useState(props.value)
@@ -88,33 +101,42 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
         return false
       }
       const entries = Object.entries(parsed)
-      const invalidValue = entries.find(([, to]) => typeof to !== 'string')
+      const invalidValue = entries.find(
+        ([, to]) => normalizeCandidateList(to) === null
+      )
       if (invalidValue) {
-        setJsonError(t('Model mapping values must be strings'))
+        setJsonError(
+          t(
+            'Model mapping values must be a model name or an array of model names'
+          )
+        )
         return false
       }
       setRows((previousRows) => {
         const remainingRows = [...previousRows]
         return entries.map(([from, to], index) => {
-          const toString = String(to)
-          const existingIndex = remainingRows.findIndex(
-            (row) =>
-              row.from === from ||
-              (row.from === from && row.to === toString) ||
-              previousRows[index]?.id === row.id
+          const tos = normalizeCandidateList(to) ?? []
+          const previousRow = previousRows[index]
+          let existingIndex = remainingRows.findIndex(
+            (row) => row.from === from
           )
+          if (existingIndex < 0 && previousRow) {
+            existingIndex = remainingRows.findIndex(
+              (row) => row.id === previousRow.id
+            )
+          }
           if (existingIndex >= 0) {
             const [existing] = remainingRows.splice(existingIndex, 1)
             return {
               id: existing.id,
               from,
-              to: toString,
+              tos,
             }
           }
           return {
             id: createRowId(),
             from,
-            to: toString,
+            tos,
           }
         })
       })
@@ -137,10 +159,16 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     if (updatedRows.length === 0) {
       return ''
     }
-    const obj: Record<string, string> = {}
+    const obj: Record<string, string | string[]> = {}
     updatedRows.forEach((row) => {
-      if (row.from.trim()) {
-        obj[row.from.trim()] = row.to.trim()
+      if (!row.from.trim()) return
+      const tos = row.tos.map((item) => item.trim()).filter(Boolean)
+      if (tos.length === 0) {
+        obj[row.from.trim()] = ''
+      } else if (tos.length === 1) {
+        obj[row.from.trim()] = tos[0]
+      } else {
+        obj[row.from.trim()] = tos
       }
     })
     return JSON.stringify(obj, null, 2)
@@ -166,7 +194,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     const newRow: MappingRow = {
       id: createRowId(),
       from: '',
-      to: '',
+      tos: [],
     }
     syncRows([...rows, newRow])
   }
@@ -175,13 +203,16 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     syncRows(rows.filter((row) => row.id !== id))
   }
 
-  const handleRowChange = (
-    id: string,
-    field: 'from' | 'to',
-    newValue: string
-  ) => {
+  const handleSourceChange = (id: string, newValue: string) => {
     const updatedRows = rows.map((row) =>
-      row.id === id ? { ...row, [field]: newValue } : row
+      row.id === id ? { ...row, from: newValue } : row
+    )
+    syncRows(updatedRows)
+  }
+
+  const handleCandidatesChange = (id: string, tos: string[]) => {
+    const updatedRows = rows.map((row) =>
+      row.id === id ? { ...row, tos } : row
     )
     syncRows(updatedRows)
   }
@@ -194,7 +225,13 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
 
   const handleFillTemplate = () => {
     const template = JSON.stringify(
-      { 'gpt-3.5-turbo': 'gpt-3.5-turbo-0125' },
+      {
+        'gpt-3.5-turbo': 'gpt-3.5-turbo-0125',
+        'claude-3-5-sonnet': [
+          'claude-3-5-sonnet-20241022',
+          'claude-3-5-sonnet-latest',
+        ],
+      },
       null,
       2
     )
@@ -218,6 +255,16 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     parseJsonToRows(jsonValue)
     setMode('visual')
   }
+
+  const tooManyCandidates = useMemo(
+    () =>
+      rows.some(
+        (row) =>
+          row.tos.filter((item) => item.trim()).length >
+          MAX_CANDIDATE_MODELS_PER_SOURCE
+      ),
+    [rows]
+  )
 
   return (
     <div className='space-y-2'>
@@ -261,10 +308,20 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           </Alert>
         )}
 
+        {tooManyCandidates && (
+          <Alert variant='destructive'>
+            <AlertDescription>
+              {t('Use at most {{count}} candidate models per source', {
+                count: MAX_CANDIDATE_MODELS_PER_SOURCE,
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <TabsContent value='visual' className='space-y-2'>
           {rows.length > 0 ? (
             <div className='space-y-2'>
-              <div className='grid grid-cols-[1fr_1fr_auto] gap-2 text-sm font-medium'>
+              <div className='grid grid-cols-[1fr_1.4fr_auto] gap-2 text-sm font-medium'>
                 <div>{t('Original Model')}</div>
                 <div>{t('Replacement Model')}</div>
                 <div className='w-10'></div>
@@ -272,25 +329,21 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
               {rows.map((row) => (
                 <div
                   key={row.id}
-                  className='grid grid-cols-[1fr_1fr_auto] gap-2'
+                  className='grid grid-cols-[1fr_1.4fr_auto] items-start gap-2'
                 >
                   <Input
                     value={row.from}
-                    onChange={(e) =>
-                      handleRowChange(row.id, 'from', e.target.value)
-                    }
+                    onChange={(e) => handleSourceChange(row.id, e.target.value)}
                     placeholder='gpt-3.5-turbo'
                     disabled={props.disabled}
                     list={sourceListId}
                   />
-                  <Input
-                    value={row.to}
-                    onChange={(e) =>
-                      handleRowChange(row.id, 'to', e.target.value)
-                    }
+                  <TagInput
+                    value={row.tos}
+                    onChange={(tos) => handleCandidatesChange(row.id, tos)}
                     placeholder='gpt-3.5-turbo-0125'
                     disabled={props.disabled}
-                    list={targetListId}
+                    suggestions={props.targetModelOptions}
                   />
                   <Button
                     type='button'
@@ -305,6 +358,11 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                   </Button>
                 </div>
               ))}
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Add several replacement models to try them in order when the upstream reports the previous one as unavailable.'
+                )}
+              </p>
             </div>
           ) : (
             <div className='text-muted-foreground flex h-24 items-center justify-center rounded-md border border-dashed text-sm'>
@@ -341,13 +399,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       {props.sourceModelOptions && props.sourceModelOptions.length > 0 && (
         <datalist id={sourceListId}>
           {props.sourceModelOptions.map((model) => (
-            <option key={model} value={model} />
-          ))}
-        </datalist>
-      )}
-      {props.targetModelOptions && props.targetModelOptions.length > 0 && (
-        <datalist id={targetListId}>
-          {props.targetModelOptions.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>

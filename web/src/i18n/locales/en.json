@@ -5546,6 +5546,11 @@
     "Recommend this preset": "Recommend this preset",
     "Add preset": "Add preset",
     "Use Codex / Luna template": "Use Codex / Luna template",
+    "Add several replacement models to try them in order when the upstream reports the previous one as unavailable.": "Add several replacement models to try them in order when the upstream reports the previous one as unavailable.",
+    "Model mapping must be a JSON object whose values are model names or arrays of model names": "Model mapping must be a JSON object whose values are model names or arrays of model names",
+    "Model mapping values must be a model name or an array of model names": "Model mapping values must be a model name or an array of model names",
+    "Model names must not contain spaces": "Model names must not contain spaces",
+    "Use at most {{count}} candidate models per source": "Use at most {{count}} candidate models per source",
     "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models.": "Template source names are examples. Check the exact names your clients send, then select targets from your enabled models."
   }
 }

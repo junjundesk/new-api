@@ -534,6 +534,15 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		}
 	}
 
+	// 模型映射校验：值可以是单个上游模型名，也可以是按顺序尝试的候选模型数组
+	if channel.ModelMapping != nil {
+		normalizedMapping, err := model.NormalizeChannelModelMappingString(*channel.ModelMapping)
+		if err != nil {
+			return fmt.Errorf("模型映射[model_mapping] 格式错误：%s", err.Error())
+		}
+		channel.ModelMapping = &normalizedMapping
+	}
+
 	return nil
 }
 
@@ -874,6 +883,18 @@ func EditTagChannels(c *gin.Context) {
 			return
 		}
 		channelTag.HeaderOverride = common.GetPointer[string](trimmed)
+	}
+	if channelTag.ModelMapping != nil {
+		trimmed := strings.TrimSpace(*channelTag.ModelMapping)
+		normalizedMapping, normalizeErr := model.NormalizeChannelModelMappingString(trimmed)
+		if normalizeErr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "模型映射必须是合法的 JSON 格式：" + normalizeErr.Error(),
+			})
+			return
+		}
+		channelTag.ModelMapping = &normalizedMapping
 	}
 	err = model.EditChannelByTag(channelTag.Tag, channelTag.NewTag, channelTag.ModelMapping, channelTag.Models, channelTag.Groups, channelTag.Priority, channelTag.Weight, channelTag.ParamOverride, channelTag.HeaderOverride)
 	if err != nil {
