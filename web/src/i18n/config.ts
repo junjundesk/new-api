@@ -20,30 +20,24 @@ import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import { lazyLocaleBackend } from './lazy-locale-backend'
 import { convertDetectedLanguage } from './languages'
 import en from './locales/en.json'
 import zhCN from './locales/zh.json'
 
-// Only the fallback (en) and the primary Chinese locale stay in the main bundle;
-// fr/ja/ru/vi/zhTW are code-split and fetched on demand by `lazyLocaleBackend`.
+// English (fallback) and Simplified Chinese are the only supported interface
+// languages, so both live in the main bundle and no code-splitting is needed.
 export const resources = {
   en,
   zhCN,
 } as const
 
-// `partialBundledLanguages` makes i18next ask `lazyLocaleBackend` for any
-// language whose bundle is not in `resources`; the returned promise resolves
-// once the detected language's chunk has loaded.
 export const i18nReady: Promise<unknown> = i18n
-  .use(lazyLocaleBackend)
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
-    partialBundledLanguages: true,
     fallbackLng: 'en',
-    supportedLngs: ['en', 'zhCN', 'fr', 'ru', 'ja', 'vi', 'zhTW'],
+    supportedLngs: ['en', 'zhCN'],
     load: 'currentOnly',
     nsSeparator: false, // Allow literal colons in keys (e.g., URLs, labels)
     debug: import.meta.env.DEV,
@@ -53,8 +47,8 @@ export const i18nReady: Promise<unknown> = i18n
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-      // Browsers report `zh-CN`/`zh-TW`/`zh`; map them onto our `zhCN`/`zhTW`
-      // codes (non-Chinese codes pass through for normal supportedLngs matching).
+      // Browsers report `zh-CN`/`zh`; map them onto our `zhCN` code (non-Chinese
+      // codes pass through for normal supportedLngs matching).
       convertDetectedLanguage,
     },
   })

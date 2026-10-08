@@ -64,12 +64,6 @@ describe('InputPriceEstimate i18n locale handling', () => {
     expect(document.body.textContent ?? '').not.toContain('NaN')
   })
 
-  test('formats currency for the zhTW interface code', () => {
-    language = 'zhTW'
-    render(<InputPriceEstimate pricing={PRICING} />)
-    expect(screen.getByText('Input price estimate')).not.toBeNull()
-  })
-
   test('falls back to the runtime locale for an unknown tag', () => {
     language = 'not-a-tag'
     render(<InputPriceEstimate pricing={PRICING} />)

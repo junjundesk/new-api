@@ -34,7 +34,6 @@ import {
   Copy,
   FileText,
   Eraser,
-  Plus,
   Eye,
   RefreshCw,
   Code,
@@ -125,6 +124,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import {
   fetchModels,
+  fetchUpstreamModels,
   getAllModels,
   getChannel,
   getChannelKey,
@@ -618,6 +618,7 @@ export function ChannelMutateDrawer({
   )
   const canRevealChannelKey = currentUser?.role === ROLE.SUPER_ADMIN
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
+  const [isFillingModels, setIsFillingModels] = useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
@@ -873,18 +874,6 @@ export function ChannelMutateDrawer({
     () => allModelsData?.data?.map((model) => model.id).filter(Boolean) || [],
     [allModelsData]
   )
-
-  // Get basic models for the current channel type
-  const basicModels = useMemo(() => {
-    if (!allModelsList.length) return []
-    // Filter models based on common patterns for specific types
-    if (currentType === 1) {
-      return allModelsList.filter(
-        (model) => model.startsWith('gpt-') || model.startsWith('text-')
-      )
-    }
-    return allModelsList
-  }, [allModelsList, currentType])
 
   // Get prefill groups
   const prefillGroups = useMemo(
@@ -1463,27 +1452,66 @@ export function ChannelMutateDrawer({
   }, [canEditSensitive, channelId, form, isEditing, t])
 
   // Handle model operations
-  const handleFillRelatedModels = useCallback(() => {
-    if (!basicModels.length) {
-      toast.info(t('No related models available for this channel type'))
-      return
-    }
-    updateModels(basicModels)
-    toast.success(
-      t('Filled {{count}} related model(s)', { count: basicModels.length })
-    )
-  }, [basicModels, updateModels, t])
+  const handleFillRelatedModels = useCallback(async () => {
+    const type = form.getValues('type')
 
-  const handleFillAllModels = useCallback(() => {
-    if (!allModelsList.length) {
-      toast.info(t('No models available'))
+    if (!MODEL_FETCHABLE_TYPES.has(type)) {
+      toast.error(t('This channel type does not support fetching models'))
       return
     }
-    updateModels(allModelsList)
-    toast.success(
-      t('Filled {{count}} model(s)', { count: allModelsList.length })
-    )
-  }, [allModelsList, updateModels, t])
+
+    if (!isEditing && !canEditSensitive) {
+      toast.error(t("You don't have necessary permission"))
+      return
+    }
+
+    if (!isEditing && type !== CHANNEL_TYPE_ADVANCED_CUSTOM) {
+      const key = form.getValues('key')
+      if (!key?.trim()) {
+        toast.error(t('Please enter API key first'))
+        return
+      }
+    }
+
+    setIsFillingModels(true)
+    try {
+      let models: string[] = []
+      if (shouldPreviewUnsavedModels) {
+        models = await formPreviewFetcher()
+      } else if (channelId) {
+        const response = await fetchUpstreamModels(channelId)
+        if (!response.success) {
+          throw new Error(response.message || t('Failed to fetch models'))
+        }
+        models = Array.isArray(response.data) ? response.data : []
+      }
+
+      if (!models.length) {
+        toast.info(t('No models fetched from upstream'))
+        return
+      }
+
+      updateModels(models)
+      toast.success(
+        t('Filled {{count}} related model(s)', { count: models.length })
+      )
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : t('Failed to fetch models')
+      )
+    } finally {
+      setIsFillingModels(false)
+    }
+  }, [
+    canEditSensitive,
+    channelId,
+    form,
+    formPreviewFetcher,
+    isEditing,
+    shouldPreviewUnsavedModels,
+    t,
+    updateModels,
+  ])
 
   const handleClearModels = useCallback(() => {
     form.setValue('models', '')
@@ -3319,26 +3347,20 @@ export function ChannelMutateDrawer({
                                   variant='outline'
                                   size='sm'
                                   onClick={handleFillRelatedModels}
-                                  disabled={!basicModels.length}
+                                  disabled={isFillingModels}
                                 >
-                                  <FileText
-                                    className='mr-2 h-4 w-4'
-                                    aria-hidden='true'
-                                  />
+                                  {isFillingModels ? (
+                                    <Loader2
+                                      className='mr-2 h-4 w-4 animate-spin'
+                                      aria-hidden='true'
+                                    />
+                                  ) : (
+                                    <FileText
+                                      className='mr-2 h-4 w-4'
+                                      aria-hidden='true'
+                                    />
+                                  )}
                                   {t('Fill Related Models')}
-                                </Button>
-                                <Button
-                                  type='button'
-                                  variant='outline'
-                                  size='sm'
-                                  onClick={handleFillAllModels}
-                                  disabled={!allModelsList.length}
-                                >
-                                  <Plus
-                                    className='mr-2 h-4 w-4'
-                                    aria-hidden='true'
-                                  />
-                                  {t('Fill All Models')}
                                 </Button>
                                 {MODEL_FETCHABLE_TYPES.has(currentType) && (
                                   <>

@@ -31,8 +31,8 @@ export type InputPriceEstimateProps = {
 /** Six derived USD/1M figures plus the coverage notes behind them. */
 export function InputPriceEstimate(props: InputPriceEstimateProps) {
   const { t, i18n } = useTranslation()
-  // zhCN / zhTW are interface codes, not BCP-47 tags: feeding them to Intl
-  // throws RangeError, so they are canonicalized first.
+  // zhCN is an interface code, not a BCP-47 tag: feeding it to Intl throws
+  // RangeError, so it is canonicalized first.
   const language = toIntlLocale(i18n.resolvedLanguage ?? i18n.language)
   const currency = useMemo(
     () =>

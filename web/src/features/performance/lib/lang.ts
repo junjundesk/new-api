@@ -17,34 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /** Supported values of the perf-metrics lang query parameter. */
-const PERF_METRICS_LANGUAGES = new Set([
-  'zh',
-  'zh-TW',
-  'en',
-  'fr',
-  'ru',
-  'ja',
-  'vi',
-])
+const PERF_METRICS_LANGUAGES = new Set(['zh', 'en'])
 
 /**
  * Maps an i18n language tag onto the lang value the perf-metrics API expects.
- * zh-TW / zh-HK / zh-MO / zh-Hant* / zhtw resolve to zh-TW, every other zh
- * variant to zh, a known primary subtag to itself, and anything unknown to en.
+ * Every zh variant (zh-CN / zh-TW / zh-Hant* / zhtw) resolves to zh, a known
+ * primary subtag to itself, and anything unknown to en.
  */
 export function resolvePerfMetricsLang(language: string | undefined): string {
   if (!language) return 'en'
   const normalized = language.trim().replaceAll('_', '-').toLowerCase()
-  if (
-    normalized === 'zh-tw' ||
-    normalized === 'zh-hk' ||
-    normalized === 'zh-mo' ||
-    normalized === 'zh-hant' ||
-    normalized.startsWith('zh-hant-') ||
-    normalized === 'zhtw'
-  ) {
-    return 'zh-TW'
-  }
   if (normalized.startsWith('zh')) return 'zh'
   const primary = normalized.split('-')[0]
   if (PERF_METRICS_LANGUAGES.has(primary)) return primary
