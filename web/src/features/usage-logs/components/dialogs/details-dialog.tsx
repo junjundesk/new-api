@@ -500,6 +500,15 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const hasAudioTokens = other?.ws || other?.audio
   const showTiming = isTimingLogType(props.log.type)
   const adminInfo = other?.admin_info
+  // Channel model mapping, admin-only. The top-level fields cover logs written
+  // before mapping moved under admin_info; the backend strips admin_info for
+  // non-admin views, so users can never read either location.
+  const mappedUpstreamModelName =
+    adminInfo?.upstream_model_name ?? other?.upstream_model_name
+  const showModelMapping =
+    props.isAdmin &&
+    !!(adminInfo?.is_model_mapped || other?.is_model_mapped) &&
+    !!mappedUpstreamModelName
   const requestIp = getRequestIpForDisplay(
     props.log.ip,
     adminInfo,
@@ -1050,8 +1059,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
           />
         )}
 
-        {/* Model mapping */}
-        {other?.is_model_mapped && other?.upstream_model_name && (
+        {/* Model mapping (channel configuration detail, admin only) */}
+        {showModelMapping && (
           <DetailSection
             label={t('Model Mapping')}
             badge={
@@ -1070,7 +1079,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
             <DetailRow
               label={t('Actual Model')}
-              value={other.upstream_model_name}
+              value={mappedUpstreamModelName}
               mono
             />
           </DetailSection>

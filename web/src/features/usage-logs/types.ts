@@ -142,6 +142,11 @@ export interface LogOtherData {
       original: number
       clamped: number
     }
+    // Channel model mapping: the requested model was rewritten before being
+    // sent upstream. Channel configuration detail, admin-only (nested under
+    // admin_info, which the backend strips for non-admin log views).
+    is_model_mapped?: boolean
+    upstream_model_name?: string
   }
   // Language-independent operation descriptor (audit/login logs).
   // Frontend renders localized content from action + params via i18n templates.
@@ -192,6 +197,9 @@ export interface LogOtherData {
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number
   cache_creation_ratio_1h?: number
+  // Legacy location for the channel model mapping fields. Logs written before
+  // mapping moved under admin_info still carry them here; the backend strips
+  // admin_info for non-admin views, so only admins can ever read them.
   is_model_mapped?: boolean
   upstream_model_name?: string
   audio_ratio?: number

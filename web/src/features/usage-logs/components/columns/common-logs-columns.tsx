@@ -308,7 +308,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               copyable={false}
               className='-ml-1.5 !text-xs [&_span]:!text-xs'
             />
-            {log.type === 2 || log.type === 5 ? <LogClientBadge log={log} /> : null}
+            {log.type === 2 || log.type === 5 ? (
+              <LogClientBadge log={log} />
+            ) : null}
           </div>
         )
       },
@@ -643,7 +645,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const log = row.original
         if (!isDisplayableLogType(log.type)) return null
 
-        const modelInfo = formatModelName(log)
+        const modelInfo = formatModelName(log, isAdmin)
 
         return (
           <div className='flex w-fit flex-col gap-0.5'>

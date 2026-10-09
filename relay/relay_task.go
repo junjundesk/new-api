@@ -335,7 +335,7 @@ func sunoFetchRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.Ta
 			return
 		}
 		for _, task := range taskModels {
-			tasks = append(tasks, TaskModel2Dto(task))
+			tasks = append(tasks, TaskModel2Dto(task, false))
 		}
 	} else {
 		tasks = make([]any, 0)
@@ -363,7 +363,7 @@ func sunoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dt
 
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	return
 }
@@ -416,7 +416,7 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// 通用 TaskDto 格式
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	if err != nil {
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
@@ -547,7 +547,15 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 	}
 }
 
-func TaskModel2Dto(task *model.Task) *dto.TaskDto {
+// TaskModel2Dto converts a task to its API representation. The upstream model
+// name recorded on the task comes from the channel model mapping, which is a
+// channel configuration detail, so it is only included for admin viewers and
+// cleared for user-facing responses.
+func TaskModel2Dto(task *model.Task, includeAdminInfo bool) *dto.TaskDto {
+	properties := task.Properties
+	if !includeAdminInfo {
+		properties.UpstreamModelName = ""
+	}
 	return &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
@@ -566,7 +574,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		StartTime:  task.StartTime,
 		FinishTime: task.FinishTime,
 		Progress:   task.Progress,
-		Properties: task.Properties,
+		Properties: properties,
 		Username:   task.Username,
 		Data:       task.Data,
 	}

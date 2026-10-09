@@ -220,24 +220,39 @@ export function getResponseTimeColor(
 }
 
 /**
- * Format model name with mapping indicator
+ * Format model name with mapping indicator.
+ *
+ * Model mapping is a channel configuration detail and is admin-only: the
+ * backend removes admin_info for non-admin log views, and the isAdmin gate here
+ * keeps the column from rendering it even if the field were present.
+ *
+ * Logs written before mapping moved under admin_info still carry the fields at
+ * the top level. Those are read only for admin viewers, so historical entries
+ * keep their mapping indicator without exposing anything to users.
  */
-export function formatModelName(log: UsageLog): {
+export function formatModelName(
+  log: UsageLog,
+  isAdmin: boolean
+): {
   name: string
   isMapped: boolean
   actualModel?: string
 } {
+  if (!isAdmin) {
+    return { name: log.model_name, isMapped: false }
+  }
+
   const other = parseLogOther(log.other)
-  const isMapped = !!(
-    other?.is_model_mapped &&
-    other?.upstream_model_name &&
-    other.upstream_model_name !== ''
-  )
+  const isMappedFlag =
+    other?.admin_info?.is_model_mapped || other?.is_model_mapped
+  const upstreamModelName =
+    other?.admin_info?.upstream_model_name ?? other?.upstream_model_name
+  const isMapped = !!(isMappedFlag && upstreamModelName)
 
   return {
     name: log.model_name,
     isMapped,
-    actualModel: isMapped ? other.upstream_model_name : undefined,
+    actualModel: isMapped ? upstreamModelName : undefined,
   }
 }
 

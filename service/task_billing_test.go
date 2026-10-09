@@ -1229,3 +1229,32 @@ func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 }
+
+// TestTaskBillingOtherNestsModelMappingUnderAdminInfo verifies the channel
+// model mapping recorded on a task log stays under admin_info, so non-admin
+// log views (which strip admin_info) never expose channel configuration.
+func TestTaskBillingOtherNestsModelMappingUnderAdminInfo(t *testing.T) {
+	task := makeTask(1, 1, 100, 0, BillingSourceWallet, 0)
+	task.Properties.UpstreamModelName = "qwen-turbo"
+	task.Properties.OriginModelName = "gpt-4o-mini"
+
+	other := taskBillingOther(task)
+
+	assert.NotContains(t, other, "is_model_mapped")
+	assert.NotContains(t, other, "upstream_model_name")
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	require.True(t, ok, "mapping details must be nested under admin_info")
+	assert.Equal(t, true, adminInfo["is_model_mapped"])
+	assert.Equal(t, "qwen-turbo", adminInfo["upstream_model_name"])
+}
+
+// TestTaskBillingOtherOmitsMappingWithoutRewrite verifies a task without an
+// upstream model rewrite carries no mapping marker at all.
+func TestTaskBillingOtherOmitsMappingWithoutRewrite(t *testing.T) {
+	task := makeTask(1, 1, 100, 0, BillingSourceWallet, 0)
+
+	other := taskBillingOther(task)
+
+	assert.NotContains(t, other, "is_model_mapped")
+	assert.NotContains(t, other, "admin_info")
+}

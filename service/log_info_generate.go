@@ -83,10 +83,6 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	if relayInfo.ReasoningEffort != "" {
 		other["reasoning_effort"] = relayInfo.ReasoningEffort
 	}
-	if relayInfo.IsModelMapped {
-		other["is_model_mapped"] = true
-		other["upstream_model_name"] = relayInfo.UpstreamModelName
-	}
 
 	isSystemPromptOverwritten := common.GetContextKeyBool(ctx, constant.ContextKeySystemPromptOverride)
 	if isSystemPromptOverwritten {
@@ -95,6 +91,12 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 
 	adminInfo := make(map[string]interface{})
 	adminInfo["use_channel"] = ctx.GetStringSlice("use_channel")
+	// 模型映射信息属于渠道配置细节，仅管理员可见：嵌套在 admin_info 下，
+	// 普通用户查询日志时整个 admin_info 会被剥离。
+	if relayInfo.IsModelMapped {
+		adminInfo["is_model_mapped"] = true
+		adminInfo["upstream_model_name"] = relayInfo.UpstreamModelName
+	}
 	isMultiKey := common.GetContextKeyBool(ctx, constant.ContextKeyChannelIsMultiKey)
 	if isMultiKey {
 		adminInfo["is_multi_key"] = true

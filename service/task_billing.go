@@ -47,10 +47,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
 	}
-	if info.IsModelMapped {
-		other["is_model_mapped"] = true
-		other["upstream_model_name"] = info.UpstreamModelName
-	}
+	attachModelMappingToAdminInfo(other, info.IsModelMapped, info.UpstreamModelName)
 	attachQuotaSaturation(c, info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
@@ -135,10 +132,25 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 	}
 	props := task.Properties
 	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName {
-		other["is_model_mapped"] = true
-		other["upstream_model_name"] = props.UpstreamModelName
+		attachModelMappingToAdminInfo(other, true, props.UpstreamModelName)
 	}
 	return other
+}
+
+// attachModelMappingToAdminInfo 把模型映射信息写入 other.admin_info，使其仅对
+// 管理员可见：普通用户查询日志时整个 admin_info 会被剥离。模型映射属于渠道配置
+// 细节，不应暴露给用户端。
+func attachModelMappingToAdminInfo(other map[string]interface{}, isMapped bool, upstreamModelName string) {
+	if other == nil || !isMapped {
+		return
+	}
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	if !ok || adminInfo == nil {
+		adminInfo = make(map[string]interface{})
+		other["admin_info"] = adminInfo
+	}
+	adminInfo["is_model_mapped"] = true
+	adminInfo["upstream_model_name"] = upstreamModelName
 }
 
 func taskBillingContextPriceData(bc *model.TaskBillingContext) *types.PriceData {

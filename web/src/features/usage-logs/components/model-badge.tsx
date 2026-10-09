@@ -198,9 +198,7 @@ export function ModelBadge(props: ModelBadgeProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <p className='text-muted-foreground text-xs'>
-          {t(
-            'This channel maps the requested model to the upstream model.'
-          )}
+          {t('This channel maps the requested model to the upstream model.')}
         </p>
         <div className='mt-2 flex flex-col gap-2'>
           <div className='flex items-center gap-2'>

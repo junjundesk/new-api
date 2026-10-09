@@ -139,6 +139,11 @@ func formatLogs(logs []*Log, startIdx int, includeAdminInfo bool) {
 			delete(otherMap, "admin_info")
 			// Remove operation-audit details (operator/route info), admin-only.
 			delete(otherMap, "audit_info")
+			// Remove channel model mapping. Current logs nest it under
+			// admin_info (already removed above); these top-level keys are the
+			// legacy location and must not reach non-admin viewers either.
+			delete(otherMap, "is_model_mapped")
+			delete(otherMap, "upstream_model_name")
 			// delete(otherMap, "reject_reason")
 			// delete(otherMap, "stream_status")
 		}

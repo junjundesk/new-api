@@ -60,9 +60,12 @@ func GetUserTask(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
+// tasksToDto converts tasks for the API response. adminView controls both the
+// username enrichment and the channel-configuration details that are hidden
+// from users (see relay.TaskModel2Dto).
+func tasksToDto(tasks []*model.Task, adminView bool) []*dto.TaskDto {
 	var userIdMap map[int]*model.UserBase
-	if fillUser {
+	if adminView {
 		userIdMap = make(map[int]*model.UserBase)
 		userIds := types.NewSet[int]()
 		for _, task := range tasks {
@@ -77,12 +80,12 @@ func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
 	}
 	result := make([]*dto.TaskDto, len(tasks))
 	for i, task := range tasks {
-		if fillUser {
+		if adminView {
 			if user, ok := userIdMap[task.UserId]; ok {
 				task.Username = user.Username
 			}
 		}
-		result[i] = relay.TaskModel2Dto(task)
+		result[i] = relay.TaskModel2Dto(task, adminView)
 	}
 	return result
 }
