@@ -94,7 +94,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/new-api
+            ghcr.io/junjundesk/new-api
 
       - name: Build & push single-arch
         id: build
@@ -104,8 +104,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }}-${{ matrix.arch }}
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-${{ matrix.arch }}
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -116,14 +116,14 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign image with cosign
-        run: cosign sign --yes ghcr.io/${{ github.repository_owner }}/new-api@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes ghcr.io/junjundesk/new-api@${{ steps.build.outputs.digest }}
 
       - name: Output digest
         run: |
           echo "### Docker Image Digest (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          echo "ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
@@ -145,30 +145,30 @@ jobs:
       - name: Create & push manifest (GHCR - branch)
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }} \
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }}-amd64 \
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }}-arm64
+            -t ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }} \
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-amd64 \
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-arm64
 
       - name: Create & push manifest (GHCR - versioned)
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }} \
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }}-amd64 \
-            ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }}-arm64
+            -t ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }} \
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-amd64 \
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-arm64
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign manifests with cosign
         run: |
-          cosign sign --yes ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }}
-          cosign sign --yes ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }}
+          cosign sign --yes ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}
+          cosign sign --yes ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}
 
       - name: Output manifest digest
         run: |
           echo "### Multi-arch Manifest Digests" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.tag_prefix }} >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools inspect ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }} >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
-          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/new-api:${{ needs.prepare.outputs.version }} >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools inspect ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }} >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
