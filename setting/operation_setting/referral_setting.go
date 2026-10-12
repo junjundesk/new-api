@@ -44,6 +44,7 @@ type ReferralSetting struct {
 
 	// BonusDuration is how long reward bonus stays valid, parsed by
 	// model.ParseBonusDuration (bare number = hours, so "720" = 30 days).
+	// "0" (or blank) means the reward never expires.
 	BonusDuration string `json:"bonus_duration"`
 
 	// CountRedeemAsValid controls whether a redemption-code top-up counts
@@ -65,7 +66,7 @@ var referralSetting = ReferralSetting{
 		{MinInvitees: 30, RateBps: 800},
 	},
 	InviterMaxQuota:    0,
-	BonusDuration:      "720",
+	BonusDuration:      "0",
 	CountRedeemAsValid: true,
 }
 

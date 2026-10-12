@@ -92,6 +92,7 @@
     "+{{count}} more": "+{{count}} more",
     "| Based on": "| Based on",
     "0 means data is kept permanently": "0 means data is kept permanently",
+    "0 means the reward never expires.": "0 means the reward never expires.",
     "0 means uncapped ({{formatted}})": "0 means uncapped ({{formatted}})",
     "0 means unlimited": "0 means unlimited",
     "1 Day": "1 Day",

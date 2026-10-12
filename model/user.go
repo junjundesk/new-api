@@ -724,14 +724,12 @@ func grantInviterQuotaForInvitee(userId int, inviterId int) {
 	if !operation_setting.IsPaymentComplianceConfirmed() {
 		return
 	}
-	expireTime := int64(0)
-	if duration := operation_setting.GetReferralSetting().BonusDuration; duration != "" {
-		d, err := ParseBonusDuration(duration)
-		if err != nil {
-			common.SysError(fmt.Sprintf("invalid bonus duration %q for inviter quota: %s", duration, err.Error()))
-		} else {
-			expireTime = common.GetTimestamp() + int64(d.Seconds())
-		}
+	// Shares the referral validity rule (0 or blank = never expires) so the
+	// invitee welcome quota cannot outlive a configured window by accident.
+	expireTime, err := referralBonusExpireTime(operation_setting.GetReferralSetting().BonusDuration)
+	if err != nil {
+		common.SysError(fmt.Sprintf("invalid bonus duration %q for inviter quota: %s", operation_setting.GetReferralSetting().BonusDuration, err.Error()))
+		return
 	}
 	if _, err := GrantBonus(userId, int64(common.QuotaForInvitee), expireTime, BonusSourceSignup, "使用邀请码赠送"); err != nil {
 		common.SysError(fmt.Sprintf("failed to grant inviter quota bonus to user %d: %s", userId, err.Error()))

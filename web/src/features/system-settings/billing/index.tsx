@@ -44,7 +44,7 @@ const defaultBillingSettings: BillingSettings = {
   'referral_setting.inviter_enabled': true,
   'referral_setting.inviter_tiers': '[]',
   'referral_setting.inviter_max_quota': 0,
-  'referral_setting.bonus_duration': '720',
+  'referral_setting.bonus_duration': '0',
   'referral_setting.count_redeem_as_valid': true,
   QuotaPerUnit: 500000,
   USDExchangeRate: 7,

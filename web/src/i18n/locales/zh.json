@@ -92,6 +92,7 @@
     "+{{count}} more": "还有 {{count}} 项",
     "| Based on": "| 基于",
     "0 means data is kept permanently": "0 表示永久保留数据",
+    "0 means the reward never expires.": "0 表示永久有效。",
     "0 means uncapped ({{formatted}})": "0 表示不封顶（{{formatted}}）",
     "0 means unlimited": "0 表示不限",
     "1 Day": "1 天",

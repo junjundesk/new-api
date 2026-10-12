@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -408,11 +409,16 @@ func referralRemark(row *ReferralCharge) string {
 }
 
 // referralBonusExpireTime resolves the configured validity window into an
-// absolute expiry. An empty or unparsable duration is an error rather than a
-// silent permanent grant, because a misconfiguration would otherwise hand out
-// never-expiring quota.
+// absolute expiry. A blank duration or "0" means the reward never expires,
+// which is the shipped default. Any other unparsable duration is an error
+// rather than a silent permanent grant, because a misconfiguration would
+// otherwise hand out never-expiring quota.
 func referralBonusExpireTime(duration string) (int64, error) {
-	d, err := ParseBonusDuration(duration)
+	trimmed := strings.TrimSpace(duration)
+	if trimmed == "" || trimmed == "0" {
+		return 0, nil
+	}
+	d, err := ParseBonusDuration(trimmed)
 	if err != nil {
 		return 0, fmt.Errorf("invalid referral bonus duration %q: %w", duration, err)
 	}

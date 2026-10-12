@@ -241,7 +241,7 @@ export function ReferralSettingsSection({
                       <FormLabel>{t('Reward validity')}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder='720'
+                          placeholder='0'
                           {...field}
                           disabled={updateOption.isPending || isSubmitting}
                         />
@@ -249,7 +249,8 @@ export function ReferralSettingsSection({
                       <FormDescription>
                         {t(
                           'How long reward bonus stays valid. A bare number is hours, so 720 is 30 days.'
-                        )}
+                        )}{' '}
+                        {t('0 means the reward never expires.')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
