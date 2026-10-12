@@ -2378,7 +2378,7 @@
     "How frequently the system checks auto-disabled channels for recovery": "系统检查自动禁用渠道是否可恢复的频率",
     "How frequently the system tests all channels": "系统测试所有渠道的频率",
     "How It Works": "工作流程",
-    "How long reward bonus stays valid. A bare number is hours, so 720 is 30 days.": "返利赠金有效期。纯数字表示小时，720 即 30 天。",
+    "How long the invitee bonus credit stays valid. A bare number is hours, so 720 is 30 days. Inviter commissions never expire.": "被邀请人赠金有效期。纯数字表示小时，720 即 30 天。邀请人佣金永不过期。",
     "How model mapping works": "模型映射如何工作",
     "How much to charge for each US dollar of balance (Epay)": "每美元余额（Epay）的收费金额",
     "How this model name should match requests": "此模型名称应如何匹配请求",

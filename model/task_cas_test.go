@@ -63,6 +63,7 @@ func TestMain(m *testing.M) {
 		&SystemTaskLock{},
 		&Redemption{},
 		&UserRechargeRecord{},
+		&ReferralCharge{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

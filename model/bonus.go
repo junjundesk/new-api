@@ -80,6 +80,12 @@ func normalizeBonusExpireTime(expireTime int64) int64 {
 // GrantBonus creates a bonus grant for a user. amount must be > 0.
 // expireTime <= 0 means the grant never expires.
 func GrantBonus(userId int, amount int64, expireTime int64, source string, remark string) (*UserBonusGrant, error) {
+	return grantBonusTx(DB, userId, amount, expireTime, source, remark)
+}
+
+// grantBonusTx is GrantBonus bound to the caller's transaction, so a payout and
+// the grant backing it commit or roll back together.
+func grantBonusTx(tx *gorm.DB, userId int, amount int64, expireTime int64, source string, remark string) (*UserBonusGrant, error) {
 	if userId <= 0 {
 		return nil, errors.New("invalid userId")
 	}
@@ -98,7 +104,7 @@ func GrantBonus(userId int, amount int64, expireTime int64, source string, remar
 		Source:      source,
 		Remark:      remark,
 	}
-	if err := DB.Create(grant).Error; err != nil {
+	if err := tx.Create(grant).Error; err != nil {
 		return nil, err
 	}
 	return grant, nil

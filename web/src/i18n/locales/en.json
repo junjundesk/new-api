@@ -2378,7 +2378,7 @@
     "How frequently the system checks auto-disabled channels for recovery": "How frequently the system checks auto-disabled channels for recovery",
     "How frequently the system tests all channels": "How frequently the system tests all channels",
     "How It Works": "How It Works",
-    "How long reward bonus stays valid. A bare number is hours, so 720 is 30 days.": "How long reward bonus stays valid. A bare number is hours, so 720 is 30 days.",
+    "How long the invitee bonus credit stays valid. A bare number is hours, so 720 is 30 days. Inviter commissions never expire.": "How long the invitee bonus credit stays valid. A bare number is hours, so 720 is 30 days. Inviter commissions never expire.",
     "How model mapping works": "How model mapping works",
     "How much to charge for each US dollar of balance (Epay)": "How much to charge for each US dollar of balance (Epay)",
     "How this model name should match requests": "How this model name should match requests",

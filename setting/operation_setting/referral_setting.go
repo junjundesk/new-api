@@ -21,8 +21,9 @@ type ReferralTier struct {
 //   - The invitee's first-top-up reward is granted as expiring bonus quota
 //     (赠金) and is spendable only, never withdrawable.
 //   - The inviter's commission accrues to the claimable referral balance
-//     (users.aff_quota) backed by an expiring grant, and can be moved to the
-//     main balance by the user.
+//     (users.aff_quota) and can be moved to the main balance by the user. It is
+//     money-like and does not expire, so it is never issued as spendable bonus
+//     as well.
 type ReferralSetting struct {
 	Enabled bool `json:"enabled"`
 
@@ -44,7 +45,9 @@ type ReferralSetting struct {
 
 	// BonusDuration is how long reward bonus stays valid, parsed by
 	// model.ParseBonusDuration (bare number = hours, so "720" = 30 days).
-	// "0" (or blank) means the reward never expires.
+	// "0" (or blank) means the reward never expires. It applies to the bonus
+	// track (the invitee's first-top-up reward); inviter commissions do not
+	// expire.
 	BonusDuration string `json:"bonus_duration"`
 
 	// CountRedeemAsValid controls whether a redemption-code top-up counts

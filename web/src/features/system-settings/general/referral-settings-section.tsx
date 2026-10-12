@@ -248,7 +248,7 @@ export function ReferralSettingsSection({
                       </FormControl>
                       <FormDescription>
                         {t(
-                          'How long reward bonus stays valid. A bare number is hours, so 720 is 30 days.'
+                          'How long the invitee bonus credit stays valid. A bare number is hours, so 720 is 30 days. Inviter commissions never expire.'
                         )}{' '}
                         {t('0 means the reward never expires.')}
                       </FormDescription>
