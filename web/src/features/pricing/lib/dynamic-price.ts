@@ -46,6 +46,8 @@ export type DynamicPriceEntry = {
   shortLabel: string
   value: number
   formatted: string
+  /** Price at 1x ratio; absent when the entry already shows the original price. */
+  originalFormatted?: string
   variable: BillingVar
 }
 
@@ -138,6 +140,20 @@ export function getDynamicPriceEntries(
     const value = Number(tier[variable.field])
     if (!Number.isFinite(value) || value <= 0) return []
 
+    const formatted = formatDynamicUnitPrice(value, options)
+    const ratio = options.billingRatio ?? {
+      min: options.groupRatioMultiplier ?? 1,
+      max: options.groupRatioMultiplier ?? 1,
+    }
+    let originalFormatted: string | undefined
+    if (ratio.min !== 1 || ratio.max !== 1) {
+      const original = formatDynamicUnitPrice(value, {
+        ...options,
+        billingRatio: { min: 1, max: 1 },
+      })
+      if (original !== formatted) originalFormatted = original
+    }
+
     return [
       {
         key: variable.key,
@@ -145,7 +161,8 @@ export function getDynamicPriceEntries(
         label: variable.label,
         shortLabel: variable.shortLabel,
         value,
-        formatted: formatDynamicUnitPrice(value, options),
+        formatted,
+        originalFormatted,
         variable,
       },
     ]

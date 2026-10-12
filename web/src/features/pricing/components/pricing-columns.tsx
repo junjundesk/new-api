@@ -31,21 +31,19 @@ import { getLobeIcon } from '@/lib/lobe-icon'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { getDynamicPricingSummary } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import {
-  getDisplayBillingRatio,
-  hasBillingDiscount,
-  isTokenBasedModel,
-} from '../lib/model-helpers'
+import { getDisplayBillingRatio, isTokenBasedModel } from '../lib/model-helpers'
 import {
   formatBasePrice,
   formatBaseRequestPrice,
   formatPrice,
   formatRequestPrice,
   stripTrailingZeros,
+  withOriginalPrice,
 } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelBillingRatio } from './model-billing-ratio'
+import { OriginalPrice } from './original-price'
 
 // ----------------------------------------------------------------------------
 // Pricing Table Columns
@@ -155,6 +153,15 @@ export function usePricingColumns(
             )
           }
 
+          const originalParts = primaryEntries.map((entry) =>
+            entry.originalFormatted
+              ? stripTrailingZeros(entry.originalFormatted)
+              : null
+          )
+          const originalLine = originalParts.includes(null)
+            ? null
+            : originalParts.join(' / ')
+
           return (
             <div className='max-w-full min-w-0'>
               <span className='font-mono text-sm tabular-nums'>
@@ -167,6 +174,11 @@ export function usePricingColumns(
                   </span>
                 ))}
               </span>
+              {originalLine && (
+                <div className='text-[10px] tabular-nums'>
+                  <OriginalPrice value={originalLine} />
+                </div>
+              )}
               <div className='text-muted-foreground/50 text-[10px]'>
                 / {tokenUnitLabel} tokens
                 {dynamicSummary.tierCount > 1 &&
@@ -179,62 +191,71 @@ export function usePricingColumns(
         }
 
         const isTokenBased = isTokenBasedModel(model)
-        const showBase = hasBillingDiscount(model, selectedGroup)
 
         if (isTokenBased) {
-          const inputPrice = stripTrailingZeros(
-            formatPrice(
-              model,
-              'input',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              selectedGroup
+          const inputPair = withOriginalPrice(
+            stripTrailingZeros(
+              formatPrice(
+                model,
+                'input',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate,
+                selectedGroup
+              )
+            ),
+            stripTrailingZeros(
+              formatBasePrice(
+                model,
+                'input',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )
             )
           )
-          const outputPrice = stripTrailingZeros(
-            formatPrice(
-              model,
-              'output',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              selectedGroup
+          const outputPair = withOriginalPrice(
+            stripTrailingZeros(
+              formatPrice(
+                model,
+                'output',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate,
+                selectedGroup
+              )
+            ),
+            stripTrailingZeros(
+              formatBasePrice(
+                model,
+                'output',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )
             )
           )
+          // Input and output share one billing ratio, so the original line is
+          // only meaningful when both prices differ from it.
+          const originalLine =
+            inputPair.original && outputPair.original
+              ? `${inputPair.original} / ${outputPair.original}`
+              : null
 
           return (
             <div className='max-w-full min-w-0'>
               <span className='font-mono text-sm tabular-nums'>
-                {inputPrice}
+                {inputPair.effective}
                 <span className='text-muted-foreground/40 mx-1'>/</span>
-                {outputPrice}
+                {outputPair.effective}
               </span>
-              {showBase && (
-                <div className='text-muted-foreground/50 font-mono text-[10px] tabular-nums line-through'>
-                  {stripTrailingZeros(
-                    formatBasePrice(
-                      model,
-                      'input',
-                      tokenUnit,
-                      showRechargePrice,
-                      priceRate,
-                      usdExchangeRate
-                    )
-                  )}
-                  <span className='mx-1'>/</span>
-                  {stripTrailingZeros(
-                    formatBasePrice(
-                      model,
-                      'output',
-                      tokenUnit,
-                      showRechargePrice,
-                      priceRate,
-                      usdExchangeRate
-                    )
-                  )}
+              {originalLine && (
+                <div className='text-[10px] tabular-nums'>
+                  <OriginalPrice value={originalLine} />
                 </div>
               )}
               <div className='text-muted-foreground/50 text-[10px]'>
@@ -244,29 +265,34 @@ export function usePricingColumns(
           )
         }
 
-        const price = stripTrailingZeros(
-          formatRequestPrice(
-            model,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
-            selectedGroup
+        const requestPair = withOriginalPrice(
+          stripTrailingZeros(
+            formatRequestPrice(
+              model,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate,
+              selectedGroup
+            )
+          ),
+          stripTrailingZeros(
+            formatBaseRequestPrice(
+              model,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
+            )
           )
         )
 
         return (
           <div className='max-w-full min-w-0'>
-            <span className='font-mono text-sm tabular-nums'>{price}</span>
-            {showBase && (
-              <div className='text-muted-foreground/50 font-mono text-[10px] tabular-nums line-through'>
-                {stripTrailingZeros(
-                  formatBaseRequestPrice(
-                    model,
-                    showRechargePrice,
-                    priceRate,
-                    usdExchangeRate
-                  )
-                )}
+            <span className='font-mono text-sm tabular-nums'>
+              {requestPair.effective}
+            </span>
+            {requestPair.original && (
+              <div className='text-[10px] tabular-nums'>
+                <OriginalPrice value={requestPair.original} />
               </div>
             )}
             <div className='text-muted-foreground/50 text-[10px]'>
@@ -314,6 +340,13 @@ export function usePricingColumns(
               <span className='font-mono text-sm tabular-nums'>
                 {stripTrailingZeros(cacheEntry.formatted)}
               </span>
+              {cacheEntry.originalFormatted && (
+                <div className='text-[10px] tabular-nums'>
+                  <OriginalPrice
+                    value={stripTrailingZeros(cacheEntry.originalFormatted)}
+                  />
+                </div>
+              )}
               <div className='text-muted-foreground/50 text-[10px]'>
                 / {tokenUnitLabel}
               </div>
@@ -327,23 +360,40 @@ export function usePricingColumns(
           return <span className='text-muted-foreground/30 text-xs'>—</span>
         }
 
-        const cachedPrice = stripTrailingZeros(
-          formatPrice(
-            model,
-            'cache',
-            tokenUnit,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
-            selectedGroup
+        const cachedPair = withOriginalPrice(
+          stripTrailingZeros(
+            formatPrice(
+              model,
+              'cache',
+              tokenUnit,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate,
+              selectedGroup
+            )
+          ),
+          stripTrailingZeros(
+            formatBasePrice(
+              model,
+              'cache',
+              tokenUnit,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
+            )
           )
         )
 
         return (
           <div className='max-w-full min-w-0'>
             <span className='font-mono text-sm tabular-nums'>
-              {cachedPrice}
+              {cachedPair.effective}
             </span>
+            {cachedPair.original && (
+              <div className='text-[10px] tabular-nums'>
+                <OriginalPrice value={cachedPair.original} />
+              </div>
+            )}
             <div className='text-muted-foreground/50 text-[10px]'>
               / {tokenUnitLabel}
             </div>

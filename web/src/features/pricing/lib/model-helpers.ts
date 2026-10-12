@@ -109,30 +109,6 @@ export function getDisplayGroupRatio(
   return getDisplayBillingRatio(model, selectedGroup).min
 }
 
-/**
- * Whether the effective billing ratio differs from 1×, meaning the displayed
- * price is discounted or surcharged relative to the raw model price.
- */
-export function hasBillingDiscount(
-  model: PricingModel,
-  selectedGroup?: string
-): boolean {
-  const ratio = getDisplayBillingRatio(model, selectedGroup)
-  return ratio.min !== 1 || ratio.max !== 1
-}
-
-/**
- * Whether a specific group's billing ratio differs from 1×.
- */
-export function hasGroupBillingDiscount(
-  model: PricingModel,
-  group: string,
-  groupRatio: Record<string, number> = model.group_ratio ?? {}
-): boolean {
-  const ratio = getGroupBillingRatio(model, group, groupRatio)
-  return ratio.min !== 1 || ratio.max !== 1
-}
-
 export function formatBillingRatio(
   ratio: Pick<BillingRatio, 'min' | 'max'>
 ): string {

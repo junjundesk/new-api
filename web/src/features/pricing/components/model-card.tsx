@@ -27,21 +27,19 @@ import { cn } from '@/lib/utils'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { getDynamicPricingSummary } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import {
-  getDisplayBillingRatio,
-  hasBillingDiscount,
-  isTokenBasedModel,
-} from '../lib/model-helpers'
+import { getDisplayBillingRatio, isTokenBasedModel } from '../lib/model-helpers'
 import {
   formatBasePrice,
   formatBaseRequestPrice,
   formatPrice,
   formatRequestPrice,
+  withOriginalPrice,
 } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelBillingRatio } from './model-billing-ratio'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
+import { OriginalPrice } from './original-price'
 
 export interface ModelCardProps {
   model: PricingModel
@@ -120,6 +118,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               <span className='text-foreground font-mono font-semibold'>
                 {entry.formatted}
               </span>
+              {entry.originalFormatted && (
+                <OriginalPrice
+                  value={entry.originalFormatted}
+                  className='ml-1 text-xs'
+                />
+              )}
             </span>
           ))}
         </>
@@ -132,113 +136,133 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       )
     }
   } else if (isTokenBased) {
-    const showBase = hasBillingDiscount(props.model, props.selectedGroup)
+    const inputPair = withOriginalPrice(
+      formatPrice(
+        props.model,
+        'input',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate,
+        props.selectedGroup
+      ),
+      formatBasePrice(
+        props.model,
+        'input',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate
+      )
+    )
+    const outputPair = withOriginalPrice(
+      formatPrice(
+        props.model,
+        'output',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate,
+        props.selectedGroup
+      ),
+      formatBasePrice(
+        props.model,
+        'output',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate
+      )
+    )
+    const cachedPair = withOriginalPrice(
+      formatPrice(
+        props.model,
+        'cache',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate,
+        props.selectedGroup
+      ),
+      formatBasePrice(
+        props.model,
+        'cache',
+        tokenUnit,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate
+      )
+    )
+
     priceSummary = (
       <>
         <span className='text-muted-foreground whitespace-nowrap'>
           {t('Input')}{' '}
           <span className='text-foreground font-mono font-semibold'>
-            {formatPrice(
-              props.model,
-              'input',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              props.selectedGroup
-            )}
+            {inputPair.effective}
           </span>
-          {showBase && (
-            <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
-              {formatBasePrice(
-                props.model,
-                'input',
-                tokenUnit,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate
-              )}
-            </span>
+          {inputPair.original && (
+            <OriginalPrice
+              value={inputPair.original}
+              className='ml-1 text-xs'
+            />
           )}
         </span>
         <span className='text-muted-foreground whitespace-nowrap'>
           {t('Output')}{' '}
           <span className='text-foreground font-mono font-semibold'>
-            {formatPrice(
-              props.model,
-              'output',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              props.selectedGroup
-            )}
+            {outputPair.effective}
           </span>
-          {showBase && (
-            <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
-              {formatBasePrice(
-                props.model,
-                'output',
-                tokenUnit,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate
-              )}
-            </span>
+          {outputPair.original && (
+            <OriginalPrice
+              value={outputPair.original}
+              className='ml-1 text-xs'
+            />
           )}
         </span>
         {hasCachedPrice && (
           <span className='text-muted-foreground whitespace-nowrap'>
             {t('Cached')}{' '}
             <span className='text-foreground font-mono font-semibold'>
-              {formatPrice(
-                props.model,
-                'cache',
-                tokenUnit,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate,
-                props.selectedGroup
-              )}
+              {cachedPair.effective}
             </span>
-            {showBase && (
-              <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
-                {formatBasePrice(
-                  props.model,
-                  'cache',
-                  tokenUnit,
-                  showRechargePrice,
-                  priceRate,
-                  usdExchangeRate
-                )}
-              </span>
+            {cachedPair.original && (
+              <OriginalPrice
+                value={cachedPair.original}
+                className='ml-1 text-xs'
+              />
             )}
           </span>
         )}
       </>
     )
   } else {
-    const showBase = hasBillingDiscount(props.model, props.selectedGroup)
+    const requestPair = withOriginalPrice(
+      formatRequestPrice(
+        props.model,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate,
+        props.selectedGroup
+      ),
+      formatBaseRequestPrice(
+        props.model,
+        showRechargePrice,
+        priceRate,
+        usdExchangeRate
+      )
+    )
+
     priceSummary = (
       <span className='text-muted-foreground whitespace-nowrap'>
         <span className='text-foreground font-mono font-semibold'>
-          {formatRequestPrice(
-            props.model,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
-            props.selectedGroup
-          )}
+          {requestPair.effective}
         </span>
-        {showBase && (
-          <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
-            {formatBaseRequestPrice(
-              props.model,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate
-            )}
-          </span>
+        {requestPair.original && (
+          <OriginalPrice
+            value={requestPair.original}
+            className='ml-1 text-xs'
+          />
         )}{' '}
         / {t('request')}
       </span>

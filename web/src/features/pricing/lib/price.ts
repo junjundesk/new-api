@@ -30,8 +30,9 @@ import { getGroupBillingRatio, getDisplayBillingRatio } from './model-helpers'
  * Strip trailing zeros from formatted price string while preserving currency symbols
  */
 export function stripTrailingZeros(formatted: string): string {
-  if (formatted.includes('–'))
+  if (formatted.includes('–')) {
     return formatted.split('–').map(stripTrailingZeros).join('–')
+  }
   // Match currency symbol at start, number, and potential 'k' suffix
   const match = formatted.match(/^([^\d-]*)([-\d,]+\.?\d*)(k?)$/)
   if (!match) return formatted
@@ -54,6 +55,31 @@ export function stripTrailingZeros(formatted: string): string {
   }
 
   return `${symbol}${result}${suffix}`
+}
+
+/**
+ * A price rendered together with its pre-ratio original.
+ *
+ * `original` stays undefined when the effective price already is the original
+ * one, so callers render a single price instead of a strikethrough that crosses
+ * out the same number it sits next to.
+ */
+export type PricePair = {
+  effective: string
+  original?: string
+}
+
+/**
+ * Pair a ratio-applied price with its 1x original price.
+ *
+ * Ratios that do not change the rendered amount (for example 1.0000001x) count
+ * as no discount, because the formatted prices are what users compare.
+ */
+export function withOriginalPrice(
+  effective: string,
+  original: string
+): PricePair {
+  return effective === original ? { effective } : { effective, original }
 }
 
 /**
