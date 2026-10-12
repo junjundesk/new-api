@@ -22,10 +22,43 @@ import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { EnterpriseSettingsSection } from '../general/enterprise-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
+import { ReferralSettingsSection } from '../general/referral-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+
+import type { ReferralTierDefaults } from '../general/referral-settings-section'
+
+// parseReferralTiers decodes the stored referral tier list. The backend keeps
+// it as a JSON array; an unparsable value falls back to an empty list so the
+// section renders its default row instead of crashing the settings page.
+function parseReferralTiers(raw: string | undefined): ReferralTierDefaults[] {
+  if (!raw) {
+    return []
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.flatMap((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return []
+      }
+      const { min_invitees: minInvitees, rate_bps: rateBps } = entry as Record<
+        string,
+        unknown
+      >
+      if (typeof minInvitees !== 'number' || typeof rateBps !== 'number') {
+        return []
+      }
+      return [{ min_invitees: minInvitees, rate_bps: rateBps }]
+    })
+  } catch {
+    return []
+  }
+}
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -210,6 +243,35 @@ const BILLING_SECTIONS = [
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
         }}
+      />
+    ),
+  },
+  {
+    id: 'referral',
+    titleKey: 'Referral Program',
+    build: (settings: BillingSettings) => (
+      <ReferralSettingsSection
+        defaultValues={{
+          enabled: settings['referral_setting.enabled'],
+          inviteeFirstTopUpEnabled:
+            settings['referral_setting.invitee_first_topup_enabled'],
+          inviteeFirstTopUpRateBps:
+            settings['referral_setting.invitee_first_topup_rate_bps'],
+          inviteeFirstTopUpMaxQuota:
+            settings['referral_setting.invitee_first_topup_max_quota'],
+          inviterEnabled: settings['referral_setting.inviter_enabled'],
+          inviterTiers: parseReferralTiers(
+            settings['referral_setting.inviter_tiers']
+          ),
+          inviterMaxQuota: settings['referral_setting.inviter_max_quota'],
+          bonusDuration: settings['referral_setting.bonus_duration'],
+          countRedeemAsValid:
+            settings['referral_setting.count_redeem_as_valid'],
+        }}
+        complianceConfirmed={
+          (settings['payment_setting.compliance_confirmed'] ?? false) &&
+          settings['payment_setting.compliance_terms_version'] === 'v1'
+        }
       />
     ),
   },

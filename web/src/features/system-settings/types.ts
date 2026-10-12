@@ -260,6 +260,15 @@ export type BillingSettings = {
   'bonus_setting.signup_bonus_duration': string
   'bonus_setting.bonus_email_subject': string
   'bonus_setting.bonus_email_content': string
+  'referral_setting.enabled': boolean
+  'referral_setting.invitee_first_topup_enabled': boolean
+  'referral_setting.invitee_first_topup_rate_bps': number
+  'referral_setting.invitee_first_topup_max_quota': number
+  'referral_setting.inviter_enabled': boolean
+  'referral_setting.inviter_tiers': string
+  'referral_setting.inviter_max_quota': number
+  'referral_setting.bonus_duration': string
+  'referral_setting.count_redeem_as_valid': boolean
   QuotaPerUnit: number
   USDExchangeRate: number
   'general_setting.quota_display_type': string

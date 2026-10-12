@@ -297,6 +297,7 @@ func migrateDB() error {
 		&CasbinRule{},
 		&AuthzRole{},
 		&UserRechargeRecord{},
+		&ReferralCharge{},
 	)
 	if err != nil {
 		return err
@@ -363,6 +364,7 @@ func migrateDBFast() error {
 		{&SystemTask{}, "SystemTask"},
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&UserRechargeRecord{}, "UserRechargeRecord"},
+		{&ReferralCharge{}, "ReferralCharge"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -418,6 +420,9 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
 		return err
 	}
+	if err := migrateClickHouseLogColumns(); err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 
@@ -466,11 +471,18 @@ CREATE TABLE IF NOT EXISTS logs (
 	ip String DEFAULT '',
 	request_id String DEFAULT '',
 	upstream_request_id String DEFAULT '',
-	other String DEFAULT ''
+	other String DEFAULT '',
+	admin_only UInt8 DEFAULT 0
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(toDateTime(created_at))
 ORDER BY (created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
+}
+
+// migrateClickHouseLogColumns 为已存在的 ClickHouse 日志表补齐新增列。
+// CREATE TABLE IF NOT EXISTS 不会改动旧表结构，必须显式 ADD COLUMN。
+func migrateClickHouseLogColumns() error {
+	return LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS admin_only UInt8 DEFAULT 0").Error
 }
 
 func syncClickHouseLogTTL(ttlDays int) error {

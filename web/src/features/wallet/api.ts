@@ -31,6 +31,8 @@ import type {
   StripePaymentResponse,
   AffiliateCodeResponse,
   AffiliateTransferResponse,
+  ReferralSummaryResponse,
+  ReferralChargeResponse,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -196,6 +198,27 @@ export async function transferAffiliateQuota(
   request: AffiliateTransferRequest
 ): Promise<AffiliateTransferResponse> {
   const res = await api.post('/api/user/aff_transfer', request)
+  return res.data
+}
+
+/**
+ * Get the referral program summary for the invite page
+ */
+export async function getReferralSummary(): Promise<ReferralSummaryResponse> {
+  const res = await api.get('/api/user/referral/summary')
+  return res.data
+}
+
+/**
+ * Get one page of the caller's referral reward history
+ */
+export async function getReferralCharges(
+  page: number,
+  pageSize: number
+): Promise<ReferralChargeResponse> {
+  const res = await api.get(
+    `/api/user/referral/charges?page=${page}&page_size=${pageSize}`
+  )
   return res.data
 }
 

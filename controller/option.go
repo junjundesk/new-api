@@ -152,6 +152,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
 			return
 		}
+		// The referral program pays out quota, so enabling it or configuring a
+		// positive rate requires the same compliance confirmation as every
+		// other payment-linked reward setting.
+		if isReferralPayoutOption(c, option.Key, option.Value.(string)) {
+			return
+		}
 	}
 	switch option.Key {
 	case "GitHubOAuthEnabled":

@@ -70,6 +70,7 @@ type Log struct {
 	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
 	UseTime           int    `json:"use_time" gorm:"default:0"`
 	IsStream          bool   `json:"is_stream"`
+	AdminOnly         bool   `json:"-"` // 仅管理员可见：同一请求中被后续尝试取代的中间失败记录
 	ChannelId         int    `json:"channel" gorm:"index"`
 	ChannelName       string `json:"channel_name" gorm:"->"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
@@ -173,12 +174,22 @@ func requestClientIP(c *gin.Context) string {
 	return common.RequestClientIP(c)
 }
 
+// applyUserVisibleLogFilter 过滤掉仅管理员可见的日志行（同一次请求中已被后续
+// 尝试取代的中间失败记录）。新增 admin_only 列之前写入的历史行该列为 NULL，
+// 按可见处理；ClickHouse 走独立的建表语句，该列是 UInt8 且不可为空，直接比较。
+func applyUserVisibleLogFilter(tx *gorm.DB) *gorm.DB {
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return tx.Where("admin_only = 0")
+	}
+	return tx.Where("admin_only = ? OR admin_only IS NULL", false)
+}
+
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("")
 	}
-	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	err = applyUserVisibleLogFilter(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId)).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -321,39 +332,55 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	}
 }
 
-func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
-	isStream bool, group string, other map[string]interface{}) {
-	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, common.LocalLogPreview(content)))
+type RecordErrorLogParams struct {
+	UserId         int
+	ChannelId      int
+	ModelName      string
+	TokenName      string
+	Content        string
+	TokenId        int
+	UseTimeSeconds int
+	IsStream       bool
+	Group          string
+	Other          map[string]interface{}
+	// AdminOnly 置位时该日志仅管理员可见：同一次请求中已被后续尝试取代的中间
+	// 失败记录不写入用户的日志列表（见 applyUserVisibleLogFilter）。
+	AdminOnly bool
+}
+
+func RecordErrorLog(c *gin.Context, params RecordErrorLogParams) {
+	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", params.UserId, params.ChannelId, params.ModelName, params.TokenName, common.LocalLogPreview(params.Content)))
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	requestIP := requestClientIP(c)
-	other = attachRequestIPForAdmin(other, requestIP)
+	other := attachRequestIPForAdmin(params.Other, requestIP)
 	common.AttachClientInfoToOther(other, c.GetHeader("User-Agent"))
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
-	if settingMap, err := GetUserSetting(userId, false); err == nil {
+	if settingMap, err := GetUserSetting(params.UserId, false); err == nil {
 		if settingMap.RecordIpLog {
 			needRecordIp = true
 		}
 	}
 	log := &Log{
-		UserId:           userId,
+		UserId:           params.UserId,
 		Username:         username,
 		CreatedAt:        common.GetTimestamp(),
 		Type:             LogTypeError,
-		Content:          content,
+		Content:          params.Content,
 		PromptTokens:     0,
 		CompletionTokens: 0,
-		TokenName:        tokenName,
-		ModelName:        modelName,
+		TokenName:        params.TokenName,
+		ModelName:        params.ModelName,
 		Quota:            0,
-		ChannelId:        channelId,
-		TokenId:          tokenId,
-		UseTime:          useTimeSeconds,
-		IsStream:         isStream,
-		Group:            resolveLogGroupName(userId, group),
+		ChannelId:        params.ChannelId,
+		TokenId:          params.TokenId,
+		UseTime:          params.UseTimeSeconds,
+		IsStream:         params.IsStream,
+		AdminOnly:        params.AdminOnly,
+		Group:            resolveLogGroupName(params.UserId, params.Group),
 		Ip: func() string {
 			if needRecordIp {
 				return requestIP
@@ -631,6 +658,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
 	} else {
 		tx = LOG_DB.Where("logs.user_id = ? and logs.type = ?", userId, logType)
+	}
+	if !includeAdminInfo {
+		tx = applyUserVisibleLogFilter(tx)
 	}
 
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {

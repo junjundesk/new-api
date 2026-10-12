@@ -23,6 +23,9 @@ const (
 	BonusSourceAdmin  = "admin"
 	BonusSourceSignup = "signup"
 	BonusSourceAll    = "admin_all"
+	// BonusSourceReferral marks quota granted by the referral program: the
+	// invitee's first top-up reward and the inviter's commission.
+	BonusSourceReferral = "referral"
 )
 
 // UserBonusGrant is a single expiring bonus credit for a user. Grants are

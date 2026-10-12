@@ -221,6 +221,101 @@ export interface AffiliateTransferRequest {
 }
 
 /**
+ * One inviter commission bracket of the referral program
+ */
+export interface ReferralTier {
+  /** Valid invitee count required for this tier */
+  min_invitees: number
+  /** Commission rate in basis points (100 = 1%) */
+  rate_bps: number
+}
+
+/**
+ * Invite page summary returned by /api/user/referral/summary
+ */
+export interface ReferralSummary {
+  /** Whether the referral program is enabled site-wide */
+  enabled: boolean
+  /** The caller's invite code */
+  aff_code?: string
+  /** Reward recorded but not yet paid out */
+  pending_quota: number
+  /** Reward paid out to date */
+  total_quota: number
+  /** Reward in the claimable referral balance */
+  claimable_quota: number
+  /** Lifetime reward accrued */
+  history_quota: number
+  /** Invitees whose first top-up counted as valid */
+  valid_invitees: number
+  /** Users who registered with this invite code */
+  registered_count: number
+  /** Commission rate that applies right now */
+  current_rate_bps: number
+  /** Invitees needed for the next tier (0 = top tier) */
+  next_tier_invitees: number
+  /** Commission rate at the next tier */
+  next_tier_rate_bps: number
+  /** The invitee's own first top-up reward rate */
+  invitee_rate_bps: number
+  /** Whether the invitee-side reward is enabled */
+  invitee_reward_enabled: boolean
+  /** Whether the inviter-side commission is enabled */
+  inviter_reward_enabled: boolean
+  /** Reward bonus validity period, as a duration string */
+  bonus_duration: string
+  /** Whether redemption codes count toward tier progress */
+  count_redeem_as_valid: boolean
+  /** Commission ladder */
+  tiers: ReferralTier[]
+  /** Whether the admin confirmed payment compliance */
+  compliance_confirmed: boolean
+  /** Minimum quota for a balance transfer */
+  transfer_min_quota: number
+  /** Whether the withdrawal entry point is live (currently a placeholder) */
+  withdrawal_available: boolean
+}
+
+/**
+ * One referral reward record
+ */
+export interface ReferralCharge {
+  id: number
+  /** Recipient of the reward */
+  user_id: number
+  /** Inviter user id, 0 for invitee-side rewards */
+  inviter_id: number
+  /** Paying invitee */
+  invitee_id: number
+  /** 1 = inviter commission, 2 = invitee first-top-up reward */
+  kind: number
+  /** Quota base the percentage was applied to */
+  base_quota: number
+  /** Commission rate in basis points */
+  rate_bps: number
+  /** Reward amount in quota */
+  amount: number
+  /** 0 = pending, 1 = paid, 2 = canceled */
+  status: number
+  create_time: number
+  settle_time: number
+  remark: string
+}
+
+/**
+ * Paginated referral reward history
+ */
+export interface ReferralChargePage {
+  items: ReferralCharge[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type ReferralSummaryResponse = ApiResponse<ReferralSummary>
+export type ReferralChargeResponse = ApiResponse<ReferralChargePage>
+
+/**
  * User wallet data
  */
 export interface UserWalletData {

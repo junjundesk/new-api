@@ -95,10 +95,29 @@ func ValidateTopUpQuotaCapacity(userId int, creditedQuota int) error {
 	return nil
 }
 
+// topUpCreditSource identifies the record whose success triggered a wallet
+// credit, so the referral program can record its rewards against a stable
+// idempotency key in the same transaction as the credit itself.
+type topUpCreditSource struct {
+	// refKind is the source table, one of the ReferralRef* constants.
+	refKind string
+	// refId is the row id inside that table.
+	refId int
+	// countAsValid marks a source that may promote the inviter's tier.
+	countAsValid bool
+}
+
 // creditTopUpQuota atomically enforces the int32 wallet ceiling while adding
 // quota. Keeping the predicate and increment in one UPDATE prevents two
 // concurrent callbacks from both passing a separate read/check.
 func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[string]interface{}) error {
+	return creditTopUpQuotaFrom(tx, userId, creditedQuota, updates, nil)
+}
+
+// creditTopUpQuotaFrom is creditTopUpQuota plus referral recording. The
+// referral charge is written in the same transaction as the wallet credit, so
+// a credited top-up can never exist without its reward being recorded.
+func creditTopUpQuotaFrom(tx *gorm.DB, userId int, creditedQuota int, updates map[string]interface{}, source *topUpCreditSource) error {
 	maxCurrentQuota, err := topUpQuotaMaxCurrent(creditedQuota)
 	if err != nil {
 		return err
@@ -116,18 +135,21 @@ func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[st
 	if result.Error != nil {
 		return result.Error
 	}
-	if result.RowsAffected == 1 {
-		return nil
+	if result.RowsAffected != 1 {
+		var count int64
+		if err := tx.Model(&User{}).Where("id = ?", userId).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return ErrTopUpQuotaLimitExceeded
 	}
 
-	var count int64
-	if err := tx.Model(&User{}).Where("id = ?", userId).Count(&count).Error; err != nil {
-		return err
+	if source == nil {
+		return nil
 	}
-	if count == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return ErrTopUpQuotaLimitExceeded
+	return RecordReferralTopUp(tx, userId, source.refKind, source.refId, int64(creditedQuota), source.countAsValid)
 }
 
 func (topUp *TopUp) Update() error {
@@ -232,7 +254,7 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callbackMoney stri
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
-		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
+		return creditTopUpQuotaFrom(tx, topUp.UserId, quotaToAdd, nil, referralSourceForTopUp(topUp))
 	})
 	if err != nil {
 		if !errors.Is(err, ErrTopUpNotFound) && !errors.Is(err, ErrPaymentMethodMismatch) && !errors.Is(err, ErrTopUpStatusInvalid) {
@@ -290,9 +312,9 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 		if err != nil || quota <= 0 {
 			return ErrInvalidTopUpQuota
 		}
-		return creditTopUpQuota(tx, topUp.UserId, quota, map[string]interface{}{
+		return creditTopUpQuotaFrom(tx, topUp.UserId, quota, map[string]interface{}{
 			"stripe_customer": customerId,
-		})
+		}, referralSourceForTopUp(topUp))
 	})
 
 	if err != nil {
@@ -520,7 +542,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		}
 
 		// 增加用户额度（立即写库，保持一致性）
-		if err := creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil); err != nil {
+		if err := creditTopUpQuotaFrom(tx, topUp.UserId, quotaToAdd, nil, referralSourceForTopUp(topUp)); err != nil {
 			return err
 		}
 
@@ -597,7 +619,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			}
 		}
 
-		return creditTopUpQuota(tx, topUp.UserId, quota, updateFields)
+		return creditTopUpQuotaFrom(tx, topUp.UserId, quota, updateFields, referralSourceForTopUp(topUp))
 	})
 
 	if err != nil {
@@ -655,7 +677,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return err
 		}
 
-		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
+		return creditTopUpQuotaFrom(tx, topUp.UserId, quotaToAdd, nil, referralSourceForTopUp(topUp))
 	})
 
 	if err != nil {
@@ -715,7 +737,7 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 			return err
 		}
 
-		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
+		return creditTopUpQuotaFrom(tx, topUp.UserId, quotaToAdd, nil, referralSourceForTopUp(topUp))
 	})
 
 	if err != nil {

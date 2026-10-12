@@ -569,21 +569,6 @@ func HardDeleteUserById(id int) error {
 	return user.HardDelete()
 }
 
-func inviteUser(inviterId int) error {
-	result := DB.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]interface{}{
-		"aff_count":   gorm.Expr("aff_count + ?", 1),
-		"aff_quota":   gorm.Expr("aff_quota + ?", common.QuotaForInviter),
-		"aff_history": gorm.Expr("aff_history + ?", common.QuotaForInviter),
-	})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
-}
-
 func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
@@ -680,6 +665,9 @@ func (user *User) Insert(inviterId int) error {
 			}
 			user.Quota = common.QuotaForNewUser
 			user.AffCode = common.GetRandomString(4)
+			// The inviter is passed alongside the user rather than being set on
+			// the struct by every caller, so assign it here before the insert.
+			user.InviterId = inviterId
 
 			// 初始化用户设置，包括默认的边栏配置
 			if user.Setting == "" {
@@ -718,17 +706,38 @@ func (user *User) finishInsert(inviterId int) {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
 	grantSignupBonus(user.Id)
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
-		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
-			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
-		}
-		if common.QuotaForInviter > 0 {
-			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
+	grantInviterQuotaForInvitee(user.Id, inviterId)
+}
+
+// grantInviterQuotaForInvitee grants the legacy QuotaForInvitee setting to a
+// user who registered with an invite code.
+//
+// Registration must never credit the spendable/withdrawable balance: that made
+// the inviter reward payable for a bare signup, with no top-up behind it. The
+// amount is therefore issued as expiring bonus instead. Inviter commissions are
+// no longer granted here at all; they accrue per top-up through the referral
+// program, so this only covers the invitee's own welcome quota.
+func grantInviterQuotaForInvitee(userId int, inviterId int) {
+	if inviterId == 0 || common.QuotaForInvitee <= 0 {
+		return
+	}
+	if !operation_setting.IsPaymentComplianceConfirmed() {
+		return
+	}
+	expireTime := int64(0)
+	if duration := operation_setting.GetReferralSetting().BonusDuration; duration != "" {
+		d, err := ParseBonusDuration(duration)
+		if err != nil {
+			common.SysError(fmt.Sprintf("invalid bonus duration %q for inviter quota: %s", duration, err.Error()))
+		} else {
+			expireTime = common.GetTimestamp() + int64(d.Seconds())
 		}
 	}
+	if _, err := GrantBonus(userId, int64(common.QuotaForInvitee), expireTime, BonusSourceSignup, "使用邀请码赠送"); err != nil {
+		common.SysError(fmt.Sprintf("failed to grant inviter quota bonus to user %d: %s", userId, err.Error()))
+		return
+	}
+	RecordLog(userId, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s（赠金）", logger.LogQuota(common.QuotaForInvitee)))
 }
 
 // grantSignupBonus issues the configured signup bonus (赠金) to a new user.
@@ -769,6 +778,10 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		}
 		user.Quota = common.QuotaForNewUser
 		user.AffCode = common.GetRandomString(4)
+		// The caller passes inviterId separately from the user struct, so it
+		// must be assigned here; otherwise an OAuth signup would be created
+		// with inviter_id = 0 and the referral relationship would be lost.
+		user.InviterId = inviterId
 
 		// 初始化用户设置
 		if user.Setting == "" {
@@ -800,16 +813,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
 	grantSignupBonus(user.Id)
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
-		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
-			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
-		}
-		if common.QuotaForInviter > 0 {
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
-		}
-	}
+	grantInviterQuotaForInvitee(user.Id, inviterId)
 }
 
 func (user *User) Update(updatePassword bool) error {

@@ -253,12 +253,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
 
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+		// 这次失败之后是否还会继续尝试（候选回退或渠道级重试）。用户侧日志
+		// 只保留该请求最终结果，被后续尝试取代的中间失败对用户隐藏。
+		failoverToNextCandidate := helper.ShouldFailoverToNextModelCandidate(c, relayInfo, newAPIError)
+		continueAfterThisAttempt := failoverToNextCandidate
+		if !continueAfterThisAttempt && retryParam.GetRetry() < relayRetryLimit(c) {
+			continueAfterThisAttempt = shouldRetry(c, newAPIError, relayRetryLimit(c)-retryParam.GetRetry())
+		}
+
+		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, continueAfterThisAttempt)
 
 		// 模型映射配置了多个候选模型时，先在同一渠道内换下一个候选重试，
 		// 候选全部用尽后再回到常规的渠道级重试。候选进度按渠道记录，
 		// 换到其它渠道时自动从第一个候选重新开始。
-		if helper.ShouldFailoverToNextModelCandidate(c, relayInfo, newAPIError) && helper.AdvanceModelCandidate(relayInfo) {
+		if failoverToNextCandidate && helper.AdvanceModelCandidate(relayInfo) {
 			logger.LogInfo(c, fmt.Sprintf("模型映射候选失败，切换下一个候选模型（channel #%d）：%s -> %s", channel.Id, relayInfo.UpstreamModelName, helper.CurrentModelCandidate(relayInfo)))
 			retryParam.SetPinnedChannel(channel)
 			retryParam.ResetRetryNextTry()
@@ -266,7 +274,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		retryParam.ClearPinnedChannel()
 
-		if !shouldRetry(c, newAPIError, relayRetryLimit(c)-retryParam.GetRetry()) {
+		if !continueAfterThisAttempt {
 			break
 		}
 	}
@@ -401,7 +409,10 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
+// processChannelError 记录渠道错误并视情况禁用渠道。errorLogAdminOnly 置位时
+// 错误日志仅管理员可见：该次失败已被同一请求的后续尝试取代，用户侧的日志列表
+// 只保留这次请求的最终结果（成功消费日志或最后一次失败日志）。
+func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, errorLogAdminOnly bool) {
 	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
@@ -443,7 +454,19 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			startTime = time.Now()
 		}
 		useTimeSeconds := int(time.Since(startTime).Seconds())
-		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
+		model.RecordErrorLog(c, model.RecordErrorLogParams{
+			UserId:         userId,
+			ChannelId:      channelId,
+			ModelName:      modelName,
+			TokenName:      tokenName,
+			Content:        err.MaskSensitiveErrorWithStatusCode(),
+			TokenId:        tokenId,
+			UseTimeSeconds: useTimeSeconds,
+			IsStream:       common.GetContextKeyBool(c, constant.ContextKeyIsStream),
+			Group:          userGroup,
+			Other:          other,
+			AdminOnly:      errorLogAdminOnly,
+		})
 	}
 
 }
@@ -601,14 +624,22 @@ func RelayTask(c *gin.Context) {
 		}
 
 		if !taskErr.LocalError {
+			// 与同步请求一致：这次失败之后还会继续尝试（候选回退或渠道级重试）
+			// 时，错误日志仅管理员可见，用户侧只保留最终结果。
+			apiErr := types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
+			failoverToNextCandidate := helper.ShouldFailoverToNextModelCandidate(c, relayInfo, apiErr)
+			continueAfterThisAttempt := failoverToNextCandidate
+			if !continueAfterThisAttempt && retryParam.GetRetry() < relayRetryLimit(c) {
+				continueAfterThisAttempt = shouldRetryTaskRelay(c, channel.Id, taskErr, relayRetryLimit(c)-retryParam.GetRetry())
+			}
+
 			processChannelError(c,
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
-				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+				apiErr, continueAfterThisAttempt)
 
 			// 与同步请求一致：多候选模型映射时，先在同一渠道内换下一个候选模型。
-			apiErr := types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
-			if helper.ShouldFailoverToNextModelCandidate(c, relayInfo, apiErr) && helper.AdvanceModelCandidate(relayInfo) {
+			if failoverToNextCandidate && helper.AdvanceModelCandidate(relayInfo) {
 				logger.LogInfo(c, fmt.Sprintf("模型映射候选失败，切换下一个候选模型（channel #%d）：%s -> %s", channel.Id, relayInfo.UpstreamModelName, helper.CurrentModelCandidate(relayInfo)))
 				retryParam.SetPinnedChannel(channel)
 				retryParam.ResetRetryNextTry()

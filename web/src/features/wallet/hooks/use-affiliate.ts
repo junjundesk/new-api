@@ -23,8 +23,10 @@ import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getSelf } from '@/lib/api'
 
-import { getAffiliateCode, transferAffiliateQuota } from '../api'
+import { getAffiliateCode, getReferralSummary, transferAffiliateQuota } from '../api'
 import { generateAffiliateLink } from '../lib'
+
+import type { ReferralSummary } from '../types'
 
 // ============================================================================
 // Affiliate Hook
@@ -33,20 +35,27 @@ import { generateAffiliateLink } from '../lib'
 export function useAffiliate() {
   const [affiliateCode, setAffiliateCode] = useState<string>('')
   const [affiliateLink, setAffiliateLink] = useState<string>('')
+  const [summary, setSummary] = useState<ReferralSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [transferring, setTransferring] = useState(false)
   const { copyToClipboard } = useCopyToClipboard()
 
-  // Fetch affiliate code
+  // Fetch affiliate code and referral program status
   const fetchAffiliateCode = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await getAffiliateCode()
+      const [codeResponse, summaryResponse] = await Promise.all([
+        getAffiliateCode(),
+        getReferralSummary(),
+      ])
 
-      if (response.success && response.data) {
-        setAffiliateCode(response.data)
-        const link = generateAffiliateLink(response.data)
+      if (codeResponse.success && codeResponse.data) {
+        setAffiliateCode(codeResponse.data)
+        const link = generateAffiliateLink(codeResponse.data)
         setAffiliateLink(link)
+      }
+      if (summaryResponse.success && summaryResponse.data) {
+        setSummary(summaryResponse.data)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -90,6 +99,7 @@ export function useAffiliate() {
   return {
     affiliateCode,
     affiliateLink,
+    summary,
     loading,
     transferring,
     copyAffiliateLink,
