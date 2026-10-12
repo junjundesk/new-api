@@ -144,22 +144,19 @@ jobs:
         run: |
           docker buildx imagetools create \
             -t ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }} \
-            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-amd64 \
-            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-arm64
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.tag_prefix }}-amd64
 
       - name: Create & push manifest (GHCR - versioned)
         run: |
           docker buildx imagetools create \
             -t ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }} \
-            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-amd64 \
-            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-arm64
+            ghcr.io/junjundesk/new-api:${{ needs.prepare.outputs.version }}-amd64
 
       - name: Create & push manifest (GHCR - latest)
         run: |
           docker buildx imagetools create \
             -t ghcr.io/junjundesk/new-api:latest \
-            ghcr.io/junjundesk/new-api:latest-amd64 \
-            ghcr.io/junjundesk/new-api:latest-arm64
+            ghcr.io/junjundesk/new-api:latest-amd64
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
