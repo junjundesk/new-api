@@ -146,6 +146,10 @@ export function SidebarModulesSection({
         title: t('Users'),
         description: t('Administer user accounts and roles.'),
       },
+      email: {
+        title: t('Email Center'),
+        description: t('Manage outgoing email and notification settings.'),
+      },
       setting: {
         title: t('System settings'),
         description: t('Advanced platform configuration.'),

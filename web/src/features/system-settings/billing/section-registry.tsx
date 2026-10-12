@@ -22,13 +22,14 @@ import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { EnterpriseSettingsSection } from '../general/enterprise-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
-import { ReferralSettingsSection } from '../general/referral-settings-section'
+import {
+  ReferralSettingsSection,
+  type ReferralTierDefaults,
+} from '../general/referral-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
-
-import type { ReferralTierDefaults } from '../general/referral-settings-section'
 
 // parseReferralTiers decodes the stored referral tier list. The backend keeps
 // it as a JSON array; an unparsable value falls back to an empty list so the
@@ -111,10 +112,6 @@ const BILLING_SECTIONS = [
             signup_bonus_amount: settings['bonus_setting.signup_bonus_amount'],
             signup_bonus_duration:
               settings['bonus_setting.signup_bonus_duration'],
-            bonus_email_subject:
-              settings['bonus_setting.bonus_email_subject'],
-            bonus_email_content:
-              settings['bonus_setting.bonus_email_content'],
           },
         }}
         complianceConfirmed={

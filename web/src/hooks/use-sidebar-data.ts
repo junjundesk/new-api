@@ -142,9 +142,10 @@ export function useSidebarData(): SidebarData {
             icon: Users,
           },
           {
-            title: t('Send Email'),
+            title: t('Email Center'),
             url: '/email',
             icon: Mail,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Redemption Codes'),

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import type { FormEvent } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
@@ -34,16 +35,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-
+import { FormDirtyIndicator } from '@/features/system-settings/components/form-dirty-indicator'
+import { FormNavigationGuard } from '@/features/system-settings/components/form-navigation-guard'
 import {
   SettingsForm,
   SettingsSwitchContent,
   SettingsSwitchItem,
-} from '../components/settings-form-layout'
-import { SettingsPageFormActions } from '../components/settings-page-context'
-import { SettingsSection } from '../components/settings-section'
-import { useResetForm } from '../hooks/use-reset-form'
-import { useUpdateOption } from '../hooks/use-update-option'
+} from '@/features/system-settings/components/settings-form-layout'
+import { SettingsPageFormActions } from '@/features/system-settings/components/settings-page-context'
+import { SettingsSection } from '@/features/system-settings/components/settings-section'
+import { useResetForm } from '@/features/system-settings/hooks/use-reset-form'
+import { useUpdateOption } from '@/features/system-settings/hooks/use-update-option'
 
 const createEmailSchema = (t: (key: string) => string) =>
   z.object({
@@ -112,15 +114,18 @@ export function EmailSettingsSection({
     }
 
     const initial = {
-      SMTPServer: defaultValues.SMTPServer.trim(),
-      SMTPPort: defaultValues.SMTPPort.trim(),
-      SMTPAccount: defaultValues.SMTPAccount.trim(),
-      SMTPFrom: defaultValues.SMTPFrom.trim(),
-      SMTPToken: defaultValues.SMTPToken.trim(),
-      SMTPSSLEnabled: defaultValues.SMTPSSLEnabled,
-      SMTPStartTLSEnabled: defaultValues.SMTPStartTLSEnabled,
-      SMTPInsecureSkipVerify: defaultValues.SMTPInsecureSkipVerify,
-      SMTPForceAuthLogin: defaultValues.SMTPForceAuthLogin,
+      SMTPServer: form.formState.defaultValues?.SMTPServer?.trim() ?? '',
+      SMTPPort: form.formState.defaultValues?.SMTPPort?.trim() ?? '',
+      SMTPAccount: form.formState.defaultValues?.SMTPAccount?.trim() ?? '',
+      SMTPFrom: form.formState.defaultValues?.SMTPFrom?.trim() ?? '',
+      SMTPToken: '',
+      SMTPSSLEnabled: form.formState.defaultValues?.SMTPSSLEnabled ?? false,
+      SMTPStartTLSEnabled:
+        form.formState.defaultValues?.SMTPStartTLSEnabled ?? false,
+      SMTPInsecureSkipVerify:
+        form.formState.defaultValues?.SMTPInsecureSkipVerify ?? false,
+      SMTPForceAuthLogin:
+        form.formState.defaultValues?.SMTPForceAuthLogin ?? false,
     }
 
     const updates: Array<{ key: string; value: string | boolean }> = []
@@ -174,17 +179,28 @@ export function EmailSettingsSection({
     }
 
     for (const update of updates) {
-      await updateOption.mutateAsync(update)
+      const result = await updateOption.mutateAsync(update)
+      if (!result.success) return
     }
+    form.reset({ ...sanitized, SMTPToken: '' })
   }
+
+  const handleSubmit = (event?: FormEvent<HTMLFormElement>) =>
+    form
+      .handleSubmit(onSubmit)(event)
+      .catch(() => undefined)
 
   return (
     <SettingsSection title={t('SMTP Email')}>
+      <FormNavigationGuard
+        when={form.formState.isDirty || form.formState.isSubmitting}
+      />
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)} autoComplete='off'>
+        <SettingsForm onSubmit={handleSubmit} autoComplete='off'>
+          <FormDirtyIndicator isDirty={form.formState.isDirty} />
           <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
+            onSave={handleSubmit}
+            isSaving={updateOption.isPending || form.formState.isSubmitting}
             saveLabel='Save SMTP settings'
           />
           <FormField
