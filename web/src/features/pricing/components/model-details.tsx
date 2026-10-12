@@ -687,7 +687,7 @@ function PriceSection(props: {
                   {entry.originalFormatted && (
                     <OriginalPrice
                       value={entry.originalFormatted}
-                      className='ml-1.5 text-xs font-normal'
+                      className='ml-1.5'
                     />
                   )}
                   <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
@@ -718,7 +718,7 @@ function PriceSection(props: {
                     {entry.originalFormatted && (
                       <OriginalPrice
                         value={entry.originalFormatted}
-                        className='ml-1 text-xs font-normal'
+                        className='ml-1'
                       />
                     )}
                     <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
@@ -760,10 +760,7 @@ function PriceSection(props: {
           <span className='text-foreground font-mono text-sm font-semibold tabular-nums'>
             {requestPair.effective}
             {requestPair.original && (
-              <OriginalPrice
-                value={requestPair.original}
-                className='ml-1.5 text-xs font-normal'
-              />
+              <OriginalPrice value={requestPair.original} className='ml-1.5' />
             )}
           </span>
         </div>
@@ -797,7 +794,7 @@ function PriceSection(props: {
       <>
         {pair.effective}
         {pair.original && (
-          <OriginalPrice value={pair.original} className='ml-1.5 text-xs' />
+          <OriginalPrice value={pair.original} className='ml-1.5' />
         )}
         <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
           / {tokenUnitLabel}
@@ -1112,7 +1109,7 @@ function GroupPricingSection(props: {
     return (
       <span>
         {pair.effective}
-        <OriginalPrice value={pair.original} className='ml-1 text-xs' />
+        <OriginalPrice value={pair.original} className='ml-1' />
       </span>
     )
   }
@@ -1138,7 +1135,7 @@ function GroupPricingSection(props: {
     return (
       <span>
         {pair.effective}
-        <OriginalPrice value={pair.original} className='ml-1 text-xs' />
+        <OriginalPrice value={pair.original} className='ml-1' />
       </span>
     )
   }

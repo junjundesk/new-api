@@ -168,4 +168,28 @@ describe('original price display', () => {
     )
     expect(originalPrices(container)).toEqual(['$4', '$12'])
   })
+
+  it('keeps the original price at the price font size instead of shrinking it', () => {
+    const card = renderUI(
+      <ModelCard model={baseModel} onClick={vi.fn()} selectedGroup='default' />
+    )
+    const cardStruck = card.container.querySelectorAll(
+      '[data-slot="original-price"]'
+    )
+    expect(cardStruck.length).toBeGreaterThan(0)
+    for (const node of cardStruck) {
+      expect(node).toHaveClass('text-sm')
+      expect(node).not.toHaveClass('text-xs')
+    }
+    card.unmount()
+
+    const table = renderUI(
+      <PricingTable models={[baseModel]} selectedGroup='default' />
+    )
+    const tableStruck = table.container.querySelector(
+      '[data-slot="original-price"]'
+    )
+    expect(tableStruck).not.toBeNull()
+    expect(tableStruck).toHaveClass('text-sm')
+  })
 })

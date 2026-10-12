@@ -34,7 +34,7 @@ export function OriginalPrice(props: { value: string; className?: string }) {
       data-slot='original-price'
       title={t('Original price')}
       className={cn(
-        'text-muted-foreground/60 font-mono line-through decoration-red-500',
+        'text-muted-foreground/60 font-mono text-sm font-normal line-through decoration-red-500',
         props.className
       )}
     >

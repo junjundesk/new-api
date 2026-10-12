@@ -175,7 +175,7 @@ export function usePricingColumns(
                 ))}
               </span>
               {originalLine && (
-                <div className='text-[10px] tabular-nums'>
+                <div className='tabular-nums'>
                   <OriginalPrice value={originalLine} />
                 </div>
               )}
@@ -254,7 +254,7 @@ export function usePricingColumns(
                 {outputPair.effective}
               </span>
               {originalLine && (
-                <div className='text-[10px] tabular-nums'>
+                <div className='tabular-nums'>
                   <OriginalPrice value={originalLine} />
                 </div>
               )}
@@ -291,7 +291,7 @@ export function usePricingColumns(
               {requestPair.effective}
             </span>
             {requestPair.original && (
-              <div className='text-[10px] tabular-nums'>
+              <div className='tabular-nums'>
                 <OriginalPrice value={requestPair.original} />
               </div>
             )}
@@ -341,7 +341,7 @@ export function usePricingColumns(
                 {stripTrailingZeros(cacheEntry.formatted)}
               </span>
               {cacheEntry.originalFormatted && (
-                <div className='text-[10px] tabular-nums'>
+                <div className='tabular-nums'>
                   <OriginalPrice
                     value={stripTrailingZeros(cacheEntry.originalFormatted)}
                   />
@@ -390,7 +390,7 @@ export function usePricingColumns(
               {cachedPair.effective}
             </span>
             {cachedPair.original && (
-              <div className='text-[10px] tabular-nums'>
+              <div className='tabular-nums'>
                 <OriginalPrice value={cachedPair.original} />
               </div>
             )}

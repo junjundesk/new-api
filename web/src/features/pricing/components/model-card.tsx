@@ -121,7 +121,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               {entry.originalFormatted && (
                 <OriginalPrice
                   value={entry.originalFormatted}
-                  className='ml-1 text-xs'
+                  className='ml-1'
                 />
               )}
             </span>
@@ -202,10 +202,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             {inputPair.effective}
           </span>
           {inputPair.original && (
-            <OriginalPrice
-              value={inputPair.original}
-              className='ml-1 text-xs'
-            />
+            <OriginalPrice value={inputPair.original} className='ml-1' />
           )}
         </span>
         <span className='text-muted-foreground whitespace-nowrap'>
@@ -214,10 +211,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             {outputPair.effective}
           </span>
           {outputPair.original && (
-            <OriginalPrice
-              value={outputPair.original}
-              className='ml-1 text-xs'
-            />
+            <OriginalPrice value={outputPair.original} className='ml-1' />
           )}
         </span>
         {hasCachedPrice && (
@@ -227,10 +221,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               {cachedPair.effective}
             </span>
             {cachedPair.original && (
-              <OriginalPrice
-                value={cachedPair.original}
-                className='ml-1 text-xs'
-              />
+              <OriginalPrice value={cachedPair.original} className='ml-1' />
             )}
           </span>
         )}
@@ -259,10 +250,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           {requestPair.effective}
         </span>
         {requestPair.original && (
-          <OriginalPrice
-            value={requestPair.original}
-            className='ml-1 text-xs'
-          />
+          <OriginalPrice value={requestPair.original} className='ml-1' />
         )}{' '}
         / {t('request')}
       </span>
