@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { formatCurrencyFromUSD } from '@/lib/currency'
 
 import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
-import type { PricingModel, TokenUnit, PriceType } from '../types'
-import { getConfiguredGroupRatio, getDisplayGroupRatio } from './model-helpers'
+import type { BillingRatio, PricingModel, TokenUnit, PriceType } from '../types'
+import { getGroupBillingRatio, getDisplayBillingRatio } from './model-helpers'
 
 // ----------------------------------------------------------------------------
 // Price Calculation Utilities
@@ -30,6 +30,8 @@ import { getConfiguredGroupRatio, getDisplayGroupRatio } from './model-helpers'
  * Strip trailing zeros from formatted price string while preserving currency symbols
  */
 export function stripTrailingZeros(formatted: string): string {
+  if (formatted.includes('–'))
+    return formatted.split('–').map(stripTrailingZeros).join('–')
   // Match currency symbol at start, number, and potential 'k' suffix
   const match = formatted.match(/^([^\d-]*)([-\d,]+\.?\d*)(k?)$/)
   if (!match) return formatted
@@ -138,6 +140,32 @@ function applyRechargeRate(
   return (price * priceRate) / usdExchangeRate
 }
 
+function formatEffectivePrice(
+  basePrice: number,
+  ratio: BillingRatio,
+  showWithRecharge: boolean,
+  priceRate: number,
+  usdExchangeRate: number,
+  digitsSmall: number
+): string {
+  const prices = [ratio.min, ratio.max].map((multiplier) =>
+    formatCurrencyFromUSD(
+      applyRechargeRate(
+        basePrice * multiplier,
+        showWithRecharge,
+        priceRate,
+        usdExchangeRate
+      ),
+      {
+        digitsLarge: 4,
+        digitsSmall,
+        abbreviate: false,
+      }
+    )
+  )
+  return ratio.min === ratio.max ? prices[0] : prices.join('–')
+}
+
 /**
  * Format token-based price for display
  */
@@ -154,22 +182,14 @@ export function formatPrice(
     return '-'
   }
 
-  const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
-
-  let priceInUSD = calculateTokenPrice(model, type, displayGroupRatio)
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
+  return formatEffectivePrice(
+    calculateTokenPrice(model, type, 1) / TOKEN_UNIT_DIVISORS[tokenUnit],
+    getDisplayBillingRatio(model, selectedGroup),
     showWithRecharge,
     priceRate,
-    usdExchangeRate
+    usdExchangeRate,
+    6
   )
-
-  const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
 }
 
 /**
@@ -189,22 +209,14 @@ export function formatGroupPrice(
     return '-'
   }
 
-  const ratio = getConfiguredGroupRatio(groupRatio, group)
-  let priceInUSD = calculateTokenPrice(model, type, ratio)
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
+  return formatEffectivePrice(
+    calculateTokenPrice(model, type, 1) / TOKEN_UNIT_DIVISORS[tokenUnit],
+    getGroupBillingRatio(model, group, groupRatio),
     showWithRecharge,
     priceRate,
-    usdExchangeRate
+    usdExchangeRate,
+    6
   )
-
-  const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
 }
 
 /**
@@ -222,21 +234,14 @@ export function formatFixedPrice(
     return '-'
   }
 
-  const ratio = getConfiguredGroupRatio(groupRatio, group)
-  let priceInUSD = (model.model_price || 0) * ratio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
+  return formatEffectivePrice(
+    model.model_price || 0,
+    getGroupBillingRatio(model, group, groupRatio),
     showWithRecharge,
     priceRate,
-    usdExchangeRate
+    usdExchangeRate,
+    4
   )
-
-  return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
-    abbreviate: false,
-  })
 }
 
 /**
@@ -253,20 +258,12 @@ export function formatRequestPrice(
     return '-'
   }
 
-  const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
-
-  let priceInUSD = (model.model_price || 0) * displayGroupRatio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
+  return formatEffectivePrice(
+    model.model_price || 0,
+    getDisplayBillingRatio(model, selectedGroup),
     showWithRecharge,
     priceRate,
-    usdExchangeRate
+    usdExchangeRate,
+    4
   )
-
-  return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
-    abbreviate: false,
-  })
 }

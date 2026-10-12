@@ -29,12 +29,9 @@ import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
-import {
-  getDynamicDisplayGroupRatio,
-  getDynamicPricingSummary,
-} from '../lib/dynamic-price'
+import { getDynamicPricingSummary } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
+import { getDisplayBillingRatio, isTokenBasedModel } from '../lib/model-helpers'
 import {
   formatPrice,
   formatRequestPrice,
@@ -42,6 +39,7 @@ import {
 } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
+import { ModelBillingRatio } from './model-billing-ratio'
 
 // ----------------------------------------------------------------------------
 // Pricing Table Columns
@@ -85,9 +83,12 @@ export function usePricingColumns(
         return (
           <div className='flex max-w-full min-w-0 items-center gap-2'>
             {modelIcon}
-            <span className='truncate font-mono text-sm font-medium'>
-              {model.model_name}
-            </span>
+            <div className='min-w-0'>
+              <span className='block truncate font-mono text-sm font-medium'>
+                {model.model_name}
+              </span>
+              <ModelBillingRatio model={model} selectedGroup={selectedGroup} />
+            </div>
           </div>
         )
       },
@@ -119,10 +120,7 @@ export function usePricingColumns(
           showRechargePrice,
           priceRate,
           usdExchangeRate,
-          groupRatioMultiplier: getDynamicDisplayGroupRatio(
-            model,
-            selectedGroup
-          ),
+          billingRatio: getDisplayBillingRatio(model, selectedGroup),
         })
 
         if (dynamicSummary) {
@@ -248,10 +246,7 @@ export function usePricingColumns(
           showRechargePrice,
           priceRate,
           usdExchangeRate,
-          groupRatioMultiplier: getDynamicDisplayGroupRatio(
-            model,
-            selectedGroup
-          ),
+          billingRatio: getDisplayBillingRatio(model, selectedGroup),
         })
 
         if (dynamicSummary) {

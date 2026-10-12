@@ -80,6 +80,7 @@ export type Channel = z.infer<typeof channelSchema>
 // ============================================================================
 
 export interface ChannelSettings {
+  model_group_ratios?: Record<string, number>
   force_format?: boolean
   thinking_to_content?: boolean
   proxy?: string

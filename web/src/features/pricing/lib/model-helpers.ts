@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { EXCLUDED_GROUPS, FILTER_ALL, QUOTA_TYPE_VALUES } from '../constants'
-import type { PricingModel } from '../types'
+import type { BillingRatio, PricingModel } from '../types'
 
 // ----------------------------------------------------------------------------
 // Model Helper Utilities
@@ -57,41 +57,63 @@ export function getConfiguredGroupRatio(
  * available to the viewer. When a group filter is active, it shows that
  * group's price instead.
  */
+export function getGroupBillingRatio(
+  model: PricingModel,
+  group: string,
+  groupRatio: Record<string, number> = model.group_ratio ?? {}
+): BillingRatio {
+  const configured = model.billing_ratios?.[group]
+  if (
+    configured &&
+    Number.isFinite(configured.min) &&
+    Number.isFinite(configured.max) &&
+    configured.min >= 0 &&
+    configured.max >= configured.min
+  ) {
+    return configured
+  }
+  const ratio = getConfiguredGroupRatio(groupRatio, group)
+  return { min: ratio, max: ratio, source: 'group' }
+}
+
+export function getDisplayBillingRatio(
+  model: PricingModel,
+  selectedGroup?: string
+): BillingRatio {
+  if (
+    selectedGroup &&
+    selectedGroup !== FILTER_ALL &&
+    model.enable_groups?.includes(selectedGroup)
+  ) {
+    return getGroupBillingRatio(model, selectedGroup)
+  }
+  // The all-groups view advertises the lowest available effective price, not
+  // a made-up single group or the cheapest default group multiplier.
+  const available = (model.enable_groups ?? []).filter(
+    (group) =>
+      Object.hasOwn(model.billing_ratios ?? {}, group) ||
+      Object.hasOwn(model.group_ratio ?? {}, group)
+  )
+  let minimum = Number.POSITIVE_INFINITY
+  for (const group of available) {
+    minimum = Math.min(minimum, getGroupBillingRatio(model, group).min)
+  }
+  const ratio = Number.isFinite(minimum) ? minimum : 1
+  return { min: ratio, max: ratio, source: 'group' }
+}
+
 export function getDisplayGroupRatio(
   model: PricingModel,
   selectedGroup?: string
 ): number {
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const groupRatio = model.group_ratio || {}
+  return getDisplayBillingRatio(model, selectedGroup).min
+}
 
-  if (
-    selectedGroup &&
-    selectedGroup !== FILTER_ALL &&
-    modelEnableGroups.includes(selectedGroup)
-  ) {
-    return getConfiguredGroupRatio(groupRatio, selectedGroup)
-  }
-
-  if (modelEnableGroups.length === 0) {
-    return 1
-  }
-
-  let minRatio = Number.POSITIVE_INFINITY
-
-  for (const group of modelEnableGroups) {
-    const ratio = groupRatio[group]
-    if (
-      typeof ratio === 'number' &&
-      Number.isFinite(ratio) &&
-      ratio < minRatio
-    ) {
-      minRatio = ratio
-    }
-  }
-
-  return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
+export function formatBillingRatio(
+  ratio: Pick<BillingRatio, 'min' | 'max'>
+): string {
+  if (ratio.min === ratio.max) return `${ratio.min}×`
+  return `${ratio.min}–${ratio.max}×`
 }
 
 /**

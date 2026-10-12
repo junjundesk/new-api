@@ -50,6 +50,13 @@ func initCol() {
 	}
 }
 
+// InitDatabaseColumnNames initializes dialect-specific reserved column names.
+// Package-internal tests call it directly; other packages that build their own
+// test database must call it once after setting common database types.
+func InitDatabaseColumnNames() {
+	initCol()
+}
+
 var DB *gorm.DB
 
 var LOG_DB *gorm.DB

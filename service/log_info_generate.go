@@ -111,6 +111,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
 
 	other["admin_info"] = adminInfo
+	appendGroupRatioSource(other, relayInfo.PriceData.GroupRatioInfo, relayInfo.ChannelId, relayInfo.PriceData.BillingModelName)
 	appendRequestPath(ctx, relayInfo, other)
 	appendRequestConversionChain(relayInfo, other)
 	appendFinalRequestFormat(relayInfo, other)
@@ -320,6 +321,27 @@ func GenerateClaudeOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	return info
 }
 
+// appendGroupRatioSource records the charged multiplier without exposing channel
+// identity. The configuration owner is restricted to admin_info.
+func appendGroupRatioSource(other map[string]interface{}, ratio hosttypes.GroupRatioInfo, channelID int, modelName string) {
+	if ratio.Source == "" {
+		return
+	}
+	other["billing_ratio_source"] = ratio.Source
+	if ratio.Source != hosttypes.GroupRatioSourceChannelModel {
+		return
+	}
+	other["channel_model_ratio"] = ratio.GroupRatio
+	delete(other, "user_group_ratio")
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	if !ok {
+		adminInfo = make(map[string]interface{})
+		other["admin_info"] = adminInfo
+	}
+	adminInfo["billing_channel_id"] = channelID
+	adminInfo["billing_model"] = modelName
+}
+
 func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.PriceData) map[string]interface{} {
 	other := make(map[string]interface{})
 	other["model_price"] = priceData.ModelPrice
@@ -327,6 +349,7 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.P
 	if priceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = priceData.GroupRatioInfo.GroupSpecialRatio
 	}
+	appendGroupRatioSource(other, priceData.GroupRatioInfo, relayInfo.ChannelId, priceData.BillingModelName)
 	appendRequestPath(nil, relayInfo, other)
 	return other
 }

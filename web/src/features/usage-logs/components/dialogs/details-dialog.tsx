@@ -284,11 +284,24 @@ function BillingBreakdown(props: {
   }
 
   const userGR = other.user_group_ratio
-  const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
-  const effectiveGR = isUserGR ? userGR : other.group_ratio
+  const isChannelModel = other.billing_ratio_source === 'channel_model'
+  const isUserGR =
+    !isChannelModel &&
+    userGR != null &&
+    Number.isFinite(userGR) &&
+    userGR !== -1
+  const effectiveGR = other.billing_ratio_source
+    ? other.group_ratio
+    : isUserGR
+      ? userGR
+      : other.group_ratio
+  let ratioLabel = t('Group Ratio')
+  if (isChannelModel) ratioLabel = t('Model-specific billing ratio')
+  else if (isUserGR || other.billing_ratio_source === 'user_group')
+    ratioLabel = t('User Exclusive Ratio')
   if (effectiveGR != null && Number.isFinite(effectiveGR)) {
     rows.push({
-      label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
+      label: ratioLabel,
       value: `${formatRatio(effectiveGR)}x`,
     })
   }

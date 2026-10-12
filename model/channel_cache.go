@@ -269,6 +269,8 @@ func CacheGetChannelInfo(id int) (*ChannelInfo, error) {
 }
 
 func CacheUpdateChannelStatus(id int, status int) {
+	// Defer before acquiring the lock so invalidation runs after unlock.
+	defer InvalidatePricingCache()
 	if !common.MemoryCacheEnabled {
 		return
 	}

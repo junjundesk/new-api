@@ -103,15 +103,9 @@ func TestTryTieredSettleFallsBackToFrozenPreConsumeOnExprError(t *testing.T) {
 	}
 
 	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 100})
-	if !ok {
-		t.Fatal("expected tiered settle to apply")
-	}
-	if quota != 321 {
-		t.Fatalf("quota = %d, want 321", quota)
-	}
-	if result != nil {
-		t.Fatalf("result = %#v, want nil", result)
-	}
+	require.True(t, ok)
+	assert.Equal(t, 123, quota, "use final attempt estimate, not a previous attempt's reservation")
+	assert.Nil(t, result)
 }
 
 // ---------------------------------------------------------------------------

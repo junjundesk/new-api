@@ -79,6 +79,12 @@ function formatRatioCompact(ratio: number | undefined): string {
 }
 
 function getGroupRatio(other: LogOtherData | null): number | null {
+  if (
+    other?.billing_ratio_source &&
+    other.group_ratio != null &&
+    Number.isFinite(other.group_ratio)
+  )
+    return other.group_ratio
   const userGroupRatio = other?.user_group_ratio
   if (
     userGroupRatio != null &&
@@ -262,10 +268,16 @@ function buildTypeDetailSegments(
         userGroupRatio != null &&
         Number.isFinite(userGroupRatio) &&
         userGroupRatio !== -1
-      const effectiveRatio = isUserGroup ? userGroupRatio : groupRatio
-      const ratioLabel = isUserGroup
-        ? t('User Exclusive Ratio')
-        : t('Group Ratio')
+      const effectiveRatio = other.billing_ratio_source
+        ? groupRatio
+        : isUserGroup
+          ? userGroupRatio
+          : groupRatio
+      let ratioLabel = t('Group Ratio')
+      if (other.billing_ratio_source === 'channel_model')
+        ratioLabel = t('Model-specific billing ratio')
+      else if (isUserGroup || other.billing_ratio_source === 'user_group')
+        ratioLabel = t('User Exclusive Ratio')
 
       if (effectiveRatio != null && Number.isFinite(effectiveRatio)) {
         segments.push({
@@ -617,6 +629,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 className='text-muted-foreground/60 shrink-0 text-xs leading-none tabular-nums'
                 data-log-group-ratio
               >
+                {other?.billing_ratio_source === 'channel_model' && (
+                  <span>{t('Model-specific billing ratio')} </span>
+                )}
                 {formatRatioCompact(groupRatio)}x
               </span>
             ) : null}

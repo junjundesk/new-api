@@ -19,6 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  'Enter a valid published model name',
+  'Each model can only have one billing ratio',
+  'Billing ratio must be a number between 0 and 1000',
   // Header navigation
   'Home',
   'Console',

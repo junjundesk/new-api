@@ -177,10 +177,20 @@ func (s *BillingSession) GetPreConsumedQuota() int {
 }
 
 func (s *BillingSession) Reserve(targetQuota int) error {
+	return s.reserve(targetQuota, false)
+}
+
+// ReserveRealtime enforces ongoing connection limits even for trusted wallets.
+// It reserves cumulative usage rather than charging chunks outside the session.
+func (s *BillingSession) ReserveRealtime(targetQuota int) error {
+	return s.reserve(targetQuota, true)
+}
+
+func (s *BillingSession) reserve(targetQuota int, realtime bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.settled || s.refunded || s.trusted || targetQuota <= s.preConsumedQuota {
+	if s.settled || s.refunded || (!realtime && s.trusted) || targetQuota <= s.preConsumedQuota {
 		return nil
 	}
 
@@ -189,6 +199,30 @@ func (s *BillingSession) Reserve(targetQuota int) error {
 		return nil
 	}
 
+	if realtime {
+		// Unlike ordinary retry reservations, a persistent connection must stop
+		// before consuming beyond the remaining wallet or token allowance.
+		_, walletOnly := s.funding.(*WalletFunding)
+		_, mixedWallet := s.funding.(*BonusWalletFunding)
+		if walletOnly || mixedWallet {
+			balance, err := model.GetUserQuota(s.relayInfo.UserId, false)
+			if err != nil {
+				return err
+			}
+			if balance < delta {
+				return fmt.Errorf("realtime wallet quota insufficient: remaining=%d, required=%d", balance, delta)
+			}
+		}
+		if !s.relayInfo.IsPlayground && !s.relayInfo.TokenUnlimited {
+			token, err := model.GetTokenByKey(s.relayInfo.TokenKey, false)
+			if err != nil {
+				return err
+			}
+			if token.RemainQuota < delta {
+				return fmt.Errorf("realtime token quota insufficient: remaining=%d, required=%d", token.RemainQuota, delta)
+			}
+		}
+	}
 	if err := s.reserveFunding(delta); err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package dto
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"strings"
@@ -10,13 +11,19 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
+// MaxChannelModelGroupRatio bounds channel-specific billing multipliers.
+const MaxChannelModelGroupRatio = 1000
+
 type ChannelSettings struct {
-	ForceFormat            bool   `json:"force_format,omitempty"`
-	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
-	Proxy                  string `json:"proxy"`
-	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
-	SystemPrompt           string `json:"system_prompt,omitempty"`
-	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	// ModelGroupRatios replaces the effective group multiplier for exact billing
+	// model names. Absence inherits; zero is explicitly free. Null is invalid.
+	ModelGroupRatios       map[string]*float64 `json:"model_group_ratios,omitempty"`
+	ForceFormat            bool                `json:"force_format,omitempty"`
+	ThinkingToContent      bool                `json:"thinking_to_content,omitempty"`
+	Proxy                  string              `json:"proxy"`
+	PassThroughBodyEnabled bool                `json:"pass_through_body_enabled,omitempty"`
+	SystemPrompt           string              `json:"system_prompt,omitempty"`
+	SystemPromptOverride   bool                `json:"system_prompt_override,omitempty"`
 	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
 	// Accepted values: "", "auto" (default), "http1".
 	HTTPProtocol string `json:"http_protocol,omitempty"`
@@ -30,6 +37,22 @@ const (
 	HTTPProtocolHTTP1        = "http1"
 	MaxHTTP2ConnectionShards = 8
 )
+
+// ValidateModelGroupRatios validates explicit overrides without normalizing keys.
+func (s *ChannelSettings) ValidateModelGroupRatios() error {
+	if s == nil {
+		return nil
+	}
+	for model, ratio := range s.ModelGroupRatios {
+		if strings.TrimSpace(model) == "" || len(model) > 255 {
+			return fmt.Errorf("invalid model_group_ratios model name: %q", model)
+		}
+		if ratio == nil || math.IsNaN(*ratio) || math.IsInf(*ratio, 0) || *ratio < 0 || *ratio > MaxChannelModelGroupRatio {
+			return fmt.Errorf("model_group_ratios[%q] must be a number between 0 and %d", model, MaxChannelModelGroupRatio)
+		}
+	}
+	return nil
+}
 
 // ValidateHTTPTransport validates save-time HTTP transport channel settings.
 func (s *ChannelSettings) ValidateHTTPTransport() error {

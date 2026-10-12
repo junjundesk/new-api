@@ -181,6 +181,7 @@ import {
 } from '../dialogs/missing-models-confirmation-dialog'
 import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dialog'
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
+import { ModelGroupRatiosEditor } from '../model-group-ratios-editor'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import {
   ChannelAdvancedSection,
@@ -940,7 +941,10 @@ export function ChannelMutateDrawer({
     formErrors.azure_responses_version
   )
   const modelsHaveErrors = Boolean(
-    formErrors.models || formErrors.group || formErrors.model_mapping
+    formErrors.models ||
+    formErrors.group ||
+    formErrors.model_mapping ||
+    formErrors.model_group_ratios
   )
   const advancedHaveErrors =
     hasAdvancedSettingsErrors(formErrors) || Boolean(formErrors.advanced_custom)
@@ -1564,6 +1568,7 @@ export function ChannelMutateDrawer({
 
   // Handle successful submission
   const handleSuccess = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['pricing'] })
     queryClient.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
     if (channelId) {
       queryClient.invalidateQueries({
@@ -3609,6 +3614,11 @@ export function ChannelMutateDrawer({
                               )}
                             />
                           </div>
+                          <ModelGroupRatiosEditor
+                            form={form}
+                            models={currentModelsArray}
+                            disabled={isSubmitting || !canEditSensitive}
+                          />
                         </div>
                       </ChannelModelsSection>
                     </div>

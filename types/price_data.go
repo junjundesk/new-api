@@ -7,29 +7,40 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	GroupRatioSourceChannelModel = "channel_model"
+	GroupRatioSourceUserGroup    = "user_group"
+	GroupRatioSourceGroup        = "group"
+)
+
 type GroupRatioInfo struct {
 	GroupRatio        float64
 	GroupSpecialRatio float64
 	HasSpecialRatio   bool
+	Source            string
+	ChannelModelRatio *float64
 }
 
 type PriceData struct {
-	FreeModel            bool
-	ModelPrice           float64
-	ModelRatio           float64
-	CompletionRatio      float64
-	CacheRatio           float64
-	CacheCreationRatio   float64
-	CacheCreation5mRatio float64
-	CacheCreation1hRatio float64
-	ImageRatio           float64
-	AudioRatio           float64
-	AudioCompletionRatio float64
-	otherRatios          map[string]float64
-	UsePrice             bool
-	Quota                int // 按次计费的最终额度（MJ / Task）
-	QuotaToPreConsume    int // 按量计费的预消耗额度
-	GroupRatioInfo       GroupRatioInfo
+	// BillingModelName and the unscaled estimate stay frozen across attempts.
+	BillingModelName           string
+	PreConsumeQuotaBeforeGroup float64
+	FreeModel                  bool
+	ModelPrice                 float64
+	ModelRatio                 float64
+	CompletionRatio            float64
+	CacheRatio                 float64
+	CacheCreationRatio         float64
+	CacheCreation5mRatio       float64
+	CacheCreation1hRatio       float64
+	ImageRatio                 float64
+	AudioRatio                 float64
+	AudioCompletionRatio       float64
+	otherRatios                map[string]float64
+	UsePrice                   bool
+	Quota                      int // 按次计费的最终额度（MJ / Task）
+	QuotaToPreConsume          int // 按量计费的预消耗额度
+	GroupRatioInfo             GroupRatioInfo
 }
 
 func (p *PriceData) AddOtherRatio(key string, ratio float64) {

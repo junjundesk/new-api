@@ -146,14 +146,8 @@ func PrepareTieredBillingForSelectedGroup(c *gin.Context, relayInfo *relaycommon
 	// initial group was free so downstream state stays consistent.
 	relayInfo.PriceData.FreeModel = false
 
-	if relayInfo.Billing == nil {
-		return PreConsumeBilling(c, snap.EstimatedQuotaAfterGroup, relayInfo)
-	}
-	if err := relayInfo.Billing.Reserve(snap.EstimatedQuotaAfterGroup); err != nil {
-		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
-	}
-	relayInfo.FinalPreConsumedQuota = relayInfo.Billing.GetPreConsumedQuota()
-	return nil
+	relayInfo.PriceData.QuotaToPreConsume = snap.EstimatedQuotaAfterGroup
+	return ReserveBilling(c, snap.EstimatedQuotaAfterGroup, relayInfo)
 }
 
 // TryTieredSettle checks if the request uses tiered_expr billing and, if so,
@@ -173,11 +167,12 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 
 	tr, err := billingexpr.ComputeTieredQuotaWithRequest(snap, params, requestInput)
 	if err != nil {
-		quota = relayInfo.FinalPreConsumedQuota
-		if quota <= 0 {
-			quota = snap.EstimatedQuotaAfterGroup
+		// A prior, more expensive attempt may have reserved more than this
+		// successful attempt. Never turn that reservation into its final price.
+		if snap.GroupRatio == 0 {
+			return true, 0, nil
 		}
-		return true, quota, nil
+		return true, snap.EstimatedQuotaAfterGroup, nil
 	}
 
 	// Surface any int32 saturation from settlement onto RelayInfo so the
