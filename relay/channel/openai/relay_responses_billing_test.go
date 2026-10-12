@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -264,4 +265,109 @@ func TestOaiResponsesStreamHandlerDoesNotCountPartialImageEvent(t *testing.T) {
 	)
 
 	assert.Equal(t, 0, info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolImageGeneration].CallCount)
+}
+
+// runResponsesUsageStream feeds a Responses SSE body to the streaming handler
+// and returns the usage it settles for the request.
+func runResponsesUsageStream(t *testing.T, estimatePromptTokens int, events ...string) *dto.Usage {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	service.InitTokenEncoders()
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() {
+		constant.StreamingTimeout = oldTimeout
+	})
+
+	var body strings.Builder
+	for _, event := range events {
+		body.WriteString("data: ")
+		body.WriteString(event)
+		body.WriteString("\n\n")
+	}
+	body.WriteString("data: [DONE]\n\n")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set(common.RequestIdKey, "responses-usage-test")
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.1",
+		DisablePing:     true,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "gpt-5.1",
+		},
+	}
+	info.SetEstimatePromptTokens(estimatePromptTokens)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(body.String())),
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+	}
+
+	usage, apiErr := OaiResponsesStreamHandler(c, info, resp)
+	require.Nil(t, apiErr)
+	require.NotNil(t, usage)
+	return usage
+}
+
+// TestOaiResponsesStreamHandlerEstimatesUsageForInterruptedStream covers a
+// stream cut before its terminal event: the input tokens are already spent and
+// every delta kind is billed output, so the settlement must not be zero.
+func TestOaiResponsesStreamHandlerEstimatesUsageForInterruptedStream(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		event string
+	}{
+		{"output text delta", `{"type":"response.output_text.delta","delta":"the answer is forty two"}`},
+		{"reasoning delta", `{"type":"response.reasoning_text.delta","delta":"weighing the options carefully"}`},
+		{"tool arguments delta", `{"type":"response.function_call_arguments.delta","delta":"{\"city\":\"Paris\"}"}`},
+		{"refusal delta", `{"type":"response.refusal.delta","delta":"I cannot help with that request"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usage := runResponsesUsageStream(t, 20, `{"type":"response.created"}`, tc.event)
+
+			assert.Greater(t, usage.CompletionTokens, 0, "generated output must be billed")
+			assert.Equal(t, 20, usage.PromptTokens, "input tokens must be billed once upstream started")
+			assert.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+		})
+	}
+}
+
+// TestOaiResponsesStreamHandlerEstimatesUsageFromTerminalOutput covers upstreams
+// that carry the output text only on the terminal event, without deltas.
+func TestOaiResponsesStreamHandlerEstimatesUsageFromTerminalOutput(t *testing.T) {
+	usage := runResponsesUsageStream(t, 20,
+		`{"type":"response.completed","response":{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hello world"}]}]}}`,
+	)
+
+	assert.Greater(t, usage.CompletionTokens, 0, "terminal output text must be billed")
+	assert.Equal(t, 20, usage.PromptTokens)
+}
+
+// TestOaiResponsesStreamHandlerBillsReportedUsageOnIncomplete keeps upstream's
+// accounting: an incomplete response reports its own usage, which is exact and
+// must win over the text estimate.
+func TestOaiResponsesStreamHandlerBillsReportedUsageOnIncomplete(t *testing.T) {
+	usage := runResponsesUsageStream(t, 20,
+		`{"type":"response.created"}`,
+		`{"type":"response.incomplete","response":{"status":"incomplete","usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18}}}`,
+	)
+
+	assert.Equal(t, 11, usage.PromptTokens)
+	assert.Equal(t, 7, usage.CompletionTokens)
+	assert.Equal(t, 18, usage.TotalTokens)
+}
+
+// TestOaiResponsesStreamHandlerDoesNotBillPromptAfterExplicitFailure keeps the
+// failure escape hatch: an upstream that reports a failed response is not
+// charged for input tokens even though the stream emitted events.
+func TestOaiResponsesStreamHandlerDoesNotBillPromptAfterExplicitFailure(t *testing.T) {
+	usage := runResponsesUsageStream(t, 20,
+		`{"type":"response.created"}`,
+		`{"type":"response.failed","response":{"status":"failed"}}`,
+	)
+
+	assert.Equal(t, 0, usage.PromptTokens)
+	assert.Equal(t, 0, usage.CompletionTokens)
 }
