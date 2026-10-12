@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,6 +42,46 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 		return apiErr
 	}
 	relayInfo.Billing = session
+	return nil
+}
+
+// PrepareBillingForSelectedChannel refreshes only the routing-dependent part
+// of synchronous pricing. Base prices and expression/request state stay frozen.
+func PrepareBillingForSelectedChannel(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
+	if info.TieredBillingSnapshot != nil {
+		return PrepareTieredBillingForSelectedGroup(c, info)
+	}
+	price := &info.PriceData
+	quota, err := common.QuotaFromFloatStrict(price.PreConsumeQuotaBeforeGroup * price.GroupRatioInfo.GroupRatio)
+	if err != nil {
+		return types.NewErrorWithStatusCode(err, types.ErrorCodeModelPriceError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	price.QuotaToPreConsume = quota
+	free := price.GroupRatioInfo.GroupRatio == 0 || (price.UsePrice && price.ModelPrice == 0) || (!price.UsePrice && price.ModelRatio == 0)
+	price.FreeModel = info.Billing == nil && free && !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume
+	return ReserveBilling(c, quota, info)
+}
+
+// ReserveBilling creates a session for a formerly free attempt, or raises the
+// existing reservation before sending. Cheaper attempts refund at settlement.
+// BillingSession retains its trusted-user and wallet-arrears contracts.
+func ReserveBilling(c *gin.Context, quota int, info *relaycommon.RelayInfo) *types.NewAPIError {
+	if info.QuotaClamp != nil {
+		return types.NewErrorWithStatusCode(info.QuotaClamp, types.ErrorCodeModelPriceError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	if info.Billing == nil {
+		if info.PriceData.FreeModel {
+			return nil
+		}
+		return PreConsumeBilling(c, quota, info)
+	}
+	if err := info.Billing.Reserve(quota); err != nil {
+		if apiErr, ok := err.(*types.NewAPIError); ok {
+			return apiErr
+		}
+		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+	}
+	info.FinalPreConsumedQuota = info.Billing.GetPreConsumedQuota()
 	return nil
 }
 

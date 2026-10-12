@@ -28,6 +28,14 @@ export const Route = createFileRoute(
   '/_authenticated/system-settings/operations/$section'
 )({
   beforeLoad: ({ params }) => {
+    if (params.section === 'email') {
+      throw redirect({
+        to: '/email',
+        search: { tab: 'smtp' },
+        replace: true,
+      })
+    }
+
     if (params.section === 'monitoring') {
       throw redirect({
         to: '/system-settings/models/$section',

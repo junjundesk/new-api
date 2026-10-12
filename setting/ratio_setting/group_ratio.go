@@ -3,8 +3,10 @@ package ratio_setting
 import (
 	"encoding/json"
 	"errors"
+	"math"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/types"
 )
@@ -95,6 +97,29 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 		return -1, false
 	}
 	return ratio, true
+}
+
+// ResolveModelGroupRatio resolves the final billing multiplier, independently of
+// routing and authorization. modelName is the exact token-mapped, pre-channel-
+// mapping billing name. The returned override is copied to freeze its value.
+func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64) types.GroupRatioInfo {
+	info := types.GroupRatioInfo{GroupSpecialRatio: -1, Source: types.GroupRatioSourceGroup}
+	if ratio, ok := overrides[modelName]; ok && ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) && *ratio >= 0 && *ratio <= dto.MaxChannelModelGroupRatio {
+		value := *ratio
+		info.GroupRatio = value
+		info.ChannelModelRatio = &value
+		info.Source = types.GroupRatioSourceChannelModel
+		return info
+	}
+	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {
+		info.GroupRatio = ratio
+		info.GroupSpecialRatio = ratio
+		info.HasSpecialRatio = true
+		info.Source = types.GroupRatioSourceUserGroup
+		return info
+	}
+	info.GroupRatio = GetGroupRatio(usingGroup)
+	return info
 }
 
 func GroupGroupRatio2JSONString() string {

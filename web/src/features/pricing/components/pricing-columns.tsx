@@ -29,19 +29,23 @@ import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
-import {
-  getDynamicDisplayGroupRatio,
-  getDynamicPricingSummary,
-} from '../lib/dynamic-price'
+import { getDynamicPricingSummary } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
 import {
+  getDisplayBillingRatio,
+  hasBillingDiscount,
+  isTokenBasedModel,
+} from '../lib/model-helpers'
+import {
+  formatBasePrice,
+  formatBaseRequestPrice,
   formatPrice,
   formatRequestPrice,
   stripTrailingZeros,
 } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
+import { ModelBillingRatio } from './model-billing-ratio'
 
 // ----------------------------------------------------------------------------
 // Pricing Table Columns
@@ -85,9 +89,12 @@ export function usePricingColumns(
         return (
           <div className='flex max-w-full min-w-0 items-center gap-2'>
             {modelIcon}
-            <span className='truncate font-mono text-sm font-medium'>
-              {model.model_name}
-            </span>
+            <div className='min-w-0'>
+              <span className='block truncate font-mono text-sm font-medium'>
+                {model.model_name}
+              </span>
+              <ModelBillingRatio model={model} selectedGroup={selectedGroup} />
+            </div>
           </div>
         )
       },
@@ -119,10 +126,7 @@ export function usePricingColumns(
           showRechargePrice,
           priceRate,
           usdExchangeRate,
-          groupRatioMultiplier: getDynamicDisplayGroupRatio(
-            model,
-            selectedGroup
-          ),
+          billingRatio: getDisplayBillingRatio(model, selectedGroup),
         })
 
         if (dynamicSummary) {
@@ -175,6 +179,7 @@ export function usePricingColumns(
         }
 
         const isTokenBased = isTokenBasedModel(model)
+        const showBase = hasBillingDiscount(model, selectedGroup)
 
         if (isTokenBased) {
           const inputPrice = stripTrailingZeros(
@@ -207,6 +212,31 @@ export function usePricingColumns(
                 <span className='text-muted-foreground/40 mx-1'>/</span>
                 {outputPrice}
               </span>
+              {showBase && (
+                <div className='text-muted-foreground/50 font-mono text-[10px] tabular-nums line-through'>
+                  {stripTrailingZeros(
+                    formatBasePrice(
+                      model,
+                      'input',
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )
+                  )}
+                  <span className='mx-1'>/</span>
+                  {stripTrailingZeros(
+                    formatBasePrice(
+                      model,
+                      'output',
+                      tokenUnit,
+                      showRechargePrice,
+                      priceRate,
+                      usdExchangeRate
+                    )
+                  )}
+                </div>
+              )}
               <div className='text-muted-foreground/50 text-[10px]'>
                 / {tokenUnitLabel} tokens
               </div>
@@ -227,6 +257,18 @@ export function usePricingColumns(
         return (
           <div className='max-w-full min-w-0'>
             <span className='font-mono text-sm tabular-nums'>{price}</span>
+            {showBase && (
+              <div className='text-muted-foreground/50 font-mono text-[10px] tabular-nums line-through'>
+                {stripTrailingZeros(
+                  formatBaseRequestPrice(
+                    model,
+                    showRechargePrice,
+                    priceRate,
+                    usdExchangeRate
+                  )
+                )}
+              </div>
+            )}
             <div className='text-muted-foreground/50 text-[10px]'>
               / {t('request')}
             </div>
@@ -248,10 +290,7 @@ export function usePricingColumns(
           showRechargePrice,
           priceRate,
           usdExchangeRate,
-          groupRatioMultiplier: getDynamicDisplayGroupRatio(
-            model,
-            selectedGroup
-          ),
+          billingRatio: getDisplayBillingRatio(model, selectedGroup),
         })
 
         if (dynamicSummary) {

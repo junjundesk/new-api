@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 
 import { TOKEN_UNIT_DIVISORS } from '../constants'
-import type { PricingModel, TokenUnit } from '../types'
+import type { BillingRatio, PricingModel, TokenUnit } from '../types'
 import {
   BILLING_PRICING_VARS,
   parseTiersFromExpr,
@@ -30,12 +30,13 @@ import {
 } from './billing-expr'
 import { getDisplayGroupRatio } from './model-helpers'
 
-type DynamicPriceOptions = {
+export type DynamicPriceOptions = {
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
   priceRate?: number
   usdExchangeRate?: number
   groupRatioMultiplier?: number
+  billingRatio?: Pick<BillingRatio, 'min' | 'max'>
 }
 
 export type DynamicPriceEntry = {
@@ -87,24 +88,27 @@ export function formatDynamicUnitPrice(
   valuePerMillionTokens: number,
   options: DynamicPriceOptions
 ): string {
-  const groupRatio = options.groupRatioMultiplier ?? 1
-  const priceRate = options.priceRate ?? 1
-  const usdExchangeRate = options.usdExchangeRate ?? 1
-  const priceUSD =
-    (valuePerMillionTokens * groupRatio) /
-    TOKEN_UNIT_DIVISORS[options.tokenUnit]
-  const displayPrice = applyRechargeRate(
-    priceUSD,
-    options.showRechargePrice ?? false,
-    priceRate,
-    usdExchangeRate
-  )
-
-  return formatBillingCurrencyFromUSD(displayPrice, {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
+  const ratio = options.billingRatio ?? {
+    min: options.groupRatioMultiplier ?? 1,
+    max: options.groupRatioMultiplier ?? 1,
+  }
+  const prices = [ratio.min, ratio.max].map((multiplier) => {
+    const priceUSD =
+      (valuePerMillionTokens * multiplier) /
+      TOKEN_UNIT_DIVISORS[options.tokenUnit]
+    const displayPrice = applyRechargeRate(
+      priceUSD,
+      options.showRechargePrice ?? false,
+      options.priceRate ?? 1,
+      options.usdExchangeRate ?? 1
+    )
+    return formatBillingCurrencyFromUSD(displayPrice, {
+      digitsLarge: 4,
+      digitsSmall: 6,
+      abbreviate: false,
+    })
   })
+  return ratio.min === ratio.max ? prices[0] : prices.join('–')
 }
 
 export function getDynamicPricingTiers(model: PricingModel): ParsedTier[] {

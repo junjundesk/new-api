@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -486,9 +487,11 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 			if channel.Status != common.ChannelStatusEnabled {
 				return service.MidjourneyErrorWrapper(constant.MjRequestError, "该任务所属渠道已被禁用")
 			}
-			c.Set("base_url", channel.GetBaseURL())
-			c.Set("channel_id", originTask.ChannelId)
-			c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", channel.Key))
+			if apiErr := middleware.SetupContextForSelectedChannel(c, channel, relayInfo.OriginModelName); apiErr != nil {
+				return service.MidjourneyErrorWrapper(constant.MjRequestError, "setup_origin_channel_failed")
+			}
+			relayInfo.InitChannelMeta(c)
+			c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", relayInfo.ApiKey))
 			logger.LogDebug(c, "Midjourney action uses origin channel: id=%s, base_url=%s", strconv.Itoa(originTask.ChannelId), channel.GetBaseURL())
 		}
 		midjRequest.Prompt = originTask.Prompt

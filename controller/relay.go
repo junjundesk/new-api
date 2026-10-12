@@ -217,7 +217,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		addUsedChannel(c, channel.Id)
-		if billingErr := service.PrepareTieredBillingForSelectedGroup(c, relayInfo); billingErr != nil {
+		if billingErr := service.PrepareBillingForSelectedChannel(c, relayInfo); billingErr != nil {
 			newAPIError = billingErr
 			break
 		}
@@ -368,12 +368,11 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
-	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
-
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)
 	if newAPIError != nil {
 		return nil, newAPIError
 	}
+	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 	return channel, nil
 }
 
@@ -590,11 +589,9 @@ func RelayTask(c *gin.Context) {
 
 		if lockedCh, ok := relayInfo.LockedChannel.(*model.Channel); ok && lockedCh != nil {
 			channel = lockedCh
-			if retryParam.GetRetry() > 0 {
-				if setupErr := middleware.SetupContextForSelectedChannel(c, channel, relayInfo.OriginModelName); setupErr != nil {
-					taskErr = service.TaskErrorWrapperLocal(setupErr.Err, "setup_locked_channel_failed", http.StatusInternalServerError)
-					break
-				}
+			if setupErr := middleware.SetupContextForSelectedChannel(c, channel, relayInfo.OriginModelName); setupErr != nil {
+				taskErr = service.TaskErrorWrapperLocal(setupErr.Err, "setup_locked_channel_failed", http.StatusInternalServerError)
+				break
 			}
 		} else {
 			var channelErr *types.NewAPIError
@@ -674,12 +671,15 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.NodeName = common.NodeName
 		task.PrivateData.RequestIP = common.RequestClientIP(c)
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
-			ModelPrice:      relayInfo.PriceData.ModelPrice,
-			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-			ModelRatio:      relayInfo.PriceData.ModelRatio,
-			OtherRatios:     relayInfo.PriceData.OtherRatios(),
-			OriginModelName: relayInfo.OriginModelName,
-			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			Version:           1,
+			GroupRatioSource:  relayInfo.PriceData.GroupRatioInfo.Source,
+			ChannelModelRatio: relayInfo.PriceData.GroupRatioInfo.ChannelModelRatio,
+			ModelPrice:        relayInfo.PriceData.ModelPrice,
+			GroupRatio:        relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+			ModelRatio:        relayInfo.PriceData.ModelRatio,
+			OtherRatios:       relayInfo.PriceData.OtherRatios(),
+			OriginModelName:   relayInfo.OriginModelName,
+			PerCallBilling:    common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData

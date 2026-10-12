@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -9,58 +8,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string]string) []model.Pricing {
-	if len(pricing) == 0 {
-		return pricing
-	}
-	if len(usableGroup) == 0 {
-		return []model.Pricing{}
-	}
-
-	filtered := make([]model.Pricing, 0, len(pricing))
-	for _, item := range pricing {
-		if common.StringsContains(item.EnableGroup, "all") {
-			filtered = append(filtered, item)
-			continue
-		}
-		for _, group := range item.EnableGroup {
-			if _, ok := usableGroup[group]; ok {
-				filtered = append(filtered, item)
-				break
-			}
-		}
-	}
-	return filtered
-}
-
 func GetPricing(c *gin.Context) {
-	pricing := model.GetPricing()
 	userId, exists := c.Get("id")
-	usableGroup := map[string]string{}
-	groupRatio := map[string]float64{}
-	for s, f := range ratio_setting.GetGroupRatioCopy() {
-		groupRatio[s] = f
-	}
 	var group string
 	if exists {
 		user, err := model.GetUserCache(userId.(int))
 		if err == nil {
 			group = user.Group
-			for g := range groupRatio {
-				ratio, ok := ratio_setting.GetGroupGroupRatio(group, g)
-				if ok {
-					groupRatio[g] = ratio
-				}
-			}
 		}
 	}
 
-	usableGroup = service.GetUserUsableGroups(group)
-	pricing = filterPricingByUsableGroups(pricing, usableGroup)
-	// check groupRatio contains usableGroup
-	for group := range ratio_setting.GetGroupRatioCopy() {
-		if _, ok := usableGroup[group]; !ok {
-			delete(groupRatio, group)
+	usableGroup := service.GetUserUsableGroups(group)
+	pricing := model.GetPricingForUser(group, usableGroup)
+	groupRatio := make(map[string]float64)
+	for usingGroup := range ratio_setting.GetGroupRatioCopy() {
+		if _, visible := usableGroup[usingGroup]; visible {
+			groupRatio[usingGroup] = ratio_setting.ResolveModelGroupRatio(group, usingGroup, "", nil).GroupRatio
 		}
 	}
 

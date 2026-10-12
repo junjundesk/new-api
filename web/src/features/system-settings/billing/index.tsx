@@ -35,8 +35,6 @@ const defaultBillingSettings: BillingSettings = {
   'bonus_setting.signup_bonus_enabled': false,
   'bonus_setting.signup_bonus_amount': 0,
   'bonus_setting.signup_bonus_duration': '24',
-  'bonus_setting.bonus_email_subject': '',
-  'bonus_setting.bonus_email_content': '',
   'referral_setting.enabled': false,
   'referral_setting.invitee_first_topup_enabled': true,
   'referral_setting.invitee_first_topup_rate_bps': 300,

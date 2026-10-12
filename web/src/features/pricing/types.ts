@@ -27,6 +27,12 @@ export type PricingVendor = {
   description?: string
 }
 
+export type BillingRatio = {
+  min: number
+  max: number
+  source: 'channel_model' | 'user_group' | 'group' | 'mixed'
+}
+
 export type PricingModel = {
   id: number
   model_name: string
@@ -50,6 +56,7 @@ export type PricingModel = {
   supported_endpoint_types?: string[]
   key?: string
   group_ratio?: Record<string, number>
+  billing_ratios?: Record<string, BillingRatio>
   /** Billing mode (e.g. "tiered_expr") used to flag dynamic pricing */
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */

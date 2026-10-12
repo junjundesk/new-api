@@ -47,6 +47,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
 	}
+	appendGroupRatioSource(other, info.PriceData.GroupRatioInfo, info.ChannelId, info.PriceData.BillingModelName)
 	attachModelMappingToAdminInfo(other, info.IsModelMapped, info.UpstreamModelName)
 	attachQuotaSaturation(c, info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
@@ -124,6 +125,7 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
+		appendGroupRatioSource(other, types.GroupRatioInfo{GroupRatio: bc.GroupRatio, Source: bc.GroupRatioSource, ChannelModelRatio: bc.ChannelModelRatio}, task.ChannelId, bc.OriginModelName)
 		if priceData := taskBillingContextPriceData(bc); priceData != nil {
 			for k, v := range priceData.OtherRatios() {
 				other[k] = v
@@ -304,33 +306,36 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 
 	modelName := taskModelName(task)
 
-	// 获取模型价格和倍率
-	modelRatio, hasRatioSetting, _ := ratio_setting.GetModelRatio(modelName)
-	// 只有配置了倍率(非固定价格)时才按 token 重新计费
-	if !hasRatioSetting || modelRatio <= 0 {
-		return
-	}
-
-	// 获取用户和组的倍率信息
-	group := task.Group
-	if group == "" {
-		user, err := model.GetUserById(task.UserId, false)
-		if err == nil {
-			group = user.Group
+	var modelRatio, finalGroupRatio float64
+	bc := task.PrivateData.BillingContext
+	if bc != nil && bc.Version >= 1 {
+		if bc.PerCallBilling {
+			return
 		}
-	}
-	if group == "" {
-		return
-	}
-
-	groupRatio := ratio_setting.GetGroupRatio(group)
-	userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
-
-	var finalGroupRatio float64
-	if hasUserGroupRatio {
-		finalGroupRatio = userGroupRatio
+		modelRatio, finalGroupRatio = bc.ModelRatio, bc.GroupRatio
+		if modelRatio == 0 || finalGroupRatio == 0 {
+			// Explicit free snapshots must never pick up later paid settings.
+			RefundTaskQuota(ctx, task, "free billing snapshot")
+			return
+		}
 	} else {
-		finalGroupRatio = groupRatio
+		// Historical tasks predate reliable snapshots; preserve their lookup.
+		var hasRatioSetting bool
+		modelRatio, hasRatioSetting, _ = ratio_setting.GetModelRatio(modelName)
+		if !hasRatioSetting || modelRatio <= 0 {
+			return
+		}
+		group := task.Group
+		if group == "" {
+			user, err := model.GetUserById(task.UserId, false)
+			if err == nil {
+				group = user.Group
+			}
+		}
+		if group == "" {
+			return
+		}
+		finalGroupRatio = ratio_setting.ResolveModelGroupRatio(group, group, modelName, nil).GroupRatio
 	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）

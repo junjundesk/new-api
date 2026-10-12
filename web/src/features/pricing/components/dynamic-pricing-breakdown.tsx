@@ -43,8 +43,13 @@ import {
   type RequestRuleGroup,
   type TierCondition,
 } from '../lib/billing-expr'
+import {
+  formatDynamicUnitPrice,
+  type DynamicPriceOptions,
+} from '../lib/dynamic-price'
 
 type DynamicPricingBreakdownProps = {
+  priceOptions?: DynamicPriceOptions
   billingExpr: string | null | undefined
   /**
    * Label of the tier that fired for the current request. When provided,
@@ -158,6 +163,7 @@ export function DynamicPricingBreakdown({
   matchedTierLabel,
   hideCacheColumns = false,
   compact = false,
+  priceOptions,
 }: DynamicPricingBreakdownProps) {
   const { t } = useTranslation()
   const expr = billingExpr || ''
@@ -312,7 +318,9 @@ export function DynamicPricingBreakdown({
                             )}
                           >
                             {value > 0
-                              ? `${symbol}${(value * rate).toFixed(4)}`
+                              ? priceOptions
+                                ? formatDynamicUnitPrice(value, priceOptions)
+                                : `${symbol}${(value * rate).toFixed(4)}`
                               : '-'}
                           </div>
                         </div>
@@ -401,7 +409,9 @@ export function DynamicPricingBreakdown({
                   )
                   return value > 0 ? (
                     <span className={cn(!compact && 'font-semibold')}>
-                      {`${symbol}${(value * rate).toFixed(4)}`}
+                      {priceOptions
+                        ? formatDynamicUnitPrice(value, priceOptions)
+                        : `${symbol}${(value * rate).toFixed(4)}`}
                     </span>
                   ) : (
                     '-'

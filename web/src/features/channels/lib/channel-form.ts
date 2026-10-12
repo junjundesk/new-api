@@ -201,6 +201,45 @@ function addRequiredIssue(
   })
 }
 
+export const MAX_MODEL_GROUP_RATIO = 1000
+
+export const modelGroupRatioRowsSchema = z
+  .array(z.object({ model: z.string(), ratio: z.string() }))
+  .superRefine((rows, ctx) => {
+    const seen = new Set<string>()
+    rows.forEach((row, index) => {
+      const model = row.model.trim()
+      if (!model && !row.ratio.trim()) return
+      if (!model || model.length > 255 || /[\s\p{Cc}]/u.test(model)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'model'],
+          message: 'Enter a valid published model name',
+        })
+      } else if (seen.has(model)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'model'],
+          message: 'Each model can only have one billing ratio',
+        })
+      }
+      seen.add(model)
+      if (!row.ratio.trim()) return
+      const ratio = Number(row.ratio)
+      if (
+        !Number.isFinite(ratio) ||
+        ratio < 0 ||
+        ratio > MAX_MODEL_GROUP_RATIO
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'ratio'],
+          message: 'Billing ratio must be a number between 0 and 1000',
+        })
+      }
+    })
+  })
+
 export const channelFormSchema = z
   .object({
     name: z.string().min(1, ERROR_MESSAGES.REQUIRED_NAME),
@@ -258,6 +297,7 @@ export const channelFormSchema = z
     batch_add_set_key_prefix_2_name: z.boolean().optional(),
     key_mode: z.enum(['append', 'replace']).optional(), // For editing multi-key channels
     // Channel extra settings (stored in setting JSON, not sent directly)
+    model_group_ratios: modelGroupRatioRowsSchema.optional(),
     force_format: z.boolean().optional(),
     thinking_to_content: z.boolean().optional(),
     proxy: z
@@ -433,6 +473,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   batch_add_set_key_prefix_2_name: false,
   key_mode: 'append',
   // Channel extra settings
+  model_group_ratios: [],
   force_format: false,
   thinking_to_content: false,
   proxy: '',
@@ -473,6 +514,7 @@ export function transformChannelToFormDefaults(
 ): ChannelFormValues {
   // Parse channel extra settings from setting field
   let extraSettings = {
+    model_group_ratios: [] as { model: string; ratio: string }[],
     force_format: false,
     thinking_to_content: false,
     proxy: '',
@@ -491,6 +533,12 @@ export function transformChannelToFormDefaults(
         parsed.http2_connection_shards
       )
       extraSettings = {
+        model_group_ratios: isJsonObjectValue(parsed.model_group_ratios)
+          ? Object.entries(parsed.model_group_ratios).map(([model, ratio]) => ({
+              model,
+              ratio: String(ratio),
+            }))
+          : [],
         force_format: parsed.force_format || false,
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
@@ -609,7 +657,9 @@ export function transformChannelToFormDefaults(
  * Build the setting JSON string from form extra settings
  */
 export function buildSettingJSON(formData: ChannelFormValues): string {
+  const existing: unknown = parseOptionalJson(formData.setting)
   const settingObj: Record<string, unknown> = {
+    ...(isJsonObjectValue(existing) ? existing : {}),
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
@@ -624,7 +674,20 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
       ? 1
       : normalizeHttp2ConnectionShards(formData.http2_connection_shards)
 
+  const rows = modelGroupRatioRowsSchema.parse(
+    formData.model_group_ratios ?? []
+  )
+  const ratios = Object.fromEntries(
+    rows
+      .filter((row) => row.model.trim() && row.ratio.trim())
+      .map((row) => [row.model.trim(), Number(row.ratio)])
+  )
+  delete settingObj.model_group_ratios
+  if (Object.keys(ratios).length > 0) settingObj.model_group_ratios = ratios
+
   // Omit defaults so unchanged channels keep equivalent JSON.
+  delete settingObj.http_protocol
+  delete settingObj.http2_connection_shards
   if (protocol === HTTP_PROTOCOL_HTTP1) {
     settingObj.http_protocol = HTTP_PROTOCOL_HTTP1
   } else if (shards > 1) {

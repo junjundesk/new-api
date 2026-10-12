@@ -258,8 +258,6 @@ export type BillingSettings = {
   'bonus_setting.signup_bonus_enabled': boolean
   'bonus_setting.signup_bonus_amount': number
   'bonus_setting.signup_bonus_duration': string
-  'bonus_setting.bonus_email_subject': string
-  'bonus_setting.bonus_email_content': string
   'referral_setting.enabled': boolean
   'referral_setting.invitee_first_topup_enabled': boolean
   'referral_setting.invitee_first_topup_rate_bps': number
@@ -353,16 +351,6 @@ export type OperationsSettings = {
   DefaultCollapseSidebar: boolean
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean
-  QuotaRemindThreshold: string
-  SMTPServer: string
-  SMTPPort: string
-  SMTPAccount: string
-  SMTPFrom: string
-  SMTPToken: string
-  SMTPSSLEnabled: boolean
-  SMTPStartTLSEnabled: boolean
-  SMTPInsecureSkipVerify: boolean
-  SMTPForceAuthLogin: boolean
   WorkerUrl: string
   WorkerValidKey: string
   WorkerAllowHttpImageRequestEnabled: boolean
