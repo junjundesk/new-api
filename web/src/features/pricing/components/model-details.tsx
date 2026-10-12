@@ -72,9 +72,13 @@ import {
   getAvailableGroups,
   getDisplayBillingRatio,
   getGroupBillingRatio,
+  hasBillingDiscount,
+  hasGroupBillingDiscount,
   isTokenBasedModel,
 } from '../lib/model-helpers'
 import {
+  formatBasePrice,
+  formatBaseRequestPrice,
   formatFixedPrice,
   formatGroupPrice,
   formatPrice,
@@ -719,6 +723,7 @@ function PriceSection(props: {
   }
 
   if (!isTokenBased) {
+    const showBaseReq = hasBillingDiscount(props.model, props.selectedGroup)
     return (
       <section>
         <SectionTitle>{priceTitle}</SectionTitle>
@@ -734,6 +739,16 @@ function PriceSection(props: {
               props.usdExchangeRate,
               props.selectedGroup
             )}
+            {showBaseReq && (
+              <span className='text-muted-foreground/50 ml-1.5 font-mono text-xs font-normal line-through'>
+                {formatBaseRequestPrice(
+                  props.model,
+                  props.showRechargePrice,
+                  props.priceRate,
+                  props.usdExchangeRate
+                )}
+              </span>
+            )}
           </span>
         </div>
       </section>
@@ -741,6 +756,8 @@ function PriceSection(props: {
   }
 
   const secondaryItems = secondaryPriceTypes.filter((p) => p.available)
+  const showBase = hasBillingDiscount(props.model, props.selectedGroup)
+
   const renderPrice = (type: PriceType) => (
     <>
       {formatPrice(
@@ -751,6 +768,18 @@ function PriceSection(props: {
         props.priceRate,
         props.usdExchangeRate,
         props.selectedGroup
+      )}
+      {showBase && (
+        <span className='text-muted-foreground/50 ml-1.5 font-mono text-xs line-through'>
+          {formatBasePrice(
+            props.model,
+            type,
+            props.tokenUnit,
+            props.showRechargePrice,
+            props.priceRate,
+            props.usdExchangeRate
+          )}
+        </span>
       )}
       <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
         / {tokenUnitLabel}
@@ -1039,8 +1068,8 @@ function GroupPricingSection(props: {
     )
   }
 
-  const renderGroupPrice = (group: string, type: PriceType) =>
-    formatGroupPrice(
+  const renderGroupPrice = (group: string, type: PriceType) => {
+    const effective = formatGroupPrice(
       props.model,
       group,
       type,
@@ -1050,8 +1079,31 @@ function GroupPricingSection(props: {
       props.usdExchangeRate,
       props.groupRatio
     )
-  const renderFixedGroupPrice = (group: string) =>
-    formatFixedPrice(
+    const showBase = hasGroupBillingDiscount(
+      props.model,
+      group,
+      props.groupRatio
+    )
+    if (!showBase) return effective
+    return (
+      <span>
+        {effective}
+        <span className='text-muted-foreground/50 ml-1 text-xs line-through'>
+          {formatBasePrice(
+            props.model,
+            type,
+            props.tokenUnit,
+            showRechargePrice,
+            props.priceRate,
+            props.usdExchangeRate
+          )}
+        </span>
+      </span>
+    )
+  }
+
+  const renderFixedGroupPrice = (group: string) => {
+    const effective = formatFixedPrice(
       props.model,
       group,
       showRechargePrice,
@@ -1059,6 +1111,26 @@ function GroupPricingSection(props: {
       props.usdExchangeRate,
       props.groupRatio
     )
+    const showBase = hasGroupBillingDiscount(
+      props.model,
+      group,
+      props.groupRatio
+    )
+    if (!showBase) return effective
+    return (
+      <span>
+        {effective}
+        <span className='text-muted-foreground/50 ml-1 text-xs line-through'>
+          {formatBaseRequestPrice(
+            props.model,
+            showRechargePrice,
+            props.priceRate,
+            props.usdExchangeRate
+          )}
+        </span>
+      </span>
+    )
+  }
 
   return (
     <section>

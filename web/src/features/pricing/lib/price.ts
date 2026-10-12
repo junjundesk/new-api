@@ -267,3 +267,49 @@ export function formatRequestPrice(
     4
   )
 }
+
+/**
+ * Format token-based price at ratio=1 (base price before any group/channel multiplier).
+ */
+export function formatBasePrice(
+  model: PricingModel,
+  type: PriceType,
+  tokenUnit: TokenUnit,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+  return formatEffectivePrice(
+    calculateTokenPrice(model, type, 1) / TOKEN_UNIT_DIVISORS[tokenUnit],
+    { min: 1, max: 1, source: 'group' } as BillingRatio,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate,
+    6
+  )
+}
+
+/**
+ * Format per-request price at ratio=1 (base price before any group/channel multiplier).
+ */
+export function formatBaseRequestPrice(
+  model: PricingModel,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+  return formatEffectivePrice(
+    model.model_price || 0,
+    { min: 1, max: 1, source: 'group' } as BillingRatio,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate,
+    4
+  )
+}

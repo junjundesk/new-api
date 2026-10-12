@@ -27,8 +27,17 @@ import { cn } from '@/lib/utils'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { getDynamicPricingSummary } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { getDisplayBillingRatio, isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '../lib/price'
+import {
+  getDisplayBillingRatio,
+  hasBillingDiscount,
+  isTokenBasedModel,
+} from '../lib/model-helpers'
+import {
+  formatBasePrice,
+  formatBaseRequestPrice,
+  formatPrice,
+  formatRequestPrice,
+} from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelBillingRatio } from './model-billing-ratio'
@@ -123,6 +132,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       )
     }
   } else if (isTokenBased) {
+    const showBase = hasBillingDiscount(props.model, props.selectedGroup)
     priceSummary = (
       <>
         <span className='text-muted-foreground whitespace-nowrap'>
@@ -138,6 +148,18 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               props.selectedGroup
             )}
           </span>
+          {showBase && (
+            <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
+              {formatBasePrice(
+                props.model,
+                'input',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )}
+            </span>
+          )}
         </span>
         <span className='text-muted-foreground whitespace-nowrap'>
           {t('Output')}{' '}
@@ -152,6 +174,18 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               props.selectedGroup
             )}
           </span>
+          {showBase && (
+            <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
+              {formatBasePrice(
+                props.model,
+                'output',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )}
+            </span>
+          )}
         </span>
         {hasCachedPrice && (
           <span className='text-muted-foreground whitespace-nowrap'>
@@ -167,11 +201,24 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 props.selectedGroup
               )}
             </span>
+            {showBase && (
+              <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
+                {formatBasePrice(
+                  props.model,
+                  'cache',
+                  tokenUnit,
+                  showRechargePrice,
+                  priceRate,
+                  usdExchangeRate
+                )}
+              </span>
+            )}
           </span>
         )}
       </>
     )
   } else {
+    const showBase = hasBillingDiscount(props.model, props.selectedGroup)
     priceSummary = (
       <span className='text-muted-foreground whitespace-nowrap'>
         <span className='text-foreground font-mono font-semibold'>
@@ -182,7 +229,17 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             usdExchangeRate,
             props.selectedGroup
           )}
-        </span>{' '}
+        </span>
+        {showBase && (
+          <span className='text-muted-foreground/50 ml-1 font-mono text-xs line-through'>
+            {formatBaseRequestPrice(
+              props.model,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
+            )}
+          </span>
+        )}{' '}
         / {t('request')}
       </span>
     )
