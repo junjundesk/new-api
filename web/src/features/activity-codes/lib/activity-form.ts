@@ -22,6 +22,8 @@ import { z } from 'zod'
 import { parseQuotaFromDollars, quotaUnitsToEditableAmount } from '@/lib/format'
 
 import {
+  ACTIVITY_CODE_FORMAT_MESSAGE,
+  ACTIVITY_CODE_PATTERN,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_VALIDATION,
 } from '../constants'
@@ -31,14 +33,16 @@ export function getActivityCodeFormSchema(t: TFunction) {
   return z.object({
     code: z
       .string()
+      .trim()
       .min(1, t('Please enter an activity code'))
-      .max(
-        ACTIVITY_VALIDATION.CODE_MAX_LENGTH,
-        t('Activity code must be 1-64 characters of a-z, 0-9, _ or -')
+      // 按字符数（码点）计长度：一个汉字算一个字符，而不是三个字节。
+      .refine(
+        (value) => [...value].length <= ACTIVITY_VALIDATION.CODE_MAX_LENGTH,
+        t(ACTIVITY_CODE_FORMAT_MESSAGE)
       )
-      .regex(
-        /^[a-z0-9_-]+$/,
-        t('Activity code must be 1-64 characters of a-z, 0-9, _ or -')
+      .refine(
+        (value) => ACTIVITY_CODE_PATTERN.test(value),
+        t(ACTIVITY_CODE_FORMAT_MESSAGE)
       ),
     name: z
       .string()

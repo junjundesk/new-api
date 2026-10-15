@@ -3,7 +3,6 @@ package controller
 import (
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -22,8 +21,6 @@ import (
 
 // 活动码：管理端维护「码 → 目标分组」的限时授权，用户端用真余额兑换。
 const activityCodeMaxDurationHours = 87600 // 10 年
-
-var activityCodePattern = regexp.MustCompile("^[a-z0-9_-]+$")
 
 // ---------------------------------------------------------------------------
 // 管理端
@@ -57,7 +54,7 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		activityCode = existing
 	} else {
 		code := model.NormalizeActivityCode(req.Code)
-		if len(code) == 0 || len(code) > 64 || !activityCodePattern.MatchString(code) {
+		if !model.IsValidActivityCode(code) {
 			common.ApiErrorI18n(c, i18n.MsgActivityCodeFormat)
 			return nil, false
 		}

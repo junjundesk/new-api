@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -29,6 +31,8 @@ const (
 
 	ActivityGrantSourceRedeem = "redeem"
 
+	// ActivityCodeMaxLength 是活动码的字符数上限（按 rune 计，中文等宽字符按 1 个算）。
+	ActivityCodeMaxLength = 64
 	// ActivityCodeMaxRpm 是活动码每分钟请求上限的允许最大值。
 	ActivityCodeMaxRpm = 100000
 	// ActivityCodeMaxPriceQuota 与用户余额列的 32 位存储保持一致。
@@ -124,10 +128,25 @@ func (grant *ActivityGrant) BeforeUpdate(tx *gorm.DB) error {
 	return nil
 }
 
-// NormalizeActivityCode 归一化用户输入的活动码：去空格并转小写。
-// 活动码统一以小写形式落库，避免不同数据库大小写敏感度不一致。
+// NormalizeActivityCode 归一化用户输入的活动码：去首尾空白并转小写。
+// 统一以小写形式落库，避免不同数据库大小写敏感度不一致；中文等非拉丁字符不受影响。
 func NormalizeActivityCode(code string) string {
 	return strings.ToLower(strings.TrimSpace(code))
+}
+
+// IsValidActivityCode 校验活动码格式：允许任意语言的字母与数字，以及下划线和连字符。
+// 不接受空格、标点、表情符号；长度按字符（rune）计算，中文一个汉字算一个字符。
+func IsValidActivityCode(code string) bool {
+	if code == "" || utf8.RuneCountInString(code) > ActivityCodeMaxLength {
+		return false
+	}
+	for _, r := range code {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // WindowClosed 判断活动码的可兑换窗口是否已经结束。

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -319,6 +320,50 @@ func TestActivityGrantExpireAndRevoke(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, grants)
 	assert.Equal(t, 2, reloadActivityCode(t, created.Id).UsedCount, "撤销不返还兑换次数")
+}
+
+func TestActivityCodeFormatSupportsNonLatinScripts(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+		want bool
+	}{
+		{name: "中文", code: "夏日免费", want: true},
+		{name: "中文与数字分隔符混排", code: "hdm-免费_2026", want: true},
+		{name: "日文与西里尔字母", code: "夏休み-скидка", want: true},
+		{name: "空字符串", code: "", want: false},
+		{name: "含空格", code: "夏日 免费", want: false},
+		{name: "含表情符号", code: "免费🎉", want: false},
+		{name: "含邮箱符号", code: "free@2026", want: false},
+		{name: "64 个汉字", code: strings.Repeat("免", 64), want: true},
+		{name: "65 个汉字", code: strings.Repeat("免", 65), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsValidActivityCode(tt.code))
+		})
+	}
+}
+
+func TestRedeemActivityCodeNormalizesUserInput(t *testing.T) {
+	tests := []struct {
+		name       string
+		storedCode string
+		input      string
+	}{
+		{name: "中文码带首尾空格", storedCode: "夏日免费", input: "  夏日免费  "},
+		{name: "拉丁字母大小写与空格归一化", storedCode: "hdm-免费", input: " HDM-免费 "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user, created := setupActivityFixture(t, ActivityCode{Code: tt.storedCode, DurationSeconds: 3600}, 0)
+
+			result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: tt.input, UserId: user.Id})
+			require.NoError(t, err)
+			assert.Equal(t, created.Id, result.CodeId)
+			assert.Equal(t, tt.storedCode, result.Code)
+		})
+	}
 }
 
 // 不存在的活动码与空活动码必须返回同一种错误，避免通过错误类型区分活动码是否存在。

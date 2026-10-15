@@ -122,6 +122,43 @@ func TestActivityCodeCreateThenUpdateSucceeds(t *testing.T) {
 	assert.Equal(t, "hdmfree", stored.Code, "activity code string must stay unchanged")
 }
 
+func TestActivityCodeSupportsChineseCode(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	payload := activityRequestPayload()
+	payload["code"] = "夏日免费"
+	payload["name"] = "夏日免费活动"
+
+	created := callActivityAdmin(t, router, http.MethodPost, payload)
+	require.True(t, created.Success, "creating a Chinese activity code must succeed: "+created.Message)
+	codeIdValue, ok := created.Data["id"].(float64)
+	require.True(t, ok)
+	activityCodeId := int(codeIdValue)
+
+	updatePayload := activityRequestPayload()
+	updatePayload["id"] = activityCodeId
+	updatePayload["code"] = "夏日免费"
+	updatePayload["name"] = "夏日免费活动-已改名"
+	updated := callActivityAdmin(t, router, http.MethodPut, updatePayload)
+	require.True(t, updated.Success, "updating a Chinese activity code must succeed: "+updated.Message)
+
+	stored, err := model.GetActivityCodeById(activityCodeId)
+	require.NoError(t, err)
+	assert.Equal(t, "夏日免费", stored.Code)
+	assert.Equal(t, "夏日免费活动-已改名", stored.Name)
+}
+
+func TestActivityCodeRejectsIllegalCharacters(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	payload := activityRequestPayload()
+	payload["code"] = "夏日 免费"
+	rejected := callActivityAdmin(t, router, http.MethodPost, payload)
+	assert.False(t, rejected.Success, "codes containing spaces must be rejected")
+}
+
 func TestActivityCodeUpdateRejectsMalformedPayload(t *testing.T) {
 	setupActivityControllerTest(t)
 	router := newActivityAdminRouter()

@@ -608,6 +608,7 @@ export const STATIC_I18N_KEYS = [
   'Activity grant revoked',
   'Group Default Ratio',
   'Custom Ratio',
+  'Activity code must be 1-64 letters (any language), digits, _ or -',
   'Active',
   'Revoked',
 ] as const

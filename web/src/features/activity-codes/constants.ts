@@ -101,6 +101,12 @@ export const SUCCESS_MESSAGES = {
   GRANT_REVOKED: 'Activity grant revoked',
 } as const
 
+// 活动码允许任意语言的字母/数字，以及下划线和连字符；不接受空格与其它符号。
+export const ACTIVITY_CODE_PATTERN = /^[\p{L}\p{N}_-]+$/u
+
+export const ACTIVITY_CODE_FORMAT_MESSAGE =
+  'Activity code must be 1-64 letters (any language), digits, _ or -'
+
 export const ACTIVITY_VALIDATION = {
   CODE_MAX_LENGTH: 64,
   NAME_MAX_LENGTH: 64,

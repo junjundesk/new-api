@@ -76,7 +76,7 @@ activity.insufficient_balance: "Insufficient wallet balance. Bonus credit cannot
 activity.need_confirm: "This activity code deducts wallet balance and needs confirmation"
 activity.price_changed: "The activity has been updated, please review and confirm again"
 activity.not_found: "Activity code not found"
-activity.code_format: "Activity code must be 1-64 characters of a-z, 0-9, _ or -"
+activity.code_format: "Activity code must be 1-64 letters (any language), digits, _ or -"
 activity.name_length: "Activity code name length must be between 1-64"
 activity.code_exists: "This activity code already exists"
 activity.group_not_configured: "Group {{.Group}} is not configured in group ratios"

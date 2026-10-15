@@ -5724,6 +5724,9 @@
     "Validity (hours)": "Validity (hours)",
     "Validity must be between 0 and 87600 hours": "Validity must be between 0 and 87600 hours",
     "Wallet balance": "Wallet balance",
+    "Activity code must be 1-64 letters (any language), digits, _ or -": "Activity code must be 1-64 letters (any language), digits, _ or -",
+    "For example: hdmfree or 夏日免费": "For example: hdmfree or 夏日免费",
+    "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.",
     "Zoom": "Zoom"
   }
 }

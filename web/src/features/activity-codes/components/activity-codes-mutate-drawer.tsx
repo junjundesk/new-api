@@ -253,12 +253,12 @@ export function ActivityCodesMutateDrawer({
                         <Input
                           {...field}
                           disabled={isUpdate}
-                          placeholder={t('For example: hdmfree')}
+                          placeholder={t('For example: hdmfree or 夏日免费')}
                         />
                       </FormControl>
                       <FormDescription>
                         {t(
-                          'Lowercase letters, digits, _ and - only. The code cannot be changed after creation.'
+                          'Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.'
                         )}
                       </FormDescription>
                       <FormMessage />
