@@ -25,15 +25,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { formatQuota } from '@/lib/format'
-
 import { getActivityOffers } from '../api'
 import { useActivity } from '../hooks/use-activity'
-import {
-  describeActivityDuration,
-  describeActivityRatio,
-} from '../lib/activity-format'
 import type { ActivityPreview } from '../types'
+import { ActivityOfferCards } from './activity-offer-cards'
 import { ActivityRedeemConfirmDialog } from './dialogs/activity-redeem-confirm-dialog'
 
 type ActivityRedeemPanelProps = {
@@ -152,41 +147,21 @@ export function ActivityRedeemPanel({ showOffers = false }: ActivityRedeemPanelP
       </p>
 
       {showOffers && offers.length > 0 && (
-        <div className='space-y-2 border-t pt-3'>
+        <div className='space-y-3 border-t pt-3'>
           <div className='flex items-center gap-2'>
             <Gift className='text-muted-foreground h-4 w-4' />
             <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
               {t('Available Activities')}
             </Label>
           </div>
-          {offers.map((offer) => (
-            <div
-              key={offer.code_id}
-              className='flex items-center justify-between gap-3 rounded-lg border p-3'
-            >
-              <div className='min-w-0 space-y-1'>
-                <p className='truncate text-sm font-medium'>{offer.name}</p>
-                <p className='text-muted-foreground text-xs'>
-                  {offer.group_desc || offer.group_name} ·{' '}
-                  {describeActivityDuration(t, offer.duration_seconds)} ·{' '}
-                  {describeActivityRatio(t, offer.ratio_mode, offer.ratio_override)}
-                  {offer.price_quota > 0
-                    ? ` · ${formatQuota(offer.price_quota)}`
-                    : ` · ${t('Free')}`}
-                </p>
-              </div>
-              <Button
-                size='sm'
-                disabled={isBusy}
-                onClick={() => {
-                  setCode(offer.code)
-                  void startRedeem(offer.code)
-                }}
-              >
-                {t('Redeem')}
-              </Button>
-            </div>
-          ))}
+          <ActivityOfferCards
+            offers={offers}
+            disabled={isBusy}
+            onRedeem={(offer) => {
+              setCode(offer.code)
+              void startRedeem(offer.code)
+            }}
+          />
         </div>
       )}
 

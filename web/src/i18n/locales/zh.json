@@ -5727,6 +5727,8 @@
     "Activity code must be 1-64 letters (any language), digits, _ or -": "活动码只能是 1-64 个字符：任意语言的字母、数字、_ 或 -",
     "For example: hdmfree or 夏日免费": "例如：hdmfree 或 夏日免费",
     "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": "可包含任意语言的字母、数字、_ 和 -；拉丁字母按小写保存。活动码创建后不可修改。",
+    "Limited-time group access granted by an activity code": "活动码授予的限时分组权限",
+    "Redeem {{name}}": "兑换 {{name}}",
     "Zoom": "缩放"
   }
 }

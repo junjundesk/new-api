@@ -27,17 +27,17 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const LOCALES = ['en', 'zh']
 
 const NEW_KEYS = {
-  "Activity code must be 1-64 letters (any language), digits, _ or -": {
-    en: "Activity code must be 1-64 letters (any language), digits, _ or -",
-    zh: "活动码只能是 1-64 个字符：任意语言的字母、数字、_ 或 -",
+  "Remaining": {
+    en: "Remaining",
+    zh: "剩余",
   },
-  "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": {
-    en: "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.",
-    zh: "可包含任意语言的字母、数字、_ 和 -；拉丁字母按小写保存。活动码创建后不可修改。",
+  "Limited-time group access granted by an activity code": {
+    en: "Limited-time group access granted by an activity code",
+    zh: "活动码授予的限时分组权限",
   },
-  "For example: hdmfree or 夏日免费": {
-    en: "For example: hdmfree or 夏日免费",
-    zh: "例如：hdmfree 或 夏日免费",
+  "Redeem {{name}}": {
+    en: "Redeem {{name}}",
+    zh: "兑换 {{name}}",
   },
 }
 

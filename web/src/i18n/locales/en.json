@@ -5727,6 +5727,8 @@
     "Activity code must be 1-64 letters (any language), digits, _ or -": "Activity code must be 1-64 letters (any language), digits, _ or -",
     "For example: hdmfree or 夏日免费": "For example: hdmfree or 夏日免费",
     "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.",
+    "Limited-time group access granted by an activity code": "Limited-time group access granted by an activity code",
+    "Redeem {{name}}": "Redeem {{name}}",
     "Zoom": "Zoom"
   }
 }

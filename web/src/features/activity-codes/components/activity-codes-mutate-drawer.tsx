@@ -306,11 +306,16 @@ export function ActivityCodesMutateDrawer({
                         onValueChange={field.onChange}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className='w-full'>
                             <SelectValue placeholder={t('Select a group')} />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
+                        {/* 触发框占满表单宽度；弹层按内容自适应（至少与触发框同宽），
+                            过高时按可用高度滚动，避免长分组名或长列表被截断。 */}
+                        <SelectContent
+                          alignItemWithTrigger={false}
+                          className='max-h-[min(22rem,var(--available-height))] w-max min-w-(--anchor-width) max-w-[min(32rem,var(--available-width))]'
+                        >
                           <SelectGroup>
                             {groupNames.map((group) => (
                               <SelectItem key={group} value={group}>

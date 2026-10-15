@@ -60,7 +60,7 @@ export function ActivityCodeCard() {
         </div>
       </CardHeader>
       <CardContent>
-        <ActivityRedeemPanel />
+        <ActivityRedeemPanel showOffers />
       </CardContent>
     </Card>
   )
