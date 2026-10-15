@@ -48,14 +48,10 @@ type activityCodeRequest struct {
 	PublicVisible *int    `json:"public_visible"`
 }
 
-// buildActivityCode 校验并组装活动码。existing 非空表示更新（活动码字符串不可修改）。
-func buildActivityCode(c *gin.Context, existing *model.ActivityCode) (*model.ActivityCode, bool) {
-	var req activityCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return nil, false
-	}
-
+// buildActivityCode 校验并组装活动码。请求体由调用方解析一次后传入：
+// c.ShouldBindJSON 会消费请求体，函数内部再次绑定只会读到 EOF。
+// existing 非空表示更新（活动码字符串不可修改）。
+func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model.ActivityCode) (*model.ActivityCode, bool) {
 	activityCode := &model.ActivityCode{}
 	if existing != nil {
 		activityCode = existing
@@ -173,7 +169,13 @@ func GetActivityCode(c *gin.Context) {
 
 // AddActivityCode 新建活动码。
 func AddActivityCode(c *gin.Context) {
-	activityCode, ok := buildActivityCode(c, nil)
+	var req activityCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.SysError("failed to bind activity code payload: " + err.Error())
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	activityCode, ok := buildActivityCode(c, &req, nil)
 	if !ok {
 		return
 	}
@@ -199,6 +201,7 @@ func AddActivityCode(c *gin.Context) {
 func UpdateActivityCode(c *gin.Context) {
 	var req activityCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		common.SysError("failed to bind activity code payload: " + err.Error())
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
@@ -207,7 +210,7 @@ func UpdateActivityCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeNotFound)
 		return
 	}
-	activityCode, ok := buildActivityCode(c, existing)
+	activityCode, ok := buildActivityCode(c, &req, existing)
 	if !ok {
 		return
 	}
