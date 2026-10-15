@@ -55,7 +55,7 @@ func TestResolveChannelModelRatioPriority(t *testing.T) {
 			var overrides map[string]*float64
 			require.NoError(t, common.UnmarshalJsonStr(tt.overridesJSON, &overrides))
 
-			got := ResolveModelGroupRatio(tt.userGroup, "default", tt.modelName, overrides)
+			got := ResolveModelGroupRatio(tt.userGroup, "default", tt.modelName, overrides, nil)
 
 			assert.Equal(t, tt.wantRatio, got.GroupRatio)
 			assert.Equal(t, tt.wantSource, got.Source)
@@ -73,7 +73,7 @@ func TestResolveChannelModelRatioPriority(t *testing.T) {
 
 			if tt.modelName == "gpt-4-gizmo-channel-test" {
 				delete(overrides, tt.modelName)
-				withoutExact := ResolveModelGroupRatio(tt.userGroup, "default", tt.modelName, overrides)
+				withoutExact := ResolveModelGroupRatio(tt.userGroup, "default", tt.modelName, overrides, nil)
 				assert.Equal(t, 0.6, withoutExact.GroupRatio, "the wildcard used for base pricing must not supply a channel override")
 				assert.Equal(t, types.GroupRatioSourceUserGroup, withoutExact.Source)
 				assert.Nil(t, withoutExact.ChannelModelRatio)

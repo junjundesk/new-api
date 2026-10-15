@@ -139,6 +139,16 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/self/bonus", controller.GetSelfBonus)
 			}
 
+			// 活动码（用户端）：公开活动、我的授权、兑换预览与兑换
+			activitySelfRoute := userRoute.Group("/activity")
+			activitySelfRoute.Use(middleware.UserAuth())
+			{
+				activitySelfRoute.GET("/offers", controller.GetActivityOffers)
+				activitySelfRoute.GET("/grants", controller.GetSelfActivityGrants)
+				activitySelfRoute.POST("/verify", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("activity"), controller.VerifyActivityCode)
+				activitySelfRoute.POST("/redeem", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("activity-redeem"), controller.RedeemActivityCode)
+			}
+
 			adminRoute := userRoute.Group("/")
 			adminRoute.Use(middleware.AdminAuth())
 			{
@@ -283,6 +293,21 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.PUT("/", controller.UpdateRedemption)
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
+		}
+
+		// 活动码（管理端）：活动码 CRUD 与授权管理
+		activityCodeRoute := apiRouter.Group("/activity")
+		activityCodeRoute.Use(middleware.AdminAuth())
+		{
+			activityCodeRoute.GET("/", controller.GetAllActivityCodes)
+			activityCodeRoute.GET("/search", controller.GetAllActivityCodes)
+			activityCodeRoute.GET("/:id", controller.GetActivityCode)
+			activityCodeRoute.POST("/", controller.AddActivityCode)
+			activityCodeRoute.PUT("/", controller.UpdateActivityCode)
+			activityCodeRoute.PUT("/:id/status", controller.UpdateActivityCodeStatus)
+			activityCodeRoute.DELETE("/:id", controller.DeleteActivityCode)
+			activityCodeRoute.GET("/:id/grants", controller.GetActivityCodeGrants)
+			activityCodeRoute.POST("/grants/:grant_id/revoke", controller.RevokeActivityGrant)
 		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)

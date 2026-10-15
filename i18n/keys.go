@@ -75,6 +75,32 @@ const (
 	MsgRedemptionExpireTimeInvalid = "redemption.expire_time_invalid"
 )
 
+// Activity code messages
+const (
+	MsgActivityCodeInvalid             = "activity.invalid"
+	MsgActivityCodeDisabled            = "activity.disabled"
+	MsgActivityCodeNotStarted          = "activity.not_started"
+	MsgActivityCodeEnded               = "activity.ended"
+	MsgActivityCodeSoldOut             = "activity.sold_out"
+	MsgActivityCodeUserLimit           = "activity.user_limit"
+	MsgActivityCodeGroupUnavailable    = "activity.group_unavailable"
+	MsgActivityCodeInsufficientBalance = "activity.insufficient_balance"
+	MsgActivityCodeNeedConfirm         = "activity.need_confirm"
+	MsgActivityCodePriceChanged        = "activity.price_changed"
+	MsgActivityCodeNotFound            = "activity.not_found"
+	MsgActivityCodeFormat              = "activity.code_format"
+	MsgActivityCodeNameLength          = "activity.name_length"
+	MsgActivityCodeExists              = "activity.code_exists"
+	MsgActivityCodeGroupNotConfigured  = "activity.group_not_configured"
+	MsgActivityCodeDurationInvalid     = "activity.duration_invalid"
+	MsgActivityCodeRpmInvalid          = "activity.rpm_invalid"
+	MsgActivityCodePriceInvalid        = "activity.price_invalid"
+	MsgActivityCodeRatioModeInvalid    = "activity.ratio_mode_invalid"
+	MsgActivityCodeRatioInvalid        = "activity.ratio_invalid"
+	MsgActivityCodeWindowInvalid       = "activity.window_invalid"
+	MsgActivityCodeLimitInvalid        = "activity.limit_invalid"
+)
+
 // User related messages
 const (
 	MsgUserPasswordLoginDisabled     = "user.password_login_disabled"

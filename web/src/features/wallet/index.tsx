@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { ActivityCodeCard } from '@/features/activity/components/activity-code-card'
 import { BonusBalanceCard } from '@/features/bonus/components/bonus-balance-card'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -346,6 +347,11 @@ export function Wallet(props: WalletProps) {
                 userQuota={user?.quota}
                 onPurchaseSuccess={fetchUser}
               />
+            </div>
+
+            {/* 活动码：站点启用活动码时显示，免费码直接兑换、付费码先确认 */}
+            <div id='wallet-activity-code' className='scroll-mt-4'>
+              <ActivityCodeCard />
             </div>
 
             <AffiliateRewardsCard

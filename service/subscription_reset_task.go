@@ -97,6 +97,12 @@ func runSubscriptionQuotaResetOnce() {
 	} else if n > 0 {
 		totalExpired += int(n)
 	}
+	// 活动码授权过期：同样只是让管理端列表状态准确，实时判定靠读时的 expire_time 过滤。
+	if n, err := model.ExpireDueActivityGrants(); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("activity grant expire task failed: %v", err))
+	} else if n > 0 {
+		totalExpired += int(n)
+	}
 	if common.DebugEnabled && (totalReset > 0 || totalExpired > 0) {
 		logger.LogDebug(ctx, "subscription maintenance: reset_count=%d, expired_count=%d", totalReset, totalExpired)
 	}

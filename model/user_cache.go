@@ -170,6 +170,18 @@ func syncCreditUserQuotaCache(userId int, quota int, operation string) {
 	}
 }
 
+// SyncDebitUserQuotaCache 在扣费事务（活动码兑换等）提交后把扣减同步进缓存余额。
+// 预扣以缓存值为准（存在期间），事务里的余额扣减如果不同步，缓存过期前用户仍会
+// 看到旧余额；缓存未命中无需处理，下次读取会从已提交的数据库余额水合。
+func SyncDebitUserQuotaCache(userId int, quota int, operation string) {
+	if quota <= 0 {
+		return
+	}
+	if err := cacheDecrUserQuota(userId, int64(quota)); err != nil {
+		common.SysLog(fmt.Sprintf("failed to sync %s debit to user quota cache: %s", operation, err.Error()))
+	}
+}
+
 // Helper functions to get individual fields if needed
 func getUserGroupCache(userId int) (string, error) {
 	cache, err := GetUserCache(userId)

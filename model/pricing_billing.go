@@ -62,7 +62,9 @@ func (p Pricing) clone() Pricing {
 
 // GetPricingForUser resolves current group settings after copying the static
 // snapshot. No per-user price or visible-group selection is written to the cache.
-func GetPricingForUser(userGroup string, usableGroups map[string]string) []Pricing {
+// activityRatios carries the ratio overrides of the user's active activity-code
+// grants ("group -> ratio"); nil means the user holds none.
+func GetPricingForUser(userGroup string, usableGroups map[string]string, activityRatios map[string]float64) []Pricing {
 	snapshot := getPricingSnapshot()
 	pricing := make([]Pricing, 0, len(snapshot))
 	if len(usableGroups) == 0 {
@@ -92,7 +94,12 @@ func GetPricingForUser(userGroup string, usableGroups map[string]string) []Prici
 				if override != nil {
 					overrides = map[string]*float64{item.ModelName: override}
 				}
-				resolved := ratio_setting.ResolveModelGroupRatio(userGroup, group, item.ModelName, overrides)
+				var activityRatio *float64
+				if ratio, ok := activityRatios[group]; ok {
+					value := ratio
+					activityRatio = &value
+				}
+				resolved := ratio_setting.ResolveModelGroupRatio(userGroup, group, item.ModelName, overrides, activityRatio)
 				if i == 0 {
 					item.BillingRatios[group] = BillingRatioRange{
 						Min: resolved.GroupRatio, Max: resolved.GroupRatio, Source: resolved.Source,

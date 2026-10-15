@@ -55,6 +55,10 @@ const (
 	ContextKeyUsingGroup  ContextKey = "group"
 	ContextKeyUserName    ContextKey = "username"
 
+	// ContextKeyActivityGrants stores the current user's active activity-code
+	// grants, resolved lazily once per request (see service.GetRequestActivityView).
+	ContextKeyActivityGrants ContextKey = "activity_grants"
+
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 
 	ContextKeySystemPromptOverride ContextKey = "system_prompt_override"

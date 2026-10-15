@@ -121,6 +121,32 @@ func GetGroupsEnabledModels(groups []string) []string {
 	return models
 }
 
+// GetUserUsableGroupsWithActivity 在静态可用分组之上叠加用户当前有效的活动码分组。
+// userId <= 0 时退化为静态可用分组。
+func GetUserUsableGroupsWithActivity(userId int, userGroup string) map[string]string {
+	groups := GetUserUsableGroups(userGroup)
+	for _, view := range GetActiveActivityViews(userId) {
+		if _, exists := groups[view.GroupName]; exists {
+			continue
+		}
+		label := view.CodeName
+		if label == "" {
+			label = view.Code
+		}
+		groups[view.GroupName] = "活动分组：" + label
+	}
+	return groups
+}
+
+// GetUserGroupRatioWithActivity 返回用户在某个分组上的实际计费倍率，
+// 活动授权覆盖优先于用户分组倍率矩阵。
+func GetUserGroupRatioWithActivity(userGroup, group string, activityRatios map[string]float64) float64 {
+	if override := ActivityRatioFor(activityRatios, group); override != nil {
+		return *override
+	}
+	return GetUserGroupRatio(userGroup, group)
+}
+
 // GetUserGroupRatio 获取用户使用某个分组的倍率
 // userGroup 用户分组
 // group 需要获取倍率的分组

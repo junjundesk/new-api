@@ -23,6 +23,7 @@ import {
   FileText,
   FlaskConical,
   Gauge,
+  Gift,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -116,6 +117,11 @@ export function useSidebarData(): SidebarData {
             icon: Wallet,
           },
           {
+            title: t('Activity Center'),
+            url: '/activity',
+            icon: Gift,
+          },
+          {
             title: t('Profile'),
             url: '/profile',
             icon: User,
@@ -151,6 +157,11 @@ export function useSidebarData(): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
+          },
+          {
+            title: t('Activity Codes'),
+            url: '/activity-codes',
+            icon: Gift,
           },
           {
             title: t('Subscriptions'),

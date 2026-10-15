@@ -9,21 +9,22 @@ import (
 )
 
 func GetPricing(c *gin.Context) {
-	userId, exists := c.Get("id")
+	userId := c.GetInt("id")
 	var group string
-	if exists {
-		user, err := model.GetUserCache(userId.(int))
+	if userId > 0 {
+		user, err := model.GetUserCache(userId)
 		if err == nil {
 			group = user.Group
 		}
 	}
 
-	usableGroup := service.GetUserUsableGroups(group)
-	pricing := model.GetPricingForUser(group, usableGroup)
+	activityRatios := service.GetActivityRatioOverrides(service.GetActiveActivityViews(userId))
+	usableGroup := service.GetUserUsableGroupsWithActivity(userId, group)
+	pricing := model.GetPricingForUser(group, usableGroup, activityRatios)
 	groupRatio := make(map[string]float64)
 	for usingGroup := range ratio_setting.GetGroupRatioCopy() {
 		if _, visible := usableGroup[usingGroup]; visible {
-			groupRatio[usingGroup] = ratio_setting.ResolveModelGroupRatio(group, usingGroup, "", nil).GroupRatio
+			groupRatio[usingGroup] = ratio_setting.ResolveModelGroupRatio(group, usingGroup, "", nil, service.ActivityRatioFor(activityRatios, usingGroup)).GroupRatio
 		}
 	}
 

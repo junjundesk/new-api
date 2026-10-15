@@ -27,357 +27,465 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const LOCALES = ['en', 'zh']
 
 const NEW_KEYS = {
-  Performance: {
-    en: 'Performance',
-    zh: '性能',
-  },
-  'Live availability and latency for the groups your account can use.': {
-    en: 'Live availability and latency for the groups your account can use.',
-    zh: '当前账号可用分组的实时可用率与延迟。',
-  },
-  'Updated {{time}}': {
-    en: 'Updated {{time}}',
-    zh: '更新于 {{time}}',
-  },
-  'Auto-refreshes every minute': {
-    en: 'Auto-refreshes every minute',
-    zh: '每分钟自动刷新',
-  },
-  'Time range': {
-    en: 'Time range',
-    zh: '时间范围',
-  },
-  'Last 24 hours': {
-    en: 'Last 24 hours',
-    zh: '最近 24 小时',
-  },
-  'Last 7 days': {
-    en: 'Last 7 days',
-    zh: '最近 7 天',
-  },
-  Refresh: {
-    en: 'Refresh',
-    zh: '刷新',
-  },
-  'Sort groups': {
-    en: 'Sort groups',
-    zh: '排序分组',
-  },
-  'Custom group order': {
-    en: 'Custom group order',
-    zh: '自定义分组顺序',
-  },
-  'Request volume': {
-    en: 'Request volume',
-    zh: '请求量',
-  },
-  'Observed multiplier: high to low': {
-    en: 'Observed multiplier: high to low',
-    zh: '实测倍率：从高到低',
-  },
-  'Observed multiplier: low to high': {
-    en: 'Observed multiplier: low to high',
-    zh: '实测倍率：从低到高',
-  },
-  'Effective multiplier: high to low': {
-    en: 'Effective multiplier: high to low',
-    zh: '实际倍率：从高到低',
-  },
-  'Effective multiplier: low to high': {
-    en: 'Effective multiplier: low to high',
-    zh: '实际倍率：从低到高',
-  },
-  'Group name': {
-    en: 'Group name',
-    zh: '分组名称',
-  },
-  'Coding cache: high to low': {
-    en: 'Coding cache: high to low',
-    zh: 'Coding 缓存：从高到低',
-  },
-  'Success rate: high to low': {
-    en: 'Success rate: high to low',
-    zh: '成功率：从高到低',
-  },
-  'Latency: low to high': {
-    en: 'Latency: low to high',
-    zh: '延迟：从低到高',
-  },
-  'Throughput: high to low': {
-    en: 'Throughput: high to low',
-    zh: '吞吐量：从高到低',
-  },
-  'Filter groups by status': {
-    en: 'Filter groups by status',
-    zh: '按状态筛选分组',
-  },
-  Operational: {
-    en: 'Operational',
-    zh: '运行中',
-  },
-  Degraded: {
-    en: 'Degraded',
-    zh: '波动',
-  },
-  Unavailable: {
-    en: 'Unavailable',
-    zh: '异常',
-  },
-  'No data': {
-    en: 'No data',
-    zh: '暂无数据',
-  },
-  '{{shown}} of {{count}} groups': {
-    en: '{{shown}} of {{count}} groups',
-    zh: '{{shown}}/{{count}} 个分组',
-  },
-  '{{count}} groups': {
-    en: '{{count}} groups',
-    zh: '{{count}} 个分组',
-  },
-  'Use Move up and Move down to save your group order on this device. Filters keep hidden groups in place.':
-    {
-      en: 'Use Move up and Move down to save your group order on this device. Filters keep hidden groups in place.',
-      zh: '使用上移、下移调整顺序，并保存在此设备。筛选时隐藏的分组保持原位置。',
-    },
-  'Move up': {
-    en: 'Move up',
-    zh: '上移',
-  },
-  'Move down': {
-    en: 'Move down',
-    zh: '下移',
-  },
-  'Move {{group}} up': {
-    en: 'Move {{group}} up',
-    zh: '将 {{group}} 上移',
-  },
-  'Move {{group}} down': {
-    en: 'Move {{group}} down',
-    zh: '将 {{group}} 下移',
-  },
-  'Group ratio': {
-    en: 'Group ratio',
-    zh: '分组倍率',
-  },
-  'User Group': {
-    en: 'User Group',
-    zh: '用户分组',
-  },
-  Auto: {
-    en: 'Auto',
-    zh: '自动',
-  },
-  'Cache hit': {
-    en: 'Cache hit',
-    zh: '缓存命中',
-  },
-  'Coding cache': {
-    en: 'Coding cache',
-    zh: 'Coding 缓存',
-  },
-  'Observed input multiplier': {
-    en: 'Observed input multiplier',
-    zh: '实测输入倍率',
-  },
-  'Reference-adjusted multiplier': {
-    en: 'Reference-adjusted multiplier',
-    zh: '参考调整倍率',
-  },
-  'Pricing coverage is insufficient': {
-    en: 'Pricing coverage is insufficient',
-    zh: '价格覆盖不足',
-  },
-  'Cost coverage: {{coverage}}%': {
-    en: 'Cost coverage: {{coverage}}%',
-    zh: '成本覆盖：{{coverage}}%',
-  },
-  Latency: {
-    en: 'Latency',
-    zh: '延迟',
-  },
-  Availability: {
-    en: 'Availability',
-    zh: '可用性',
-  },
-  '{{success}}/{{total}} requests succeeded': {
-    en: '{{success}}/{{total}} requests succeeded',
-    zh: '{{success}}/{{total}} 次请求成功',
-  },
-  'No requests in this window': {
-    en: 'No requests in this window',
-    zh: '该时间窗内无请求',
-  },
-  '{{count}} models with traffic': {
-    en: '{{count}} models with traffic',
-    zh: '{{count}} 个模型有流量',
-  },
-  'View models': {
-    en: 'View models',
-    zh: '查看模型',
-  },
-  Past: {
-    en: 'Past',
-    zh: '过去',
-  },
-  Now: {
-    en: 'Now',
-    zh: '现在',
-  },
-  '{{count}} requests': {
-    en: '{{count}} requests',
-    zh: '{{count}} 次请求',
-  },
-  'Cache metrics explained': {
-    en: 'Cache metrics explained',
-    zh: '缓存统计说明',
-  },
-  'Cache hit is cached input tokens divided by total input tokens, summed across successful requests in this group. Output tokens are excluded.':
-    {
-      en: 'Cache hit is cached input tokens divided by total input tokens, summed across successful requests in this group. Output tokens are excluded.',
-      zh: '缓存命中 = 缓存读取 token 总数 ÷ 总输入 token 数，按本分组的成功调用汇总，不包含输出 token。',
-    },
-  'Coding cache uses the same calculation, only for Codex, Claude Code, Pi, OpenCode, OMP, ZCode, DeepSeek Harness (DSH), and Open Design clients.':
-    {
-      en: 'Coding cache uses the same calculation, only for Codex, Claude Code, Pi, OpenCode, OMP, ZCode, DeepSeek Harness (DSH), and Open Design clients.',
-      zh: 'Coding 缓存采用相同公式，仅统计 Codex、Claude Code、Pi、OpenCode、OMP、ZCode、DeepSeek Harness (DSH) 和 Open Design 客户端。',
-    },
-  'Observed multiplier = input cost ÷ the 0% cache reference cost. Reference-adjusted multiplier uses your selected cache scenario instead. Both keep cache-write costs fixed and require 90% input cost coverage.':
-    {
-      en: 'Observed multiplier = input cost ÷ the 0% cache reference cost. Reference-adjusted multiplier uses your selected cache scenario instead. Both keep cache-write costs fixed and require 90% input cost coverage.',
-      zh: '观测倍率 = 输入成本 ÷ 缓存 0% 的参考成本；参考调整倍率使用你选择的缓存场景作为分母。两者均保持写入费用不变，输入成本覆盖达到 90% 才展示。',
-    },
-  'Only valid upstream usage is included. No data is shown as —; a measured zero is 0%. Statistics cover all users in the group.':
-    {
-      en: 'Only valid upstream usage is included. No data is shown as —; a measured zero is 0%. Statistics cover all users in the group.',
-      zh: '仅纳入有效的上游用量。无数据时显示 —，真实零命中显示 0%。统计覆盖本分组的所有用户。',
-    },
-  'Reference cache rate': {
-    en: 'Reference cache rate',
-    zh: '参考缓存率',
-  },
-  'Reference cache: {{rate}}%': {
-    en: 'Reference cache: {{rate}}%',
-    zh: '参考缓存率：{{rate}}%',
-  },
-  'Reference cache rate (%)': {
-    en: 'Reference cache rate (%)',
-    zh: '参考缓存率（%）',
-  },
-  '90% is an adjustable multi-turn coding scenario, not a guaranteed official cache rate. OpenAI documents examples above 90%, with results depending on the workload.':
-    {
-      en: '90% is an adjustable multi-turn coding scenario, not a guaranteed official cache rate. OpenAI documents examples above 90%, with results depending on the workload.',
-      zh: '90% 是可调整的多轮 Coding 参考场景，不是官方保证的缓存率。OpenAI 文档列举了超过 90% 的案例，实际效果取决于工作负载。',
-    },
-  'Changing this reference only changes the estimate, not your billing.': {
-    en: 'Changing this reference only changes the estimate, not your billing.',
-    zh: '调整参考值只影响估算结果，不会改变计费。',
-  },
-  'The reference changes cache reads for non-write input. Actual cache-write costs stay fixed; Coding cache percentages include writes in total input.':
-    {
-      en: 'The reference changes cache reads for non-write input. Actual cache-write costs stay fixed; Coding cache percentages include writes in total input.',
-      zh: '参考缓存率仅调整非写入输入的缓存读取；缓存写入费用保持不变。Coding 缓存率的输入总量包含写入。',
-    },
-  'Input price estimate': {
-    en: 'Input price estimate',
-    zh: '输入价格估算',
-  },
-  'USD per 1M input tokens': {
-    en: 'USD per 1M input tokens',
-    zh: '美元 / 百万输入 token',
-  },
-  'Input price at 0% reference cache': {
-    en: 'Input price at 0% reference cache',
-    zh: '参考缓存 0% 时的输入价',
-  },
-  'Input price at 100% reference cache': {
-    en: 'Input price at 100% reference cache',
-    zh: '参考缓存 100% 时的输入价',
-  },
-  'Observed input price': {
-    en: 'Observed input price',
-    zh: '观测输入单价',
-  },
-  'Reference input price': {
-    en: 'Reference input price',
-    zh: '参考输入单价',
-  },
-  'Reference cache {{rate}}% · all Coding cache {{observed}}% · input cost coverage {{coverage}}%':
-    {
-      en: 'Reference cache {{rate}}% · all Coding cache {{observed}}% · input cost coverage {{coverage}}%',
-      zh: '参考缓存 {{rate}}% · 全部 Coding 缓存 {{observed}}% · 输入成本覆盖 {{coverage}}%',
-    },
-  'Prices describe the observed subset. Multipliers require 90% input cost coverage for the group or model being shown.':
-    {
-      en: 'Prices describe the observed subset. Multipliers require 90% input cost coverage for the group or model being shown.',
-      zh: '单价仅描述已观测的样本。分组或模型的输入成本覆盖达到 90% 后，才展示对应倍率。',
-    },
-  'Observed input cost uses each request’s settlement prices and multiplier. Reference cost uses the same pricing rules before the group multiplier; these are site prices, not verified official prices.':
-    {
-      en: 'Observed input cost uses each request’s settlement prices and multiplier. Reference cost uses the same pricing rules before the group multiplier; these are site prices, not verified official prices.',
-      zh: '观测成本采用每次请求结算时的价格与倍率。参考成本沿用同一计价规则、不含分组倍率；基准来自站点配置，未经官网价格核验。',
-    },
-  'Input costs include regular input, cache reads, and cache writes. Output, tools, and recharge discounts are excluded. Historical usage without cost observations and unsupported pricing reduce coverage.':
-    {
-      en: 'Input costs include regular input, cache reads, and cache writes. Output, tools, and recharge discounts are excluded. Historical usage without cost observations and unsupported pricing reduce coverage.',
-      zh: '输入成本包含普通输入、缓存读取和缓存写入，不含输出、工具费用与充值优惠。未采集成本的历史用量及不支持的计价规则会降低覆盖率。',
-    },
-  'Costs are calculated before quota rounding. Nonlinear, cache-dependent, media, and per-request pricing may remain unobserved.':
-    {
-      en: 'Costs are calculated before quota rounding. Nonlinear, cache-dependent, media, and per-request pricing may remain unobserved.',
-      zh: '成本在整数额度舍入前计算。非线性、依赖缓存条件、媒体及按次计费等规则可能没有成本观测。',
-    },
-  'No valid Coding input was observed in this window.': {
-    en: 'No valid Coding input was observed in this window.',
-    zh: '此时间窗口内没有有效的 Coding 输入观测。',
-  },
-  'Model breakdown': {
-    en: 'Model breakdown',
-    zh: '模型明细',
-  },
-  'Per-model availability within this group': {
-    en: 'Per-model availability within this group',
-    zh: '该分组内按模型的可用率',
-  },
-  Model: {
-    en: 'Model',
-    zh: '模型',
-  },
-  Requests: {
-    en: 'Requests',
-    zh: '请求数',
-  },
-  'Success rate': {
-    en: 'Success rate',
-    zh: '成功率',
-  },
-  'Average TTFT': {
-    en: 'Average TTFT',
-    zh: '平均首 Token 延迟',
-  },
-  'Average latency': {
-    en: 'Average latency',
-    zh: '平均延迟',
-  },
-  'No model traffic in this group yet.': {
-    en: 'No model traffic in this group yet.',
-    zh: '该分组暂无模型流量。',
-  },
-  'Failed to load performance data.': {
-    en: 'Failed to load performance data.',
-    zh: '性能数据加载失败。',
-  },
-  Retry: {
-    en: 'Retry',
-    zh: '重试',
-  },
-  'You have no usable groups yet.': {
-    en: 'You have no usable groups yet.',
-    zh: '当前账号暂无可用分组。',
-  },
-  'Last hour': {
-    en: 'Last hour',
-    zh: '最近 1 小时',
+  "Activity Codes": {
+    en: "Activity Codes",
+    zh: "活动码",
+  },
+  "Activity Code": {
+    en: "Activity Code",
+    zh: "活动码",
+  },
+  "Create Activity Code": {
+    en: "Create Activity Code",
+    zh: "创建活动码",
+  },
+  "Update Activity Code": {
+    en: "Update Activity Code",
+    zh: "编辑活动码",
+  },
+  "An activity code grants its target group to the user for a limited time. The group must already exist in group ratios.": {
+    en: "An activity code grants its target group to the user for a limited time. The group must already exist in group ratios.",
+    zh: "活动码在有效期内把目标分组授权给用户；目标分组必须已在分组倍率中配置。",
+  },
+  "For example: hdmfree": {
+    en: "For example: hdmfree",
+    zh: "例如：hdmfree",
+  },
+  "Lowercase letters, digits, _ and - only. The code cannot be changed after creation.": {
+    en: "Lowercase letters, digits, _ and - only. The code cannot be changed after creation.",
+    zh: "只能使用小写字母、数字、_ 和 -；活动码创建后不可修改。",
+  },
+  "Enter a name": {
+    en: "Enter a name",
+    zh: "请输入名称",
+  },
+  "Optional description": {
+    en: "Optional description",
+    zh: "选填描述",
+  },
+  "Target Group": {
+    en: "Target Group",
+    zh: "目标分组",
+  },
+  "Select a group": {
+    en: "Select a group",
+    zh: "请选择分组",
+  },
+  "Users with an active grant can switch their token group to it.": {
+    en: "Users with an active grant can switch their token group to it.",
+    zh: "用户获得授权后，把令牌分组切换到该分组即可使用。",
+  },
+  "Pricing and Limits": {
+    en: "Pricing and Limits",
+    zh: "价格与限制",
+  },
+  "Validity (hours)": {
+    en: "Validity (hours)",
+    zh: "有效期（小时）",
+  },
+  "0 means the grant never expires.": {
+    en: "0 means the grant never expires.",
+    zh: "0 表示授权永久有效。",
+  },
+  "RPM limit": {
+    en: "RPM limit",
+    zh: "RPM 限制",
+  },
+  "Requests per minute. 0 means unlimited.": {
+    en: "Requests per minute. 0 means unlimited.",
+    zh: "每分钟请求数上限，0 表示不限。",
+  },
+  "Price ({{currency}})": {
+    en: "Price ({{currency}})",
+    zh: "价格（{{currency}}）",
+  },
+  "Paid with wallet balance only. 0 means the code is free.": {
+    en: "Paid with wallet balance only. 0 means the code is free.",
+    zh: "仅能用真余额支付；0 表示免费。",
+  },
+  "Group Default Ratio": {
+    en: "Group Default Ratio",
+    zh: "分组默认倍率",
+  },
+  "Custom Ratio": {
+    en: "Custom Ratio",
+    zh: "自定义倍率",
+  },
+  "Custom ratio": {
+    en: "Custom ratio",
+    zh: "自定义倍率",
+  },
+  "0 means this group is completely free.": {
+    en: "0 means this group is completely free.",
+    zh: "0 表示该分组完全免费。",
+  },
+  "Total redemptions": {
+    en: "Total redemptions",
+    zh: "总可兑换次数",
+  },
+  "Redemptions per user": {
+    en: "Redemptions per user",
+    zh: "每人可兑换次数",
+  },
+  "0 means unlimited.": {
+    en: "0 means unlimited.",
+    zh: "0 表示不限。",
+  },
+  "0 means unlimited. Extra redemptions extend the expiry.": {
+    en: "0 means unlimited. Extra redemptions extend the expiry.",
+    zh: "0 表示不限；重复兑换会顺延到期时间。",
+  },
+  "Redemption starts": {
+    en: "Redemption starts",
+    zh: "可兑换开始时间",
+  },
+  "Redemption ends": {
+    en: "Redemption ends",
+    zh: "可兑换结束时间",
+  },
+  "Show in activity center": {
+    en: "Show in activity center",
+    zh: "在活动中心展示",
+  },
+  "Users can redeem it directly from their wallet.": {
+    en: "Users can redeem it directly from their wallet.",
+    zh: "用户可直接在钱包中兑换。",
+  },
+  "Delete Activity Code?": {
+    en: "Delete Activity Code?",
+    zh: "删除活动码？",
+  },
+  "This will delete the activity code": {
+    en: "This will delete the activity code",
+    zh: "将删除活动码",
+  },
+  ". Grants that were already redeemed stay active until they expire.": {
+    en: ". Grants that were already redeemed stay active until they expire.",
+    zh: "；已兑换的授权会保留到自然到期。",
+  },
+  "Activity Grants": {
+    en: "Activity Grants",
+    zh: "活动授权",
+  },
+  "Redeemed grants for this activity code. Revoking one takes effect immediately.": {
+    en: "Redeemed grants for this activity code. Revoking one takes effect immediately.",
+    zh: "该活动码的兑换记录，撤销后立即生效。",
+  },
+  "No grants yet.": {
+    en: "No grants yet.",
+    zh: "暂无兑换记录。",
+  },
+  "Group": {
+    en: "Group",
+    zh: "分组",
+  },
+  "Validity": {
+    en: "Validity",
+    zh: "有效期",
+  },
+  "Free": {
+    en: "Free",
+    zh: "免费",
+  },
+  "Inherited": {
+    en: "Inherited",
+    zh: "继承分组倍率",
+  },
+  "Fully Free": {
+    en: "Fully Free",
+    zh: "完全免费",
+  },
+  "RPM": {
+    en: "RPM",
+    zh: "RPM",
+  },
+  "Unlimited": {
+    en: "Unlimited",
+    zh: "不限",
+  },
+  "Limits": {
+    en: "Limits",
+    zh: "限额",
+  },
+  "Total": {
+    en: "Total",
+    zh: "总量",
+  },
+  "Per user": {
+    en: "Per user",
+    zh: "每人",
+  },
+  "Redemption Window": {
+    en: "Redemption Window",
+    zh: "可兑换时间",
+  },
+  "Always": {
+    en: "Always",
+    zh: "长期开放",
+  },
+  "Until": {
+    en: "Until",
+    zh: "截止",
+  },
+  "From": {
+    en: "From",
+    zh: "开始于",
+  },
+  "Ended": {
+    en: "Ended",
+    zh: "已结束",
+  },
+  "No Activity Codes Found": {
+    en: "No Activity Codes Found",
+    zh: "暂无活动码",
+  },
+  "No activity codes yet. Create one to grant a temporary group to your users.": {
+    en: "No activity codes yet. Create one to grant a temporary group to your users.",
+    zh: "还没有活动码。创建一个即可向用户发放限时分组。",
+  },
+  "Filter by code or name...": {
+    en: "Filter by code or name...",
+    zh: "按活动码或名称筛选...",
+  },
+  "Grants": {
+    en: "Grants",
+    zh: "授权记录",
+  },
+  "Expires at": {
+    en: "Expires at",
+    zh: "到期时间",
+  },
+  "Paid": {
+    en: "Paid",
+    zh: "已支付",
+  },
+  "Revoke": {
+    en: "Revoke",
+    zh: "撤销",
+  },
+  "Failed to load activity codes": {
+    en: "Failed to load activity codes",
+    zh: "加载活动码失败",
+  },
+  "Failed to search activity codes": {
+    en: "Failed to search activity codes",
+    zh: "搜索活动码失败",
+  },
+  "Failed to create activity code": {
+    en: "Failed to create activity code",
+    zh: "创建活动码失败",
+  },
+  "Failed to update activity code": {
+    en: "Failed to update activity code",
+    zh: "更新活动码失败",
+  },
+  "Failed to delete activity code": {
+    en: "Failed to delete activity code",
+    zh: "删除活动码失败",
+  },
+  "Failed to update activity code status": {
+    en: "Failed to update activity code status",
+    zh: "更新活动码状态失败",
+  },
+  "Failed to load activity grants": {
+    en: "Failed to load activity grants",
+    zh: "加载活动授权失败",
+  },
+  "Failed to revoke activity grant": {
+    en: "Failed to revoke activity grant",
+    zh: "撤销活动授权失败",
+  },
+  "Activity code created": {
+    en: "Activity code created",
+    zh: "活动码已创建",
+  },
+  "Activity code updated": {
+    en: "Activity code updated",
+    zh: "活动码已更新",
+  },
+  "Activity code deleted": {
+    en: "Activity code deleted",
+    zh: "活动码已删除",
+  },
+  "Activity code disabled": {
+    en: "Activity code disabled",
+    zh: "活动码已停用",
+  },
+  "Activity code enabled": {
+    en: "Activity code enabled",
+    zh: "活动码已启用",
+  },
+  "Activity grant revoked": {
+    en: "Activity grant revoked",
+    zh: "活动授权已撤销",
+  },
+  "Please enter an activity code": {
+    en: "Please enter an activity code",
+    zh: "请输入活动码",
+  },
+  "Activity code must be 1-64 characters of a-z, 0-9, _ or -": {
+    en: "Activity code must be 1-64 characters of a-z, 0-9, _ or -",
+    zh: "活动码只能是 1-64 位的 a-z、0-9、_ 或 -",
+  },
+  "Please enter a name": {
+    en: "Please enter a name",
+    zh: "请输入名称",
+  },
+  "Name must be 1-64 characters": {
+    en: "Name must be 1-64 characters",
+    zh: "名称长度必须在 1-64 之间",
+  },
+  "Please select a group": {
+    en: "Please select a group",
+    zh: "请选择分组",
+  },
+  "Validity must be between 0 and 87600 hours": {
+    en: "Validity must be between 0 and 87600 hours",
+    zh: "有效期必须在 0 到 87600 小时之间",
+  },
+  "RPM limit must be 0 or greater": {
+    en: "RPM limit must be 0 or greater",
+    zh: "RPM 限制不能为负数",
+  },
+  "RPM limit is too large": {
+    en: "RPM limit is too large",
+    zh: "RPM 限制过大",
+  },
+  "Price must be zero or greater": {
+    en: "Price must be zero or greater",
+    zh: "价格不能为负数",
+  },
+  "Ratio must be between 0 and 1000": {
+    en: "Ratio must be between 0 and 1000",
+    zh: "倍率必须在 0 到 1000 之间",
+  },
+  "Total limit must be 0 or greater": {
+    en: "Total limit must be 0 or greater",
+    zh: "总可兑换次数不能为负数",
+  },
+  "Total limit is too large": {
+    en: "Total limit is too large",
+    zh: "总可兑换次数过大",
+  },
+  "Per-user limit must be 0 or greater": {
+    en: "Per-user limit must be 0 or greater",
+    zh: "每人可兑换次数不能为负数",
+  },
+  "Per-user limit is too large": {
+    en: "Per-user limit is too large",
+    zh: "每人可兑换次数过大",
+  },
+  "{{count}} minutes": {
+    en: "{{count}} minutes",
+    zh: "{{count}} 分钟",
+  },
+  "{{count}} hours": {
+    en: "{{count}} hours",
+    zh: "{{count}} 小时",
+  },
+  "{{count}} days": {
+    en: "{{count}} days",
+    zh: "{{count}} 天",
+  },
+  "Permanent": {
+    en: "Permanent",
+    zh: "永久",
+  },
+  "Redeem a code to unlock a group for a limited time and at a special ratio.": {
+    en: "Redeem a code to unlock a group for a limited time and at a special ratio.",
+    zh: "输入活动码，即可在限定时间内以专属倍率使用指定分组。",
+  },
+  "Enter your activity code": {
+    en: "Enter your activity code",
+    zh: "请输入活动码",
+  },
+  "Verify": {
+    en: "Verify",
+    zh: "校验",
+  },
+  "Free activity codes are redeemed right away; paid ones ask for confirmation first.": {
+    en: "Free activity codes are redeemed right away; paid ones ask for confirmation first.",
+    zh: "免费活动码直接兑换成功，付费活动码会先弹出确认。",
+  },
+  "Available Activities": {
+    en: "Available Activities",
+    zh: "可参与的活动",
+  },
+  "Confirm Redemption": {
+    en: "Confirm Redemption",
+    zh: "确认兑换",
+  },
+  "Spend {{quota}} of your wallet balance to redeem {{group}}?": {
+    en: "Spend {{quota}} of your wallet balance to redeem {{group}}?",
+    zh: "是否消耗 {{quota}} 余额兑换 {{group}}？",
+  },
+  "Wallet balance": {
+    en: "Wallet balance",
+    zh: "钱包余额",
+  },
+  "Bonus credit cannot be used for redemption.": {
+    en: "Bonus credit cannot be used for redemption.",
+    zh: "赠金不能用于兑换。",
+  },
+  "Confirm and Redeem": {
+    en: "Confirm and Redeem",
+    zh: "确认兑换",
+  },
+  "Redeemed {{group}}. Switch your token group to start using it.": {
+    en: "Redeemed {{group}}. Switch your token group to start using it.",
+    zh: "已兑换 {{group}}。把令牌分组切换到该分组即可使用。",
+  },
+  "Invalid activity code": {
+    en: "Invalid activity code",
+    zh: "无效的活动码",
+  },
+  "This activity code is not redeemable now": {
+    en: "This activity code is not redeemable now",
+    zh: "该活动码当前不可兑换",
+  },
+  "Failed to load activity offers": {
+    en: "Failed to load activity offers",
+    zh: "加载活动列表失败",
+  },
+  "Group default ratio": {
+    en: "Group default ratio",
+    zh: "分组默认倍率",
+  },
+  "Fully free": {
+    en: "Fully free",
+    zh: "完全免费",
+  },
+  "My Activity Grants": {
+    en: "My Activity Grants",
+    zh: "我的活动授权",
+  },
+  "Set a token group to the granted group to use it while the grant is active.": {
+    en: "Set a token group to the granted group to use it while the grant is active.",
+    zh: "把令牌分组切换到已授权的分组即可在有效期内使用。",
+  },
+  "No activity grants yet.": {
+    en: "No activity grants yet.",
+    zh: "暂无活动授权。",
+  },
+  "Activity Center": {
+    en: "Activity Center",
+    zh: "活动中心",
+  },
+  "Redeem an Activity Code": {
+    en: "Redeem an Activity Code",
+    zh: "兑换活动码",
+  },
+  "Free codes are redeemed instantly. Paid codes ask you to confirm the wallet deduction first.": {
+    en: "Free codes are redeemed instantly. Paid codes ask you to confirm the wallet deduction first.",
+    zh: "免费活动码即时兑换；付费活动码需要先确认余额扣减。",
+  },
+  "Active": {
+    en: "Active",
+    zh: "有效",
+  },
+  "Revoked": {
+    en: "Revoked",
+    zh: "已撤销",
   },
 }
 

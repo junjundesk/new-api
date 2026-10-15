@@ -54,6 +54,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   personal: {
     enabled: true,
     topup: true,
+    activity: true,
     personal: true,
   },
   admin: {
@@ -61,6 +62,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     channel: true,
     models: true,
     redemption: true,
+    activity: true,
     user: true,
     email: true,
     setting: true,
@@ -117,6 +119,8 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/users': { section: 'admin', module: 'user' },
   '/email': { section: 'admin', module: 'email' },
   '/redemption-codes': { section: 'admin', module: 'redemption' },
+  '/activity-codes': { section: 'admin', module: 'activity' },
+  '/activity': { section: 'personal', module: 'activity' },
   '/subscriptions': { section: 'admin', module: 'subscription' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },

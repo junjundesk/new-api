@@ -31,12 +31,13 @@ func GetUserGroups(c *gin.Context) {
 	userGroup := ""
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
+	activityRatios := service.GetActivityRatioOverrides(service.GetActiveActivityViews(userId))
+	userUsableGroups := service.GetUserUsableGroupsWithActivity(userId, userGroup)
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]interface{}{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
+				"ratio": service.GetUserGroupRatioWithActivity(userGroup, groupName, activityRatios),
 				"desc":  desc,
 			}
 		}

@@ -73,7 +73,7 @@ func TestPricingBillingRatioResolution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var found *Pricing
-			for _, item := range GetPricingForUser(tt.userGroup, map[string]string{"default": "Default"}) {
+			for _, item := range GetPricingForUser(tt.userGroup, map[string]string{"default": "Default"}, nil) {
 				if item.ModelName == tt.name {
 					found = &item
 					break
@@ -97,7 +97,7 @@ func TestPricingBillingExcludesUnavailableCandidates(t *testing.T) {
 	require.NoError(t, DB.Create(&Ability{Group: "default", Model: "orphan", ChannelId: 100000, Enabled: true}).Error)
 	RefreshPricing()
 
-	pricing := GetPricingForUser("member", map[string]string{"default": "Default"})
+	pricing := GetPricingForUser("member", map[string]string{"default": "Default"}, nil)
 	require.Len(t, pricing, 1)
 	assert.Equal(t, "available", pricing[0].ModelName)
 	assert.Equal(t, BillingRatioRange{1, 1, "channel_model"}, pricing[0].BillingRatios["default"])
@@ -112,7 +112,7 @@ func TestPricingBillingUserIsolationAndVisibility(t *testing.T) {
 	RefreshPricing()
 	visibleGroups := map[string]string{"default": "Default", "vip": "VIP"}
 
-	member := GetPricingForUser("member", visibleGroups)
+	member := GetPricingForUser("member", visibleGroups, nil)
 	require.Len(t, member, 1)
 	assert.ElementsMatch(t, []string{"default", "vip"}, member[0].EnableGroup)
 	assert.Equal(t, map[string]BillingRatioRange{
@@ -127,12 +127,12 @@ func TestPricingBillingUserIsolationAndVisibility(t *testing.T) {
 	member[0].EnableGroup[0] = "corrupted"
 	member[0].SupportedEndpointTypes[0] = "corrupted"
 	member[0].BillingRatios["default"] = BillingRatioRange{99, 99, "corrupted"}
-	guest := GetPricingForUser("", map[string]string{"default": "Default"})
+	guest := GetPricingForUser("", map[string]string{"default": "Default"}, nil)
 	require.Len(t, guest, 1)
 	assert.Equal(t, []string{"default"}, guest[0].EnableGroup)
 	assert.Equal(t, BillingRatioRange{2, 2, "group"}, guest[0].BillingRatios["default"])
 	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, guest[0].SupportedEndpointTypes)
-	assert.Empty(t, GetPricingForUser("member", nil))
+	assert.Empty(t, GetPricingForUser("member", nil, nil))
 
 	for _, price := range GetPricing() {
 		assert.Nil(t, price.BillingRatios)
@@ -143,7 +143,7 @@ func TestPricingBillingUserIsolationAndVisibility(t *testing.T) {
 	}
 	// Current group settings are resolved per response, without refreshing channels.
 	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"member":{"default":0.25}}`))
-	updated := GetPricingForUser("member", map[string]string{"default": "Default"})
+	updated := GetPricingForUser("member", map[string]string{"default": "Default"}, nil)
 	require.Len(t, updated, 1)
 	assert.Equal(t, BillingRatioRange{0.25, 0.25, "user_group"}, updated[0].BillingRatios["default"])
 }
@@ -155,7 +155,7 @@ func TestPricingBillingAllRemainsVisibilityMarker(t *testing.T) {
 	insertPricingBillingChannel(t, "all-only", "all", `{"model_group_ratios":{"all-only":0}}`, common.ChannelStatusEnabled, true, 10)
 	RefreshPricing()
 
-	for _, price := range GetPricingForUser("member", map[string]string{"default": "Default", "vip": "VIP"}) {
+	for _, price := range GetPricingForUser("member", map[string]string{"default": "Default", "vip": "VIP"}, nil) {
 		assert.Contains(t, price.EnableGroup, "all")
 		if price.ModelName == "all-model" {
 			assert.Equal(t, map[string]BillingRatioRange{"default": {0.5, 0.5, "user_group"}}, price.BillingRatios)
@@ -166,7 +166,7 @@ func TestPricingBillingAllRemainsVisibilityMarker(t *testing.T) {
 			assert.NotContains(t, string(payload), "billing_ratios")
 		}
 	}
-	prices := GetPricingForUser("member", map[string]string{"all": "All"})
+	prices := GetPricingForUser("member", map[string]string{"all": "All"}, nil)
 	require.Len(t, prices, 2)
 	for _, price := range prices {
 		assert.Equal(t, map[string]BillingRatioRange{"all": {0, 0, "channel_model"}}, price.BillingRatios)
@@ -178,13 +178,13 @@ func TestPricingBillingRefreshAndFailedFetch(t *testing.T) {
 	channel := insertPricingBillingChannel(t, "refreshable", "default", `{"model_group_ratios":{"refreshable":1}}`, common.ChannelStatusEnabled, true, 10)
 	RefreshPricing()
 	visible := map[string]string{"default": "Default"}
-	before := GetPricingForUser("member", visible)
+	before := GetPricingForUser("member", visible, nil)
 	require.Len(t, before, 1)
 	assert.Equal(t, BillingRatioRange{1, 1, "channel_model"}, before[0].BillingRatios["default"])
 
 	require.NoError(t, DB.Model(channel).Update("setting", `{"model_group_ratios":{"refreshable":0}}`).Error)
 	InvalidatePricingCache()
-	after := GetPricingForUser("member", visible)
+	after := GetPricingForUser("member", visible, nil)
 	require.Len(t, after, 1)
 	assert.Equal(t, BillingRatioRange{0, 0, "channel_model"}, after[0].BillingRatios["default"])
 	assert.Equal(t, BillingRatioRange{1, 1, "channel_model"}, before[0].BillingRatios["default"])
@@ -198,13 +198,13 @@ func TestPricingBillingRefreshAndFailedFetch(t *testing.T) {
 	originalDB := DB
 	DB = emptyDB
 	InvalidatePricingCache()
-	failed := GetPricingForUser("member", visible)
+	failed := GetPricingForUser("member", visible, nil)
 	DB = originalDB
 	assert.Equal(t, after, failed)
 
 	require.NoError(t, DB.Model(channel).Update("status", common.ChannelStatusManuallyDisabled).Error)
 	RefreshPricing()
-	assert.Empty(t, GetPricingForUser("member", visible))
+	assert.Empty(t, GetPricingForUser("member", visible, nil))
 }
 
 func TestPricingBillingSnapshotRefreshWithAndWithoutMemoryCache(t *testing.T) {
@@ -215,13 +215,13 @@ func TestPricingBillingSnapshotRefreshWithAndWithoutMemoryCache(t *testing.T) {
 			channel := insertPricingBillingChannel(t, "cached", "default", `{"model_group_ratios":{"cached":0}}`, common.ChannelStatusEnabled, true, 10)
 			InitChannelCache()
 			visible := map[string]string{"default": "Default"}
-			initial := GetPricingForUser("member", visible)
+			initial := GetPricingForUser("member", visible, nil)
 			require.Len(t, initial, 1)
 			assert.Equal(t, BillingRatioRange{0, 0, "channel_model"}, initial[0].BillingRatios["default"])
 
 			require.NoError(t, DB.Model(channel).Update("setting", `{"model_group_ratios":{}}`).Error)
 			InitChannelCache()
-			updated := GetPricingForUser("member", visible)
+			updated := GetPricingForUser("member", visible, nil)
 			require.Len(t, updated, 1)
 			assert.Equal(t, BillingRatioRange{0.5, 0.5, "user_group"}, updated[0].BillingRatios["default"])
 		})

@@ -11,6 +11,9 @@ const (
 	GroupRatioSourceChannelModel = "channel_model"
 	GroupRatioSourceUserGroup    = "user_group"
 	GroupRatioSourceGroup        = "group"
+	// GroupRatioSourceActivity marks a ratio granted by an activity code that the
+	// user redeemed; it outranks the user-group matrix but not a channel-model override.
+	GroupRatioSourceActivity = "activity"
 )
 
 type GroupRatioInfo struct {

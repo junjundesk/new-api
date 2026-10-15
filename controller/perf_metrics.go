@@ -145,14 +145,15 @@ func getPerformanceGroupMetadata(c *gin.Context) map[string]perfmetrics.GroupMet
 	userID := c.GetInt("id")
 	if userID > 0 {
 		userGroup, _ := model.GetUserGroup(userID, false)
-		return getUserPerformanceGroupMetadata(userGroup)
+		return getUserPerformanceGroupMetadata(userID, userGroup)
 	}
 	return getPublicPerformanceGroupMetadata()
 }
 
-func getUserPerformanceGroupMetadata(userGroup string) map[string]perfmetrics.GroupMetadata {
+func getUserPerformanceGroupMetadata(userID int, userGroup string) map[string]perfmetrics.GroupMetadata {
 	metadata := make(map[string]perfmetrics.GroupMetadata)
-	usableGroups := service.GetUserUsableGroups(userGroup)
+	activityRatios := service.GetActivityRatioOverrides(service.GetActiveActivityViews(userID))
+	usableGroups := service.GetUserUsableGroupsWithActivity(userID, userGroup)
 	for group, description := range usableGroups {
 		if group == "auto" {
 			metadata[group] = perfmetrics.GroupMetadata{
@@ -166,7 +167,7 @@ func getUserPerformanceGroupMetadata(userGroup string) map[string]perfmetrics.Gr
 		}
 		metadata[group] = perfmetrics.GroupMetadata{
 			Description: description,
-			Ratio:       service.GetUserGroupRatio(userGroup, group),
+			Ratio:       service.GetUserGroupRatioWithActivity(userGroup, group, activityRatios),
 		}
 	}
 	return metadata

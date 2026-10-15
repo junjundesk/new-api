@@ -19,7 +19,7 @@ func TestPerformanceGroupMetadataHidesDisabledGroupsFromUsers(t *testing.T) {
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
 	})
 
-	userMetadata := getUserPerformanceGroupMetadata("default")
+	userMetadata := getUserPerformanceGroupMetadata(0, "default")
 	_, userCanSeeDisabled := userMetadata["disabled"]
 	assert.False(t, userCanSeeDisabled)
 	assert.Contains(t, userMetadata, "default")

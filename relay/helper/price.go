@@ -12,6 +12,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -56,7 +57,9 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	if relayInfo.PriceData.BillingModelName != "" {
 		modelName = relayInfo.PriceData.BillingModelName
 	}
-	return ratio_setting.ResolveModelGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup, modelName, settings.ModelGroupRatios)
+	// 活动码授权对该分组给出专属倍率（0 表示完全免费），优先于用户分组倍率矩阵。
+	activityView := service.GetRequestActivityView(ctx, relayInfo.UserId, relayInfo.UsingGroup)
+	return ratio_setting.ResolveModelGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup, modelName, settings.ModelGroupRatios, service.ActivityViewRatioPointer(activityView))
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (hosttypes.PriceData, error) {

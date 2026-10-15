@@ -650,6 +650,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 	defaultConfig["personal"] = map[string]interface{}{
 		"enabled":  true,
 		"topup":    true,
+		"activity": true,
 		"personal": true,
 	}
 
@@ -661,6 +662,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"channel":    true,
 			"models":     true,
 			"redemption": true,
+			"activity":   true,
 			"user":       true,
 			"setting":    false, // 管理员不能访问系统设置
 		}
@@ -671,6 +673,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"channel":    true,
 			"models":     true,
 			"redemption": true,
+			"activity":   true,
 			"user":       true,
 			"setting":    true,
 		}
@@ -697,7 +700,7 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserUsableGroupsWithActivity(user.Id, user.Group)
 	group := c.Query("group")
 	var groupsToQuery []string
 	switch {

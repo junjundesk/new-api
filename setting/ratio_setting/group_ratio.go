@@ -102,13 +102,25 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 // ResolveModelGroupRatio resolves the final billing multiplier, independently of
 // routing and authorization. modelName is the exact token-mapped, pre-channel-
 // mapping billing name. The returned override is copied to freeze its value.
-func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64) types.GroupRatioInfo {
+//
+// activityRatio, when non-nil, is the ratio of an active activity-code grant the
+// user holds for usingGroup. It outranks the user-group matrix (a redeemed code is
+// more specific than the user's own group) but not a channel-model override.
+func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64, activityRatio *float64) types.GroupRatioInfo {
 	info := types.GroupRatioInfo{GroupSpecialRatio: -1, Source: types.GroupRatioSourceGroup}
 	if ratio, ok := overrides[modelName]; ok && ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) && *ratio >= 0 && *ratio <= dto.MaxChannelModelGroupRatio {
 		value := *ratio
 		info.GroupRatio = value
 		info.ChannelModelRatio = &value
 		info.Source = types.GroupRatioSourceChannelModel
+		return info
+	}
+	if activityRatio != nil && !math.IsNaN(*activityRatio) && !math.IsInf(*activityRatio, 0) && *activityRatio >= 0 && *activityRatio <= dto.MaxChannelModelGroupRatio {
+		value := *activityRatio
+		info.GroupRatio = value
+		info.GroupSpecialRatio = value
+		info.HasSpecialRatio = true
+		info.Source = types.GroupRatioSourceActivity
 		return info
 	}
 	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {

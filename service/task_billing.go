@@ -335,7 +335,7 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		if group == "" {
 			return
 		}
-		finalGroupRatio = ratio_setting.ResolveModelGroupRatio(group, group, modelName, nil).GroupRatio
+		finalGroupRatio = ratio_setting.ResolveModelGroupRatio(group, group, modelName, nil, nil).GroupRatio
 	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）

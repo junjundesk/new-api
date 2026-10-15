@@ -479,9 +479,13 @@ func TokenAuth() func(c *gin.Context) {
 				userGroup = tokenGroup
 			} else {
 				// check common.UserUsableGroups[userGroup]
+				// 活动码授权会把目标分组临时并入可用分组：静态分组未命中时再查一次活动授权
+				// （查询结果会缓存到请求上下文，供限流与计费复用）。
 				if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
-					return
+					if service.GetRequestActivityView(c, userCache.Id, tokenGroup) == nil {
+						abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
+						return
+					}
 				}
 				// check group in common.GroupRatio
 				if !ratio_setting.ContainsGroupRatio(tokenGroup) {

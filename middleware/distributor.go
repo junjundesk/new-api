@@ -97,7 +97,9 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if playgroundRequest.Group != "" {
-						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
+						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) &&
+							playgroundRequest.Group != usingGroup &&
+							service.GetRequestActivityView(c, c.GetInt("id"), playgroundRequest.Group) == nil {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
