@@ -97,6 +97,10 @@ const (
 	MsgActivityCodePriceInvalid        = "activity.price_invalid"
 	MsgActivityCodeRatioModeInvalid    = "activity.ratio_mode_invalid"
 	MsgActivityCodeRatioInvalid        = "activity.ratio_invalid"
+	MsgActivityCodeRatioScopeInvalid   = "activity.ratio_scope_invalid"
+	MsgActivityCodeModelRatioRequired  = "activity.model_ratio_required"
+	MsgActivityCodeModelRatioLimit     = "activity.model_ratio_limit"
+	MsgActivityCodeModelNameInvalid    = "activity.model_name_invalid"
 	MsgActivityCodeWindowInvalid       = "activity.window_invalid"
 	MsgActivityCodeLimitInvalid        = "activity.limit_invalid"
 )

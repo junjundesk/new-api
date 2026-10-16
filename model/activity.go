@@ -1,8 +1,10 @@
 package model
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"time"
@@ -29,6 +31,12 @@ const (
 	ActivityRatioModeInherit  = "inherit"
 	ActivityRatioModeOverride = "override"
 
+	// ActivityRatioScopeGroup 默认作用范围：RatioMode/RatioOverride 作用于整个目标分组。
+	ActivityRatioScopeGroup = "group"
+	// ActivityRatioScopeModels 新作用范围：只对 ModelRatioOverrides 命中的模型改价，
+	// 分组内其余模型按各自原价计费。
+	ActivityRatioScopeModels = "models"
+
 	ActivityGrantSourceRedeem = "redeem"
 
 	// ActivityCodeMaxLength 是活动码的字符数上限（按 rune 计，中文等宽字符按 1 个算）。
@@ -39,7 +47,54 @@ const (
 	ActivityCodeMaxPriceQuota = math.MaxInt32
 	// ActivityCodeMaxDurationSeconds 限制单次授权的有效期长度。
 	ActivityCodeMaxDurationSeconds = 10 * 365 * 24 * 3600
+	// ActivityCodeMaxModelRatioOverrides 是指定模型倍率的条目上限，避免超大 JSON 落库。
+	ActivityCodeMaxModelRatioOverrides = 100
+	// ActivityModelNameMaxLength 与 abilities.model 的 varchar(255) 保持一致。
+	ActivityModelNameMaxLength = 255
 )
+
+// ActivityModelRatioOverrides 是活动码「指定模型 → 倍率」的覆盖表，落库为 JSON 对象。
+// 空表写 NULL，从 NULL/空值读回时仍是空表，因此新增该列的存量数据无需迁移。
+type ActivityModelRatioOverrides map[string]float64
+
+// Scan 实现 sql.Scanner。新增列在存量行上是 NULL，必须容忍 nil 与空值。
+func (m *ActivityModelRatioOverrides) Scan(value interface{}) error {
+	var raw []byte
+	switch v := value.(type) {
+	case nil:
+		*m = nil
+		return nil
+	case []byte:
+		raw = v
+	case string:
+		raw = []byte(v)
+	default:
+		*m = nil
+		return nil
+	}
+	if len(raw) == 0 {
+		*m = nil
+		return nil
+	}
+	overrides := make(ActivityModelRatioOverrides)
+	if err := common.Unmarshal(raw, &overrides); err != nil {
+		return err
+	}
+	if len(overrides) == 0 {
+		*m = nil
+		return nil
+	}
+	*m = overrides
+	return nil
+}
+
+// Value 实现 driver.Valuer：空表写 NULL，避免往 MySQL 的 json 列里写空串。
+func (m ActivityModelRatioOverrides) Value() (driver.Value, error) {
+	if len(m) == 0 {
+		return nil, nil
+	}
+	return common.Marshal(map[string]float64(m))
+}
 
 // 兑换失败原因，由 controller 映射为 i18n 文案。
 var (
@@ -59,27 +114,31 @@ var (
 // RatioMode 为 inherit 时使用目标分组自身的倍率；为 override 时使用 RatioOverride
 // （RatioOverride 为 0 表示该分组完全免费）。
 type ActivityCode struct {
-	Id              int            `json:"id"`
-	Code            string         `json:"code" gorm:"type:varchar(64);uniqueIndex"`
-	Name            string         `json:"name" gorm:"type:varchar(64);index"`
-	Description     string         `json:"description" gorm:"type:text"`
-	Status          int            `json:"status" gorm:"default:1"`
-	GroupName       string         `json:"group_name" gorm:"type:varchar(64);index"`
-	DurationSeconds int64          `json:"duration_seconds" gorm:"bigint;default:0"`
-	RpmLimit        int            `json:"rpm_limit" gorm:"default:0"`
-	PriceQuota      int            `json:"price_quota" gorm:"default:0"`
-	RatioMode       string         `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
-	RatioOverride   float64        `json:"ratio_override"`
-	StartTime       int64          `json:"start_time" gorm:"bigint;default:0"`
-	EndTime         int64          `json:"end_time" gorm:"bigint;default:0"`
-	TotalLimit      int            `json:"total_limit" gorm:"default:0"`
-	UsedCount       int            `json:"used_count" gorm:"default:0"`
-	PerUserLimit    int            `json:"per_user_limit" gorm:"default:1"`
-	PublicVisible   int            `json:"public_visible" gorm:"default:0"`
-	CreatedBy       int            `json:"created_by"`
-	CreatedTime     int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime     int64          `json:"updated_time" gorm:"bigint"`
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
+	Id              int     `json:"id"`
+	Code            string  `json:"code" gorm:"type:varchar(64);uniqueIndex"`
+	Name            string  `json:"name" gorm:"type:varchar(64);index"`
+	Description     string  `json:"description" gorm:"type:text"`
+	Status          int     `json:"status" gorm:"default:1"`
+	GroupName       string  `json:"group_name" gorm:"type:varchar(64);index"`
+	DurationSeconds int64   `json:"duration_seconds" gorm:"bigint;default:0"`
+	RpmLimit        int     `json:"rpm_limit" gorm:"default:0"`
+	PriceQuota      int     `json:"price_quota" gorm:"default:0"`
+	RatioMode       string  `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
+	RatioOverride   float64 `json:"ratio_override"`
+	// RatioScope 决定倍率的作用范围：group 作用于整个分组（默认），models 只作用于
+	// ModelRatioOverrides 命中的模型；存量行该列为空，按 group 处理。
+	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
+	ModelRatioOverrides ActivityModelRatioOverrides `json:"model_ratio_overrides" gorm:"type:json"`
+	StartTime           int64                       `json:"start_time" gorm:"bigint;default:0"`
+	EndTime             int64                       `json:"end_time" gorm:"bigint;default:0"`
+	TotalLimit          int                         `json:"total_limit" gorm:"default:0"`
+	UsedCount           int                         `json:"used_count" gorm:"default:0"`
+	PerUserLimit        int                         `json:"per_user_limit" gorm:"default:1"`
+	PublicVisible       int                         `json:"public_visible" gorm:"default:0"`
+	CreatedBy           int                         `json:"created_by"`
+	CreatedTime         int64                       `json:"created_time" gorm:"bigint"`
+	UpdatedTime         int64                       `json:"updated_time" gorm:"bigint"`
+	DeletedAt           gorm.DeletedAt              `gorm:"index"`
 }
 
 // ActivityGrant 是某个用户的一次活动授权。Status 与 ExpireTime 由本表维护，
@@ -93,15 +152,18 @@ type ActivityGrant struct {
 	GroupName     string  `json:"group_name" gorm:"type:varchar(64);index"`
 	RatioMode     string  `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
 	RatioOverride float64 `json:"ratio_override"`
-	RpmLimit      int     `json:"rpm_limit" gorm:"default:0"`
-	PriceQuota    int     `json:"price_quota" gorm:"default:0"`
-	StartTime     int64   `json:"start_time" gorm:"bigint"`
-	ExpireTime    int64   `json:"expire_time" gorm:"bigint;index"`
-	Status        string  `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
-	Source        string  `json:"source" gorm:"type:varchar(32);default:'redeem'"`
-	Remark        string  `json:"remark" gorm:"type:varchar(255);default:''"`
-	CreatedTime   int64   `json:"created_time" gorm:"bigint"`
-	UpdatedTime   int64   `json:"updated_time" gorm:"bigint"`
+	// RatioScope 与 ModelRatioOverrides 是兑换时对活动码条款的快照。
+	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
+	ModelRatioOverrides ActivityModelRatioOverrides `json:"model_ratio_overrides" gorm:"type:json"`
+	RpmLimit            int                         `json:"rpm_limit" gorm:"default:0"`
+	PriceQuota          int                         `json:"price_quota" gorm:"default:0"`
+	StartTime           int64                       `json:"start_time" gorm:"bigint"`
+	ExpireTime          int64                       `json:"expire_time" gorm:"bigint;index"`
+	Status              string                      `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
+	Source              string                      `json:"source" gorm:"type:varchar(32);default:'redeem'"`
+	Remark              string                      `json:"remark" gorm:"type:varchar(255);default:''"`
+	CreatedTime         int64                       `json:"created_time" gorm:"bigint"`
+	UpdatedTime         int64                       `json:"updated_time" gorm:"bigint"`
 }
 
 func (activityCode *ActivityCode) BeforeCreate(tx *gorm.DB) error {
@@ -238,8 +300,8 @@ func (activityCode *ActivityCode) Insert() error {
 func (activityCode *ActivityCode) Update() error {
 	return DB.Model(activityCode).
 		Select("name", "description", "status", "group_name", "duration_seconds", "rpm_limit",
-			"price_quota", "ratio_mode", "ratio_override", "start_time", "end_time",
-			"total_limit", "per_user_limit", "public_visible", "updated_time").
+			"price_quota", "ratio_mode", "ratio_override", "ratio_scope", "model_ratio_overrides",
+			"start_time", "end_time", "total_limit", "per_user_limit", "public_visible", "updated_time").
 		Updates(activityCode).Error
 }
 
@@ -558,19 +620,22 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 			return expireErr
 		}
 		grant := &ActivityGrant{
-			UserId:        req.UserId,
-			CodeId:        activityCode.Id,
-			Code:          activityCode.Code,
-			CodeName:      activityCode.Name,
-			GroupName:     activityCode.GroupName,
-			RatioMode:     activityCode.RatioMode,
-			RatioOverride: activityCode.RatioOverride,
-			RpmLimit:      activityCode.RpmLimit,
-			PriceQuota:    chargedQuota,
-			StartTime:     now,
-			ExpireTime:    expireTime,
-			Status:        ActivityGrantStatusActive,
-			Source:        ActivityGrantSourceRedeem,
+			UserId:    req.UserId,
+			CodeId:    activityCode.Id,
+			Code:      activityCode.Code,
+			CodeName:  activityCode.Name,
+			GroupName: activityCode.GroupName,
+			RatioMode: activityCode.RatioMode,
+			// 快照必须独立于活动码：后续修改活动码不能影响已发放的授权。
+			RatioOverride:       activityCode.RatioOverride,
+			RatioScope:          activityCode.RatioScope,
+			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
+			RpmLimit:            activityCode.RpmLimit,
+			PriceQuota:          chargedQuota,
+			StartTime:           now,
+			ExpireTime:          expireTime,
+			Status:              ActivityGrantStatusActive,
+			Source:              ActivityGrantSourceRedeem,
 		}
 		if err := tx.Create(grant).Error; err != nil {
 			return err

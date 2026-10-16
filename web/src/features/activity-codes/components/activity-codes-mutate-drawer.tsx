@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, Layers3, Tag, Ticket } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -68,14 +69,17 @@ import { handleServerError } from '@/lib/handle-server-error'
 import {
   createActivityCode,
   getActivityCode,
+  getGroupModels,
   getGroupNames,
   updateActivityCode,
 } from '../api'
 import {
   ACTIVITY_RATIO_MODE,
+  ACTIVITY_RATIO_SCOPE,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   getActivityRatioModeOptions,
+  getActivityRatioScopeOptions,
 } from '../constants'
 import {
   ACTIVITY_CODE_FORM_DEFAULT_VALUES,
@@ -85,6 +89,7 @@ import {
   transformFormValuesToPayload,
 } from '../lib/activity-form'
 import type { ActivityCode } from '../types'
+import { ActivityModelRatiosEditor } from './activity-model-ratios-editor'
 import { useActivityCodes } from './activity-codes-provider'
 
 type ActivityCodesMutateDrawerProps = {
@@ -201,6 +206,20 @@ export function ActivityCodesMutateDrawer({
   }
 
   const ratioMode = form.watch('ratio_mode')
+  const ratioScope = form.watch('ratio_scope')
+  const groupName = form.watch('group_name')
+  const { data: groupModels = [] } = useQuery({
+    queryKey: ['activity-group-models', groupName],
+    enabled: open && groupName !== '',
+    queryFn: async () => {
+      const result = await getGroupModels(groupName)
+      if (!result.success) {
+        toast.error(result.message || t(ERROR_MESSAGES.GROUP_MODELS_FAILED))
+        return []
+      }
+      return (result.data ?? []).map((member) => member.model_name)
+    },
+  })
   const currencyLabel = getCurrencyLabel()
   const quotaStep = getEditableQuotaStep()
   let submitButtonLabel = t('Save')
@@ -225,7 +244,7 @@ export function ActivityCodesMutateDrawer({
           </SheetTitle>
           <SheetDescription>
             {t(
-              'An activity code grants its target group to the user for a limited time. The group must already exist in group ratios.'
+              'An activity code grants its target group to the user for a limited time, with a ratio for the whole group or only for selected models. The group must already exist in group ratios.'
             )}
           </SheetDescription>
         </SheetHeader>
@@ -342,6 +361,41 @@ export function ActivityCodesMutateDrawer({
                   icon={<Layers3 />}
                   iconTone='success'
                 />
+                <FormField
+                  control={form.control}
+                  name='ratio_scope'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Ratio scope')}</FormLabel>
+                      <Select
+                        items={getActivityRatioScopeOptions(t)}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {getActivityRatioScopeOptions(t).map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t(
+                          'Charge every model in the group, or only the models listed below.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                   <FormField
                     control={form.control}
@@ -425,64 +479,77 @@ export function ActivityCodesMutateDrawer({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name='ratio_mode'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Ratio')}</FormLabel>
-                        <Select
-                          items={getActivityRatioModeOptions(t)}
-                          value={field.value}
-                          onValueChange={field.onChange}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent alignItemWithTrigger={false}>
-                            <SelectGroup>
-                              {getActivityRatioModeOptions(t).map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                {ratioMode === ACTIVITY_RATIO_MODE.OVERRIDE && (
-                  <FormField
-                    control={form.control}
-                    name='ratio_override'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Custom ratio')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type='number'
-                            min={0}
-                            step={0.01}
+                  {ratioScope === ACTIVITY_RATIO_SCOPE.GROUP && (
+                    <FormField
+                      control={form.control}
+                      name='ratio_mode'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Ratio')}</FormLabel>
+                          <Select
+                            items={getActivityRatioModeOptions(t)}
                             value={field.value}
-                            onChange={(event) =>
-                              field.onChange(
-                                numberFieldValue(event.target.valueAsNumber)
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t('0 means this group is completely free.')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                {getActivityRatioModeOptions(t).map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+                {ratioScope === ACTIVITY_RATIO_SCOPE.MODELS ? (
+                  <ActivityModelRatiosEditor
+                    form={form}
+                    models={groupModels}
+                    disabled={isSubmitting || isLoading}
                   />
+                ) : (
+                  ratioMode === ACTIVITY_RATIO_MODE.OVERRIDE && (
+                    <FormField
+                      control={form.control}
+                      name='ratio_override'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Custom ratio')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              min={0}
+                              step={0.01}
+                              value={field.value}
+                              onChange={(event) =>
+                                field.onChange(
+                                  numberFieldValue(event.target.valueAsNumber)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t('0 means this group is completely free.')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )
                 )}
                 <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                   <FormField

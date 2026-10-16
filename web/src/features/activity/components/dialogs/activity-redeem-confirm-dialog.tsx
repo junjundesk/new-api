@@ -31,6 +31,7 @@ import { formatQuota } from '@/lib/format'
 
 import {
   describeActivityDuration,
+  describeActivityModelScope,
   describeActivityRatio,
 } from '../../lib/activity-format'
 import type { ActivityPreview } from '../../types'
@@ -62,6 +63,10 @@ export function ActivityRedeemConfirmDialog({
     {
       label: t('Ratio'),
       value: describeActivityRatio(t, preview.ratio_mode, preview.ratio_override),
+    },
+    {
+      label: t('Models'),
+      value: describeActivityModelScope(t, preview.model_ratio_overrides),
     },
     {
       label: t('RPM limit'),

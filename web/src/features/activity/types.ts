@@ -37,6 +37,8 @@ export interface ActivityOffer {
   rpm_limit: number
   ratio_mode: string
   ratio_override: number
+  ratio_scope?: string
+  model_ratio_overrides?: Record<string, number> | null
   price_quota: number
   remaining_total: number
 }
@@ -55,6 +57,8 @@ export interface ActivityGrant {
   group_name: string
   ratio_mode: string
   ratio_override: number
+  ratio_scope?: string
+  model_ratio_overrides?: Record<string, number> | null
   rpm_limit: number
   price_quota: number
   start_time: number
@@ -71,6 +75,8 @@ export interface ActivityActiveView {
   code_name: string
   ratio_mode: string
   ratio_override: number
+  ratio_scope?: string
+  model_ratio_overrides?: Record<string, number> | null
   rpm_limit: number
   expire_time: number
 }
@@ -91,6 +97,8 @@ export interface ActivityPreview {
   rpm_limit: number
   ratio_mode: string
   ratio_override: number
+  ratio_scope?: string
+  model_ratio_overrides?: Record<string, number> | null
   price_quota: number
   balance_quota: number
   bonus_quota: number

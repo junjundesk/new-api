@@ -599,6 +599,7 @@ export const STATIC_I18N_KEYS = [
   'Failed to delete activity code',
   'Failed to update activity code status',
   'Failed to load activity grants',
+  'Failed to load group models',
   'Failed to revoke activity grant',
   'Activity code created',
   'Activity code updated',

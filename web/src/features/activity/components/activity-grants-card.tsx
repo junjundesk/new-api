@@ -27,6 +27,7 @@ import { formatQuota } from '@/lib/format'
 
 import { getActivityGrants } from '../api'
 import {
+  describeActivityModelScope,
   describeActivityRatio,
   describeExpireTime,
 } from '../lib/activity-format'
@@ -99,7 +100,8 @@ export function ActivityGrantsCard() {
                   grant.ratio_mode,
                   grant.ratio_override
                 )}{' '}
-                · {t('Expires at')}: {describeExpireTime(t, grant.expire_time)}
+                · {describeActivityModelScope(t, grant.model_ratio_overrides)} ·{' '}
+                {t('Expires at')}: {describeExpireTime(t, grant.expire_time)}
                 {grant.price_quota > 0
                   ? ` · ${t('Paid')}: ${formatQuota(grant.price_quota)}`
                   : ''}

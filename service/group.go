@@ -140,8 +140,8 @@ func GetUserUsableGroupsWithActivity(userId int, userGroup string) map[string]st
 
 // GetUserGroupRatioWithActivity 返回用户在某个分组上的实际计费倍率，
 // 活动授权覆盖优先于用户分组倍率矩阵。
-func GetUserGroupRatioWithActivity(userGroup, group string, activityRatios map[string]float64) float64 {
-	if override := ActivityRatioFor(activityRatios, group); override != nil {
+func GetUserGroupRatioWithActivity(userGroup, group string, activityOverrides ActivityOverrides) float64 {
+	if override := ActivityRatioFor(activityOverrides, group); override != nil {
 		return *override
 	}
 	return GetUserGroupRatio(userGroup, group)

@@ -57,9 +57,13 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	if relayInfo.PriceData.BillingModelName != "" {
 		modelName = relayInfo.PriceData.BillingModelName
 	}
-	// 活动码授权对该分组给出专属倍率（0 表示完全免费），优先于用户分组倍率矩阵。
-	activityView := service.GetRequestActivityView(ctx, relayInfo.UserId, relayInfo.UsingGroup)
-	return ratio_setting.ResolveModelGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup, modelName, settings.ModelGroupRatios, service.ActivityViewRatioPointer(activityView))
+	// 活动码授权对该分组给出专属倍率（0 表示完全免费），优先于用户分组倍率矩阵；
+	// 指定模型倍率在授权内部优先于分组级倍率。
+	var activity *ratio_setting.ActivityRatioOverride
+	if activityView := service.GetRequestActivityView(ctx, relayInfo.UserId, relayInfo.UsingGroup); activityView != nil {
+		activity = activityView.BillingRatioOverride()
+	}
+	return ratio_setting.ResolveModelGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup, modelName, settings.ModelGroupRatios, activity)
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (hosttypes.PriceData, error) {

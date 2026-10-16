@@ -161,35 +161,62 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 	return ratio, true
 }
 
+// ActivityRatioOverride is an activity-code grant's ratio overrides for one group.
+// ModelRatios covers the named billing models and outranks GroupRatio, which covers
+// every other model in the group. Both empty means the grant overrides no ratio,
+// which is what an inherit-mode whole-group grant stores.
+type ActivityRatioOverride struct {
+	ModelRatios map[string]float64
+	GroupRatio  *float64
+}
+
+// validBillingRatio reports whether a billing multiplier is usable: a finite
+// number inside [0, MaxChannelModelGroupRatio]. Values loaded from a hand-edited
+// row are ignored instead of poisoning the charge.
+func validBillingRatio(ratio *float64) bool {
+	return ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) &&
+		*ratio >= 0 && *ratio <= dto.MaxChannelModelGroupRatio
+}
+
 // ResolveModelGroupRatio resolves the final billing multiplier, independently of
 // routing and authorization. modelName is the exact token-mapped, pre-channel-
 // mapping billing name. The returned override is copied to freeze its value.
 //
-// activityRatio, when non-nil, is the ratio of an active activity-code grant the
-// user holds for usingGroup. It outranks the user-group matrix (a redeemed code is
-// more specific than the user's own group) but not a channel-model override.
-func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64, activityRatio *float64) types.GroupRatioInfo {
+// activity, when non-nil, carries the ratio overrides of an active activity-code
+// grant the user holds for usingGroup. A model listed in activity.ModelRatios is
+// more specific than the whole group and wins; activity.GroupRatio then outranks
+// the user-group matrix (a redeemed code is more specific than the user's own
+// group). Neither outranks a channel-model override.
+func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64, activity *ActivityRatioOverride) types.GroupRatioInfo {
 	info := types.GroupRatioInfo{GroupSpecialRatio: -1, Source: types.GroupRatioSourceGroup}
-	if ratio, ok := overrides[modelName]; ok && ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) && *ratio >= 0 && *ratio <= dto.MaxChannelModelGroupRatio {
+	if ratio, ok := overrides[modelName]; ok && validBillingRatio(ratio) {
 		value := *ratio
 		info.GroupRatio = value
 		info.ChannelModelRatio = &value
 		info.Source = types.GroupRatioSourceChannelModel
 		return info
 	}
-	if activityRatio != nil && !math.IsNaN(*activityRatio) && !math.IsInf(*activityRatio, 0) && *activityRatio >= 0 && *activityRatio <= dto.MaxChannelModelGroupRatio {
-		value := *activityRatio
-		info.GroupRatio = value
-		info.GroupSpecialRatio = value
-		info.HasSpecialRatio = true
-		info.Source = types.GroupRatioSourceActivity
-		// Freeze the price the request would have had without the grant, so the
-		// consume log can show it struck through next to the discounted charge.
-		// Channel-model overrides already lost to the grant above, so they
-		// cannot apply to this fallback either.
-		original := ResolveModelGroupRatio(userGroup, usingGroup, modelName, nil, nil).GroupRatio
-		info.ActivityOriginalRatio = &original
-		return info
+	if activity != nil {
+		var activityRatio *float64
+		if ratio, ok := activity.ModelRatios[modelName]; ok && validBillingRatio(&ratio) {
+			activityRatio = &ratio
+		} else if validBillingRatio(activity.GroupRatio) {
+			activityRatio = activity.GroupRatio
+		}
+		if activityRatio != nil {
+			value := *activityRatio
+			info.GroupRatio = value
+			info.GroupSpecialRatio = value
+			info.HasSpecialRatio = true
+			info.Source = types.GroupRatioSourceActivity
+			// Freeze the price the request would have had without the grant, so the
+			// consume log can show it struck through next to the discounted charge.
+			// Channel-model overrides already lost to the grant above, so they
+			// cannot apply to this fallback either.
+			original := ResolveModelGroupRatio(userGroup, usingGroup, modelName, nil, nil).GroupRatio
+			info.ActivityOriginalRatio = &original
+			return info
+		}
 	}
 	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {
 		info.GroupRatio = ratio

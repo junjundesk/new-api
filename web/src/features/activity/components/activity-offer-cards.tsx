@@ -32,6 +32,7 @@ import { formatQuota } from '@/lib/format'
 
 import {
   describeActivityDuration,
+  describeActivityModelScope,
   describeActivityRatio,
 } from '../lib/activity-format'
 import type { ActivityOffer } from '../types'
@@ -69,6 +70,10 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
               offer.ratio_mode,
               offer.ratio_override
             ),
+          },
+          {
+            label: t('Models'),
+            value: describeActivityModelScope(t, offer.model_ratio_overrides),
           },
           {
             label: t('RPM limit'),

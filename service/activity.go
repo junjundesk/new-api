@@ -1,9 +1,12 @@
 package service
 
 import (
+	"maps"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,8 +20,11 @@ type ActivityView struct {
 	CodeName      string  `json:"code_name"`
 	RatioMode     string  `json:"ratio_mode"`
 	RatioOverride float64 `json:"ratio_override"`
-	RpmLimit      int     `json:"rpm_limit"`
-	ExpireTime    int64   `json:"expire_time"`
+	// ModelRatioOverrides 是「指定模型 → 倍率」覆盖：命中的模型优先于 RatioOverride，
+	// 未命中的模型继续沿用 RatioMode/RatioOverride 与分组默认倍率。
+	ModelRatioOverrides map[string]float64 `json:"model_ratio_overrides"`
+	RpmLimit            int                `json:"rpm_limit"`
+	ExpireTime          int64              `json:"expire_time"`
 }
 
 // GetActiveActivityViews 读取用户当前有效的活动授权并按分组合并。
@@ -47,8 +53,10 @@ func mergeActivityViews(grants []model.ActivityGrant) []ActivityView {
 				CodeName:      grant.CodeName,
 				RatioMode:     grant.RatioMode,
 				RatioOverride: grant.RatioOverride,
-				RpmLimit:      grant.RpmLimit,
-				ExpireTime:    grant.ExpireTime,
+				// 复制而不是共享：合并时可能继续写入，授权本身（可能来自缓存）不能被改。
+				ModelRatioOverrides: maps.Clone(grant.ModelRatioOverrides),
+				RpmLimit:            grant.RpmLimit,
+				ExpireTime:          grant.ExpireTime,
 			})
 			indexByGroup[grant.GroupName] = len(views) - 1
 			continue
@@ -61,6 +69,15 @@ func mergeActivityViews(grants []model.ActivityGrant) []ActivityView {
 				view.GrantId = grant.Id
 				view.Code = grant.Code
 				view.CodeName = grant.CodeName
+			}
+		}
+		// 指定模型倍率同样按「对用户最优」合并：并集 + 同名取最小倍率。
+		for modelName, ratio := range grant.ModelRatioOverrides {
+			if view.ModelRatioOverrides == nil {
+				view.ModelRatioOverrides = make(map[string]float64, len(grant.ModelRatioOverrides))
+			}
+			if existing, ok := view.ModelRatioOverrides[modelName]; !ok || ratio < existing {
+				view.ModelRatioOverrides[modelName] = ratio
 			}
 		}
 		if grant.RpmLimit > view.RpmLimit {
@@ -94,35 +111,45 @@ func GetRequestActivityView(c *gin.Context, userId int, group string) *ActivityV
 	return nil
 }
 
-// ActivityViewRatioPointer 返回该授权的倍率覆盖指针；非 override 模式返回 nil。
-func ActivityViewRatioPointer(view *ActivityView) *float64 {
-	if view == nil || view.RatioMode != model.ActivityRatioModeOverride {
+// BillingRatioOverride 把该授权的倍率覆盖转换成计费解析所需形态；没有任何覆盖时返回 nil。
+// 名称不能是 RatioOverride：ActivityView 已有同名字段。
+func (view *ActivityView) BillingRatioOverride() *ratio_setting.ActivityRatioOverride {
+	if view == nil {
 		return nil
 	}
-	ratio := view.RatioOverride
-	return &ratio
+	override := &ratio_setting.ActivityRatioOverride{}
+	if view.RatioMode == model.ActivityRatioModeOverride {
+		ratio := view.RatioOverride
+		override.GroupRatio = &ratio
+	}
+	if len(view.ModelRatioOverrides) > 0 {
+		override.ModelRatios = view.ModelRatioOverrides
+	}
+	if override.GroupRatio == nil && len(override.ModelRatios) == 0 {
+		return nil
+	}
+	return override
 }
 
-// GetActivityRatioOverrides 把授权列表转换成「分组 -> 活动倍率」，只含 override 模式的授权。
-func GetActivityRatioOverrides(views []ActivityView) map[string]float64 {
-	overrides := make(map[string]float64, len(views))
-	for _, view := range views {
-		if view.RatioMode != model.ActivityRatioModeOverride {
-			continue
+// ActivityOverrides 是「分组 -> 倍率覆盖」，同时承载分组级 override 与指定模型倍率。
+type ActivityOverrides map[string]ratio_setting.ActivityRatioOverride
+
+// GetActivityOverrides 把授权列表转换成「分组 -> 倍率覆盖」。
+func GetActivityOverrides(views []ActivityView) ActivityOverrides {
+	overrides := make(ActivityOverrides, len(views))
+	for i := range views {
+		if override := views[i].BillingRatioOverride(); override != nil {
+			overrides[views[i].GroupName] = *override
 		}
-		overrides[view.GroupName] = view.RatioOverride
 	}
 	return overrides
 }
 
-// ActivityRatioFor 返回倍率覆盖映射中某个分组的值，未命中返回 nil。
-func ActivityRatioFor(ratios map[string]float64, group string) *float64 {
-	if len(ratios) == 0 {
-		return nil
-	}
-	ratio, ok := ratios[group]
+// ActivityRatioFor 返回倍率覆盖映射中某个分组的分组级倍率，未命中返回 nil。
+func ActivityRatioFor(overrides ActivityOverrides, group string) *float64 {
+	override, ok := overrides[group]
 	if !ok {
 		return nil
 	}
-	return &ratio
+	return override.GroupRatio
 }

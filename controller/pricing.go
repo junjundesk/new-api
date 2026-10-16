@@ -18,13 +18,13 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
-	activityRatios := service.GetActivityRatioOverrides(service.GetActiveActivityViews(userId))
+	activityOverrides := service.GetActivityOverrides(service.GetActiveActivityViews(userId))
 	usableGroup := service.GetUserUsableGroupsWithActivity(userId, group)
-	pricing := model.GetPricingForUser(group, usableGroup, activityRatios)
+	pricing := model.GetPricingForUser(group, usableGroup, activityOverrides)
 	groupRatio := make(map[string]float64)
 	for usingGroup := range ratio_setting.GetGroupRatioCopy() {
 		if _, visible := usableGroup[usingGroup]; visible {
-			groupRatio[usingGroup] = ratio_setting.ResolveModelGroupRatio(group, usingGroup, "", nil, service.ActivityRatioFor(activityRatios, usingGroup)).GroupRatio
+			groupRatio[usingGroup] = service.GetUserGroupRatioWithActivity(group, usingGroup, activityOverrides)
 		}
 	}
 

@@ -375,3 +375,104 @@ func TestRedeemActivityCodeInvalidCodeDoesNotLeakExistence(t *testing.T) {
 	require.ErrorIs(t, errMissing, ErrActivityCodeInvalid)
 	require.ErrorIs(t, errEmpty, ErrActivityCodeInvalid)
 }
+
+// 「指定模型」类型：兑换时把模型倍率快照进授权，之后改活动码不影响已发放的授权。
+func TestRedeemActivityCodeSnapshotsModelRatioOverrides(t *testing.T) {
+	code := ActivityCode{
+		Code:                "act-models",
+		Name:                "指定模型活动",
+		DurationSeconds:     24 * 3600,
+		RatioScope:          ActivityRatioScopeModels,
+		ModelRatioOverrides: ActivityModelRatioOverrides{"gpt-5": 0, "o3": 0.5},
+	}
+	user, created := setupActivityFixture(t, code, 0)
+
+	result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-models", UserId: user.Id})
+	require.NoError(t, err)
+
+	grant := &ActivityGrant{}
+	require.NoError(t, DB.First(grant, "id = ?", result.GrantId).Error)
+	assert.Equal(t, ActivityRatioScopeModels, grant.RatioScope)
+	assert.Equal(t, map[string]float64{"gpt-5": 0, "o3": 0.5}, map[string]float64(grant.ModelRatioOverrides))
+
+	created.ModelRatioOverrides = ActivityModelRatioOverrides{"gpt-5": 0.9}
+	require.NoError(t, created.Update())
+
+	reloaded := &ActivityGrant{}
+	require.NoError(t, DB.First(reloaded, "id = ?", result.GrantId).Error)
+	assert.Equal(t, float64(0), reloaded.ModelRatioOverrides["gpt-5"], "已发放的授权是快照，不随后续修改变化")
+	assert.Equal(t, 0.5, reloaded.ModelRatioOverrides["o3"])
+}
+
+func TestActivityCodeUpdatePersistsRatioScopeAndModelRatios(t *testing.T) {
+	code := ActivityCode{
+		Code:                "act-scope-update",
+		RatioScope:          ActivityRatioScopeModels,
+		ModelRatioOverrides: ActivityModelRatioOverrides{"gpt-5": 0.25},
+	}
+	_, created := setupActivityFixture(t, code, 0)
+
+	created.RatioScope = ActivityRatioScopeGroup
+	created.RatioMode = ActivityRatioModeOverride
+	created.RatioOverride = 0.5
+	created.ModelRatioOverrides = nil
+	require.NoError(t, created.Update())
+
+	stored := reloadActivityCode(t, created.Id)
+	assert.Equal(t, ActivityRatioScopeGroup, stored.RatioScope)
+	assert.Equal(t, 0.5, stored.RatioOverride)
+	assert.Empty(t, stored.ModelRatioOverrides, "切回整个分组后模型倍率被清空")
+
+	created.RatioScope = ActivityRatioScopeModels
+	created.ModelRatioOverrides = ActivityModelRatioOverrides{"o3": 0}
+	require.NoError(t, created.Update())
+
+	stored = reloadActivityCode(t, created.Id)
+	assert.Equal(t, ActivityRatioScopeModels, stored.RatioScope)
+	assert.Equal(t, map[string]float64{"o3": 0}, map[string]float64(stored.ModelRatioOverrides))
+}
+
+// 新增列在存量行上是 NULL，Scan 必须把 NULL/空值当成空表，而不是报错。
+func TestActivityModelRatioOverridesScanAndValue(t *testing.T) {
+	t.Run("空表写 NULL", func(t *testing.T) {
+		var empty ActivityModelRatioOverrides
+		value, err := empty.Value()
+		require.NoError(t, err)
+		assert.Nil(t, value)
+
+		value, err = ActivityModelRatioOverrides{}.Value()
+		require.NoError(t, err)
+		assert.Nil(t, value)
+	})
+
+	t.Run("非空表写 JSON 对象", func(t *testing.T) {
+		value, err := ActivityModelRatioOverrides{"gpt-5": 0, "o3": 0.5}.Value()
+		require.NoError(t, err)
+		raw, ok := value.([]byte)
+		require.True(t, ok)
+		assert.JSONEq(t, `{"gpt-5":0,"o3":0.5}`, string(raw))
+	})
+
+	t.Run("NULL 与空值读回空表", func(t *testing.T) {
+		for _, stored := range []interface{}{nil, []byte(nil), "", []byte(""), []byte("{}"), []byte("null")} {
+			overrides := ActivityModelRatioOverrides{"stale": 1}
+			require.NoError(t, overrides.Scan(stored))
+			assert.Empty(t, overrides, "存量空值必须读成空表: %v", stored)
+		}
+	})
+
+	t.Run("字符串与字节读回映射", func(t *testing.T) {
+		fromString := ActivityModelRatioOverrides{}
+		require.NoError(t, fromString.Scan(`{"gpt-5":0,"o3":0.5}`))
+		assert.Equal(t, ActivityModelRatioOverrides{"gpt-5": 0, "o3": 0.5}, fromString)
+
+		fromBytes := ActivityModelRatioOverrides{}
+		require.NoError(t, fromBytes.Scan([]byte(`{"gpt-5":0.5}`)))
+		assert.Equal(t, 0.5, fromBytes["gpt-5"])
+	})
+
+	t.Run("非法 JSON 报错", func(t *testing.T) {
+		overrides := ActivityModelRatioOverrides{}
+		require.Error(t, overrides.Scan([]byte("{not json")))
+	})
+}

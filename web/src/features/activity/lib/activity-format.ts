@@ -47,6 +47,16 @@ export function describeActivityRatio(
   return `${ratioOverride}x`
 }
 
+// 「指定模型」类型：列表内模型按各自倍率计费，未列出的模型按原价。
+export function describeActivityModelScope(
+  t: TFunction,
+  modelRatioOverrides: Record<string, number> | null | undefined
+): string {
+  const count = Object.keys(modelRatioOverrides ?? {}).length
+  if (count === 0) return t('All models in the group')
+  return t('{{count}} specified models', { count })
+}
+
 export function describeExpireTime(
   t: TFunction,
   expireTime: number

@@ -34,6 +34,12 @@ export const ACTIVITY_RATIO_MODE = {
   OVERRIDE: 'override',
 } as const
 
+// 倍率作用范围：整个分组沿用 ratio_mode/ratio_override，指定模型只看模型倍率列表。
+export const ACTIVITY_RATIO_SCOPE = {
+  GROUP: 'group',
+  MODELS: 'models',
+} as const
+
 export const ACTIVITY_GRANT_STATUS = {
   ACTIVE: 'active',
   EXPIRED: 'expired',
@@ -67,6 +73,13 @@ export function getActivityRatioModeOptions(t: TFunction) {
   ]
 }
 
+export function getActivityRatioScopeOptions(t: TFunction) {
+  return [
+    { label: t('Whole group'), value: ACTIVITY_RATIO_SCOPE.GROUP },
+    { label: t('Selected models'), value: ACTIVITY_RATIO_SCOPE.MODELS },
+  ]
+}
+
 export function getActivityGrantStatusLabelKey(status: string): string {
   if (status === ACTIVITY_GRANT_STATUS.EXPIRED) return 'Expired'
   if (status === ACTIVITY_GRANT_STATUS.REVOKED) return 'Revoked'
@@ -88,6 +101,7 @@ export const ERROR_MESSAGES = {
   DELETE_FAILED: 'Failed to delete activity code',
   STATUS_FAILED: 'Failed to update activity code status',
   GROUPS_FAILED: 'Failed to load groups',
+  GROUP_MODELS_FAILED: 'Failed to load group models',
   GRANTS_FAILED: 'Failed to load activity grants',
   REVOKE_FAILED: 'Failed to revoke activity grant',
 } as const
@@ -114,4 +128,7 @@ export const ACTIVITY_VALIDATION = {
   RPM_MAX: 100000,
   RATIO_MAX: 1000,
   LIMIT_MAX: 1000000,
+  // 与后端 model.ActivityCodeMaxModelRatioOverrides / ActivityModelNameMaxLength 保持一致。
+  MODEL_RATIO_MAX_ENTRIES: 100,
+  MODEL_NAME_MAX_LENGTH: 255,
 } as const

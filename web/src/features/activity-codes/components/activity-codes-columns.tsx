@@ -120,6 +120,26 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
       id: 'ratio',
       header: t('Ratio'),
       cell: ({ row }) => {
+        // 「指定模型」类型下展示命中的模型数量，具体倍率放在 title 里，避免撑爆单元格。
+        const modelOverrides = Object.entries(
+          row.original.model_ratio_overrides ?? {}
+        )
+        if (modelOverrides.length > 0) {
+          const listed = modelOverrides
+            .slice(0, 5)
+            .map(([model, ratio]) => `${model}=${ratio}`)
+            .join(', ')
+          return (
+            <span title={modelOverrides.length > 5 ? `${listed} …` : listed}>
+              <StatusBadge
+                label={t('{{count}} models', { count: modelOverrides.length })}
+                variant='info'
+                copyable={false}
+                className='-ml-1.5'
+              />
+            </span>
+          )
+        }
         if (row.original.ratio_mode !== ACTIVITY_RATIO_MODE.OVERRIDE) {
           return <span className='text-muted-foreground'>{t('Inherited')}</span>
         }

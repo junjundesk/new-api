@@ -34,6 +34,8 @@ export const activityCodeSchema = z.object({
   price_quota: z.number(),
   ratio_mode: z.string(), // inherit | override
   ratio_override: z.number(),
+  ratio_scope: z.string(), // group | models
+  model_ratio_overrides: z.record(z.string(), z.number()).nullish(),
   start_time: z.number(),
   end_time: z.number(),
   total_limit: z.number(),
@@ -56,6 +58,8 @@ export const activityGrantSchema = z.object({
   group_name: z.string(),
   ratio_mode: z.string(),
   ratio_override: z.number(),
+  ratio_scope: z.string(),
+  model_ratio_overrides: z.record(z.string(), z.number()).nullish(),
   rpm_limit: z.number(),
   price_quota: z.number(),
   start_time: z.number(),
@@ -112,11 +116,20 @@ export interface ActivityCodeFormData {
   price_quota: number
   ratio_mode: string
   ratio_override: number
+  ratio_scope: string
+  model_ratio_overrides: Record<string, number>
   start_time: number
   end_time: number
   total_limit: number
   per_user_limit: number
   public_visible: number
+}
+
+// 分组内在架模型（GET /api/models/group_members），用作指定模型的选择建议。
+export interface GroupModelMember {
+  model_name: string
+  description?: string
+  group_description?: string
 }
 
 // ============================================================================

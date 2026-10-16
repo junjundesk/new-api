@@ -24,6 +24,7 @@ import type {
   ActivityCodeFormData,
   ApiResponse,
   GetActivityCodesParams,
+  GroupModelMember,
   PagedActivityCodes,
   PagedActivityGrants,
   SearchActivityCodesParams,
@@ -112,6 +113,16 @@ export async function revokeActivityGrant(
 // 活动码的目标分组必须已在「分组倍率」中配置，这里复用管理端分组接口。
 export async function getGroupNames(): Promise<ApiResponse<string[]>> {
   const res = await api.get('/api/group/')
+  return res.data
+}
+
+// 分组内在架模型，作为「指定模型」类型的模型建议值。
+export async function getGroupModels(
+  group: string
+): Promise<ApiResponse<GroupModelMember[]>> {
+  const res = await api.get(
+    `/api/models/group_members?group=${encodeURIComponent(group)}`
+  )
   return res.data
 }
 

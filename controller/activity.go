@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,11 +39,15 @@ type activityCodeRequest struct {
 	PriceQuota    int     `json:"price_quota"`
 	RatioMode     string  `json:"ratio_mode"`
 	RatioOverride float64 `json:"ratio_override"`
-	StartTime     int64   `json:"start_time"`
-	EndTime       int64   `json:"end_time"`
-	TotalLimit    int     `json:"total_limit"`
-	PerUserLimit  *int    `json:"per_user_limit"`
-	PublicVisible *int    `json:"public_visible"`
+	// RatioScope 为 models 时只使用 ModelRatioOverrides 改价（可无视原分组定价），
+	// 为空或 group 时沿用 RatioMode/RatioOverride 作用于整个分组。
+	RatioScope          string              `json:"ratio_scope"`
+	ModelRatioOverrides map[string]*float64 `json:"model_ratio_overrides"`
+	StartTime           int64               `json:"start_time"`
+	EndTime             int64               `json:"end_time"`
+	TotalLimit          int                 `json:"total_limit"`
+	PerUserLimit        *int                `json:"per_user_limit"`
+	PublicVisible       *int                `json:"public_visible"`
 }
 
 // buildActivityCode 校验并组装活动码。请求体由调用方解析一次后传入：
@@ -91,6 +96,46 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
 		return nil, false
 	}
+	ratioScope := req.RatioScope
+	if ratioScope == "" {
+		// 存量客户端不带该字段，等价于「整个分组」。
+		ratioScope = model.ActivityRatioScopeGroup
+	}
+	if ratioScope != model.ActivityRatioScopeGroup && ratioScope != model.ActivityRatioScopeModels {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioScopeInvalid)
+		return nil, false
+	}
+	var modelRatioOverrides model.ActivityModelRatioOverrides
+	if ratioScope == model.ActivityRatioScopeModels {
+		// 指定模型类型必须给出明确的模型倍率：空列表或非法条目一律拒绝，
+		// 避免出现「看起来有优惠、实际不生效」的活动码。
+		if len(req.ModelRatioOverrides) == 0 {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioRequired)
+			return nil, false
+		}
+		if len(req.ModelRatioOverrides) > model.ActivityCodeMaxModelRatioOverrides {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioLimit, map[string]any{"Max": model.ActivityCodeMaxModelRatioOverrides})
+			return nil, false
+		}
+		modelRatioOverrides = make(model.ActivityModelRatioOverrides, len(req.ModelRatioOverrides))
+		for modelName, ratio := range req.ModelRatioOverrides {
+			trimmed := strings.TrimSpace(modelName)
+			if trimmed == "" || len(trimmed) > model.ActivityModelNameMaxLength {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+				return nil, false
+			}
+			if _, exists := modelRatioOverrides[trimmed]; exists {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+				return nil, false
+			}
+			if ratio == nil || math.IsNaN(*ratio) || math.IsInf(*ratio, 0) ||
+				*ratio < 0 || *ratio > dto.MaxChannelModelGroupRatio {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
+				return nil, false
+			}
+			modelRatioOverrides[trimmed] = *ratio
+		}
+	}
 	now := common.GetTimestamp()
 	if req.StartTime < 0 || req.EndTime < 0 {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeWindowInvalid)
@@ -120,8 +165,17 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 	activityCode.DurationSeconds = int64(req.DurationHours * 3600)
 	activityCode.RpmLimit = req.RpmLimit
 	activityCode.PriceQuota = req.PriceQuota
-	activityCode.RatioMode = req.RatioMode
-	activityCode.RatioOverride = req.RatioOverride
+	// 指定模型类型只按模型倍率改价，分组级倍率保持「继承」语义，避免两条规则打架。
+	// 切回「整个分组」时 modelRatioOverrides 为空，该列随之清空。
+	if ratioScope == model.ActivityRatioScopeModels {
+		activityCode.RatioMode = model.ActivityRatioModeInherit
+		activityCode.RatioOverride = 0
+	} else {
+		activityCode.RatioMode = req.RatioMode
+		activityCode.RatioOverride = req.RatioOverride
+	}
+	activityCode.RatioScope = ratioScope
+	activityCode.ModelRatioOverrides = modelRatioOverrides
 	activityCode.StartTime = req.StartTime
 	activityCode.EndTime = req.EndTime
 	activityCode.TotalLimit = req.TotalLimit
@@ -324,18 +378,20 @@ func GetActivityOffers(c *gin.Context) {
 			continue
 		}
 		offers = append(offers, gin.H{
-			"code_id":          activityCode.Id,
-			"code":             activityCode.Code,
-			"name":             activityCode.Name,
-			"description":      activityCode.Description,
-			"group_name":       activityCode.GroupName,
-			"group_desc":       setting.GetUsableGroupDescription(activityCode.GroupName),
-			"duration_seconds": activityCode.DurationSeconds,
-			"rpm_limit":        activityCode.RpmLimit,
-			"ratio_mode":       activityCode.RatioMode,
-			"ratio_override":   activityCode.RatioOverride,
-			"price_quota":      activityCode.PriceQuota,
-			"remaining_total":  activityCode.RemainingTotal(),
+			"code_id":               activityCode.Id,
+			"code":                  activityCode.Code,
+			"name":                  activityCode.Name,
+			"description":           activityCode.Description,
+			"group_name":            activityCode.GroupName,
+			"group_desc":            setting.GetUsableGroupDescription(activityCode.GroupName),
+			"duration_seconds":      activityCode.DurationSeconds,
+			"rpm_limit":             activityCode.RpmLimit,
+			"ratio_mode":            activityCode.RatioMode,
+			"ratio_override":        activityCode.RatioOverride,
+			"ratio_scope":           activityCode.RatioScope,
+			"model_ratio_overrides": activityCode.ModelRatioOverrides,
+			"price_quota":           activityCode.PriceQuota,
+			"remaining_total":       activityCode.RemainingTotal(),
 		})
 	}
 	common.ApiSuccess(c, gin.H{"enabled": len(activityCodes) > 0, "offers": offers})
@@ -549,26 +605,28 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 	}
 
 	return gin.H{
-		"code_id":             activityCode.Id,
-		"code":                activityCode.Code,
-		"name":                activityCode.Name,
-		"description":         activityCode.Description,
-		"group_name":          activityCode.GroupName,
-		"group_desc":          setting.GetUsableGroupDescription(activityCode.GroupName),
-		"duration_seconds":    activityCode.DurationSeconds,
-		"rpm_limit":           activityCode.RpmLimit,
-		"ratio_mode":          activityCode.RatioMode,
-		"ratio_override":      activityCode.RatioOverride,
-		"price_quota":         activityCode.PriceQuota,
-		"balance_quota":       balanceQuota,
-		"bonus_quota":         bonusQuota,
-		"can_afford":          activityCode.PriceQuota <= 0 || balanceQuota >= activityCode.PriceQuota,
-		"need_confirm":        activityCode.PriceQuota > 0,
-		"already_granted":     hasActive,
-		"current_expire_time": activeExpireTime,
-		"remaining_total":     activityCode.RemainingTotal(),
-		"redeemable":          blockedReason == "",
-		"blocked_reason":      blockedReason,
-		"message":             message,
+		"code_id":               activityCode.Id,
+		"code":                  activityCode.Code,
+		"name":                  activityCode.Name,
+		"description":           activityCode.Description,
+		"group_name":            activityCode.GroupName,
+		"group_desc":            setting.GetUsableGroupDescription(activityCode.GroupName),
+		"duration_seconds":      activityCode.DurationSeconds,
+		"rpm_limit":             activityCode.RpmLimit,
+		"ratio_mode":            activityCode.RatioMode,
+		"ratio_override":        activityCode.RatioOverride,
+		"ratio_scope":           activityCode.RatioScope,
+		"model_ratio_overrides": activityCode.ModelRatioOverrides,
+		"price_quota":           activityCode.PriceQuota,
+		"balance_quota":         balanceQuota,
+		"bonus_quota":           bonusQuota,
+		"can_afford":            activityCode.PriceQuota <= 0 || balanceQuota >= activityCode.PriceQuota,
+		"need_confirm":          activityCode.PriceQuota > 0,
+		"already_granted":       hasActive,
+		"current_expire_time":   activeExpireTime,
+		"remaining_total":       activityCode.RemainingTotal(),
+		"redeemable":            blockedReason == "",
+		"blocked_reason":        blockedReason,
+		"message":               message,
 	}
 }
