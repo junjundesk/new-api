@@ -5766,6 +5766,11 @@
     "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.": "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.",
     "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.": "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.",
     "Expected a JSON object mapping groups to model descriptions": "Expected a JSON object mapping groups to model descriptions",
+    "{{count}} users were skipped because they turned off operational notifications": "{{count}} users were skipped because they turned off operational notifications",
+    "Filter users who turned off operational notifications": "Filter users who turned off operational notifications",
+    "Operational Notifications": "Operational Notifications",
+    "Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.": "Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.",
+    "Unchecking this sends to everyone, including users who turned off operational notifications.": "Unchecking this sends to everyone, including users who turned off operational notifications.",
     "Zoom": "Zoom"
   }
 }

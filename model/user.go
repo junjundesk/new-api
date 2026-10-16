@@ -168,6 +168,18 @@ func (user *User) GetSetting() dto.UserSetting {
 	return setting
 }
 
+// AcceptsOperationalEmail reports whether the user still accepts operational
+// email (admin campaigns, bonus arrival notices). System mail such as
+// verification codes and password resets is never filtered by this flag.
+// An absent flag means enabled, so the site default is "on".
+//
+// Callers must have loaded the setting column; a row selected without it
+// yields an empty setting and therefore counts as subscribed.
+func (user *User) AcceptsOperationalEmail() bool {
+	enabled := user.GetSetting().OperationalNotifyEnabled
+	return enabled == nil || *enabled
+}
+
 func (user *User) SetSetting(setting dto.UserSetting) {
 	settingBytes, err := common.Marshal(setting)
 	if err != nil {

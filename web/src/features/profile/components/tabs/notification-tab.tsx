@@ -78,6 +78,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
     gotify_url: '',
     gotify_token: '',
     gotify_priority: 5,
+    operational_notify_enabled: true,
     accept_unset_model_ratio_model: false,
     record_ip_log: false,
     upstream_model_update_notify_enabled: false,
@@ -110,6 +111,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         record_ip_log: parsed.record_ip_log || false,
         upstream_model_update_notify_enabled:
           parsed.upstream_model_update_notify_enabled || false,
+        // 缺省视为开启：只有显式写入 false 才表示用户关闭了运营通知。
+        operational_notify_enabled: parsed.operational_notify_enabled !== false,
       })
     }
   }, [profile])
@@ -125,7 +128,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
       } else {
         toast.error(response.message || t('Failed to update settings'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Failed to update settings'))
     } finally {
       setLoading(false)
@@ -143,8 +146,9 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           value={[notifyType]}
           onValueChange={(value) => {
             const nextValue = value.find((item) => item !== notifyType)
-            if (nextValue)
+            if (nextValue) {
               updateField('notify_type', normalizeNotifyType(nextValue))
+            }
           }}
           aria-label={t('Notification Method')}
           variant='outline'
@@ -330,6 +334,28 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           <p className='text-muted-foreground mt-1 text-xs'>
             {t('Configure your account behavior preferences')}
           </p>
+        </div>
+
+        {/* Operational email */}
+        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
+          <div className='space-y-0.5'>
+            <Label htmlFor='operationalNotify'>
+              {t('Operational Notifications')}
+            </Label>
+            <p className='text-muted-foreground text-xs sm:text-sm'>
+              {t(
+                'Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.'
+              )}
+            </p>
+          </div>
+          <Switch
+            id='operationalNotify'
+            className='shrink-0'
+            checked={settings.operational_notify_enabled}
+            onCheckedChange={(checked) =>
+              updateField('operational_notify_enabled', checked)
+            }
+          />
         </div>
 
         {/* Receive Upstream Model Update Notifications (admin only) */}

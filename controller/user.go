@@ -1478,6 +1478,7 @@ type UpdateUserSettingRequest struct {
 	GotifyToken                      string  `json:"gotify_token,omitempty"`
 	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
+	OperationalNotifyEnabled         *bool   `json:"operational_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
 	RecordIpLog                      bool    `json:"record_ip_log"`
 }
@@ -1575,11 +1576,19 @@ func UpdateUserSetting(c *gin.Context) {
 		upstreamModelUpdateNotifyEnabled = *req.UpstreamModelUpdateNotifyEnabled
 	}
 
+	// 运营通知默认开启，只有请求显式携带该字段时才覆盖：否则旧客户端保存
+	// 通知设置时会丢掉这个字段，把已关闭运营通知的用户重新订阅。
+	operationalNotifyEnabled := existingSettings.OperationalNotifyEnabled
+	if req.OperationalNotifyEnabled != nil {
+		operationalNotifyEnabled = req.OperationalNotifyEnabled
+	}
+
 	// 构建设置
 	settings := dto.UserSetting{
 		NotifyType:                       req.QuotaWarningType,
 		QuotaWarningThreshold:            req.QuotaWarningThreshold,
 		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
+		OperationalNotifyEnabled:         operationalNotifyEnabled,
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
 	}

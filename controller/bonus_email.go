@@ -87,6 +87,11 @@ func sendBonusGrantEmail(user *model.User, amount int64, expireTime int64, remar
 	if user == nil || strings.TrimSpace(user.Email) == "" {
 		return
 	}
+	// The bonus notice is an operational email: the admin's "send email" toggle
+	// decides whether to notify, but it cannot override the user's opt-out.
+	if !user.AcceptsOperationalEmail() {
+		return
+	}
 	subjectTemplate, contentTemplate := resolveBonusEmailTemplate()
 	vars := bonusEmailVars{
 		Username:    user.Username,

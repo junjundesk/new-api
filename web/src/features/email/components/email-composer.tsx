@@ -47,6 +47,7 @@ export function EmailComposer() {
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
   const [sending, setSending] = useState(false)
+  const [filterUnsubscribed, setFilterUnsubscribed] = useState(true)
 
   const selectedIds = useMemo(
     () => new Set(selected.map((u) => u.id)),
@@ -84,6 +85,7 @@ export function EmailComposer() {
     setSelected([])
     setResults([])
     setKeyword('')
+    setFilterUnsubscribed(true)
   }
 
   const handleSend = async () => {
@@ -107,6 +109,7 @@ export function EmailComposer() {
         user_ids: mode === 'selected' ? selected.map((u) => u.id) : undefined,
         subject: subject.trim(),
         content,
+        include_unsubscribed: !filterUnsubscribed,
       })
       if (!res.success) {
         toast.error(res.message || t('Failed to send email'))
@@ -115,6 +118,7 @@ export function EmailComposer() {
 
       const data = res.data
       const skipped = data?.skipped ?? 0
+      const skippedUnsubscribed = data?.skipped_unsubscribed ?? 0
       if (data?.async) {
         toast.success(
           t('Broadcast queued for {{count}} recipients', {
@@ -134,6 +138,14 @@ export function EmailComposer() {
           t('{{count}} users were skipped because they have no email address', {
             count: skipped,
           })
+        )
+      }
+      if (skippedUnsubscribed > 0) {
+        toast.warning(
+          t(
+            '{{count}} users were skipped because they turned off operational notifications',
+            { count: skippedUnsubscribed }
+          )
         )
       }
       resetForm()
@@ -180,6 +192,26 @@ export function EmailComposer() {
               onCheckedChange={() => setMode('all')}
             />
             {t('All users')}
+          </label>
+        </div>
+
+        <div className='border-t pt-3'>
+          <label className='flex cursor-pointer items-start gap-2 text-sm'>
+            <Checkbox
+              checked={filterUnsubscribed}
+              onCheckedChange={(checked) =>
+                setFilterUnsubscribed(checked === true)
+              }
+              className='mt-0.5'
+            />
+            <span>
+              {t('Filter users who turned off operational notifications')}
+              <span className='text-muted-foreground mt-0.5 block text-xs'>
+                {t(
+                  'Unchecking this sends to everyone, including users who turned off operational notifications.'
+                )}
+              </span>
+            </span>
           </label>
         </div>
 

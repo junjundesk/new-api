@@ -24,32 +24,43 @@ type AdminSendEmailRequest struct {
 	AllUsers bool   `json:"all_users"`
 	Subject  string `json:"subject"`
 	Content  string `json:"content"`
+	// IncludeUnsubscribed is the admin's explicit override of the recipients'
+	// operational-email opt-out for a manual broadcast. The default (false)
+	// honors the user setting.
+	IncludeUnsubscribed bool `json:"include_unsubscribed"`
 }
 
 // adminSendEmailRecipients collects the users a campaign targets, splitting out
-// the ones that cannot receive mail so the caller can report the gap.
-func adminSendEmailRecipients(req *AdminSendEmailRequest) (recipients []model.User, skipped int, err error) {
+// the ones that cannot receive mail so the caller can report the gap. Users who
+// turned operational notifications off are skipped unless the admin explicitly
+// overrides the opt-out.
+func adminSendEmailRecipients(req *AdminSendEmailRequest) (recipients []model.User, skippedNoEmail int, skippedUnsubscribed int, err error) {
 	var users []model.User
 	if req.AllUsers {
 		users, err = model.GetAllActiveUsersForBonus()
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 	} else {
 		users, err = model.GetUsersByIdsForEmail(req.UserIds)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 	}
 
+	filterUnsubscribed := !req.IncludeUnsubscribed
 	for _, user := range users {
 		if strings.TrimSpace(user.Email) == "" {
-			skipped++
+			skippedNoEmail++
+			continue
+		}
+		if filterUnsubscribed && !user.AcceptsOperationalEmail() {
+			skippedUnsubscribed++
 			continue
 		}
 		recipients = append(recipients, user)
 	}
-	return recipients, skipped, nil
+	return recipients, skippedNoEmail, skippedUnsubscribed, nil
 }
 
 // AdminSendEmail sends a custom email to selected users or to every user.
@@ -77,12 +88,16 @@ func AdminSendEmail(c *gin.Context) {
 		return
 	}
 
-	recipients, skipped, err := adminSendEmailRecipients(&req)
+	recipients, skippedNoEmail, skippedUnsubscribed, err := adminSendEmailRecipients(&req)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if len(recipients) == 0 {
+		if skippedUnsubscribed > 0 {
+			common.ApiErrorMsg(c, fmt.Sprintf("没有可发送的收件人（%d 位用户已关闭运营通知）", skippedUnsubscribed))
+			return
+		}
 		common.ApiErrorMsg(c, "没有可发送的收件人（用户未填写邮箱）")
 		return
 	}
@@ -95,35 +110,39 @@ func AdminSendEmail(c *gin.Context) {
 	if req.AllUsers {
 		gopool.Go(func() {
 			sent, failed := deliverAdminEmail(recipients, subject, content)
-			common.SysLog(fmt.Sprintf("admin broadcast email queued subject=%q sent=%d failed=%d", subject, sent, failed))
+			common.SysLog(fmt.Sprintf("admin broadcast email queued subject=%q sent=%d failed=%d skipped_unsubscribed=%d", subject, sent, failed, skippedUnsubscribed))
 		})
 		recordManageAudit(c, "user.email_send_all", map[string]interface{}{
-			"subject":  subject,
-			"targeted": len(recipients),
-			"skipped":  skipped,
-			"async":    true,
+			"subject":              subject,
+			"targeted":             len(recipients),
+			"skipped":              skippedNoEmail,
+			"skipped_unsubscribed": skippedUnsubscribed,
+			"async":                true,
 		})
 		common.ApiSuccess(c, gin.H{
-			"queued":  len(recipients),
-			"skipped": skipped,
-			"async":   true,
+			"queued":               len(recipients),
+			"skipped":              skippedNoEmail,
+			"skipped_unsubscribed": skippedUnsubscribed,
+			"async":                true,
 		})
 		return
 	}
 
 	sent, failed := deliverAdminEmail(recipients, subject, content)
 	recordManageAudit(c, "user.email_send", map[string]interface{}{
-		"subject":  subject,
-		"targeted": len(recipients),
-		"sent":     sent,
-		"failed":   failed,
-		"skipped":  skipped,
+		"subject":              subject,
+		"targeted":             len(recipients),
+		"sent":                 sent,
+		"failed":               failed,
+		"skipped":              skippedNoEmail,
+		"skipped_unsubscribed": skippedUnsubscribed,
 	})
 	common.ApiSuccess(c, gin.H{
-		"queued":  len(recipients),
-		"sent":    sent,
-		"failed":  failed,
-		"skipped": skipped,
+		"queued":               len(recipients),
+		"sent":                 sent,
+		"failed":               failed,
+		"skipped":              skippedNoEmail,
+		"skipped_unsubscribed": skippedUnsubscribed,
 	})
 }
 

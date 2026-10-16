@@ -36,6 +36,11 @@ export interface SendEmailPayload {
   subject: string
   /** HTML body. */
   content: string
+  /**
+   * Admin override: also send to users who turned operational notifications
+   * off. Omit or false to honor their opt-out.
+   */
+  include_unsubscribed?: boolean
 }
 
 export interface SendEmailResult {
@@ -47,6 +52,8 @@ export interface SendEmailResult {
   failed?: number
   /** Users skipped because they have no email address. */
   skipped: number
+  /** Users skipped because they turned operational notifications off. */
+  skipped_unsubscribed?: number
   /** True when the backend sent in the background. */
   async?: boolean
 }

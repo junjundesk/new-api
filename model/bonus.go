@@ -460,16 +460,21 @@ func CleanupBonusPreConsumeRecords(olderThanSeconds int64) (int64, error) {
 
 // GetAllActiveUsersForBonus returns every non-deleted user (id/username/email/
 // display name) so an admin can grant bonus to all of them at once.
+//
+// The setting column is included because the same result set also feeds the
+// operational-email opt-out check for bonus notices and admin broadcasts.
 func GetAllActiveUsersForBonus() ([]User, error) {
 	var users []User
 	err := DB.Model(&User{}).
-		Select("id", "username", "display_name", "email").
+		Select("id", "username", "display_name", "email", "setting").
 		Find(&users).Error
 	return users, err
 }
 
 // GetUsersByIdsForEmail loads the users an admin selected as email recipients.
 // Deleted users are excluded; unknown ids are simply absent from the result.
+// The setting column is included so the operational-email opt-out can be
+// honored (or deliberately overridden) per recipient.
 func GetUsersByIdsForEmail(ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -492,7 +497,7 @@ func GetUsersByIdsForEmail(ids []int) ([]User, error) {
 
 	var users []User
 	err := DB.Model(&User{}).
-		Select("id", "username", "display_name", "email").
+		Select("id", "username", "display_name", "email", "setting").
 		Where("id IN ?", unique).
 		Find(&users).Error
 	return users, err

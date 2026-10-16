@@ -132,6 +132,7 @@ describe('EmailComposer', () => {
       user_ids: [41, 43],
       subject: 'Service notice',
       content: ' <p>Hello team</p>\nPlease review. ',
+      include_unsubscribed: false,
     })
     expect(subject).toHaveValue('')
     expect(content).toHaveValue('')
@@ -182,6 +183,7 @@ describe('EmailComposer', () => {
       user_ids: undefined,
       subject: 'Maintenance',
       content: '<p>Scheduled maintenance</p>',
+      include_unsubscribed: false,
     })
     expect(screen.queryByText(/Email sent to/)).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveValue('')
@@ -247,6 +249,7 @@ describe('EmailComposer', () => {
             user_ids: [41],
             subject: 'Important notice',
             content: '<p>Keep this draft</p>\nMore details.',
+            include_unsubscribed: false,
           },
         ],
         [
@@ -256,6 +259,7 @@ describe('EmailComposer', () => {
             user_ids: [41],
             subject: 'Important notice',
             content: '<p>Keep this draft</p>\nMore details.',
+            include_unsubscribed: false,
           },
         ],
       ])
@@ -263,4 +267,77 @@ describe('EmailComposer', () => {
       expect(content).toHaveValue('')
     }
   )
+
+  test('unchecking the operational-notification filter sends to opted-out users', async () => {
+    const user = userEvent.setup()
+    await renderSettingsForm(<EmailComposer />, 'send')
+    const filter = screen.getByRole('checkbox', {
+      name: /Filter users who turned off operational notifications/,
+    })
+    expect(filter).toBeChecked()
+
+    await user.click(filter)
+    expect(filter).not.toBeChecked()
+
+    await user.type(
+      await screen.findByPlaceholderText(
+        'Search by username, email or user ID'
+      ),
+      'alice'
+    )
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.click(
+      await screen.findByRole('checkbox', { name: 'Alice alice@example.com' })
+    )
+    await user.type(
+      screen.getByRole('textbox', { name: 'Subject' }),
+      'Campaign'
+    )
+    await user.type(
+      screen.getByRole('textbox', { name: 'Content' }),
+      '<p>Hello</p>'
+    )
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(
+      await screen.findByText('Email sent to 2 recipients (0 failed)')
+    ).toBeVisible()
+    expect(api.post).toHaveBeenCalledExactlyOnceWith('/api/user/email/send', {
+      all_users: false,
+      user_ids: [41],
+      subject: 'Campaign',
+      content: '<p>Hello</p>',
+      include_unsubscribed: true,
+    })
+  })
+
+  test('reports recipients skipped because they turned off operational notifications', async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          queued: 1,
+          sent: 1,
+          failed: 0,
+          skipped: 0,
+          skipped_unsubscribed: 2,
+        },
+      },
+    })
+    const user = userEvent.setup()
+    await renderSettingsForm(<EmailComposer />, 'send')
+    await user.click(screen.getByRole('checkbox', { name: 'All users' }))
+    await user.type(screen.getByRole('textbox', { name: 'Subject' }), 'Notice')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Content' }),
+      '<p>Notice</p>'
+    )
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(
+      await screen.findByText(
+        '2 users were skipped because they turned off operational notifications'
+      )
+    ).toBeVisible()
+  })
 })

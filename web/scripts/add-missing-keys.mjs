@@ -147,6 +147,26 @@ const NEW_KEYS = {
     en: "Registered account {{username}}",
     zh: "注册账号 {{username}}",
   },
+  "Operational Notifications": {
+    en: "Operational Notifications",
+    zh: "运营通知",
+  },
+  "Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.": {
+    en: "Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.",
+    zh: "通过邮件接收产品公告、运营活动与赠金到账等通知。验证码、找回密码等系统邮件不受影响，始终发送。",
+  },
+  "Filter users who turned off operational notifications": {
+    en: "Filter users who turned off operational notifications",
+    zh: "过滤已关闭运营通知的用户",
+  },
+  "Unchecking this sends to everyone, including users who turned off operational notifications.": {
+    en: "Unchecking this sends to everyone, including users who turned off operational notifications.",
+    zh: "取消勾选后会发送给已关闭运营通知的用户。",
+  },
+  "{{count}} users were skipped because they turned off operational notifications": {
+    en: "{{count}} users were skipped because they turned off operational notifications",
+    zh: "{{count}} 位用户已关闭运营通知，未发送邮件",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.

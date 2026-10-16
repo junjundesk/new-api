@@ -5766,6 +5766,11 @@
     "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.": "此处填写的描述会在模型广场展示（选中该分组时）；未填写的模型沿用模型自身描述。",
     "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.": "嵌套 JSON：分组 → { 模型名: 描述 }。选中该分组时在模型广场展示；未配置的模型沿用模型自身描述。",
     "Expected a JSON object mapping groups to model descriptions": "需为「分组 → 模型描述」形式的 JSON 对象",
+    "{{count}} users were skipped because they turned off operational notifications": "{{count}} 位用户已关闭运营通知，未发送邮件",
+    "Filter users who turned off operational notifications": "过滤已关闭运营通知的用户",
+    "Operational Notifications": "运营通知",
+    "Receive product announcements, campaigns and bonus notices by email. System emails such as verification codes and password resets are always sent.": "通过邮件接收产品公告、运营活动与赠金到账等通知。验证码、找回密码等系统邮件不受影响，始终发送。",
+    "Unchecking this sends to everyone, including users who turned off operational notifications.": "取消勾选后会发送给已关闭运营通知的用户。",
     "Zoom": "缩放"
   }
 }
