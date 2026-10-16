@@ -118,6 +118,26 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	return nil
 }
 
+// originalAudioQuotaWithoutActivity recomputes an audio or realtime charge at the
+// ratio this request would have had without its activity-code grant, so the
+// consume log can show the original price struck through. Returns false when no
+// grant applied.
+func originalAudioQuotaWithoutActivity(quotaInfo QuotaInfo, tieredResult *billingexpr.TieredResult) (int, bool) {
+	if quotaInfo.PriceData == nil {
+		return 0, false
+	}
+	originalRatio := quotaInfo.PriceData.GroupRatioInfo.ActivityOriginalRatio
+	if originalRatio == nil {
+		return 0, false
+	}
+	if tieredResult != nil {
+		return common.QuotaRound(tieredResult.ActualQuotaBeforeGroup * *originalRatio), true
+	}
+	quotaInfo.GroupRatio = *originalRatio
+	quota, _ := calculateAudioQuota(quotaInfo)
+	return quota, true
+}
+
 func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelName string,
 	usage *dto.RealtimeUsage, extraContent string) {
 
@@ -205,6 +225,11 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	if tieredResult != nil {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
+	}
+	// A zero-token response is logged as a zero charge because the upstream
+	// returned no billable usage, so there is no discount to show for it.
+	if originalQuota, ok := originalAudioQuotaWithoutActivity(quotaInfo, tieredResult); ok && totalTokens != 0 {
+		appendActivityDiscountInfo(other, relayInfo.PriceData.GroupRatioInfo, quota, originalQuota)
 	}
 	attachQuotaSaturation(ctx, relayInfo, other)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
@@ -330,6 +355,11 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	if tieredResult != nil {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
+	}
+	// A zero-token response is logged as a zero charge because the upstream
+	// returned no billable usage, so there is no discount to show for it.
+	if originalQuota, ok := originalAudioQuotaWithoutActivity(quotaInfo, tieredResult); ok && totalTokens != 0 {
+		appendActivityDiscountInfo(other, relayInfo.PriceData.GroupRatioInfo, quota, originalQuota)
 	}
 	attachQuotaSaturation(ctx, relayInfo, other)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{

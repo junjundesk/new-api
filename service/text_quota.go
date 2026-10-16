@@ -394,6 +394,32 @@ func usageSemanticFromUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) 
 	return "openai"
 }
 
+// originalTextQuotaWithoutActivity recomputes this request's charge with the
+// activity-code discount removed, so the consume log can show the price the user
+// was spared. It returns false when no activity grant applied. The recomputation
+// runs on a copy of relayInfo so that a shadow quota clamp can never be recorded
+// as an audit event of the real request.
+func originalTextQuotaWithoutActivity(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, tieredResult *billingexpr.TieredResult) (int, bool) {
+	originalRatio := relayInfo.PriceData.GroupRatioInfo.ActivityOriginalRatio
+	if originalRatio == nil {
+		return 0, false
+	}
+	shadowInfo := *relayInfo
+	shadowInfo.PriceData = relayInfo.PriceData
+	shadowInfo.PriceData.GroupRatioInfo.GroupRatio = *originalRatio
+	shadow := calculateTextQuotaSummary(ctx, &shadowInfo, usage)
+	if tieredResult == nil {
+		return shadow.Quota, true
+	}
+	// Tiered billing replaces the token-based charge with the expression result
+	// scaled by the group ratio; rebuild that sum exactly like
+	// composeTieredTextQuota does, at the ratio without the grant.
+	quota, _ := common.QuotaFromDecimalChecked(decimal.NewFromFloat(tieredResult.ActualQuotaBeforeGroup).
+		Mul(decimal.NewFromFloat(*originalRatio)).
+		Add(shadow.ToolCallSurchargeQuota))
+	return quota, true
+}
+
 func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []string) {
 	originUsage := usage
 	billingUsage := effectiveBillingUsage(usage)
@@ -520,6 +546,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if tieredBillingApplied {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
+	}
+	if originalQuota, ok := originalTextQuotaWithoutActivity(ctx, relayInfo, billingUsage, tieredResult); ok {
+		appendActivityDiscountInfo(other, relayInfo.PriceData.GroupRatioInfo, summary.Quota, originalQuota)
 	}
 
 	attachQuotaSaturation(ctx, relayInfo, other)

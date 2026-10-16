@@ -136,6 +136,47 @@ describe('log cost display', () => {
     await unmountCost(rendered)
   })
 
+  test('crosses out the price an activity code spared and keeps the actual charge', async () => {
+    const rendered = await renderCost({
+      quota: 0,
+      other: { activity_original_quota: 700, activity_original_ratio: 0.08 },
+    })
+
+    const struck = rendered.container.querySelector(
+      '[data-activity-discount="true"]'
+    )
+    assert.ok(struck)
+    const struckPrice = struck.querySelector('span')
+    assert.ok(struckPrice)
+    assert.equal(struckPrice.classList.contains('line-through'), true)
+    assert.equal(struckPrice.classList.contains('decoration-red-500'), true)
+    const text = normalizedText(rendered.container.textContent)
+    assert.equal(text.includes(normalizedText(formatLogQuota(700))), true)
+    assert.equal(text.includes(normalizedText(formatLogQuota(0))), true)
+
+    await unmountCost(rendered)
+  })
+
+  test('keeps a single price when the activity grant did not lower the charge', async () => {
+    const rendered = await renderCost({
+      quota: 700,
+      other: { activity_original_quota: 700, activity_original_ratio: 0.08 },
+    })
+
+    assert.equal(
+      rendered.container.querySelector('[data-activity-discount="true"]'),
+      null
+    )
+    assert.equal(
+      normalizedText(rendered.container.textContent).includes(
+        normalizedText(formatLogQuota(700))
+      ),
+      true
+    )
+
+    await unmountCost(rendered)
+  })
+
   test('preserves the subscription badge and adds the same legacy surcharge marker', async () => {
     const rendered = await renderCost({
       quota: 5000,

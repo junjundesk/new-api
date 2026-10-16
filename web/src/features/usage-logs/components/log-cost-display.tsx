@@ -28,6 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { OriginalPrice } from '@/features/pricing/components/original-price'
 import { formatLogQuota } from '@/lib/format'
 
 import { hasToolSurcharge } from '../lib/format'
@@ -92,6 +93,36 @@ function QuotaBadge(props: { quota: number }) {
   )
 }
 
+/**
+ * The price this request would have had without its activity-code grant, struck
+ * through in red so the discount stays visible next to the actual charge.
+ */
+function ActivityDiscount(props: { originalQuota: number; ratio: number }) {
+  const { t } = useTranslation()
+  const label = t(
+    'Original price before the activity code discount ({{ratio}}x group ratio)',
+    { ratio: props.ratio }
+  )
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            aria-label={label}
+            data-activity-discount='true'
+            className='cursor-help rounded-sm'
+          >
+            <OriginalPrice value={formatLogQuota(props.originalQuota)} />
+          </span>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function SubscriptionBadge(props: { quota: number }) {
   const { t } = useTranslation()
 
@@ -120,8 +151,12 @@ function SubscriptionBadge(props: { quota: number }) {
 export function LogCostDisplay(props: LogCostDisplayProps) {
   const isSubscription = props.other?.billing_source === 'subscription'
   const showToolSurcharge = hasToolSurcharge(props.other)
+  const activityOriginalQuota = props.other?.activity_original_quota
+  const showActivityDiscount =
+    typeof activityOriginalQuota === 'number' &&
+    activityOriginalQuota > props.quota
 
-  if (!isSubscription && !showToolSurcharge) {
+  if (!isSubscription && !showToolSurcharge && !showActivityDiscount) {
     return (
       <div className='flex flex-col gap-0.5'>
         <QuotaBadge quota={props.quota} />
@@ -131,7 +166,13 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
 
   return (
     <TooltipProvider>
-      <div className='inline-flex items-center gap-1'>
+      <div className='inline-flex flex-wrap items-center gap-1'>
+        {showActivityDiscount ? (
+          <ActivityDiscount
+            originalQuota={activityOriginalQuota}
+            ratio={props.other?.activity_original_ratio ?? 0}
+          />
+        ) : null}
         {isSubscription ? (
           <SubscriptionBadge quota={props.quota} />
         ) : (

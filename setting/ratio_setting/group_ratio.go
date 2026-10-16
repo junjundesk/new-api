@@ -121,6 +121,12 @@ func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides m
 		info.GroupSpecialRatio = value
 		info.HasSpecialRatio = true
 		info.Source = types.GroupRatioSourceActivity
+		// Freeze the price the request would have had without the grant, so the
+		// consume log can show it struck through next to the discounted charge.
+		// Channel-model overrides already lost to the grant above, so they
+		// cannot apply to this fallback either.
+		original := ResolveModelGroupRatio(userGroup, usingGroup, modelName, nil, nil).GroupRatio
+		info.ActivityOriginalRatio = &original
 		return info
 	}
 	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {

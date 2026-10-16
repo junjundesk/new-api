@@ -39,6 +39,10 @@ const NEW_KEYS = {
     en: "Redeem {{name}}",
     zh: "兑换 {{name}}",
   },
+  "Original price before the activity code discount ({{ratio}}x group ratio)": {
+    en: "Original price before the activity code discount ({{ratio}}x group ratio)",
+    zh: "活动码优惠前的原价（{{ratio}}x 分组倍率）",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.
@@ -77,8 +81,9 @@ async function insertMissingKeys(locale) {
   const translationStart = lines.findIndex((line) =>
     /"translation"\s*:\s*\{/.test(line)
   )
-  if (translationStart < 0)
+  if (translationStart < 0) {
     throw new Error('translation object not found in ' + file)
+  }
   let end = lines.length - 1
   for (let i = translationStart + 1; i < lines.length; i += 1) {
     if (/^\s*\}\s*,?\s*$/.test(lines[i])) {
@@ -98,8 +103,9 @@ async function insertMissingKeys(locale) {
           break
         }
       }
-      if (lastKeyLine < 0)
+      if (lastKeyLine < 0) {
         throw new Error('no key lines before the end of translation in ' + file)
+      }
       // The last key line has no trailing comma: insert before it instead.
       lines.splice(
         lastKeyLine,

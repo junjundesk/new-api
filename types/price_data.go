@@ -22,6 +22,11 @@ type GroupRatioInfo struct {
 	HasSpecialRatio   bool
 	Source            string
 	ChannelModelRatio *float64
+	// ActivityOriginalRatio is the ratio this request would have been charged at
+	// if the activity-code grant had not overridden it. Set only when Source is
+	// activity; the consume log shows the charge at this ratio struck through so
+	// the discount stays visible.
+	ActivityOriginalRatio *float64
 }
 
 type PriceData struct {

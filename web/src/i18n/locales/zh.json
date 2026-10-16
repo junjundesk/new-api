@@ -5729,6 +5729,7 @@
     "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": "可包含任意语言的字母、数字、_ 和 -；拉丁字母按小写保存。活动码创建后不可修改。",
     "Limited-time group access granted by an activity code": "活动码授予的限时分组权限",
     "Redeem {{name}}": "兑换 {{name}}",
+    "Original price before the activity code discount ({{ratio}}x group ratio)": "活动码优惠前的原价（{{ratio}}x 分组倍率）",
     "Zoom": "缩放"
   }
 }

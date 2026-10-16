@@ -38,6 +38,21 @@ func TestResolveModelGroupRatioActivityPriority(t *testing.T) {
 		assert.Equal(t, types.GroupRatioSourceActivity, info.Source)
 	})
 
+	t.Run("the price without the grant is frozen for the consume log", func(t *testing.T) {
+		fromMatrix := ResolveModelGroupRatio("member", "activity-group", "billing-model", nil, pointerTo(0))
+		require.NotNil(t, fromMatrix.ActivityOriginalRatio)
+		assert.Equal(t, 0.6, *fromMatrix.ActivityOriginalRatio, "the user group matrix is what the request would have cost")
+
+		fromGroup := ResolveModelGroupRatio("other", "activity-group", "billing-model", nil, pointerTo(0))
+		require.NotNil(t, fromGroup.ActivityOriginalRatio)
+		assert.Equal(t, 1.5, *fromGroup.ActivityOriginalRatio, "without a matrix entry the group's own ratio applies")
+	})
+
+	t.Run("no original price is frozen without an activity ratio", func(t *testing.T) {
+		info := ResolveModelGroupRatio("member", "activity-group", "billing-model", nil, nil)
+		assert.Nil(t, info.ActivityOriginalRatio)
+	})
+
 	t.Run("channel model override still wins over an activity ratio", func(t *testing.T) {
 		channelRatio := 0.05
 		overrides := map[string]*float64{"billing-model": &channelRatio}

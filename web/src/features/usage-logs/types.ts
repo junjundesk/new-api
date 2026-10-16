@@ -192,9 +192,14 @@ export interface LogOtherData {
   completion_ratio?: number
   model_price?: number
   group_ratio?: number
-  billing_ratio_source?: 'channel_model' | 'user_group' | 'group'
+  billing_ratio_source?: 'channel_model' | 'user_group' | 'group' | 'activity'
   channel_model_ratio?: number
   user_group_ratio?: number
+  // Activity-code discount: the charge this request would have had without the
+  // grant, plus the group ratio it was computed at. The cost cell shows that
+  // original amount struck through next to the actual charge.
+  activity_original_quota?: number
+  activity_original_ratio?: number
   cache_ratio?: number
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number

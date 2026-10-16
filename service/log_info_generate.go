@@ -342,6 +342,19 @@ func appendGroupRatioSource(other map[string]interface{}, ratio hosttypes.GroupR
 	adminInfo["billing_model"] = modelName
 }
 
+// appendActivityDiscountInfo records the charge this request would have had if
+// its activity-code grant had not lowered it. The usage log shows that original
+// amount struck through next to the actual charge. Nothing is written when no
+// grant applied, or when the grant did not make the request cheaper (a grant can
+// be worse than the ratio the user already had).
+func appendActivityDiscountInfo(other map[string]interface{}, ratioInfo hosttypes.GroupRatioInfo, actualQuota int, originalQuota int) {
+	if other == nil || ratioInfo.ActivityOriginalRatio == nil || originalQuota <= actualQuota {
+		return
+	}
+	other["activity_original_ratio"] = *ratioInfo.ActivityOriginalRatio
+	other["activity_original_quota"] = originalQuota
+}
+
 func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.PriceData) map[string]interface{} {
 	other := make(map[string]interface{})
 	other["model_price"] = priceData.ModelPrice

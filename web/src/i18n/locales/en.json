@@ -5729,6 +5729,7 @@
     "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.": "Letters (any language), digits, _ and -. Latin letters are saved in lowercase. The code cannot be changed after creation.",
     "Limited-time group access granted by an activity code": "Limited-time group access granted by an activity code",
     "Redeem {{name}}": "Redeem {{name}}",
+    "Original price before the activity code discount ({{ratio}}x group ratio)": "Original price before the activity code discount ({{ratio}}x group ratio)",
     "Zoom": "Zoom"
   }
 }
