@@ -283,6 +283,26 @@ func acceptH2TestConnection(ln net.Listener) (net.Conn, *http2.Framer, error) {
 	return conn, framer, nil
 }
 
+// closeH2TestConnectionGracefully 在后台完成优雅关闭：先半关闭写方向（保证已写出的
+// RST_STREAM/GOAWAY/响应帧先于 FIN 交付客户端），再读掉客户端的剩余帧，最后才真正 Close。
+// 直接 Close 一个还有未读入站数据的 socket 会触发 TCP RST：Windows 上客户端因此只观测到
+// 连接级错误（wsarecv: ... forcibly closed），使重试相关断言随机失败。
+func closeH2TestConnectionGracefully(conn net.Conn) {
+	go func() {
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.CloseWrite()
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		buffer := make([]byte, 512)
+		for {
+			if _, err := conn.Read(buffer); err != nil {
+				break
+			}
+		}
+		_ = conn.Close()
+	}()
+}
+
 func readH2TestRequest(framer *http2.Framer) (uint32, []byte, error) {
 	var streamID uint32
 	var body []byte
@@ -362,12 +382,12 @@ func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2Ser
 			res.err = err
 			return
 		}
-		defer conn.Close()
 
 	attempts:
 		for attempt := 0; ; attempt++ {
 			streamID, body, err := readH2TestRequest(framer)
 			if err != nil {
+				conn.Close()
 				res.err = err
 				return
 			}
@@ -376,6 +396,7 @@ func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2Ser
 
 			if attempt == 0 {
 				if err := framer.WriteRSTStream(streamID, http2.ErrCodeRefusedStream); err != nil {
+					conn.Close()
 					res.err = err
 					return
 				}
@@ -386,10 +407,13 @@ func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2Ser
 			}
 
 			if err := writeH2TestResponse(framer, streamID); err != nil {
+				conn.Close()
 				res.err = err
+				return
 			}
-			return
+			break attempts
 		}
+		closeH2TestConnectionGracefully(conn)
 	}()
 	return resCh
 }
@@ -417,19 +441,23 @@ func runGoAwayAfterFirstRequestServer(ln net.Listener) <-chan h2ServerResult {
 
 			if attempt == 0 {
 				err = framer.WriteGoAway(0, http2.ErrCodeNo, nil)
-				conn.Close()
 				if err != nil {
+					conn.Close()
 					res.err = err
 					return
 				}
+				// 半关闭而不是立即 Close：GOAWAY 必须先于 FIN 送达，客户端才会在新连接上重试。
+				closeH2TestConnectionGracefully(conn)
 				continue
 			}
 
 			err = writeH2TestResponse(framer, streamID)
-			conn.Close()
 			if err != nil {
+				conn.Close()
 				res.err = err
+				return
 			}
+			closeH2TestConnectionGracefully(conn)
 			return
 		}
 	}()
