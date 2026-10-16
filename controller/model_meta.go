@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,9 +10,18 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
+
+// groupModelMember is one model reachable in a group, with its plaza
+// description as configured globally and, when present, for that group.
+type groupModelMember struct {
+	ModelName        string `json:"model_name"`
+	Description      string `json:"description"`
+	GroupDescription string `json:"group_description"`
+}
 
 // GetAllModelsMeta 获取模型列表（分页）
 func GetAllModelsMeta(c *gin.Context) {
@@ -84,6 +94,33 @@ func GetModelMeta(c *gin.Context) {
 	}
 	enrichModels([]*model.Model{&m})
 	common.ApiSuccess(c, &m)
+}
+
+// GetGroupModelMembers lists the models reachable in one group so the group
+// management page can edit the plaza descriptions shown for that group.
+func GetGroupModelMembers(c *gin.Context) {
+	group := strings.TrimSpace(c.Query("group"))
+	if group == "" {
+		common.ApiErrorMsg(c, "缺少分组名称")
+		return
+	}
+
+	descriptions := ratio_setting.GetGroupModelDescriptions(group)
+	members := make([]groupModelMember, 0)
+	for _, pricing := range model.GetPricing() {
+		if !slices.Contains(pricing.EnableGroup, group) {
+			continue
+		}
+		members = append(members, groupModelMember{
+			ModelName:        pricing.ModelName,
+			Description:      pricing.Description,
+			GroupDescription: descriptions[pricing.ModelName],
+		})
+	}
+	slices.SortFunc(members, func(a, b groupModelMember) int {
+		return strings.Compare(a.ModelName, b.ModelName)
+	})
+	common.ApiSuccess(c, members)
 }
 
 // CreateModelMeta 新建模型

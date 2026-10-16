@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ChevronDown,
+  FileText,
   GripVertical,
   Info,
   Plus,
@@ -37,6 +38,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { DataTableRowActionMenu } from '@/components/data-table/core/row-action-menu'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
 import { Dialog } from '@/components/dialog'
@@ -60,6 +62,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -81,6 +87,7 @@ import { renameChannelGroup } from '@/features/channels/api'
 import { channelsQueryKeys } from '@/features/channels/lib/channel-actions'
 
 import { safeJsonParse } from '../utils/json-parser'
+import { GroupModelDescriptionsDialog } from './group-model-descriptions-dialog'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
@@ -90,6 +97,7 @@ type GroupRatioVisualEditorProps = {
   autoGroups: string
   maxTokenAutoGroupsField: ReactNode
   groupSpecialUsableGroup: string
+  groupModelDescriptions: string
   onChange: (field: string, value: string) => void
 }
 
@@ -281,10 +289,12 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   autoGroups,
   maxTokenAutoGroupsField,
   groupSpecialUsableGroup,
+  groupModelDescriptions,
   onChange,
 }: GroupRatioVisualEditorProps) {
   const { t } = useTranslation()
   const [detailGroup, setDetailGroup] = useState<string | null>(null)
+  const [descriptionGroup, setDescriptionGroup] = useState<string | null>(null)
 
   const registry = useMemo<RegistryEntry[]>(() => {
     const ratioMap = parseRatioMap(groupRatio)
@@ -346,6 +356,23 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
     [registryNames, autoGroupsList]
   )
 
+  const handleApplyGroupDescriptions = useCallback(
+    (group: string, descriptions: Record<string, string>) => {
+      const map = safeJsonParse<Record<string, Record<string, string>>>(
+        groupModelDescriptions,
+        { fallback: {}, silent: true }
+      )
+      if (Object.keys(descriptions).length === 0) {
+        delete map[group]
+      } else {
+        map[group] = descriptions
+      }
+      onChange('GroupModelDescriptions', JSON.stringify(map, null, 2))
+      setDescriptionGroup(null)
+    },
+    [groupModelDescriptions, onChange]
+  )
+
   return (
     <div className='space-y-4'>
       <GroupPricingTable
@@ -354,6 +381,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
         topupGroupRatio={topupGroupRatio}
         onChange={onChange}
         onShowDetail={setDetailGroup}
+        onShowDescriptions={setDescriptionGroup}
       />
 
       <GroupOverrideRules
@@ -424,6 +452,15 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
         </CardContent>
       </Card>
 
+      <GroupModelDescriptionsDialog
+        groupName={descriptionGroup}
+        value={groupModelDescriptions}
+        onOpenChange={(open) => {
+          if (!open) setDescriptionGroup(null)
+        }}
+        onApply={handleApplyGroupDescriptions}
+      />
+
       <GroupDetailSheet
         groupName={detailGroup}
         onOpenChange={(open) => {
@@ -446,6 +483,7 @@ type GroupPricingTableProps = {
   topupGroupRatio: string
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
+  onShowDescriptions: (name: string) => void
 }
 
 function GroupPricingTable({
@@ -454,6 +492,7 @@ function GroupPricingTable({
   topupGroupRatio,
   onChange,
   onShowDetail,
+  onShowDescriptions,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -745,24 +784,36 @@ function GroupPricingTable({
                 className: 'text-right',
                 cellClassName: 'text-right',
                 cell: (row) => (
-                  <div className='flex justify-end gap-1'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => onShowDetail(row.name.trim())}
-                      disabled={!row.name.trim()}
-                      aria-label={t('Details')}
-                    >
-                      <Info className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => removeRow(row._id)}
-                      aria-label={t('Delete')}
-                    >
-                      <Trash2 className='h-4 w-4' />
-                    </Button>
+                  <div className='flex justify-end'>
+                    <DataTableRowActionMenu ariaLabel={t('Open menu')}>
+                      <DropdownMenuItem
+                        disabled={!row.name.trim()}
+                        onClick={() => onShowDetail(row.name.trim())}
+                      >
+                        {t('Details')}
+                        <DropdownMenuShortcut>
+                          <Info size={16} />
+                        </DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!row.name.trim()}
+                        onClick={() => onShowDescriptions(row.name.trim())}
+                      >
+                        {t('Model descriptions')}
+                        <DropdownMenuShortcut>
+                          <FileText size={16} />
+                        </DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => removeRow(row._id)}
+                        className='text-destructive focus:text-destructive'
+                      >
+                        {t('Delete')}
+                        <DropdownMenuShortcut>
+                          <Trash2 size={16} />
+                        </DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                    </DataTableRowActionMenu>
                   </div>
                 ),
               },

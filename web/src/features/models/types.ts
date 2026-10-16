@@ -55,6 +55,22 @@ export interface Model {
 }
 
 /**
+ * Group member entry: a model reachable in a group together with the plaza
+ * description configured globally and, when present, for that group.
+ */
+export interface GroupModelMember {
+  model_name: string
+  description: string
+  group_description: string
+}
+
+export interface GroupModelMembersResponse {
+  success: boolean
+  message?: string
+  data: GroupModelMember[]
+}
+
+/**
  * Vendor entity from API
  */
 export interface Vendor {

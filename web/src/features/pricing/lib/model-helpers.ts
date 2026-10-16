@@ -24,6 +24,30 @@ import type { BillingRatio, PricingModel } from '../types'
 // ----------------------------------------------------------------------------
 
 /**
+ * Replace model descriptions with the plaza copy configured for one group.
+ * Returns the original array when no override applies, so callers that already
+ * hold the list keep a stable reference.
+ */
+export function applyGroupDescriptions(
+  models: PricingModel[],
+  descriptions?: Record<string, string>
+): PricingModel[] {
+  if (!descriptions || Object.keys(descriptions).length === 0) {
+    return models
+  }
+  let overridden = false
+  const next = models.map((model) => {
+    const description = descriptions[model.model_name]
+    if (!description || description === model.description) {
+      return model
+    }
+    overridden = true
+    return { ...model, description }
+  })
+  return overridden ? next : models
+}
+
+/**
  * Get available groups for a model
  */
 export function getAvailableGroups(

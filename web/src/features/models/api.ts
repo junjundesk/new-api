@@ -23,6 +23,7 @@ import type {
   GetModelsResponse,
   GetModelResponse,
   GetVendorsResponse,
+  GroupModelMembersResponse,
   GetVendorResponse,
   Model,
   Vendor,
@@ -236,6 +237,16 @@ export async function applyUpstreamOverwrite(params: {
  */
 export async function getMissingModels(): Promise<MissingModelsResponse> {
   const res = await api.get('/api/models/missing')
+  return res.data
+}
+
+/**
+ * List the models reachable in one group together with their plaza descriptions
+ */
+export async function getGroupModelMembers(
+  group: string
+): Promise<GroupModelMembersResponse> {
+  const res = await api.get('/api/models/group_members', { params: { group } })
   return res.data
 }
 

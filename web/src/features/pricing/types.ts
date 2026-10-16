@@ -101,6 +101,8 @@ export type PricingData = {
   data: PricingModel[]
   vendors: PricingVendor[]
   group_ratio: Record<string, number>
+  /** Plaza-only per-group model descriptions: { group: { model: description } } */
+  group_model_descriptions?: Record<string, Record<string, string>>
   usable_group: Record<string, { desc: string; ratio: number }>
   supported_endpoint: Record<string, string>
   auto_groups: string[]

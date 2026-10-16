@@ -117,6 +117,7 @@ describe('group pricing visual editor', () => {
           autoGroups='[]'
           maxTokenAutoGroupsField={null}
           groupSpecialUsableGroup='{}'
+          groupModelDescriptions='{}'
           onChange={(field, value) => {
             changes.push({ field, value })
             if (field === 'GroupRatio') setGroupRatio(value)

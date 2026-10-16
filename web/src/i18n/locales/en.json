@@ -5753,6 +5753,19 @@
     "Usage data is aggregated every {{count}} minutes.": "Usage data is aggregated every {{count}} minutes.",
     "User Consumption Details": "User Consumption Details",
     "Yesterday": "Yesterday",
+    "Group Management": "Group Management",
+    "Save groups": "Save groups",
+    "Model descriptions": "Model descriptions",
+    "Model descriptions: {{group}}": "Model descriptions: {{group}}",
+    "Group model descriptions": "Group model descriptions",
+    "Search model": "Search model",
+    "Not configured": "Not configured",
+    "Loading models...": "Loading models...",
+    "No models in this group yet": "No models in this group yet",
+    "Applies after you save the group settings.": "Applies after you save the group settings.",
+    "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.": "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.",
+    "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.": "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.",
+    "Expected a JSON object mapping groups to model descriptions": "Expected a JSON object mapping groups to model descriptions",
     "Zoom": "Zoom"
   }
 }

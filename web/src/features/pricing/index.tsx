@@ -32,9 +32,10 @@ import {
   ModelCardGrid,
   ModelDetailsDrawer,
 } from './components'
-import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
+import { EXCLUDED_GROUPS, FILTER_ALL, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
+import { applyGroupDescriptions } from './lib/model-helpers'
 
 export function Pricing() {
   const { t } = useTranslation()
@@ -46,6 +47,7 @@ export function Pricing() {
     models,
     vendors,
     groupRatio,
+    groupModelDescriptions,
     usableGroup,
     endpointMap,
     autoGroups,
@@ -87,14 +89,29 @@ export function Pricing() {
     setSelectedModelName(modelName)
   }, [])
 
+  // A group's plaza descriptions only apply while that group is selected; the
+  // all-groups view keeps every model's own description.
+  const selectedGroupDescriptions = useMemo(
+    () =>
+      groupFilter === FILTER_ALL
+        ? undefined
+        : groupModelDescriptions[groupFilter],
+    [groupFilter, groupModelDescriptions]
+  )
+
+  const displayModels = useMemo(
+    () => applyGroupDescriptions(filteredModels, selectedGroupDescriptions),
+    [filteredModels, selectedGroupDescriptions]
+  )
+
   const selectedModel = useMemo(
     () =>
       selectedModelName
-        ? (models || []).find(
+        ? displayModels.find(
             (model) => model.model_name === selectedModelName
           ) || null
         : null,
-    [models, selectedModelName]
+    [displayModels, selectedModelName]
   )
 
   const availableGroups = useMemo(
@@ -111,7 +128,7 @@ export function Pricing() {
   }, [clearFilters, clearSearch])
 
   const renderPricingContent = () => {
-    if (filteredModels.length === 0) {
+    if (displayModels.length === 0) {
       return (
         <EmptyState
           searchQuery={searchInput}
@@ -124,7 +141,7 @@ export function Pricing() {
     if (viewMode === VIEW_MODES.CARD) {
       return (
         <ModelCardGrid
-          models={filteredModels}
+          models={displayModels}
           onModelClick={handleModelClick}
           priceRate={priceRate}
           usdExchangeRate={usdExchangeRate}
@@ -137,7 +154,7 @@ export function Pricing() {
 
     return (
       <PricingTable
-        models={filteredModels}
+        models={displayModels}
         priceRate={priceRate}
         usdExchangeRate={usdExchangeRate}
         tokenUnit={tokenUnit}

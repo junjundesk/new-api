@@ -29,6 +29,27 @@ export function formatJsonForTextarea(value: string) {
   }
 }
 
+type OptionValue = string | number | boolean
+
+/**
+ * Collects the options that differ from the last saved state and maps the form
+ * field names to the option keys the settings API expects.
+ */
+export function collectChangedOptionEntries(
+  current: Record<string, OptionValue>,
+  baseline: Record<string, OptionValue>,
+  apiKeyMap: Record<string, string> = {}
+): Array<{ key: string; value: OptionValue }> {
+  const entries: Array<{ key: string; value: OptionValue }> = []
+  for (const [field, value] of Object.entries(current)) {
+    if (value === baseline[field]) {
+      continue
+    }
+    entries.push({ key: apiKeyMap[field] ?? field, value })
+  }
+  return entries
+}
+
 export function normalizeJsonString(value: string) {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -72,7 +93,7 @@ function extractErrorPosition(
     const lines = jsonString.substring(0, position).split('\n')
     return {
       line: lines.length,
-      column: lines[lines.length - 1].length + 1,
+      column: (lines.at(-1) ?? '').length + 1,
       position,
     }
   }

@@ -28,15 +28,25 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	// Plaza-only, per-group model descriptions. Only groups the caller can see
+	// are exposed so a private group's copy never leaks through this endpoint.
+	groupModelDescriptions := make(map[string]map[string]string)
+	for usingGroup := range usableGroup {
+		if descriptions := ratio_setting.GetGroupModelDescriptions(usingGroup); len(descriptions) > 0 {
+			groupModelDescriptions[usingGroup] = descriptions
+		}
+	}
+
 	c.JSON(200, gin.H{
-		"success":            true,
-		"data":               pricing,
-		"vendors":            model.GetVendors(),
-		"group_ratio":        groupRatio,
-		"usable_group":       usableGroup,
-		"supported_endpoint": model.GetSupportedEndpointMap(),
-		"auto_groups":        service.GetUserAutoGroup(group),
-		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
+		"success":                  true,
+		"data":                     pricing,
+		"vendors":                  model.GetVendors(),
+		"group_ratio":              groupRatio,
+		"usable_group":             usableGroup,
+		"group_model_descriptions": groupModelDescriptions,
+		"supported_endpoint":       model.GetSupportedEndpointMap(),
+		"auto_groups":              service.GetUserAutoGroup(group),
+		"pricing_version":          "a42d372ccf0b5dd13ecf71203521f9d2",
 	})
 }
 

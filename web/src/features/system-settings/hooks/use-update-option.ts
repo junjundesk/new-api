@@ -23,8 +23,11 @@ import { toast } from 'sonner'
 import { updateSystemOption } from '../api'
 import type { UpdateOptionRequest } from '../types'
 
+export const SETTING_UPDATED_MESSAGE = 'Setting updated successfully'
+export const SETTING_UPDATE_FAILED_MESSAGE = 'Failed to update setting'
+
 // Configuration keys that require status refresh
-const STATUS_RELATED_KEYS = new Set([
+export const STATUS_RELATED_KEYS = new Set([
   'HeaderNavModules',
   'SidebarModulesAdmin',
   'Notice',
@@ -59,13 +62,13 @@ export function useUpdateOption() {
           }
         }
 
-        toast.success(i18next.t('Setting updated successfully'))
+        toast.success(i18next.t(SETTING_UPDATED_MESSAGE))
       } else {
-        toast.error(data.message || i18next.t('Failed to update setting'))
+        toast.error(data.message || i18next.t(SETTING_UPDATE_FAILED_MESSAGE))
       }
     },
     onError: (error: Error) => {
-      toast.error(error.message || i18next.t('Failed to update setting'))
+      toast.error(error.message || i18next.t(SETTING_UPDATE_FAILED_MESSAGE))
     },
   })
 }

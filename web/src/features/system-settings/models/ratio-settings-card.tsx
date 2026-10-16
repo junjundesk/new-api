@@ -30,13 +30,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { resetModelRatios } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
-import { useUpdateOption } from '../hooks/use-update-option'
+import { useSaveOptions } from '../hooks/use-save-options'
 import { positiveIntegerSchema } from '../utils/numeric-field'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
 import { UpstreamRatioSync } from './upstream-ratio-sync'
 import {
+  collectChangedOptionEntries,
   formatJsonForTextarea,
   type JsonValidationError,
   normalizeJsonString,
@@ -119,6 +120,23 @@ const createModelSchema = (t: Translate) =>
     BillingExpr: createJsonStringField(t),
   })
 
+// The group model description option is a nested map:
+// {"<group>": {"<model name>": "<description>"}}.
+function isGroupModelDescriptionsMap(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  return Object.values(value).every(
+    (entries) =>
+      typeof entries === 'object' &&
+      entries !== null &&
+      !Array.isArray(entries) &&
+      Object.values(entries).every(
+        (description) => typeof description === 'string'
+      )
+  )
+}
+
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
@@ -134,6 +152,11 @@ const createGroupSchema = (t: Translate) =>
     MaxTokenAutoGroups: positiveIntegerSchema(t('Enter a positive integer')),
     DefaultUseAutoGroup: z.boolean(),
     GroupSpecialUsableGroup: createJsonStringField(t),
+    GroupModelDescriptions: createJsonStringField(t, {
+      predicate: isGroupModelDescriptionsMap,
+      predicateMessage:
+        'Expected a JSON object mapping groups to model descriptions',
+    }),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -161,7 +184,7 @@ export function RatioSettingsCard({
   visibleTabs = ['models', 'groups', 'tool-prices', 'upstream-sync'],
 }: RatioSettingsCardProps) {
   const { t } = useTranslation()
-  const updateOption = useUpdateOption()
+  const { saveOptions, isSaving } = useSaveOptions()
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -211,6 +234,9 @@ export function RatioSettingsCard({
     GroupSpecialUsableGroup: normalizeJsonString(
       groupDefaults.GroupSpecialUsableGroup
     ),
+    GroupModelDescriptions: normalizeJsonString(
+      groupDefaults.GroupModelDescriptions
+    ),
   })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
@@ -247,6 +273,9 @@ export function RatioSettingsCard({
       AutoGroups: formatJsonForTextarea(groupDefaults.AutoGroups),
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
+      ),
+      GroupModelDescriptions: formatJsonForTextarea(
+        groupDefaults.GroupModelDescriptions
       ),
     },
   })
@@ -298,6 +327,9 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: normalizeJsonString(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      GroupModelDescriptions: normalizeJsonString(
+        groupDefaults.GroupModelDescriptions
+      ),
     }
 
     groupForm.reset({
@@ -309,6 +341,9 @@ export function RatioSettingsCard({
       AutoGroups: formatJsonForTextarea(groupDefaults.AutoGroups),
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
+      ),
+      GroupModelDescriptions: formatJsonForTextarea(
+        groupDefaults.GroupModelDescriptions
       ),
     })
   }, [groupDefaults, groupForm])
@@ -334,26 +369,18 @@ export function RatioSettingsCard({
         BillingExpr: 'billing_setting.billing_expr',
       }
 
-      const updates = (
-        Object.keys(normalized) as Array<keyof ModelFormValues>
-      ).filter(
-        (key) => normalized[key] !== modelNormalizedDefaults.current[key]
+      const updates = collectChangedOptionEntries(
+        normalized,
+        modelNormalizedDefaults.current,
+        apiKeyMap
       )
 
-      if (updates.length === 0) {
-        toast.info(t('No model price changes to save'))
-        return
+      if (await saveOptions(updates)) {
+        modelNormalizedDefaults.current = normalized
+        setSavedModelValues(normalized)
       }
-
-      for (const key of updates) {
-        const apiKey = apiKeyMap[key as string] || (key as string)
-        await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
-      }
-
-      modelNormalizedDefaults.current = normalized
-      setSavedModelValues(normalized)
     },
-    [t, updateOption]
+    [saveOptions]
   )
 
   const saveGroupRatios = useCallback(
@@ -369,28 +396,31 @@ export function RatioSettingsCard({
         GroupSpecialUsableGroup: normalizeJsonString(
           values.GroupSpecialUsableGroup
         ),
+        GroupModelDescriptions: normalizeJsonString(
+          values.GroupModelDescriptions
+        ),
       }
 
-      // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
+      // Map form field names to API keys (most are 1:1, except the
+      // group_ratio_setting.* options)
       const apiKeyMap: Record<string, string> = {
         GroupSpecialUsableGroup:
           'group_ratio_setting.group_special_usable_group',
+        GroupModelDescriptions:
+          'group_ratio_setting.group_model_descriptions',
       }
 
-      const updates = (
-        Object.keys(normalized) as Array<keyof typeof normalized>
-      ).filter(
-        (key) => normalized[key] !== groupNormalizedDefaults.current[key]
+      const updates = collectChangedOptionEntries(
+        normalized,
+        groupNormalizedDefaults.current,
+        apiKeyMap
       )
 
-      for (const key of updates) {
-        const apiKey = apiKeyMap[key] || key
-        await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
+      if (await saveOptions(updates)) {
+        groupNormalizedDefaults.current = normalized
       }
-
-      groupNormalizedDefaults.current = normalized
     },
-    [updateOption]
+    [saveOptions]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -427,7 +457,7 @@ export function RatioSettingsCard({
           savedValues={savedModelValues}
           onSave={saveModelRatios}
           onReset={handleResetRatios}
-          isSaving={updateOption.isPending}
+          isSaving={isSaving}
           isResetting={resetMutation.isPending}
           variant={tab === 'unset-models' ? 'unset' : 'default'}
         />
@@ -438,7 +468,7 @@ export function RatioSettingsCard({
         <GroupRatioForm
           form={groupForm}
           onSave={saveGroupRatios}
-          isSaving={updateOption.isPending}
+          isSaving={isSaving}
         />
       )
     }

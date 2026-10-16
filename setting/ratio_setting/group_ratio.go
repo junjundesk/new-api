@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -29,10 +30,20 @@ var groupGroupRatioMap = types.NewRWMap[string, map[string]float64]()
 
 var defaultGroupSpecialUsableGroup = map[string]map[string]string{}
 
+var groupModelDescriptions = types.NewRWMap[string, map[string]string]()
+
+const (
+	maxGroupModelDescriptionLength = 1000
+	maxGroupModelDescriptionsSize  = 512 * 1024
+)
+
 type GroupRatioSetting struct {
 	GroupRatio              *types.RWMap[string, float64]            `json:"group_ratio"`
 	GroupGroupRatio         *types.RWMap[string, map[string]float64] `json:"group_group_ratio"`
 	GroupSpecialUsableGroup *types.RWMap[string, map[string]string]  `json:"group_special_usable_group"`
+	// GroupModelDescriptions stores plaza-only model descriptions per group:
+	// {"<group>": {"<model name>": "<description>"}}. It never affects billing.
+	GroupModelDescriptions *types.RWMap[string, map[string]string] `json:"group_model_descriptions"`
 }
 
 var groupRatioSetting GroupRatioSetting
@@ -48,6 +59,7 @@ func init() {
 		GroupSpecialUsableGroup: groupSpecialUsableGroup,
 		GroupRatio:              groupRatioMap,
 		GroupGroupRatio:         groupGroupRatioMap,
+		GroupModelDescriptions:  groupModelDescriptions,
 	}
 
 	config.GlobalConfig.Register("group_ratio_setting", &groupRatioSetting)
@@ -58,7 +70,57 @@ func GetGroupRatioSetting() *GroupRatioSetting {
 		groupRatioSetting.GroupSpecialUsableGroup = types.NewRWMap[string, map[string]string]()
 		groupRatioSetting.GroupSpecialUsableGroup.AddAll(defaultGroupSpecialUsableGroup)
 	}
+	if groupRatioSetting.GroupModelDescriptions == nil {
+		groupRatioSetting.GroupModelDescriptions = groupModelDescriptions
+	}
 	return &groupRatioSetting
+}
+
+// GetGroupModelDescriptions returns a copy of the model descriptions configured
+// for one group in the model plaza. Blank model names and descriptions are
+// treated as not configured.
+func GetGroupModelDescriptions(group string) map[string]string {
+	descriptions, ok := groupModelDescriptions.Get(group)
+	if !ok {
+		return nil
+	}
+	copied := make(map[string]string, len(descriptions))
+	for modelName, description := range descriptions {
+		if strings.TrimSpace(modelName) == "" || strings.TrimSpace(description) == "" {
+			continue
+		}
+		copied[modelName] = description
+	}
+	if len(copied) == 0 {
+		return nil
+	}
+	return copied
+}
+
+// CheckGroupModelDescriptions validates the option value shape:
+// {"<group>": {"<model name>": "<description>"}}.
+func CheckGroupModelDescriptions(jsonStr string) error {
+	if len(jsonStr) > maxGroupModelDescriptionsSize {
+		return errors.New("分组模型描述内容过大")
+	}
+	descriptions := make(map[string]map[string]string)
+	if err := common.UnmarshalJsonStr(jsonStr, &descriptions); err != nil {
+		return errors.New("分组模型描述必须是 {\"分组\": {\"模型\": \"描述\"}} 形式的 JSON 对象")
+	}
+	for group, entries := range descriptions {
+		if strings.TrimSpace(group) == "" {
+			return errors.New("分组名称不能为空")
+		}
+		for modelName, description := range entries {
+			if strings.TrimSpace(modelName) == "" {
+				return errors.New("模型名称不能为空: " + group)
+			}
+			if len(description) > maxGroupModelDescriptionLength {
+				return errors.New("模型描述过长（最多 1000 字符）: " + group + " / " + modelName)
+			}
+		}
+	}
+	return nil
 }
 
 func GetGroupRatioCopy() map[string]float64 {

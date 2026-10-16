@@ -5753,6 +5753,19 @@
     "Usage data is aggregated every {{count}} minutes.": "用量数据每 {{count}} 分钟聚合一次。",
     "User Consumption Details": "用户消费明细",
     "Yesterday": "昨天",
+    "Group Management": "分组管理",
+    "Save groups": "保存分组",
+    "Model descriptions": "模型描述",
+    "Model descriptions: {{group}}": "模型描述：{{group}}",
+    "Group model descriptions": "分组模型描述",
+    "Search model": "搜索模型",
+    "Not configured": "未配置",
+    "Loading models...": "正在加载模型…",
+    "No models in this group yet": "该分组下暂无模型",
+    "Applies after you save the group settings.": "点击下方「保存分组」后生效。",
+    "Descriptions here are shown in the model plaza when this group is selected; models without one keep their own description.": "此处填写的描述会在模型广场展示（选中该分组时）；未填写的模型沿用模型自身描述。",
+    "Nested JSON: group → { modelName: description }. Shown in the model plaza when that group is selected; models without an entry keep their own description.": "嵌套 JSON：分组 → { 模型名: 描述 }。选中该分组时在模型广场展示；未配置的模型沿用模型自身描述。",
+    "Expected a JSON object mapping groups to model descriptions": "需为「分组 → 模型描述」形式的 JSON 对象",
     "Zoom": "缩放"
   }
 }
