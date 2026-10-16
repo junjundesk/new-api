@@ -79,6 +79,19 @@ export function formatQuota(quota: number): string {
 }
 
 /**
+ * Format a "model -> ratio" override map as a readable list, e.g.
+ * `gpt-5: 0, o3: 0.5`. Returns an empty string when nothing is listed, so
+ * callers can decide how to describe the inherited case themselves.
+ */
+export function formatModelRatioOverrides(
+  overrides: Record<string, number> | null | undefined
+): string {
+  return Object.entries(overrides ?? {})
+    .map(([model, ratio]) => `${model}: ${ratio}`)
+    .join(', ')
+}
+
+/**
  * Parse quota from the current display input back to quota units.
  */
 export function parseQuotaFromDollars(amount: number): number {

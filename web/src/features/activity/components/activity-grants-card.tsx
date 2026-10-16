@@ -23,11 +23,10 @@ import { useTranslation } from 'react-i18next'
 import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
-import { formatQuota } from '@/lib/format'
+import { formatModelRatioOverrides, formatQuota } from '@/lib/format'
 
 import { getActivityGrants } from '../api'
 import {
-  describeActivityModelScope,
   describeActivityRatio,
   describeExpireTime,
 } from '../lib/activity-format'
@@ -79,36 +78,46 @@ export function ActivityGrantsCard() {
             {t('No activity grants yet.')}
           </p>
         )}
-        {grants.map((grant) => (
-          <div
-            key={grant.id}
-            className='flex items-center justify-between gap-3 rounded-lg border p-3'
-          >
-            <div className='min-w-0 space-y-1'>
-              <div className='flex items-center gap-2'>
-                <span className='text-sm font-medium'>{grant.group_name}</span>
-                <StatusBadge
-                  label={t(grantStatusLabelKey(grant.status))}
-                  variant={grant.status === 'active' ? 'success' : 'neutral'}
-                  copyable={false}
-                />
+        {grants.map((grant) => {
+          // 指定模型时直接列出具体模型 ID 与倍率；未指定模型则不加多余信息。
+          const listedModels = formatModelRatioOverrides(
+            grant.model_ratio_overrides
+          )
+          const summary = [
+            grant.code_name || grant.code,
+            describeActivityRatio(t, grant.ratio_mode, grant.ratio_override),
+            listedModels ? `${t('Models (ratio)')}: ${listedModels}` : '',
+            `${t('Expires at')}: ${describeExpireTime(t, grant.expire_time)}`,
+            grant.price_quota > 0
+              ? `${t('Paid')}: ${formatQuota(grant.price_quota)}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+
+          return (
+            <div
+              key={grant.id}
+              className='flex items-center justify-between gap-3 rounded-lg border p-3'
+            >
+              <div className='min-w-0 space-y-1'>
+                <div className='flex items-center gap-2'>
+                  <span className='text-sm font-medium'>
+                    {grant.group_name}
+                  </span>
+                  <StatusBadge
+                    label={t(grantStatusLabelKey(grant.status))}
+                    variant={grant.status === 'active' ? 'success' : 'neutral'}
+                    copyable={false}
+                  />
+                </div>
+                <p className='text-muted-foreground text-xs break-all'>
+                  {summary}
+                </p>
               </div>
-              <p className='text-muted-foreground text-xs'>
-                {grant.code_name || grant.code} ·{' '}
-                {describeActivityRatio(
-                  t,
-                  grant.ratio_mode,
-                  grant.ratio_override
-                )}{' '}
-                · {describeActivityModelScope(t, grant.model_ratio_overrides)} ·{' '}
-                {t('Expires at')}: {describeExpireTime(t, grant.expire_time)}
-                {grant.price_quota > 0
-                  ? ` · ${t('Paid')}: ${formatQuota(grant.price_quota)}`
-                  : ''}
-              </p>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </CardContent>
     </Card>
   )

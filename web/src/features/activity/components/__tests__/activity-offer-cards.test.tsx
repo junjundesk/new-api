@@ -82,6 +82,8 @@ await i18n.use(initReactI18next).init({
         'Redeem {{name}}': 'Redeem {{name}}',
         'Limited-time group access granted by an activity code':
           'Limited-time group access granted by an activity code',
+        'Models (ratio)': 'Models (ratio)',
+        'All models in the group': 'All models in the group',
       },
     },
   },
@@ -211,6 +213,31 @@ test('renders one card per offer showing price, group, validity, ratio, rpm and 
   assert.ok(
     paidText.includes('Remaining: 3'),
     'limited remaining redemptions must render'
+  )
+})
+
+// 回归：指定模型的活动码必须展示具体模型 ID 与倍率，而不是只给「N 个模型」。
+test('lists the concrete model ids of a selected-models activity code', async () => {
+  storeModule.useSystemConfigStore.getState().setConfig({
+    currency: { ...storeModule.DEFAULT_CURRENCY_CONFIG },
+  })
+  await renderCards([
+    offerFixture({
+      code_id: 31,
+      name: 'Models Group',
+      group_desc: '指定模型分组',
+      ratio_mode: 'inherit',
+      model_ratio_overrides: { 'gpt-5': 0, o3: 0.5 },
+    }),
+  ])
+
+  const text = renderedCards()[0]?.textContent ?? ''
+  assert.ok(text.includes('Models (ratio)'), 'the model scope label must render')
+  assert.ok(text.includes('gpt-5: 0'), 'the concrete model id must render')
+  assert.ok(text.includes('o3: 0.5'), 'every listed model must show its ratio')
+  assert.ok(
+    !text.includes('specified models'),
+    'the count-only copy must not be the model scope anymore'
   )
 })
 

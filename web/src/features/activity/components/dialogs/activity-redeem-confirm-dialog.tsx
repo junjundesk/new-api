@@ -65,7 +65,7 @@ export function ActivityRedeemConfirmDialog({
       value: describeActivityRatio(t, preview.ratio_mode, preview.ratio_override),
     },
     {
-      label: t('Models'),
+      label: t('Models (ratio)'),
       value: describeActivityModelScope(t, preview.model_ratio_overrides),
     },
     {
@@ -98,10 +98,17 @@ export function ActivityRedeemConfirmDialog({
           {rows.map((row) => (
             <div
               key={row.label}
-              className='flex items-center justify-between gap-4 text-sm'
+              className='flex items-start justify-between gap-4 text-sm'
             >
-              <span className='text-muted-foreground'>{row.label}</span>
-              <span className='font-medium'>{row.value}</span>
+              <span className='text-muted-foreground shrink-0'>
+                {row.label}
+              </span>
+              <span
+                className='min-w-0 text-right font-medium break-all'
+                title={row.value}
+              >
+                {row.value}
+              </span>
             </div>
           ))}
           <p className='text-muted-foreground text-xs'>

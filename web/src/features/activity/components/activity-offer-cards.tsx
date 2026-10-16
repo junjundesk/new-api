@@ -54,6 +54,10 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
       className='grid grid-cols-1 gap-3 sm:grid-cols-2'
     >
       {props.offers.map((offer) => {
+        const modelScope = describeActivityModelScope(
+          t,
+          offer.model_ratio_overrides
+        )
         const details = [
           {
             label: t('Group'),
@@ -70,10 +74,6 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
               offer.ratio_mode,
               offer.ratio_override
             ),
-          },
-          {
-            label: t('Models'),
-            value: describeActivityModelScope(t, offer.model_ratio_overrides),
           },
           {
             label: t('RPM limit'),
@@ -108,6 +108,16 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                   <p className='truncate text-xs font-medium'>{detail.value}</p>
                 </div>
               ))}
+              {/* 指定模型时直接列出具体模型 ID 与倍率：整行展示且允许换行，
+                  不用 truncate 截断模型名。 */}
+              <div className='col-span-2 min-w-0'>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Models (ratio)')}
+                </p>
+                <p className='text-xs font-medium break-all' title={modelScope}>
+                  {modelScope}
+                </p>
+              </div>
             </CardContent>
             <CardFooter className='mt-auto justify-between gap-2'>
               <span className='text-muted-foreground text-xs'>

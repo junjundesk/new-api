@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 
+import { formatModelRatioOverrides } from '@/lib/format'
+
 // ============================================================================
 // Activity display helpers
 // ============================================================================
@@ -47,14 +49,15 @@ export function describeActivityRatio(
   return `${ratioOverride}x`
 }
 
-// 「指定模型」类型：列表内模型按各自倍率计费，未列出的模型按原价。
+// 「指定模型」类型：直接列出具体模型与倍率（例如 "gpt-5: 0, o3: 0.5"），
+// 只有在未指定模型时才回落到「分组全部模型」。
 export function describeActivityModelScope(
   t: TFunction,
   modelRatioOverrides: Record<string, number> | null | undefined
 ): string {
-  const count = Object.keys(modelRatioOverrides ?? {}).length
-  if (count === 0) return t('All models in the group')
-  return t('{{count}} specified models', { count })
+  const listed = formatModelRatioOverrides(modelRatioOverrides)
+  if (!listed) return t('All models in the group')
+  return listed
 }
 
 export function describeExpireTime(
