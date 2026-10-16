@@ -5741,6 +5741,18 @@
     "Registered account {{username}}": "注册账号 {{username}}",
     "Updated API key {{name}}": "修改密钥 {{name}}",
     "User Logs": "用户日志",
+    "Active Users": "活跃用户",
+    "Consumption by user, group and model for the selected time range.": "所选时间范围内，各用户在各分组、各模型上的消费明细。",
+    "Filter by model": "按模型筛选",
+    "Last 30 Days": "最近 30 天",
+    "Last 7 Days": "最近 7 天",
+    "No consumption in this range": "该时间段内无消费数据",
+    "Only the top {{count}} rows by cost are shown. Narrow the time range for complete data.": "仅显示消费最高的 {{count}} 条记录，请缩小时间范围以查看完整数据。",
+    "Total Requests": "总请求数",
+    "Usage data collection is disabled; enable data export to collect this data.": "用量采集已关闭，请在系统设置中开启数据导出后再查看。",
+    "Usage data is aggregated every {{count}} minutes.": "用量数据每 {{count}} 分钟聚合一次。",
+    "User Consumption Details": "用户消费明细",
+    "Yesterday": "昨天",
     "Zoom": "缩放"
   }
 }

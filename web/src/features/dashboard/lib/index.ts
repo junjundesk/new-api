@@ -25,7 +25,20 @@ export {
   getSavedChartPreferences,
   saveChartPreferences,
   buildDefaultDashboardFilters,
+  getSavedBreakdownFilters,
+  saveBreakdownFilters,
 } from './filters'
+export {
+  BREAKDOWN_EMPTY_FILTER_VALUE,
+  resolveBreakdownTimeRange,
+  summarizeBreakdownRows,
+  buildBreakdownFilterOptions,
+  filterBreakdownRows,
+  breakdownShare,
+  type BreakdownFilterOption,
+  type BreakdownFilterOptions,
+  type BreakdownSummary,
+} from './breakdown'
 export {
   getLatencyColorClass,
   testUrlLatency,

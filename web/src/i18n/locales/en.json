@@ -5741,6 +5741,18 @@
     "Registered account {{username}}": "Registered account {{username}}",
     "Updated API key {{name}}": "Updated API key {{name}}",
     "User Logs": "User Logs",
+    "Active Users": "Active Users",
+    "Consumption by user, group and model for the selected time range.": "Consumption by user, group and model for the selected time range.",
+    "Filter by model": "Filter by model",
+    "Last 30 Days": "Last 30 Days",
+    "Last 7 Days": "Last 7 Days",
+    "No consumption in this range": "No consumption in this range",
+    "Only the top {{count}} rows by cost are shown. Narrow the time range for complete data.": "Only the top {{count}} rows by cost are shown. Narrow the time range for complete data.",
+    "Total Requests": "Total Requests",
+    "Usage data collection is disabled; enable data export to collect this data.": "Usage data collection is disabled; enable data export to collect this data.",
+    "Usage data is aggregated every {{count}} minutes.": "Usage data is aggregated every {{count}} minutes.",
+    "User Consumption Details": "User Consumption Details",
+    "Yesterday": "Yesterday",
     "Zoom": "Zoom"
   }
 }

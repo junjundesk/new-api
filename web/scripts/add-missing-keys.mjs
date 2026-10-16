@@ -27,6 +27,54 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const LOCALES = ['en', 'zh']
 
 const NEW_KEYS = {
+  "Yesterday": {
+    en: "Yesterday",
+    zh: "昨天",
+  },
+  "Last 7 Days": {
+    en: "Last 7 Days",
+    zh: "最近 7 天",
+  },
+  "Last 30 Days": {
+    en: "Last 30 Days",
+    zh: "最近 30 天",
+  },
+  "User Consumption Details": {
+    en: "User Consumption Details",
+    zh: "用户消费明细",
+  },
+  "Consumption by user, group and model for the selected time range.": {
+    en: "Consumption by user, group and model for the selected time range.",
+    zh: "所选时间范围内，各用户在各分组、各模型上的消费明细。",
+  },
+  "Total Requests": {
+    en: "Total Requests",
+    zh: "总请求数",
+  },
+  "Active Users": {
+    en: "Active Users",
+    zh: "活跃用户",
+  },
+  "Filter by model": {
+    en: "Filter by model",
+    zh: "按模型筛选",
+  },
+  "No consumption in this range": {
+    en: "No consumption in this range",
+    zh: "该时间段内无消费数据",
+  },
+  "Only the top {{count}} rows by cost are shown. Narrow the time range for complete data.": {
+    en: "Only the top {{count}} rows by cost are shown. Narrow the time range for complete data.",
+    zh: "仅显示消费最高的 {{count}} 条记录，请缩小时间范围以查看完整数据。",
+  },
+  "Usage data collection is disabled; enable data export to collect this data.": {
+    en: "Usage data collection is disabled; enable data export to collect this data.",
+    zh: "用量采集已关闭，请在系统设置中开启数据导出后再查看。",
+  },
+  "Usage data is aggregated every {{count}} minutes.": {
+    en: "Usage data is aggregated every {{count}} minutes.",
+    zh: "用量数据每 {{count}} 分钟聚合一次。",
+  },
   "Remaining": {
     en: "Remaining",
     zh: "剩余",

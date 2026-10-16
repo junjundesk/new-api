@@ -42,8 +42,10 @@ import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
   getDefaultDays,
+  getSavedBreakdownFilters,
   getSavedChartPreferences,
   getSavedGranularity,
+  saveBreakdownFilters,
   saveChartPreferences,
 } from './lib'
 import {
@@ -52,6 +54,7 @@ import {
   DASHBOARD_SECTION_IDS,
 } from './section-registry'
 import type {
+  BreakdownFilters,
   DashboardChartPreferences,
   DashboardFilters,
   QuotaDataItem,
@@ -98,6 +101,12 @@ const LazyConsumptionDistributionChart = lazy(() =>
 const LazyPerformanceOverview = lazy(() =>
   import('./components/models/performance-overview').then((m) => ({
     default: m.PerformanceOverview,
+  }))
+)
+
+const LazyUserConsumptionBreakdown = lazy(() =>
+  import('./components/models/user-consumption-breakdown').then((m) => ({
+    default: m.UserConsumptionBreakdown,
   }))
 )
 
@@ -148,6 +157,21 @@ function ModelChartsFallback() {
       </div>
       <div className='h-96 p-2'>
         <Skeleton className='h-full w-full' />
+      </div>
+    </div>
+  )
+}
+
+function BreakdownFallback() {
+  return (
+    <div className='overflow-hidden rounded-lg border'>
+      <div className='flex items-center justify-between border-b px-4 py-3 sm:px-5'>
+        <Skeleton className='h-5 w-48' />
+        <Skeleton className='h-8 w-72' />
+      </div>
+      <div className='space-y-2 p-4 sm:p-5'>
+        <Skeleton className='h-10 w-full' />
+        <Skeleton className='h-40 w-full' />
       </div>
     </div>
   )
@@ -216,6 +240,9 @@ export function Dashboard() {
       }
     }
   )
+  const [breakdownFilters, setBreakdownFilters] = useState<BreakdownFilters>(
+    () => getSavedBreakdownFilters()
+  )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
@@ -230,6 +257,14 @@ export function Dashboard() {
     (data: QuotaDataItem[], loading: boolean) => {
       setModelData(data)
       setDataLoading(loading)
+    },
+    []
+  )
+
+  const handleBreakdownFiltersChange = useCallback(
+    (filters: BreakdownFilters) => {
+      setBreakdownFilters(filters)
+      saveBreakdownFilters(filters)
     },
     []
   )
@@ -355,14 +390,22 @@ export function Dashboard() {
                   />
                 </Suspense>
               </FadeIn>
+              <FadeIn delay={0.05}>
+                <Suspense fallback={<BreakdownFallback />}>
+                  <LazyUserConsumptionBreakdown
+                    filters={breakdownFilters}
+                    onFiltersChange={handleBreakdownFiltersChange}
+                  />
+                </Suspense>
+              </FadeIn>
               {isAdmin && (
-                <FadeIn delay={0.05}>
+                <FadeIn delay={0.1}>
                   <Suspense fallback={<PerformanceOverviewFallback />}>
                     <LazyPerformanceOverview />
                   </Suspense>
                 </FadeIn>
               )}
-              <FadeIn delay={0.1}>
+              <FadeIn delay={0.15}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart
                     data={modelData}
@@ -376,7 +419,7 @@ export function Dashboard() {
                   />
                 </Suspense>
               </FadeIn>
-              <FadeIn delay={0.15}>
+              <FadeIn delay={0.2}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyModelCharts
                     data={modelData}

@@ -22,6 +22,7 @@ import type {
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
+  UserQuotaBreakdownData,
 } from './types'
 
 // ============================================================================
@@ -61,6 +62,26 @@ export async function getUserQuotaDataByUsers(params: {
 }) {
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     '/api/data/users',
+    { params }
+  )
+  return res.data
+}
+
+// Get per-user, per-group and per-model consumption for a time range.
+// Admin users see every user's rows; everyone else is scoped server-side to
+// their own account.
+export async function getUserQuotaBreakdown(
+  params: {
+    start_timestamp: number
+    end_timestamp: number
+  },
+  isAdmin = false
+) {
+  const endpoint = isAdmin
+    ? '/api/data/user-breakdown'
+    : '/api/data/user-breakdown/self'
+  const res = await api.get<{ success: boolean; data: UserQuotaBreakdownData }>(
+    endpoint,
     { params }
   )
   return res.data

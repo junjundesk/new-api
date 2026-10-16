@@ -33,6 +33,28 @@ export interface QuotaDataItem {
   quota?: number
 }
 
+// One aggregated line of the user x group x model consumption breakdown.
+export interface UserQuotaBreakdownRow {
+  user_id: number
+  username: string
+  use_group: string
+  model_name: string
+  count: number
+  quota: number
+  token_used: number
+}
+
+export interface UserQuotaBreakdownData {
+  rows: UserQuotaBreakdownRow[]
+  // True when the server capped the row count, so the client must not claim
+  // the totals are complete.
+  truncated: boolean
+  // Reflects the server's DataExportEnabled switch; when false the
+  // pre-aggregated table the panel reads from stays empty.
+  data_export_enabled: boolean
+  data_export_interval_minutes: number
+}
+
 export interface FlowQuotaDataItem {
   user_id?: number
   username?: string
@@ -189,6 +211,23 @@ export interface DashboardFilters {
   end_timestamp?: Date
   time_granularity?: TimeGranularity
   username?: string
+}
+
+export type BreakdownTimePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last7'
+  | 'last30'
+  | 'all'
+
+// The consumption breakdown keeps its own range instead of sharing the chart
+// filters, so "all time" can never drag the charts to a full-table scan.
+export interface BreakdownFilters {
+  preset: BreakdownTimePreset
+  username: string
+  use_group: string
+  model_name: string
+  query: string
 }
 
 export type ConsumptionDistributionChartType = 'bar' | 'area'

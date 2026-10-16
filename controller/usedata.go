@@ -129,3 +129,72 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 	})
 	return
 }
+
+// parseBreakdownTimeRange reads the dashboard breakdown time range. Unlike
+// parseFlowQuotaTimeRange, a zero or missing bound is allowed and means "no
+// bound on that side", which is how the dashboard requests "all time".
+func parseBreakdownTimeRange(c *gin.Context) (int64, int64, bool) {
+	startTimestamp, err := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	if err != nil {
+		startTimestamp = 0
+	}
+	endTimestamp, err := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	if err != nil {
+		endTimestamp = 0
+	}
+	if startTimestamp < 0 || endTimestamp < 0 {
+		common.ApiErrorMsg(c, "invalid time range")
+		return 0, 0, false
+	}
+	if startTimestamp > 0 && endTimestamp > 0 && endTimestamp < startTimestamp {
+		common.ApiErrorMsg(c, "invalid time range")
+		return 0, 0, false
+	}
+	return startTimestamp, endTimestamp, true
+}
+
+// GetUserQuotaBreakdown returns how much every user spent per group and model.
+// The optional username parameter only ever narrows the admin view.
+func GetUserQuotaBreakdown(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseBreakdownTimeRange(c)
+	if !ok {
+		return
+	}
+	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, c.Query("username"), 0, c.GetInt("role"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"rows":                         result.Rows,
+			"truncated":                    result.Truncated,
+			"data_export_enabled":          common.DataExportEnabled,
+			"data_export_interval_minutes": common.DataExportInterval,
+		},
+	})
+}
+
+func GetUserQuotaBreakdownSelf(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseBreakdownTimeRange(c)
+	if !ok {
+		return
+	}
+	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, "", c.GetInt("id"), common.RoleCommonUser)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"rows":                         result.Rows,
+			"truncated":                    result.Truncated,
+			"data_export_enabled":          common.DataExportEnabled,
+			"data_export_interval_minutes": common.DataExportInterval,
+		},
+	})
+}

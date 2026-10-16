@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { DashboardChartPreferences, DashboardFilters } from './types'
+import type {
+  BreakdownFilters,
+  DashboardChartPreferences,
+  DashboardFilters,
+} from './types'
 
 export const TIME_GRANULARITY_STORAGE_KEY = 'data_export_default_time'
 export const DASHBOARD_CHART_PREFERENCES_STORAGE_KEY =
@@ -60,6 +64,28 @@ export const MODEL_ANALYTICS_CHART_OPTIONS = [
   { value: 'proportion', labelKey: 'Call Count Distribution' },
   { value: 'top', labelKey: 'Call Count Ranking' },
 ] as const
+
+export const BREAKDOWN_FILTERS_STORAGE_KEY =
+  'dashboard_models_breakdown_filters'
+
+// The breakdown presets intentionally differ from TIME_RANGE_PRESETS: admins
+// ask for calendar days ("today", "yesterday") and for an unbounded range,
+// neither of which the chart presets offer.
+export const BREAKDOWN_TIME_PRESETS = [
+  { value: 'today', labelKey: 'Today' },
+  { value: 'yesterday', labelKey: 'Yesterday' },
+  { value: 'last7', labelKey: 'Last 7 Days' },
+  { value: 'last30', labelKey: 'Last 30 Days' },
+  { value: 'all', labelKey: 'All-time' },
+] as const
+
+export const DEFAULT_BREAKDOWN_FILTERS: BreakdownFilters = {
+  preset: 'today',
+  username: '',
+  use_group: '',
+  model_name: '',
+  query: '',
+}
 
 export const EMPTY_DASHBOARD_FILTERS: DashboardFilters = {
   start_timestamp: undefined,

@@ -17,7 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  BREAKDOWN_FILTERS_STORAGE_KEY,
+  BREAKDOWN_TIME_PRESETS,
   DASHBOARD_CHART_PREFERENCES_STORAGE_KEY,
+  DEFAULT_BREAKDOWN_FILTERS,
   DEFAULT_DASHBOARD_CHART_PREFERENCES,
   DEFAULT_TIME_GRANULARITY,
   EMPTY_DASHBOARD_FILTERS,
@@ -26,6 +29,8 @@ import {
   TIME_RANGE_BY_GRANULARITY,
 } from '@/features/dashboard/constants'
 import type {
+  BreakdownFilters,
+  BreakdownTimePreset,
   ConsumptionDistributionChartType,
   DashboardChartPreferences,
   DashboardFilters,
@@ -132,6 +137,46 @@ export function saveChartPreferences(
   localStorage.setItem(
     DASHBOARD_CHART_PREFERENCES_STORAGE_KEY,
     JSON.stringify(preferences)
+  )
+}
+
+function isBreakdownTimePreset(value: unknown): value is BreakdownTimePreset {
+  return BREAKDOWN_TIME_PRESETS.some((preset) => preset.value === value)
+}
+
+// The breakdown panel keeps its own range on purpose: "all time" is only safe
+// for its pre-aggregated table, never for the charts.
+export function getSavedBreakdownFilters(): BreakdownFilters {
+  if (typeof window === 'undefined') return DEFAULT_BREAKDOWN_FILTERS
+
+  try {
+    const raw = localStorage.getItem(BREAKDOWN_FILTERS_STORAGE_KEY)
+    if (!raw) return DEFAULT_BREAKDOWN_FILTERS
+
+    const parsed = JSON.parse(raw) as Partial<BreakdownFilters>
+    const readText = (value: unknown) =>
+      typeof value === 'string' ? value : ''
+
+    return {
+      preset: isBreakdownTimePreset(parsed.preset)
+        ? parsed.preset
+        : DEFAULT_BREAKDOWN_FILTERS.preset,
+      username: readText(parsed.username),
+      use_group: readText(parsed.use_group),
+      model_name: readText(parsed.model_name),
+      // The free-text search is transient and never restored.
+      query: '',
+    }
+  } catch {
+    return DEFAULT_BREAKDOWN_FILTERS
+  }
+}
+
+export function saveBreakdownFilters(filters: BreakdownFilters): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(
+    BREAKDOWN_FILTERS_STORAGE_KEY,
+    JSON.stringify({ ...filters, query: '' })
   )
 }
 
