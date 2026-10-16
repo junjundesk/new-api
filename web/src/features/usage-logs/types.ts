@@ -337,6 +337,11 @@ export interface GetLogsParams {
   p?: number
   page_size?: number
   type?: number
+  /**
+   * 后端日志分组：使用日志固定传 'usage'（消费/错误/退款/未知），
+   * 账户与操作类日志由「用户日志」页传 'account'。
+   */
+  log_group?: string
   username?: string
   token_name?: string
   model_name?: string

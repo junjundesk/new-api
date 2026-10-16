@@ -37,7 +37,7 @@ func TestGetUserLogsHidesSupersededAttempts(t *testing.T) {
 	userId := 930001
 	seedSupersededAttemptLogs(t, userId, 0)
 
-	logs, total, err := GetUserLogs(userId, LogTypeUnknown, 0, 0, "", "", 0, 20, "", "", "", false)
+	logs, total, err := GetUserLogs(userId, LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", false)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	require.Len(t, logs, 2)
@@ -53,7 +53,7 @@ func TestGetUserLogsKeepsSupersededAttemptsForAdmin(t *testing.T) {
 	userId := 930002
 	seedSupersededAttemptLogs(t, userId, 0)
 
-	logs, total, err := GetUserLogs(userId, LogTypeUnknown, 0, 0, "", "", 0, 20, "", "", "", true)
+	logs, total, err := GetUserLogs(userId, LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", true)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), total)
 	require.Len(t, logs, 3)

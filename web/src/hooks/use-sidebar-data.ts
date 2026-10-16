@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Gauge,
   Gift,
+  History,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -97,6 +98,11 @@ export function useSidebarData(): SidebarData {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,
+          },
+          {
+            title: t('User Logs'),
+            url: '/user-logs',
+            icon: History,
           },
           {
             title: t('Task Logs'),

@@ -92,23 +92,9 @@ function timestampToSeconds(ms: number): number {
   return Math.floor(ms / 1000)
 }
 
-/**
- * Build query parameters from filters
- */
-export function buildQueryParams(
-  params: Record<string, unknown>
-): URLSearchParams {
-  const queryParams = new URLSearchParams()
-
-  Object.entries(params).forEach(([key, value]) => {
-    // Keep 0 as a valid value, only filter out undefined, null, and empty string
-    if (value !== undefined && value !== null && value !== '') {
-      queryParams.append(key, String(value))
-    }
-  })
-
-  return queryParams
-}
+// buildQueryParams 定义在叶子模块 query-params.ts 中：api.ts 与 utils.ts 都需要它，
+// 放在任一侧都会让 api.ts ↔ lib/utils.ts 形成循环依赖。
+export { buildQueryParams } from './query-params'
 
 /**
  * Build time range parameters with default values
@@ -196,10 +182,12 @@ export function buildApiParams(config: {
     return undefined
   }
 
-  // Build base params from search params
+  // Build base params from search params. The common usage-log page only ever
+  // queries the usage group; account activity lives on the user-logs page.
   const params: GetLogsParams = {
     p: page,
     page_size: pageSize,
+    log_group: 'usage',
     ...(searchParams.type ? { type: processType(searchParams.type) } : {}),
     ...(searchParams.model ? { model_name: String(searchParams.model) } : {}),
     ...(searchParams.token ? { token_name: String(searchParams.token) } : {}),

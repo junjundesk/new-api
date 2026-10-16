@@ -43,6 +43,62 @@ const NEW_KEYS = {
     en: "Original price before the activity code discount ({{ratio}}x group ratio)",
     zh: "活动码优惠前的原价（{{ratio}}x 分组倍率）",
   },
+  "User Logs": {
+    en: "User Logs",
+    zh: "用户日志",
+  },
+  "Content": {
+    en: "Content",
+    zh: "内容",
+  },
+  "IP Address": {
+    en: "IP Address",
+    zh: "IP 地址",
+  },
+  "Type": {
+    en: "Type",
+    zh: "类型",
+  },
+  "No user logs yet": {
+    en: "No user logs yet",
+    zh: "暂无用户日志",
+  },
+  "Account activity such as sign-in, registration, API keys and top-ups appears here.": {
+    en: "Account activity such as sign-in, registration, API keys and top-ups appears here.",
+    zh: "登录、注册、密钥、充值等账户操作记录会显示在这里。",
+  },
+  "Filter by username...": {
+    en: "Filter by username...",
+    zh: "按用户名筛选…",
+  },
+  "Created API key {{name}}": {
+    en: "Created API key {{name}}",
+    zh: "新建密钥 {{name}}",
+  },
+  "Updated API key {{name}}": {
+    en: "Updated API key {{name}}",
+    zh: "修改密钥 {{name}}",
+  },
+  "Deleted API key {{name}} (ID: {{id}})": {
+    en: "Deleted API key {{name}} (ID: {{id}})",
+    zh: "删除密钥 {{name}}（ID: {{id}}）",
+  },
+  "Deleted {{count}} API keys": {
+    en: "Deleted {{count}} API keys",
+    zh: "批量删除 {{count}} 个密钥",
+  },
+  "Enabled API key {{name}}": {
+    en: "Enabled API key {{name}}",
+    zh: "启用密钥 {{name}}",
+  },
+  "Disabled API key {{name}}": {
+    en: "Disabled API key {{name}}",
+    zh: "停用密钥 {{name}}",
+  },
+  "Registered account {{username}}": {
+    en: "Registered account {{username}}",
+    zh: "注册账号 {{username}}",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.

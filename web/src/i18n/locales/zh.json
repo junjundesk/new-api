@@ -5730,6 +5730,17 @@
     "Limited-time group access granted by an activity code": "活动码授予的限时分组权限",
     "Redeem {{name}}": "兑换 {{name}}",
     "Original price before the activity code discount ({{ratio}}x group ratio)": "活动码优惠前的原价（{{ratio}}x 分组倍率）",
+    "Account activity such as sign-in, registration, API keys and top-ups appears here.": "登录、注册、密钥、充值等账户操作记录会显示在这里。",
+    "Created API key {{name}}": "新建密钥 {{name}}",
+    "Deleted {{count}} API keys": "批量删除 {{count}} 个密钥",
+    "Deleted API key {{name}} (ID: {{id}})": "删除密钥 {{name}}（ID: {{id}}）",
+    "Disabled API key {{name}}": "停用密钥 {{name}}",
+    "Enabled API key {{name}}": "启用密钥 {{name}}",
+    "Filter by username...": "按用户名筛选…",
+    "No user logs yet": "暂无用户日志",
+    "Registered account {{username}}": "注册账号 {{username}}",
+    "Updated API key {{name}}": "修改密钥 {{name}}",
+    "User Logs": "用户日志",
     "Zoom": "缩放"
   }
 }

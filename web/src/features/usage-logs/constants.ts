@@ -101,18 +101,23 @@ export const LOG_TYPES = [
 ] as const
 
 /**
- * Log types for DataTableToolbar filters (single select mode)
+ * 使用日志（common）的类型筛选：只保留消耗与异常类。
+ * 充值(1)/管理(3)/系统(4)/登录(7) 属于账户与操作类日志，已移到「用户日志」页
+ * （见 features/user-logs/constants.ts）。
  * Backend treats type=0 as "all logs" in list/stat endpoints, so the filter
  * must not expose the display-only "Unknown" label for that value.
  */
 export const LOG_TYPE_FILTERS = [
   { label: 'All Types', value: LOG_TYPE_ALL_VALUE },
-  ...LOG_TYPES.filter((type) => type.value !== LOG_TYPE_ENUM.UNKNOWN).map(
-    (type) => ({
-      label: type.label,
-      value: String(type.value),
-    })
-  ),
+  ...LOG_TYPES.filter(
+    (type) =>
+      type.value === LOG_TYPE_ENUM.CONSUME ||
+      type.value === LOG_TYPE_ENUM.ERROR ||
+      type.value === LOG_TYPE_ENUM.REFUND
+  ).map((type) => ({
+    label: type.label,
+    value: String(type.value),
+  })),
 ] as const
 
 // ============================================================================

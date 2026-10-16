@@ -88,13 +88,13 @@ func TestProcessChannelErrorMarksSupersededAttemptsAdminOnly(t *testing.T) {
 	assert.Equal(t, 12, rows[1].ChannelId)
 
 	// 用户侧查询只能看到最终失败；管理员侧两条都在。
-	userLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, 0, 0, "", "", 0, 20, "", "", "", false)
+	userLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", false)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, userLogs, 1)
 	assert.Equal(t, 12, userLogs[0].ChannelId)
 
-	adminLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, 0, 0, "", "", 0, 20, "", "", "", true)
+	adminLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", true)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, adminLogs, 2)

@@ -542,6 +542,10 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	recordUserSecurityAudit(c, cleanToken.UserId, "token.create", map[string]interface{}{
+		"id":   cleanToken.Id,
+		"name": cleanToken.Name,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -551,11 +555,19 @@ func AddToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
-	err := model.DeleteTokenById(id, userId)
+	token, err := model.GetTokenByIds(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.DeleteTokenById(id, userId); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordUserSecurityAudit(c, userId, "token.delete", map[string]interface{}{
+		"id":   token.Id,
+		"name": token.Name,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -661,6 +673,19 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	tokenParams := map[string]interface{}{"id": cleanToken.Id, "name": cleanToken.Name}
+	switch {
+	case groupOnly != "":
+		// 分组切换只是路由偏好，不作为账户事件记录，避免刷屏。
+	case statusOnly != "":
+		action := "token.disable"
+		if cleanToken.Status == common.TokenStatusEnabled {
+			action = "token.enable"
+		}
+		recordUserSecurityAudit(c, userId, action, tokenParams)
+	default:
+		recordUserSecurityAudit(c, userId, "token.update", tokenParams)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -684,6 +709,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	recordUserSecurityAudit(c, userId, "token.delete_batch", map[string]interface{}{"count": count})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

@@ -5730,6 +5730,17 @@
     "Limited-time group access granted by an activity code": "Limited-time group access granted by an activity code",
     "Redeem {{name}}": "Redeem {{name}}",
     "Original price before the activity code discount ({{ratio}}x group ratio)": "Original price before the activity code discount ({{ratio}}x group ratio)",
+    "Account activity such as sign-in, registration, API keys and top-ups appears here.": "Account activity such as sign-in, registration, API keys and top-ups appears here.",
+    "Created API key {{name}}": "Created API key {{name}}",
+    "Deleted {{count}} API keys": "Deleted {{count}} API keys",
+    "Deleted API key {{name}} (ID: {{id}})": "Deleted API key {{name}} (ID: {{id}})",
+    "Disabled API key {{name}}": "Disabled API key {{name}}",
+    "Enabled API key {{name}}": "Enabled API key {{name}}",
+    "Filter by username...": "Filter by username...",
+    "No user logs yet": "No user logs yet",
+    "Registered account {{username}}": "Registered account {{username}}",
+    "Updated API key {{name}}": "Updated API key {{name}}",
+    "User Logs": "User Logs",
     "Zoom": "Zoom"
   }
 }

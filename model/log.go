@@ -249,11 +249,11 @@ func buildOpField(action string, params map[string]interface{}) map[string]inter
 	return op
 }
 
-// RecordLoginLog 记录用户登录成功的审计日志（type=LogTypeLogin）。
-// username 由调用方传入（登录流程已持有用户对象），避免额外的数据库查询。
+// RecordAccountLog 记录用户本人的账户事件（登录、注册等）功能日志。
+// username 由调用方传入（流程已持有用户对象），避免额外的数据库查询。
 // content 为英文兜底文本（用于导出）；action+params 供前端本地化渲染。
 // extra 可携带 login_method、user_agent 等附加信息（普通用户可见）。
-func RecordLoginLog(userId int, username string, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
+func RecordAccountLog(userId int, username string, logType int, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
 	other := map[string]interface{}{}
 	for k, v := range extra {
 		other[k] = v
@@ -263,14 +263,19 @@ func RecordLoginLog(userId int, username string, content string, ip string, acti
 		UserId:    userId,
 		Username:  username,
 		CreatedAt: common.GetTimestamp(),
-		Type:      LogTypeLogin,
+		Type:      logType,
 		Content:   content,
 		Ip:        ip,
 		Other:     common.MapToJsonStr(other),
 	}
 	if err := createLog(log); err != nil {
-		common.SysLog("failed to record login log: " + err.Error())
+		common.SysLog("failed to record account log: " + err.Error())
 	}
+}
+
+// RecordLoginLog 记录用户登录成功的审计日志（type=LogTypeLogin）。
+func RecordLoginLog(userId int, username string, content string, ip string, action string, params map[string]interface{}, extra map[string]interface{}) {
+	RecordAccountLog(userId, username, LogTypeLogin, content, ip, action, params, extra)
 }
 
 // RecordOperationAuditLog 记录管理/高危操作审计日志（type=LogTypeManage）。
@@ -556,13 +561,34 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
-	var tx *gorm.DB
-	if logType == LogTypeUnknown {
-		tx = LOG_DB
-	} else {
-		tx = LOG_DB.Where("logs.type = ?", logType)
+// 日志分组把 logs 表按“记录的是什么”分成两类，供两个页面各自查询：
+// usage   使用日志：消耗与异常（消费 / 错误 / 退款 / 未知）
+// account 用户日志：账户与操作（充值 / 管理 / 系统 / 登录）
+const (
+	LogGroupUsage   = "usage"
+	LogGroupAccount = "account"
+)
+
+var logGroupTypes = map[string][]int{
+	LogGroupUsage:   {LogTypeUnknown, LogTypeConsume, LogTypeError, LogTypeRefund},
+	LogGroupAccount: {LogTypeTopup, LogTypeManage, LogTypeSystem, LogTypeLogin},
+}
+
+// applyLogGroupFilter 把查询限定在某个日志分组内。分组与显式 type 同时生效（取交集）：
+// 分组决定这个页面能看到哪些类型的日志，显式 type 只在该分组内进一步收窄，
+// 因此带旧链接（如使用日志页 ?type=7）也不会串出另一组的记录。
+func applyLogGroupFilter(tx *gorm.DB, logType int, logGroup string) *gorm.DB {
+	if types, ok := logGroupTypes[logGroup]; ok {
+		tx = tx.Where("logs.type IN ?", types)
 	}
+	if logType != LogTypeUnknown {
+		tx = tx.Where("logs.type = ?", logType)
+	}
+	return tx
+}
+
+func GetAllLogs(logType int, logGroup string, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+	tx := applyLogGroupFilter(LOG_DB, logType, logGroup)
 
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
 		return nil, 0, err
@@ -652,13 +678,8 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, includeAdminInfo bool) (logs []*Log, total int64, err error) {
-	var tx *gorm.DB
-	if logType == LogTypeUnknown {
-		tx = LOG_DB.Where("logs.user_id = ?", userId)
-	} else {
-		tx = LOG_DB.Where("logs.user_id = ? and logs.type = ?", userId, logType)
-	}
+func GetUserLogs(userId int, logType int, logGroup string, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, includeAdminInfo bool) (logs []*Log, total int64, err error) {
+	tx := applyLogGroupFilter(LOG_DB.Where("logs.user_id = ?", userId), logType, logGroup)
 	if !includeAdminInfo {
 		tx = applyUserVisibleLogFilter(tx)
 	}

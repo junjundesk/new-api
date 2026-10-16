@@ -33,6 +33,15 @@ var auditContentTemplates = map[string]string{
 	"user.email_send":     "Sent email ${subject} to ${sent}/${targeted} recipients (failed: ${failed}, skipped: ${skipped})",
 	"user.email_send_all": "Sent email ${subject} to all users (targeted: ${targeted}, skipped: ${skipped})",
 
+	"user.register": "Registered account ${username}",
+
+	"token.create":       "Created API key ${name}",
+	"token.update":       "Updated API key ${name}",
+	"token.delete":       "Deleted API key ${name} (ID: ${id})",
+	"token.delete_batch": "Deleted ${count} API keys",
+	"token.enable":       "Enabled API key ${name}",
+	"token.disable":      "Disabled API key ${name}",
+
 	"channel.create":             "Created channel ${name} (type ${type}, count ${count})",
 	"channel.update":             "Updated channel ${name} (ID: ${id})",
 	"channel.delete":             "Deleted channel ${name} (ID: ${id})",

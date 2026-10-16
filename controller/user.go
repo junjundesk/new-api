@@ -149,6 +149,15 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 	}, extra)
 }
 
+// recordRegisterAudit 记录注册成功功能日志（账户事件，归属新用户本人，普通用户可见）。
+func recordRegisterAudit(user *model.User, c *gin.Context) {
+	if user == nil || user.Id <= 0 {
+		return
+	}
+	params := map[string]interface{}{"username": user.Username}
+	model.RecordAccountLog(user.Id, user.Username, model.LogTypeSystem, auditContentEN("user.register", params), common.RequestClientIP(c), "user.register", params, nil)
+}
+
 // setupLogin creates a server-controlled login Session and returns the shared
 // authentication bundle used by every login method.
 func setupLogin(user *model.User, c *gin.Context) {
@@ -321,6 +330,8 @@ func Register(c *gin.Context) {
 			return
 		}
 	}
+
+	recordRegisterAudit(&insertedUser, c)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
