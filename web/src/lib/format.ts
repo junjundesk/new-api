@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { TFunction } from 'i18next'
+
 import dayjs from '@/lib/dayjs'
 
 import {
@@ -80,14 +82,19 @@ export function formatQuota(quota: number): string {
 
 /**
  * Format a "model -> ratio" override map as a readable list, e.g.
- * `gpt-5: 0, o3: 0.5`. Returns an empty string when nothing is listed, so
- * callers can decide how to describe the inherited case themselves.
+ * `gpt-5: 0.1x, o3: Free`. A zero ratio is rendered with the free label
+ * because "0x" reads like a multiplier of zero rather than "free of charge".
+ * Returns an empty string when nothing is listed, so callers can describe the
+ * inherited case themselves.
  */
 export function formatModelRatioOverrides(
+  t: TFunction,
   overrides: Record<string, number> | null | undefined
 ): string {
   return Object.entries(overrides ?? {})
-    .map(([model, ratio]) => `${model}: ${ratio}`)
+    .map(
+      ([model, ratio]) => `${model}: ${ratio === 0 ? t('Free') : `${ratio}x`}`
+    )
     .join(', ')
 }
 

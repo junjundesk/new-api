@@ -214,6 +214,29 @@ test('renders one card per offer showing price, group, validity, ratio, rpm and 
     paidText.includes('Remaining: 3'),
     'limited remaining redemptions must render'
   )
+
+  // 回归：付费金额必须与兑换按钮放在一起（页脚），而不是缩在标题右上角。
+  const freeFooter = cards[0]?.querySelector('[data-slot="card-footer"]')
+  const paidFooter = cards[1]?.querySelector('[data-slot="card-footer"]')
+  const paidHeader = cards[1]?.querySelector('[data-slot="card-header"]')
+  assert.ok(freeFooter, 'offer card footer must render')
+  assert.ok(paidFooter, 'paid offer card footer must render')
+  assert.ok(
+    freeFooter.textContent?.includes('Free'),
+    'the free label must sit in the footer next to the redeem action'
+  )
+  assert.ok(
+    paidFooter.textContent?.includes('$1'),
+    'the paid amount must sit in the footer next to the redeem action'
+  )
+  assert.ok(
+    paidFooter.querySelector('button[aria-label="Redeem Paid Group"]'),
+    'the price and the redeem button must share the footer'
+  )
+  assert.ok(
+    !paidHeader?.textContent?.includes('$1'),
+    'the paid amount must not stay in the card header corner'
+  )
 })
 
 // 回归：指定模型的活动码必须展示具体模型 ID 与倍率，而不是只给「N 个模型」。
@@ -233,8 +256,14 @@ test('lists the concrete model ids of a selected-models activity code', async ()
 
   const text = renderedCards()[0]?.textContent ?? ''
   assert.ok(text.includes('Models (ratio)'), 'the model scope label must render')
-  assert.ok(text.includes('gpt-5: 0'), 'the concrete model id must render')
-  assert.ok(text.includes('o3: 0.5'), 'every listed model must show its ratio')
+  assert.ok(
+    text.includes('gpt-5: Free'),
+    'a zero ratio must read as free instead of 0x'
+  )
+  assert.ok(
+    text.includes('o3: 0.5x'),
+    'a non-zero ratio must render as the multiplier suffix'
+  )
   assert.ok(
     !text.includes('specified models'),
     'the count-only copy must not be the model scope anymore'

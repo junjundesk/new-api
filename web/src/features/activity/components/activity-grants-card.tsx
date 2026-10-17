@@ -81,6 +81,7 @@ export function ActivityGrantsCard() {
         {grants.map((grant) => {
           // 指定模型时直接列出具体模型 ID 与倍率；未指定模型则不加多余信息。
           const listedModels = formatModelRatioOverrides(
+            t,
             grant.model_ratio_overrides
           )
           const summary = [

@@ -22,7 +22,11 @@ import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import {
+  formatModelRatioOverrides,
+  formatQuota,
+  formatTimestampToDate,
+} from '@/lib/format'
 
 import { ACTIVITY_CODE_STATUS, ACTIVITY_RATIO_MODE } from '../constants'
 import type { ActivityCode } from '../types'
@@ -120,23 +124,19 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
       id: 'ratio',
       header: t('Ratio'),
       cell: ({ row }) => {
-        // 「指定模型」类型下展示命中的模型数量，具体倍率放在 title 里，避免撑爆单元格。
-        const modelOverrides = Object.entries(
-          row.original.model_ratio_overrides ?? {}
+        // 「指定模型」类型直接展示模型 ID 与倍率（如 gpt-5: 0.1x、o3: 免费）；
+        // 超出列宽时截断，完整内容放 title。
+        const listedOverrides = formatModelRatioOverrides(
+          t,
+          row.original.model_ratio_overrides
         )
-        if (modelOverrides.length > 0) {
-          const listed = modelOverrides
-            .slice(0, 5)
-            .map(([model, ratio]) => `${model}=${ratio}`)
-            .join(', ')
+        if (listedOverrides) {
           return (
-            <span title={modelOverrides.length > 5 ? `${listed} …` : listed}>
-              <StatusBadge
-                label={t('{{count}} models', { count: modelOverrides.length })}
-                variant='info'
-                copyable={false}
-                className='-ml-1.5'
-              />
+            <span
+              className='block max-w-[16rem] truncate font-mono text-xs'
+              title={listedOverrides}
+            >
+              {listedOverrides}
             </span>
           )
         }
@@ -155,7 +155,7 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
         }
         return <span>{row.original.ratio_override}x</span>
       },
-      size: 110,
+      size: 200,
     },
     {
       id: 'rpm_limit',

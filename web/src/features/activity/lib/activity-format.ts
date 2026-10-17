@@ -55,7 +55,7 @@ export function describeActivityModelScope(
   t: TFunction,
   modelRatioOverrides: Record<string, number> | null | undefined
 ): string {
-  const listed = formatModelRatioOverrides(modelRatioOverrides)
+  const listed = formatModelRatioOverrides(t, modelRatioOverrides)
   if (!listed) return t('All models in the group')
   return listed
 }

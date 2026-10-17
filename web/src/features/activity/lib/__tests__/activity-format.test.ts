@@ -28,6 +28,7 @@ await i18n.init({
     en: {
       translation: {
         'All models in the group': 'All models in the group',
+        Free: 'Free',
       },
     },
   },
@@ -49,10 +50,10 @@ describe('describeActivityModelScope', () => {
 
   it('lists the concrete model ids with their own ratios', () => {
     expect(describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 0 })).toBe(
-      'gpt-5: 0'
+      'gpt-5: Free'
     )
     expect(
       describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 0, o3: 0.5 })
-    ).toBe('gpt-5: 0, o3: 0.5')
+    ).toBe('gpt-5: Free, o3: 0.5x')
   })
 })

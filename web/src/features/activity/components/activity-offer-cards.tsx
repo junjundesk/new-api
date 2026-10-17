@@ -85,16 +85,8 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
         return (
           <Card key={offer.code_id} size='sm' className='h-full'>
             <CardHeader>
-              <CardTitle className='flex items-start justify-between gap-2'>
-                <span className='truncate'>{offer.name || offer.code}</span>
-                <Badge
-                  variant={offer.price_quota > 0 ? 'secondary' : 'default'}
-                  className='shrink-0'
-                >
-                  {offer.price_quota > 0
-                    ? formatQuota(offer.price_quota)
-                    : t('Free')}
-                </Badge>
+              <CardTitle className='truncate'>
+                {offer.name || offer.code}
               </CardTitle>
               <CardDescription className='line-clamp-2'>
                 {offer.description ||
@@ -119,6 +111,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                 </p>
               </div>
             </CardContent>
+            {/* 价格紧贴兑换按钮：放在卡片右上角太容易被忽略，付费码需要在下单前看到金额。 */}
             <CardFooter className='mt-auto justify-between gap-2'>
               <span className='text-muted-foreground text-xs'>
                 {t('Remaining')}:{' '}
@@ -126,16 +119,26 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                   ? offer.remaining_total
                   : t('Unlimited')}
               </span>
-              <Button
-                size='sm'
-                disabled={props.disabled}
-                aria-label={t('Redeem {{name}}', {
-                  name: offer.name || offer.code,
-                })}
-                onClick={() => props.onRedeem(offer)}
-              >
-                {t('Redeem')}
-              </Button>
+              <div className='flex shrink-0 items-center gap-2'>
+                <Badge
+                  variant={offer.price_quota > 0 ? 'warning' : 'default'}
+                  className='h-6 px-2.5 text-sm font-semibold'
+                >
+                  {offer.price_quota > 0
+                    ? formatQuota(offer.price_quota)
+                    : t('Free')}
+                </Badge>
+                <Button
+                  size='sm'
+                  disabled={props.disabled}
+                  aria-label={t('Redeem {{name}}', {
+                    name: offer.name || offer.code,
+                  })}
+                  onClick={() => props.onRedeem(offer)}
+                >
+                  {t('Redeem')}
+                </Button>
+              </div>
             </CardFooter>
           </Card>
         )
