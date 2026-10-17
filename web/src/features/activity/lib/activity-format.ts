@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 
-import { formatModelRatioOverrides } from '@/lib/format'
+import { formatModelRatioOverrides, formatRatioMultiplier } from '@/lib/format'
 
 // ============================================================================
 // Activity display helpers
@@ -46,7 +46,7 @@ export function describeActivityRatio(
 ): string {
   if (ratioMode !== 'override') return t('Group default ratio')
   if (ratioOverride === 0) return t('Fully free')
-  return `${ratioOverride}x`
+  return `${formatRatioMultiplier(ratioOverride)}x`
 }
 
 // 「指定模型」类型：直接列出具体模型与倍率（例如 "gpt-5: 0, o3: 0.5"），

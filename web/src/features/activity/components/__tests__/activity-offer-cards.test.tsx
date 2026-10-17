@@ -84,6 +84,8 @@ await i18n.use(initReactI18next).init({
           'Limited-time group access granted by an activity code',
         'Models (ratio)': 'Models (ratio)',
         'All models in the group': 'All models in the group',
+        'Free of charge': 'Free of charge',
+        '{{ratio}}x ratio': '{{ratio}}x ratio',
       },
     },
   },
@@ -257,12 +259,12 @@ test('lists the concrete model ids of a selected-models activity code', async ()
   const text = renderedCards()[0]?.textContent ?? ''
   assert.ok(text.includes('Models (ratio)'), 'the model scope label must render')
   assert.ok(
-    text.includes('gpt-5: Free'),
+    text.includes('gpt-5: Free of charge'),
     'a zero ratio must read as free instead of 0x'
   )
   assert.ok(
-    text.includes('o3: 0.5x'),
-    'a non-zero ratio must render as the multiplier suffix'
+    text.includes('o3: 0.5x ratio'),
+    'a non-zero ratio must render as the multiplier with its unit'
   )
   assert.ok(
     !text.includes('specified models'),

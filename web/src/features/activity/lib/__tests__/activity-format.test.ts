@@ -28,7 +28,24 @@ await i18n.init({
     en: {
       translation: {
         'All models in the group': 'All models in the group',
-        Free: 'Free',
+        'Free of charge': 'Free of charge',
+        '{{ratio}}x ratio': '{{ratio}}x ratio',
+      },
+    },
+  },
+  interpolation: { escapeValue: false },
+})
+
+// 中文文案单独用一份资源，用来钉住用户可见的最终展示结果。
+const zhI18n = createInstance()
+await zhI18n.init({
+  lng: 'zh',
+  resources: {
+    zh: {
+      translation: {
+        'All models in the group': '分组内全部模型',
+        'Free of charge': '免费',
+        '{{ratio}}x ratio': '{{ratio}}x倍率',
       },
     },
   },
@@ -50,10 +67,28 @@ describe('describeActivityModelScope', () => {
 
   it('lists the concrete model ids with their own ratios', () => {
     expect(describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 0 })).toBe(
-      'gpt-5: Free'
+      'gpt-5: Free of charge'
     )
     expect(
       describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 0, o3: 0.5 })
-    ).toBe('gpt-5: Free, o3: 0.5x')
+    ).toBe('gpt-5: Free of charge, o3: 0.5x ratio')
+  })
+
+  it('keeps at least one decimal so 1 reads as 1.0x', () => {
+    expect(
+      describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 1 })
+    ).toBe('gpt-5: 1.0x ratio')
+    expect(
+      describeActivityModelScope(i18n.t.bind(i18n), { 'gpt-5': 0.25 })
+    ).toBe('gpt-5: 0.25x ratio')
+  })
+
+  it('renders the Chinese copy shown in the activity center', () => {
+    expect(
+      describeActivityModelScope(zhI18n.t.bind(zhI18n), {
+        'deepseek-flash': 0,
+        'deepseek-v4-pro': 1,
+      })
+    ).toBe('deepseek-flash: 免费, deepseek-v4-pro: 1.0x倍率')
   })
 })

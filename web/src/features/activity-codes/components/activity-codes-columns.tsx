@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import {
   formatModelRatioOverrides,
   formatQuota,
+  formatRatioMultiplier,
   formatTimestampToDate,
 } from '@/lib/format'
 
@@ -112,7 +113,7 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
           <span>{formatQuota(row.original.price_quota)}</span>
         ) : (
           <StatusBadge
-            label={t('Free')}
+            label={t('Free of charge')}
             variant='success'
             copyable={false}
             className='-ml-1.5'
@@ -153,7 +154,7 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
             />
           )
         }
-        return <span>{row.original.ratio_override}x</span>
+        return <span>{formatRatioMultiplier(row.original.ratio_override)}x</span>
       },
       size: 200,
     },

@@ -126,7 +126,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                 >
                   {offer.price_quota > 0
                     ? formatQuota(offer.price_quota)
-                    : t('Free')}
+                    : t('Free of charge')}
                 </Badge>
                 <Button
                   size='sm'

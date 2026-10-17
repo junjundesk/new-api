@@ -81,20 +81,30 @@ export function formatQuota(quota: number): string {
 }
 
 /**
+ * Format a billing multiplier so it always reads as a decimal, e.g. 1 -> "1.0",
+ * 0.5 -> "0.5", 0.25 -> "0.25". A bare "1x" is easy to misread as a count, and
+ * rounding to a single digit would silently drop 0.25 to 0.3.
+ */
+export function formatRatioMultiplier(ratio: number): string {
+  const rounded = Number(ratio.toFixed(4))
+  return Number.isInteger(rounded) ? rounded.toFixed(1) : String(rounded)
+}
+
+/**
  * Format a "model -> ratio" override map as a readable list, e.g.
- * `gpt-5: 0.1x, o3: Free`. A zero ratio is rendered with the free label
- * because "0x" reads like a multiplier of zero rather than "free of charge".
- * Returns an empty string when nothing is listed, so callers can describe the
- * inherited case themselves.
+ * `gpt-5: 免费, o3: 1.0x倍率` (en: `gpt-5: Free of charge, o3: 1.0x ratio`).
+ * A zero ratio is spelled out as free rather than "0x". Returns an empty string
+ * when nothing is listed, so callers can describe the inherited case themselves.
  */
 export function formatModelRatioOverrides(
   t: TFunction,
   overrides: Record<string, number> | null | undefined
 ): string {
   return Object.entries(overrides ?? {})
-    .map(
-      ([model, ratio]) => `${model}: ${ratio === 0 ? t('Free') : `${ratio}x`}`
-    )
+    .map(([model, ratio]) => {
+      if (ratio === 0) return `${model}: ${t('Free of charge')}`
+      return `${model}: ${t('{{ratio}}x ratio', { ratio: formatRatioMultiplier(ratio) })}`
+    })
     .join(', ')
 }
 
