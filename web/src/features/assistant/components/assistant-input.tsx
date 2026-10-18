@@ -39,13 +39,17 @@ interface AssistantInputProps {
 
 export function AssistantInput(props: AssistantInputProps) {
   const { t } = useTranslation()
-  const [characterCount, setCharacterCount] = useState(0)
-  const canSend = !props.isStreaming && characterCount > 0
+  // The textarea is controlled: PromptInput resets the form after a submit, and
+  // an uncontrolled value would leave React's change tracker stale, so pasting
+  // the same prompt again (a common retry after an error) fired no change event
+  // and left the send button disabled.
+  const [value, setValue] = useState('')
+  const canSend = !props.isStreaming && value.trim().length > 0
 
   function handleSubmit(message: PromptInputMessage): void {
     const text = (message.text ?? '').trim()
     if (text === '' || props.isStreaming) return
-    setCharacterCount(0)
+    setValue('')
     props.onSend(text)
   }
 
@@ -60,16 +64,15 @@ export function AssistantInput(props: AssistantInputProps) {
           autoComplete='off'
           className='min-h-20 px-5 pt-4 pb-3 leading-7 md:min-h-24 md:text-base'
           maxLength={props.maxMessageChars}
-          onChange={(event) =>
-            setCharacterCount(event.currentTarget.value.length)
-          }
+          onChange={(event) => setValue(event.currentTarget.value)}
           placeholder={t('Ask about your usage or API keys')}
+          value={value}
         />
         <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5'>
           <PromptInputTools>
             <span className='text-muted-foreground text-xs tabular-nums'>
               {t('{{count}} / {{max}} characters', {
-                count: characterCount,
+                count: value.length,
                 max: props.maxMessageChars,
               })}
             </span>

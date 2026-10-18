@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader } from '@/components/ai-elements/loader'
 import { Message, MessageContent } from '@/components/ai-elements/message'
 import { Response } from '@/components/ai-elements/response'
+import { CopyButton } from '@/components/copy-button'
 
 import {
   ASSISTANT_ERROR_KEYS,
@@ -42,16 +43,29 @@ interface AssistantMessageProps {
 export function AssistantMessage(props: AssistantMessageProps) {
   const { t } = useTranslation()
   const message = props.message
+  const messageText = getMessageText(message)
 
   if (message.role === 'user') {
     return (
-      <Message className='py-2.5' from='user'>
-        <MessageContent variant='flat'>
-          <p className='break-words whitespace-pre-wrap'>
-            {getMessageText(message)}
-          </p>
-        </MessageContent>
-      </Message>
+      <div>
+        <Message className='py-2.5' from='user'>
+          <MessageContent variant='flat'>
+            <p className='break-words whitespace-pre-wrap'>{messageText}</p>
+          </MessageContent>
+        </Message>
+        {messageText.trim() === '' ? null : (
+          <div className='flex justify-end'>
+            <CopyButton
+              className='text-muted-foreground hover:text-foreground size-7'
+              iconClassName='size-3.5'
+              size='icon'
+              successTooltip={t('Copied!')}
+              tooltip={t('Copy to clipboard')}
+              value={messageText}
+            />
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -59,59 +73,73 @@ export function AssistantMessage(props: AssistantMessageProps) {
   const hasParts = message.parts.length > 0
 
   return (
-    <Message className='py-2.5' from='assistant'>
-      <div className='flex w-full min-w-0 flex-1 basis-full flex-col gap-2'>
-        {message.parts.map((part) => {
-          if (part.type === 'text') {
-            return (
-              <Response final={!isStreaming} key={part.id}>
-                {part.text}
-              </Response>
-            )
-          }
-          if (part.type === 'confirmation') {
-            return (
-              <AssistantConfirmationCard
-                key={part.id}
-                onConfirm={props.onConfirm}
-                part={part}
+    <div>
+      <Message className='py-2.5' from='assistant'>
+        <div className='flex w-full min-w-0 flex-1 basis-full flex-col gap-2'>
+          {message.parts.map((part) => {
+            if (part.type === 'text') {
+              return (
+                <Response final={!isStreaming} key={part.id}>
+                  {part.text}
+                </Response>
+              )
+            }
+            if (part.type === 'confirmation') {
+              return (
+                <AssistantConfirmationCard
+                  key={part.id}
+                  onConfirm={props.onConfirm}
+                  part={part}
+                />
+              )
+            }
+            if (
+              props.profile !== 'admin' &&
+              !ASSISTANT_USER_TOOL_NAMES.has(part.name)
+            ) {
+              return null
+            }
+            return <AssistantToolCard key={part.id} part={part} />
+          })}
+          {isStreaming && !hasParts ? (
+            <div className='text-muted-foreground flex items-center gap-2 text-sm'>
+              <Loader />
+              <span>{t('Thinking...')}</span>
+            </div>
+          ) : null}
+          {message.status === ASSISTANT_MESSAGE_STATUS.STOPPED ? (
+            <p className='text-muted-foreground text-xs'>
+              {t('Generation stopped')}
+            </p>
+          ) : null}
+          {message.status === ASSISTANT_MESSAGE_STATUS.ERROR ? (
+            <div
+              className='border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-lg border p-2.5 text-sm'
+              role='alert'
+            >
+              <AlertCircle
+                className='mt-0.5 size-4 shrink-0'
+                aria-hidden='true'
               />
-            )
-          }
-          if (
-            props.profile !== 'admin' &&
-            !ASSISTANT_USER_TOOL_NAMES.has(part.name)
-          ) {
-            return null
-          }
-          return <AssistantToolCard key={part.id} part={part} />
-        })}
-        {isStreaming && !hasParts ? (
-          <div className='text-muted-foreground flex items-center gap-2 text-sm'>
-            <Loader />
-            <span>{t('Thinking...')}</span>
-          </div>
-        ) : null}
-        {message.status === ASSISTANT_MESSAGE_STATUS.STOPPED ? (
-          <p className='text-muted-foreground text-xs'>
-            {t('Generation stopped')}
-          </p>
-        ) : null}
-        {message.status === ASSISTANT_MESSAGE_STATUS.ERROR ? (
-          <div
-            className='border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-lg border p-2.5 text-sm'
-            role='alert'
-          >
-            <AlertCircle
-              className='mt-0.5 size-4 shrink-0'
-              aria-hidden='true'
-            />
-            <span>
-              {message.error ?? t(ASSISTANT_ERROR_KEYS.REQUEST_FAILED)}
-            </span>
-          </div>
-        ) : null}
-      </div>
-    </Message>
+              <span>
+                {message.error ?? t(ASSISTANT_ERROR_KEYS.REQUEST_FAILED)}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </Message>
+      {messageText.trim() === '' ? null : (
+        <div className='flex justify-start'>
+          <CopyButton
+            className='text-muted-foreground hover:text-foreground size-7'
+            iconClassName='size-3.5'
+            size='icon'
+            successTooltip={t('Copied!')}
+            tooltip={t('Copy to clipboard')}
+            value={messageText}
+          />
+        </div>
+      )}
+    </div>
   )
 }

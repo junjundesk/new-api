@@ -97,6 +97,11 @@ const configMock = vi.hoisted(() => ({
   getAssistantConfig: vi.fn(),
   confirmAssistantOperation: vi.fn(),
 }))
+
+const copyMock = vi.hoisted(() => ({
+  copyToClipboard: vi.fn().mockResolvedValue(true),
+}))
+vi.mock('@/lib/copy-to-clipboard', () => copyMock)
 vi.mock('@/features/assistant/api', () => configMock)
 
 const i18n = createInstance()
@@ -167,6 +172,7 @@ beforeEach(() => {
   configMock.getAssistantConfig.mockReset()
   configMock.confirmAssistantOperation.mockReset()
   configMock.confirmAssistantOperation.mockResolvedValue(undefined)
+  copyMock.copyToClipboard.mockClear()
   mockConfigs()
 })
 
@@ -428,6 +434,48 @@ describe('assistant chat page', () => {
     )
 
     expect(await screen.findByText('Database query')).toBeVisible()
+  })
+
+  it('enables send after pasting text following an assistant error', async () => {
+    const user = userEvent.setup()
+    renderAssistant()
+
+    const source = await sendMessage('trigger an error')
+    source.emit('message', '{"type":"error","message":"assistant blew up"}')
+    await waitFor(() => {
+      expect(screen.getByRole('log').textContent).toContain('assistant blew up')
+    })
+
+    const textarea = screen.getByPlaceholderText(
+      'Ask about your usage or API keys'
+    )
+    await user.click(textarea)
+    await user.paste('trigger an error')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
+  it('copies the text of each message', async () => {
+    const user = userEvent.setup()
+    renderAssistant()
+
+    const source = await sendMessage('How much quota do I have?')
+    source.emit('message', '{"type":"delta","text":"You have plenty."}')
+    source.emit('message', '{"type":"done"}')
+    await waitFor(() => {
+      expect(screen.getByRole('log').textContent).toContain('You have plenty.')
+    })
+
+    const copyButtons = screen.getAllByRole('button', {
+      name: 'Copy to clipboard',
+    })
+    expect(copyButtons).toHaveLength(2)
+
+    await user.click(copyButtons[0])
+    expect(copyMock.copyToClipboard).toHaveBeenCalledWith(
+      'How much quota do I have?'
+    )
+    await user.click(copyButtons[1])
+    expect(copyMock.copyToClipboard).toHaveBeenCalledWith('You have plenty.')
   })
 
   it('shows a retryable error when the configuration fails to load', async () => {
