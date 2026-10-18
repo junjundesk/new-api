@@ -168,6 +168,20 @@ func GetAllUserTokens(userId int, startIdx int, num int) ([]*Token, error) {
 	return tokens, err
 }
 
+// GetAllTokens lists tokens across all users for admin assistant tools.
+func GetAllTokens(startIdx int, num int) ([]*Token, error) {
+	var tokens []*Token
+	err := DB.Order("id desc").Limit(num).Offset(startIdx).Find(&tokens).Error
+	return tokens, err
+}
+
+// CountAllTokens counts tokens across all users.
+func CountAllTokens() (int64, error) {
+	var count int64
+	err := DB.Model(&Token{}).Count(&count).Error
+	return count, err
+}
+
 // sanitizeLikePattern 校验并清洗用户输入的 LIKE 搜索模式。
 // 规则：
 //  1. 转义 ! 和 _（使用 ! 作为 ESCAPE 字符，兼容 MySQL/PostgreSQL/SQLite）

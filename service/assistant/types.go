@@ -9,6 +9,7 @@ import (
 
 // Config is a request-scoped snapshot of one assistant profile.
 type Config struct {
+	AdminScope      bool
 	Protocol        string
 	BaseURL         string
 	APIKey          string

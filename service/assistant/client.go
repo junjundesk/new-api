@@ -49,7 +49,7 @@ func (c *HTTPClient) createResponse(ctx context.Context, input []json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	instructionsRaw, err := common.Marshal(buildInstructions(c.cfg.SystemPrompt))
+	instructionsRaw, err := common.Marshal(buildInstructions(c.cfg.SystemPrompt, c.cfg.AdminScope))
 	if err != nil {
 		return nil, err
 	}

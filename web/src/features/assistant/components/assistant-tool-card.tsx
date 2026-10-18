@@ -56,6 +56,8 @@ function getToolTitle(name: string, t: TFunction): string {
       return t('Create API key')
     case 'set_api_key_status':
       return t('Update API key status')
+    case 'list_users':
+      return t('Users')
     default:
       return name.replaceAll('_', ' ')
   }

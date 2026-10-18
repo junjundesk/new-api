@@ -30,6 +30,7 @@ func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 		return Config{}, fmt.Errorf("max output tokens must be smaller than the model context window")
 	}
 	cfg := Config{
+		AdminScope:      profile.Name == assistant_setting.ProfileAdmin,
 		Protocol:        protocol,
 		SystemPrompt:    setting.SystemPrompt,
 		ContextWindow:   contextWindow,

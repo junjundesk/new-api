@@ -75,6 +75,13 @@ func TestNormalizeOptionValue(t *testing.T) {
 		assert.Empty(t, normalized)
 	})
 
+	t.Run("normalizes master switch", func(t *testing.T) {
+		normalized, skip, err := NormalizeOptionValue(OptionKeyEnabled, "false")
+		require.NoError(t, err)
+		assert.False(t, skip)
+		assert.Equal(t, "false", normalized)
+	})
+
 	t.Run("trims api key", func(t *testing.T) {
 		normalized, skip, err := NormalizeOptionValue(OptionKeyAdminAPIKey, " sk-test ")
 		require.NoError(t, err)
@@ -141,6 +148,9 @@ func TestProfiles(t *testing.T) {
 	original := *setting
 	t.Cleanup(func() { *setting = original })
 
+	setting.Enabled = false
+	assert.False(t, IsAvailable(ProfileUser))
+	setting.Enabled = true
 	setting.UserEnabled = true
 	setting.UserSource = SourceDirect
 	setting.UserProtocol = ProtocolResponses

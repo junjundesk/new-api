@@ -18,7 +18,7 @@ type setKeyStatusArguments struct {
 	Enabled *bool `json:"enabled"`
 }
 
-func (e *DefaultToolExecutor) createAPIKey(userID int, rawArguments string, audit AuditFunc) ToolResult {
+func (e *DefaultToolExecutor) createAPIKey(targetUserID int, rawArguments string, audit AuditFunc) ToolResult {
 	args := createKeyArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -41,14 +41,17 @@ func (e *DefaultToolExecutor) createAPIKey(userID int, rawArguments string, audi
 		ExpiredTime:    expiredTime,
 		Group:          "",
 	}
-	if err := service.InsertUserToken(userID, token); err != nil {
+	if err := service.InsertUserToken(targetUserID, token); err != nil {
 		return toolError(err)
 	}
+	username, _ := model.GetUsernameById(targetUserID, false)
 	if audit != nil {
 		audit("token.create", map[string]any{
-			"id":   token.Id,
-			"name": token.Name,
-			"via":  "assistant",
+			"id":              token.Id,
+			"name":            token.Name,
+			"target_user_id":  targetUserID,
+			"target_username": username,
+			"via":             "assistant",
 		})
 	}
 	status := token.Status
@@ -57,6 +60,8 @@ func (e *DefaultToolExecutor) createAPIKey(userID int, rawArguments string, audi
 	}
 	return ToolResult{OK: true, Data: map[string]any{
 		"id":              token.Id,
+		"user_id":         targetUserID,
+		"username":        username,
 		"name":            token.Name,
 		"masked_key":      "sk-" + token.GetMaskedKey(),
 		"status":          status,
@@ -71,7 +76,7 @@ func (e *DefaultToolExecutor) createAPIKey(userID int, rawArguments string, audi
 	}}
 }
 
-func (e *DefaultToolExecutor) setAPIKeyStatus(userID int, rawArguments string, audit AuditFunc) ToolResult {
+func (e *DefaultToolExecutor) setAPIKeyStatus(actorUserID int, rawArguments string, audit AuditFunc) ToolResult {
 	args := setKeyStatusArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -82,7 +87,13 @@ func (e *DefaultToolExecutor) setAPIKeyStatus(userID int, rawArguments string, a
 	if args.Enabled == nil {
 		return toolErrorf("enabled is required")
 	}
-	token, err := model.GetTokenByIds(args.ID, userID)
+	var token *model.Token
+	var err error
+	if e.adminScope {
+		token, err = model.GetTokenById(args.ID)
+	} else {
+		token, err = model.GetTokenByIds(args.ID, actorUserID)
+	}
 	if err != nil {
 		return toolErrorf("API key not found")
 	}
@@ -105,15 +116,20 @@ func (e *DefaultToolExecutor) setAPIKeyStatus(userID int, rawArguments string, a
 	if *args.Enabled {
 		action = "token.enable"
 	}
+	username, _ := model.GetUsernameById(token.UserId, false)
 	if audit != nil {
 		audit(action, map[string]any{
-			"id":   token.Id,
-			"name": token.Name,
-			"via":  "assistant",
+			"id":              token.Id,
+			"name":            token.Name,
+			"target_user_id":  token.UserId,
+			"target_username": username,
+			"via":             "assistant",
 		})
 	}
 	return ToolResult{OK: true, Data: map[string]any{
 		"id":          token.Id,
+		"user_id":     token.UserId,
+		"username":    username,
 		"name":        token.Name,
 		"masked_key":  "sk-" + token.GetMaskedKey(),
 		"status":      token.Status,

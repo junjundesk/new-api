@@ -193,8 +193,12 @@ func assistantChatStream(c *gin.Context, profileName string) {
 	defer assistant.ReleaseGlobal()
 
 	client := assistant.NewHTTPClient(cfg)
-	executor := assistant.NewDefaultToolExecutor()
+	executor := assistant.NewDefaultToolExecutor(cfg.AdminScope)
 	audit := func(action string, params map[string]any) {
+		if profileName == assistant_setting.ProfileAdmin {
+			recordManageAudit(c, action, params)
+			return
+		}
 		recordUserSecurityAudit(c, userID, action, params)
 	}
 	orchestrator := assistant.NewOrchestrator(cfg, client, executor, writer.WriteEvent, audit)

@@ -35,9 +35,14 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
-import { SettingsForm } from '../components/settings-form-layout'
+import {
+  SettingsForm,
+  SettingsSwitchContent,
+  SettingsSwitchItem,
+} from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
@@ -71,6 +76,7 @@ export type AssistantProfileDefaults = {
 }
 
 export type AssistantSettingsDefaults = {
+  enabled: boolean
   user: AssistantProfileDefaults
   admin: AssistantProfileDefaults
   systemPrompt: string
@@ -81,7 +87,16 @@ type AssistantSettingsSectionProps = {
   defaultValues: AssistantSettingsDefaults
 }
 
+/**
+ * The shared form carries the master switch in addition to the profile cards
+ * rendered by AssistantProfileCard.
+ */
+type AssistantSettingsFormValuesWithMaster = AssistantSettingsFormValues & {
+  enabled: boolean
+}
+
 const OPTION_KEYS = {
+  enabled: 'assistant_setting.enabled',
   systemPrompt: 'assistant_setting.system_prompt',
   requestTimeoutSeconds: 'assistant_setting.request_timeout_seconds',
   user: {
@@ -117,113 +132,104 @@ const OPTION_KEYS = {
  * output limit must stay strictly below the context window. The API key stays
  * optional because an empty field means "keep the stored key" (direct) or
  * "use the channel key" (channel).
+ *
+ * All of those checks are skipped while the master switch is off: turning the
+ * assistant off must always be saveable, whatever state the profiles are in.
  */
 const createAssistantSettingsSchema = (t: TFunction) => {
   const rangeMessage = t('Value is out of range')
-  const profileSchema = z
+  const profileSchema = z.object({
+    enabled: z.boolean(),
+    source: z.enum(['direct', 'channel']),
+    protocol: z.enum(['responses', 'chat']),
+    baseUrl: z.string(),
+    model: z.string(),
+    channelId: z.number().int(),
+    channelModel: z.string(),
+    apiKey: z.string(),
+    contextWindow: z.string(),
+    maxOutputTokens: z.string(),
+  })
+
+  return z
     .object({
       enabled: z.boolean(),
-      source: z.enum(['direct', 'channel']),
-      protocol: z.enum(['responses', 'chat']),
-      baseUrl: z.string(),
-      model: z.string(),
-      channelId: z.number().int(),
-      channelModel: z.string(),
-      apiKey: z.string(),
-      contextWindow: z.string(),
-      maxOutputTokens: z.string(),
+      user: profileSchema,
+      admin: profileSchema,
+      systemPrompt: z.string(),
+      requestTimeoutSeconds: z
+        .number()
+        .int(rangeMessage)
+        .min(5, rangeMessage)
+        .max(300, rangeMessage),
     })
-    .superRefine((profile, ctx) => {
-      const contextWindow = parseTokenAmount(profile.contextWindow)
-      if (
-        contextWindow === null ||
-        contextWindow < 1024 ||
-        contextWindow > 10000000
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['contextWindow'],
-          message: rangeMessage,
-        })
-      }
-      const maxOutputTokens = parseTokenAmount(profile.maxOutputTokens)
-      if (
-        maxOutputTokens === null ||
-        maxOutputTokens < 1 ||
-        maxOutputTokens > 1000000
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['maxOutputTokens'],
-          message: rangeMessage,
-        })
-      }
-      if (
-        contextWindow !== null &&
-        maxOutputTokens !== null &&
-        maxOutputTokens >= contextWindow
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['maxOutputTokens'],
-          message: t('Max output tokens must be less than the context window'),
-        })
-      }
-      if (!profile.enabled) return
+    .superRefine((values, ctx) => {
+      if (!values.enabled) return
 
-      if (profile.source === 'direct') {
-        const baseUrl = profile.baseUrl.trim()
-        if (baseUrl === '') {
+      for (const profileName of ['user', 'admin'] as const) {
+        const profile = values[profileName]
+        const addIssue = (
+          field: keyof AssistantProfileFormValues,
+          message: string
+        ) => {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['baseUrl'],
-            message: t('Base URL is required'),
-          })
-        } else if (!z.string().url().safeParse(baseUrl).success) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['baseUrl'],
-            message: t('Must be a valid URL'),
+            path: [profileName, field],
+            message,
           })
         }
-        if (profile.model.trim() === '') {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['model'],
-            message: t('Model is required'),
-          })
-        }
-        return
-      }
 
-      if (profile.channelId <= 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['channelId'],
-          message: t('Channel is required'),
-        })
-      }
-      if (profile.channelModel.trim() === '') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['channelModel'],
-          message: t('Channel model is required'),
-        })
+        const contextWindow = parseTokenAmount(profile.contextWindow)
+        if (
+          contextWindow === null ||
+          contextWindow < 1024 ||
+          contextWindow > 10000000
+        ) {
+          addIssue('contextWindow', rangeMessage)
+        }
+        const maxOutputTokens = parseTokenAmount(profile.maxOutputTokens)
+        if (
+          maxOutputTokens === null ||
+          maxOutputTokens < 1 ||
+          maxOutputTokens > 1000000
+        ) {
+          addIssue('maxOutputTokens', rangeMessage)
+        }
+        if (
+          contextWindow !== null &&
+          maxOutputTokens !== null &&
+          maxOutputTokens >= contextWindow
+        ) {
+          addIssue(
+            'maxOutputTokens',
+            t('Max output tokens must be less than the context window')
+          )
+        }
+
+        if (!profile.enabled) continue
+
+        if (profile.source === 'direct') {
+          const baseUrl = profile.baseUrl.trim()
+          if (baseUrl === '') {
+            addIssue('baseUrl', t('Base URL is required'))
+          } else if (!z.string().url().safeParse(baseUrl).success) {
+            addIssue('baseUrl', t('Must be a valid URL'))
+          }
+          if (profile.model.trim() === '') {
+            addIssue('model', t('Model is required'))
+          }
+          continue
+        }
+
+        if (profile.channelId <= 0) {
+          addIssue('channelId', t('Channel is required'))
+        }
+        if (profile.channelModel.trim() === '') {
+          addIssue('channelModel', t('Channel model is required'))
+        }
       }
     })
-
-  return z.object({
-    user: profileSchema,
-    admin: profileSchema,
-    systemPrompt: z.string(),
-    requestTimeoutSeconds: z
-      .number()
-      .int(rangeMessage)
-      .min(5, rangeMessage)
-      .max(300, rangeMessage),
-  })
 }
-
 function buildProfileFormDefaults(
   defaults: AssistantProfileDefaults
 ): AssistantProfileFormValues {
@@ -243,8 +249,9 @@ function buildProfileFormDefaults(
 
 function buildFormDefaults(
   defaults: AssistantSettingsDefaults
-): AssistantSettingsFormValues {
+): AssistantSettingsFormValuesWithMaster {
   return {
+    enabled: defaults.enabled,
     user: buildProfileFormDefaults(defaults.user),
     admin: buildProfileFormDefaults(defaults.admin),
     systemPrompt: defaults.systemPrompt,
@@ -309,10 +316,14 @@ function buildProfileOptionEntries(
 }
 
 function buildOptionEntries(
-  values: AssistantSettingsFormValues,
+  values: AssistantSettingsFormValuesWithMaster,
   defaults: AssistantSettingsDefaults
 ): UpdateOptionRequest[] {
   const entries: UpdateOptionRequest[] = []
+
+  if (values.enabled !== defaults.enabled) {
+    entries.push({ key: OPTION_KEYS.enabled, value: values.enabled })
+  }
 
   if (values.systemPrompt !== defaults.systemPrompt) {
     entries.push({ key: OPTION_KEYS.systemPrompt, value: values.systemPrompt })
@@ -349,7 +360,7 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
     [props.defaultValues]
   )
 
-  const form = useForm<AssistantSettingsFormValues>({
+  const form = useForm<AssistantSettingsFormValuesWithMaster>({
     resolver: zodResolver(schema),
     defaultValues: formDefaults,
   })
@@ -379,7 +390,7 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
     queryClient.invalidateQueries({ queryKey: ['status'] })
   }
 
-  const onSubmit = async (values: AssistantSettingsFormValues) => {
+  const onSubmit = async (values: AssistantSettingsFormValuesWithMaster) => {
     const entries = buildOptionEntries(values, props.defaultValues)
     const saved = await saveOptions(entries)
     if (!saved) return
@@ -403,6 +414,28 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
             onSave={form.handleSubmit(onSubmit)}
             isSaving={isBusy}
             isSaveDisabled={!form.formState.isDirty}
+          />
+
+          <FormField
+            control={form.control}
+            name='enabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Enable AI Assistant')}</FormLabel>
+                  <FormDescription>
+                    {t('Master switch for the user and admin assistants.')}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={isBusy}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
           />
 
           <AssistantProfileCard

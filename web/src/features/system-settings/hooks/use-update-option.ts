@@ -40,6 +40,7 @@ export const STATUS_RELATED_KEYS = new Set([
   'general_setting.custom_currency_symbol',
   'general_setting.custom_currency_exchange_rate',
   'oidc.display_name',
+  'assistant_setting.enabled',
   'assistant_setting.user_enabled',
   'assistant_setting.user_source',
   'assistant_setting.user_base_url',

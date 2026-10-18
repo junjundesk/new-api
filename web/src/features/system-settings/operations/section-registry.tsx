@@ -78,6 +78,7 @@ const OPERATIONS_SECTIONS = [
     build: (settings: OperationsSettings) => (
       <AssistantSettingsSection
         defaultValues={{
+          enabled: settings['assistant_setting.enabled'] ?? true,
           user: {
             enabled: settings['assistant_setting.user_enabled'] ?? false,
             source:

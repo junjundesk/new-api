@@ -5882,6 +5882,7 @@
     "Maximum context window of the model used by this profile.": "Maximum context window of the model used by this profile.",
     "Maximum output tokens per assistant response.": "Maximum output tokens per assistant response.",
     "API protocol used to call the upstream endpoint.": "API protocol used to call the upstream endpoint.",
-    "Resolved value: {{tokens}} tokens": "Resolved value: {{tokens}} tokens"
+    "Resolved value: {{tokens}} tokens": "Resolved value: {{tokens}} tokens",
+    "Master switch for the user and admin assistants.": "Master switch for the user and admin assistants."
   }
 }

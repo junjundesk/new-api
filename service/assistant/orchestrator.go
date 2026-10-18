@@ -194,7 +194,7 @@ func buildChatMessages(cfg Config, history []ChatMessage, message string) ([]map
 	messages := make([]map[string]any, 0, len(trimmed)+2)
 	messages = append(messages, map[string]any{
 		"role":    "system",
-		"content": buildInstructions(cfg.SystemPrompt),
+		"content": buildInstructions(cfg.SystemPrompt, cfg.AdminScope),
 	})
 	for _, entry := range trimmed {
 		messages = append(messages, map[string]any{

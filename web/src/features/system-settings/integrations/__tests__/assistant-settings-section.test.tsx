@@ -53,6 +53,7 @@ const baseProfileDefaults: AssistantProfileDefaults = {
 }
 
 const baseDefaults: AssistantSettingsDefaults = {
+  enabled: true,
   user: { ...baseProfileDefaults },
   admin: { ...baseProfileDefaults },
   systemPrompt: '',
@@ -190,12 +191,14 @@ describe('assistant settings section', () => {
     vi.restoreAllMocks()
   })
 
-  it('saves shared fields first, then each profile with its enabled flag last', async () => {
+  it('saves master first, then shared fields, then each profile with its enabled flag last', async () => {
     const user = userEvent.setup()
     renderSection()
 
     const userCard = getProfileCard('User assistant')
     const adminCard = getProfileCard('Admin assistant')
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable AI Assistant' }))
 
     fireEvent.change(screen.getByLabelText('System Prompt'), {
       target: { value: 'Be concise.' },
@@ -256,8 +259,9 @@ describe('assistant settings section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(15))
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(16))
     expect(putSpy.mock.calls).toEqual([
+      ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
       [
         '/api/option/',
         { key: 'assistant_setting.system_prompt', value: 'Be concise.' },
@@ -327,6 +331,86 @@ describe('assistant settings section', () => {
     expect(
       (within(adminCard).getByLabelText(/API Key/) as HTMLInputElement).value
     ).toBe('')
+  })
+
+  it('shows exactly three switches with the master switch on by default', () => {
+    renderSection()
+
+    expect(screen.getAllByRole('switch')).toHaveLength(3)
+    expect(
+      screen.getByRole('switch', { name: 'Enable AI Assistant' })
+    ).toBeChecked()
+    expect(
+      within(getProfileCard('User assistant')).getByRole('switch', {
+        name: 'Enabled',
+      })
+    ).not.toBeChecked()
+    expect(
+      within(getProfileCard('Admin assistant')).getByRole('switch', {
+        name: 'Enabled',
+      })
+    ).not.toBeChecked()
+  })
+
+  it('saves the master switch off as false before any other option', async () => {
+    renderSection()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable AI Assistant' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1))
+    expect(putSpy.mock.calls).toEqual([
+      ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
+    ])
+    await waitFor(() => expect(successSpy).toHaveBeenCalledTimes(1))
+  })
+
+  it('saves the master switch off without validating incomplete enabled profiles', async () => {
+    renderSection({
+      user: {
+        ...baseProfileDefaults,
+        enabled: true,
+        baseUrl: '',
+        model: '',
+      },
+    })
+
+    fireEvent.change(screen.getByLabelText('System Prompt'), {
+      target: { value: 'Paused.' },
+    })
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable AI Assistant' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(2))
+    expect(putSpy.mock.calls).toEqual([
+      ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.system_prompt', value: 'Paused.' },
+      ],
+    ])
+    await waitFor(() => expect(successSpy).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Base URL is required')).toBeNull()
+  })
+
+  it('blocks saving an incomplete enabled profile while the master switch is on', async () => {
+    renderSection({
+      user: {
+        ...baseProfileDefaults,
+        enabled: true,
+        baseUrl: '',
+        model: '',
+      },
+    })
+
+    fireEvent.change(screen.getByLabelText('System Prompt'), {
+      target: { value: 'Be concise.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    expect(await screen.findByText('Base URL is required')).toBeVisible()
+    expect(screen.getByText('Model is required')).toBeVisible()
+    expect(putSpy).not.toHaveBeenCalled()
   })
 
   it('skips an empty API key when other profile fields change', async () => {
@@ -511,6 +595,9 @@ describe('assistant settings section', () => {
 
     expect(await screen.findByText('Channel is required')).toBeVisible()
     expect(screen.getByText('Channel model is required')).toBeVisible()
+    expect(
+      screen.getByRole('switch', { name: 'Enable AI Assistant' })
+    ).toBeChecked()
     expect(putSpy).not.toHaveBeenCalled()
   })
 

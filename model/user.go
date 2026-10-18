@@ -1565,3 +1565,21 @@ func RootUserExists() bool {
 	}
 	return true
 }
+
+// UserAggregateSummary aggregates all active users for admin assistant
+// platform-wide account summaries.
+type UserAggregateSummary struct {
+	Count        int64 `gorm:"column:count"`
+	Quota        int64 `gorm:"column:quota"`
+	UsedQuota    int64 `gorm:"column:used_quota"`
+	RequestCount int64 `gorm:"column:request_count"`
+}
+
+// GetUserAggregateSummary returns platform-wide user counts and quota totals.
+func GetUserAggregateSummary() (UserAggregateSummary, error) {
+	var summary UserAggregateSummary
+	err := DB.Model(&User{}).
+		Select("COUNT(*) AS count, COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(used_quota), 0) AS used_quota, COALESCE(SUM(request_count), 0) AS request_count").
+		Scan(&summary).Error
+	return summary, err
+}

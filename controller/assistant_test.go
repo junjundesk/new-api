@@ -147,6 +147,20 @@ func TestGetStatusIncludesAssistantEnabled(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	assert.True(t, payload.Success)
 	assert.True(t, payload.Data.AssistantEnabled)
+
+	setting.Enabled = false
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	GetStatus(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	payload = struct {
+		Success bool `json:"success"`
+		Data    struct {
+			AssistantEnabled bool `json:"assistant_enabled"`
+		} `json:"data"`
+	}{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	assert.False(t, payload.Data.AssistantEnabled)
 }
 
 func TestUpdateOptionAssistantKeyThenEnable(t *testing.T) {

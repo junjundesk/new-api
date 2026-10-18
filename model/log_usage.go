@@ -95,3 +95,65 @@ func GetUserConsumeBreakdown(userID int, start, end int64, dimension string, lim
 	}
 	return rows, nil
 }
+
+// applyAllUserConsumeLogFilter scopes a logs query to every user's visible
+// consume records. Admin assistant tools use it for platform-wide reporting.
+func applyAllUserConsumeLogFilter(tx *gorm.DB, start, end int64) *gorm.DB {
+	tx = applyUserVisibleLogFilter(tx.Where("type = ?", LogTypeConsume))
+	if start > 0 {
+		tx = tx.Where("created_at >= ?", start)
+	}
+	if end > 0 {
+		tx = tx.Where("created_at <= ?", end)
+	}
+	return tx
+}
+
+// GetAllConsumeTotals returns platform-wide consumed quota, request count and
+// token total over the requested time range.
+func GetAllConsumeTotals(start, end int64) (UserConsumeTotals, error) {
+	var totals UserConsumeTotals
+	err := applyAllUserConsumeLogFilter(LOG_DB.Table("logs"), start, end).
+		Select(userConsumeAggregateSelect).
+		Scan(&totals).Error
+	if err != nil {
+		return UserConsumeTotals{}, err
+	}
+	return totals, nil
+}
+
+// GetAllConsumeBreakdown groups all users' consume records along a dimension.
+// Admin dimensions are user, model, group and token; user is represented by the
+// log's username so no cross-database join is required.
+func GetAllConsumeBreakdown(start, end int64, dimension string, limit int) ([]*UserConsumeBreakdownRow, error) {
+	var dimensionColumn string
+	switch dimension {
+	case "user":
+		dimensionColumn = "username"
+	case "model":
+		dimensionColumn = "model_name"
+	case "group":
+		dimensionColumn = logGroupCol
+	case "token":
+		dimensionColumn = "token_name"
+	default:
+		return nil, fmt.Errorf("unsupported consume breakdown dimension %q", dimension)
+	}
+	if limit <= 0 {
+		limit = userConsumeBreakdownDefaultLimit
+	}
+	if limit > userConsumeBreakdownMaxLimit {
+		limit = userConsumeBreakdownMaxLimit
+	}
+	rows := make([]*UserConsumeBreakdownRow, 0)
+	err := applyAllUserConsumeLogFilter(LOG_DB.Table("logs"), start, end).
+		Select(dimensionColumn + " AS dimension, " + userConsumeAggregateSelect).
+		Group("dimension").
+		Order("quota DESC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}

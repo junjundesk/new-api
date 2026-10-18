@@ -57,8 +57,11 @@ func seedAssistantUser(t *testing.T, db *gorm.DB, id int, username string) {
 
 func seedAssistantLog(t *testing.T, db *gorm.DB, userID int, modelName, tokenName, content string, quota int) {
 	t.Helper()
+	username, err := model.GetUsernameById(userID, false)
+	require.NoError(t, err)
 	require.NoError(t, db.Create(&model.Log{
 		UserId:           userID,
+		Username:         username,
 		CreatedAt:        time.Now().Unix(),
 		Type:             model.LogTypeConsume,
 		Content:          content,
@@ -75,7 +78,7 @@ func seedAssistantLog(t *testing.T, db *gorm.DB, userID int, modelName, tokenNam
 func TestCreateAPIKeyToolReturnsMaskedKeyOnly(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	result := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "create_api_key",
 		Arguments: "{\"name\":\"assistant-key\"}",
@@ -108,7 +111,7 @@ func TestUsageToolsAreScopedToCurrentUser(t *testing.T) {
 	seedAssistantLog(t, db, 1, "model-a", "key-a", "alice consume", 100)
 	seedAssistantLog(t, db, 2, "model-b-secret", "key-b", "bob consume", 999)
 
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	summary := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "get_usage_summary",
 		Arguments: "{\"days\":7,\"group_by\":\"model\"}",
@@ -149,7 +152,7 @@ func TestSetAPIKeyStatusRejectsOtherUsersToken(t *testing.T) {
 	bobToken, err := model.GetTokenByKey("sk-bob", true)
 	require.NoError(t, err)
 
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	result := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "set_api_key_status",
 		Arguments: fmt.Sprintf("{\"id\":%d,\"enabled\":false}", bobToken.Id),
@@ -171,7 +174,7 @@ func TestSetAPIKeyStatusRejectsOtherUsersToken(t *testing.T) {
 
 func TestToolArgumentBounds(t *testing.T) {
 	setupToolTestDB(t)
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	tests := []struct {
 		name      string
 		arguments string
@@ -197,7 +200,7 @@ func TestGetAccountSummaryIncludesQuota(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
 	seedAssistantLog(t, db, 1, "model-a", "key-a", "consume", 100)
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	result := executor.Execute(context.Background(), 1, ToolCall{Name: "get_account_summary"}, nil)
 	require.True(t, result.OK, result.Error)
 	data, ok := result.Data.(map[string]any)
@@ -212,7 +215,7 @@ func TestGetAccountSummaryIncludesQuota(t *testing.T) {
 func TestTokenToolsAreNotCappedPerTurn(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
-	executor := NewDefaultToolExecutor()
+	executor := NewDefaultToolExecutor(false)
 	for index := 0; index < 2; index++ {
 		result := executor.Execute(context.Background(), 1, ToolCall{
 			Name:      "create_api_key",
@@ -240,4 +243,92 @@ func TestTokenToolsAreNotCappedPerTurn(t *testing.T) {
 		}, nil)
 		require.True(t, result.OK, result.Error)
 	}
+}
+
+func TestUserScopeCannotTargetOtherUsers(t *testing.T) {
+	db := setupToolTestDB(t)
+	seedAssistantUser(t, db, 1, "alice")
+	seedAssistantUser(t, db, 2, "bob")
+	executor := NewDefaultToolExecutor(false)
+	result := executor.Execute(context.Background(), 1, ToolCall{
+		Name:      "get_account_summary",
+		Arguments: "{\"user_id\":2}",
+	}, nil)
+	require.True(t, result.OK, result.Error)
+	data, ok := result.Data.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "alice", data["username"])
+	users := executor.Execute(context.Background(), 1, ToolCall{Name: "list_users", Arguments: "{}"}, nil)
+	assert.False(t, users.OK)
+}
+
+func TestAdminScopeCanQueryAndManageAllUsers(t *testing.T) {
+	db := setupToolTestDB(t)
+	seedAssistantUser(t, db, 1, "alice")
+	seedAssistantUser(t, db, 2, "bob")
+	seedAssistantLog(t, db, 1, "model-a", "key-a", "alice consume", 100)
+	seedAssistantLog(t, db, 2, "model-b", "key-b", "bob consume", 200)
+	require.NoError(t, db.Create(&model.Token{UserId: 2, Key: "sk-bob", Name: "bob-key", UnlimitedQuota: true, ExpiredTime: -1, Status: common.TokenStatusEnabled}).Error)
+	bobToken, err := model.GetTokenByKey("sk-bob", true)
+	require.NoError(t, err)
+
+	executor := NewDefaultToolExecutor(true)
+
+	summary := executor.Execute(context.Background(), 1, ToolCall{Name: "get_account_summary", Arguments: "{\"user_id\":2}"}, nil)
+	require.True(t, summary.OK, summary.Error)
+	summaryData := summary.Data.(map[string]any)
+	assert.Equal(t, "bob", summaryData["username"])
+
+	platform := executor.Execute(context.Background(), 1, ToolCall{Name: "get_account_summary", Arguments: "{}"}, nil)
+	require.True(t, platform.OK, platform.Error)
+	platformData := platform.Data.(map[string]any)
+	assert.EqualValues(t, 2, platformData["user_count"])
+
+	usage := executor.Execute(context.Background(), 1, ToolCall{Name: "get_usage_summary", Arguments: "{\"group_by\":\"user\"}"}, nil)
+	require.True(t, usage.OK, usage.Error)
+	usageData := usage.Data.(map[string]any)
+	assert.Equal(t, "all_users", usageData["scope"])
+	assert.Len(t, usageData["rows"], 2)
+
+	allLogs := executor.Execute(context.Background(), 1, ToolCall{Name: "list_usage_logs", Arguments: "{}"}, nil)
+	require.True(t, allLogs.OK, allLogs.Error)
+	assert.Len(t, allLogs.Data.(map[string]any)["items"], 2)
+
+	users := executor.Execute(context.Background(), 1, ToolCall{Name: "list_users", Arguments: "{\"keyword\":\"bob\"}"}, nil)
+	require.True(t, users.OK, users.Error)
+	userItems := users.Data.(map[string]any)["items"].([]map[string]any)
+	require.Len(t, userItems, 1)
+	assert.Equal(t, "bob", userItems[0]["username"])
+
+	logs := executor.Execute(context.Background(), 1, ToolCall{Name: "list_usage_logs", Arguments: "{\"user_id\":2}"}, nil)
+	require.True(t, logs.OK, logs.Error)
+	logData := logs.Data.(map[string]any)
+	logItems := logData["items"].([]map[string]any)
+	require.Len(t, logItems, 1)
+	assert.Equal(t, "bob consume", logItems[0]["content"])
+
+	keys := executor.Execute(context.Background(), 1, ToolCall{Name: "list_api_keys", Arguments: "{\"user_id\":2}"}, nil)
+	require.True(t, keys.OK, keys.Error)
+	keyItems := keys.Data.(map[string]any)["items"].([]map[string]any)
+	require.Len(t, keyItems, 1)
+	assert.Equal(t, "bob-key", keyItems[0]["name"])
+
+	created := executor.Execute(context.Background(), 1, ToolCall{Name: "create_api_key", Arguments: "{\"user_id\":2,\"name\":\"admin-created\"}"}, nil)
+	require.True(t, created.OK, created.Error)
+	createdData := created.Data.(map[string]any)
+	tokenID, ok := createdData["id"].(int)
+	require.True(t, ok)
+	token, err := model.GetTokenById(tokenID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, token.UserId)
+	assert.Equal(t, "admin-created", token.Name)
+
+	disable := executor.Execute(context.Background(), 1, ToolCall{
+		Name:      "set_api_key_status",
+		Arguments: fmt.Sprintf("{\"id\":%d,\"enabled\":false}", bobToken.Id),
+	}, nil)
+	require.True(t, disable.OK, disable.Error)
+	updated, err := model.GetTokenById(bobToken.Id)
+	require.NoError(t, err)
+	assert.Equal(t, common.TokenStatusDisabled, updated.Status)
 }

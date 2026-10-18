@@ -20,6 +20,7 @@ const (
 	ProtocolResponses = "responses"
 	ProtocolChat      = "chat"
 
+	OptionKeyEnabled               = "assistant_setting.enabled"
 	OptionKeyUserEnabled           = "assistant_setting.user_enabled"
 	OptionKeyUserSource            = "assistant_setting.user_source"
 	OptionKeyUserProtocol          = "assistant_setting.user_protocol"
@@ -50,6 +51,8 @@ const (
 // use a direct OpenAI-compatible endpoint or bind a channel (including a
 // disabled channel) and one of that channel's models.
 type AssistantSetting struct {
+	Enabled bool `json:"enabled"`
+
 	UserEnabled         bool   `json:"user_enabled"`
 	UserSource          string `json:"user_source"`
 	UserProtocol        string `json:"user_protocol"`
@@ -92,6 +95,7 @@ type Profile struct {
 }
 
 var assistantSetting = AssistantSetting{
+	Enabled:               true,
 	UserEnabled:           false,
 	UserSource:            SourceDirect,
 	UserProtocol:          ProtocolResponses,
@@ -173,6 +177,9 @@ func IsConfigured(name string) bool {
 }
 
 func IsAvailable(name string) bool {
+	if !assistantSetting.Enabled {
+		return false
+	}
 	profile := GetProfile(name)
 	return profile.Enabled && IsConfigured(name)
 }
@@ -306,6 +313,12 @@ func NormalizeOptionValue(key, value string) (normalized string, skip bool, err 
 		return normalizeProfileOption(profileName, field, value)
 	}
 	switch key {
+	case OptionKeyEnabled:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", false, errors.New("assistant enabled must be true or false")
+		}
+		return strconv.FormatBool(parsed), false, nil
 	case OptionKeySystemPrompt:
 		if len(value) > 8000 {
 			return "", false, errors.New("system prompt is too long (max 8000 characters)")

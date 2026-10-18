@@ -26,21 +26,53 @@ type listKeysArguments struct {
 	Limit *int `json:"limit"`
 }
 
-func (e *DefaultToolExecutor) getAccountSummary(userID int) ToolResult {
-	user, err := model.GetUserById(userID, false)
+// getAccountSummary returns one user's summary. targetUserID == 0 is only used
+// by the admin profile and reports platform-wide totals.
+func (e *DefaultToolExecutor) getAccountSummary(targetUserID int) ToolResult {
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	if targetUserID == 0 {
+		summary, err := model.GetUserAggregateSummary()
+		if err != nil {
+			return toolError(err)
+		}
+		today := model.UserConsumeTotals{}
+		todayUnavailable := ""
+		if totals, err := model.GetAllConsumeTotals(start, now.Unix()); err != nil {
+			todayUnavailable = err.Error()
+		} else {
+			today = totals
+		}
+		data := map[string]any{
+			"scope":         "all_users",
+			"user_count":    summary.Count,
+			"quota":         summary.Quota,
+			"used_quota":    summary.UsedQuota,
+			"request_count": summary.RequestCount,
+			"quota_display": DisplayQuota(summary.Quota),
+			"used_display":  DisplayQuota(summary.UsedQuota),
+			"today":         consumeTotalsMap(today),
+		}
+		if todayUnavailable != "" {
+			data["today_unavailable"] = todayUnavailable
+		}
+		return ToolResult{OK: true, Data: data}
+	}
+
+	user, err := model.GetUserById(targetUserID, false)
 	if err != nil {
 		return toolError(err)
 	}
-	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	today := model.UserConsumeTotals{}
 	todayUnavailable := ""
-	if totals, err := model.GetUserConsumeTotals(userID, start, now.Unix()); err != nil {
+	if totals, err := model.GetUserConsumeTotals(targetUserID, start, now.Unix()); err != nil {
 		todayUnavailable = err.Error()
 	} else {
 		today = totals
 	}
 	data := map[string]any{
+		"scope":         "user",
+		"user_id":       user.Id,
 		"username":      user.Username,
 		"display_name":  user.DisplayName,
 		"group":         user.Group,
@@ -57,7 +89,9 @@ func (e *DefaultToolExecutor) getAccountSummary(userID int) ToolResult {
 	return ToolResult{OK: true, Data: data}
 }
 
-func (e *DefaultToolExecutor) getUsageSummary(userID int, rawArguments string) ToolResult {
+// getUsageSummary aggregates one user's usage, or all users when targetUserID
+// is 0. Admin profiles may group the all-users view by user.
+func (e *DefaultToolExecutor) getUsageSummary(targetUserID int, rawArguments string) ToolResult {
 	args := usageSummaryArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -70,7 +104,11 @@ func (e *DefaultToolExecutor) getUsageSummary(userID int, rawArguments string) T
 	if groupBy == "" {
 		groupBy = "model"
 	}
-	if groupBy != "model" && groupBy != "group" && groupBy != "token" {
+	if targetUserID == 0 {
+		if groupBy != "user" && groupBy != "model" && groupBy != "group" && groupBy != "token" {
+			return toolErrorf("group_by must be one of user, model, group, token")
+		}
+	} else if groupBy != "model" && groupBy != "group" && groupBy != "token" {
 		return toolErrorf("group_by must be one of model, group, token")
 	}
 	limit, err := normalizeLimit(args.Limit, 10, 20)
@@ -80,15 +118,21 @@ func (e *DefaultToolExecutor) getUsageSummary(userID int, rawArguments string) T
 
 	end := time.Now().Unix()
 	start := end - int64(days)*86400
-	totals, err := model.GetUserConsumeTotals(userID, start, end)
-	if err != nil {
-		return toolError(err)
+	var totals model.UserConsumeTotals
+	var rows []*model.UserConsumeBreakdownRow
+	if targetUserID == 0 {
+		totals, err = model.GetAllConsumeTotals(start, end)
+		if err != nil {
+			return toolError(err)
+		}
+		rows, err = model.GetAllConsumeBreakdown(start, end, groupBy, limit+1)
+	} else {
+		totals, err = model.GetUserConsumeTotals(targetUserID, start, end)
+		if err != nil {
+			return toolError(err)
+		}
+		rows, err = model.GetUserConsumeBreakdown(targetUserID, start, end, groupBy, limit+1)
 	}
-	requestLimit := limit + 1
-	if requestLimit > 50 {
-		requestLimit = 50
-	}
-	rows, err := model.GetUserConsumeBreakdown(userID, start, end, groupBy, requestLimit)
 	if err != nil {
 		return toolError(err)
 	}
@@ -106,7 +150,7 @@ func (e *DefaultToolExecutor) getUsageSummary(userID int, rawArguments string) T
 			"display": DisplayQuota(row.Quota),
 		})
 	}
-	return ToolResult{OK: true, Data: map[string]any{
+	data := map[string]any{
 		"period_start":  start,
 		"period_end":    end,
 		"days":          days,
@@ -115,10 +159,18 @@ func (e *DefaultToolExecutor) getUsageSummary(userID int, rawArguments string) T
 		"total_display": DisplayQuota(totals.Quota),
 		"rows":          items,
 		"truncated":     truncated,
-	}}
+	}
+	if targetUserID == 0 {
+		data["scope"] = "all_users"
+	} else {
+		data["scope"] = "user"
+		data["user_id"] = targetUserID
+	}
+	return ToolResult{OK: true, Data: data}
 }
 
-func (e *DefaultToolExecutor) listUsageLogs(userID int, rawArguments string) ToolResult {
+// listUsageLogs lists one user's logs, or all users' logs when targetUserID is 0.
+func (e *DefaultToolExecutor) listUsageLogs(targetUserID int, rawArguments string) ToolResult {
 	args := usageLogsArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -144,7 +196,13 @@ func (e *DefaultToolExecutor) listUsageLogs(userID int, rawArguments string) Too
 	}
 	end := time.Now().Unix()
 	start := end - int64(days)*86400
-	logs, total, err := model.GetUserLogs(userID, model.LogTypeConsume, "", start, end, modelName, tokenName, 0, limit, "", "", "", false)
+	var logs []*model.Log
+	var total int64
+	if targetUserID == 0 {
+		logs, total, err = model.GetAllLogs(model.LogTypeConsume, "", start, end, modelName, "", tokenName, 0, limit, 0, "", "", "")
+	} else {
+		logs, total, err = model.GetUserLogs(targetUserID, model.LogTypeConsume, "", start, end, modelName, tokenName, 0, limit, "", "", "", false)
+	}
 	if err != nil {
 		return toolError(err)
 	}
@@ -157,6 +215,8 @@ func (e *DefaultToolExecutor) listUsageLogs(userID int, rawArguments string) Too
 		items = append(items, map[string]any{
 			"created_at":        entry.CreatedAt,
 			"created_at_iso":    time.Unix(entry.CreatedAt, 0).UTC().Format(time.RFC3339),
+			"user_id":           entry.UserId,
+			"username":          entry.Username,
 			"model":             entry.ModelName,
 			"token_name":        entry.TokenName,
 			"group":             entry.Group,
@@ -170,6 +230,8 @@ func (e *DefaultToolExecutor) listUsageLogs(userID int, rawArguments string) Too
 		})
 	}
 	return ToolResult{OK: true, Data: map[string]any{
+		"scope":        scopeLabel(targetUserID),
+		"user_id":      targetUserID,
 		"period_start": start,
 		"period_end":   end,
 		"days":         days,
@@ -180,7 +242,8 @@ func (e *DefaultToolExecutor) listUsageLogs(userID int, rawArguments string) Too
 	}}
 }
 
-func (e *DefaultToolExecutor) listAPIKeys(userID int, rawArguments string) ToolResult {
+// listAPIKeys lists one user's keys, or all users' keys when targetUserID is 0.
+func (e *DefaultToolExecutor) listAPIKeys(targetUserID int, rawArguments string) ToolResult {
 	args := listKeysArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -189,31 +252,63 @@ func (e *DefaultToolExecutor) listAPIKeys(userID int, rawArguments string) ToolR
 	if err != nil {
 		return toolError(err)
 	}
-	tokens, err := model.GetAllUserTokens(userID, 0, limit)
-	if err != nil {
-		return toolError(err)
-	}
-	total, err := model.CountUserTokens(userID)
-	if err != nil {
-		return toolError(err)
-	}
-	ids := make([]int, 0, len(tokens))
-	for _, token := range tokens {
-		if token != nil {
-			ids = append(ids, token.Id)
+	var tokens []*model.Token
+	var total int64
+	todayUsed := map[int]int64{}
+	if targetUserID == 0 {
+		tokens, err = model.GetAllTokens(0, limit)
+		if err != nil {
+			return toolError(err)
 		}
-	}
-	todayUsed, err := model.GetTokenTodayUsedQuota(userID, ids)
-	if err != nil {
-		todayUsed = map[int]int64{}
+		total, err = model.CountAllTokens()
+		if err != nil {
+			return toolError(err)
+		}
+		idsByUser := map[int][]int{}
+		for _, token := range tokens {
+			if token != nil {
+				idsByUser[token.UserId] = append(idsByUser[token.UserId], token.Id)
+			}
+		}
+		for ownerID, ids := range idsByUser {
+			used, usedErr := model.GetTokenTodayUsedQuota(ownerID, ids)
+			if usedErr != nil {
+				continue
+			}
+			for tokenID, quota := range used {
+				todayUsed[tokenID] = quota
+			}
+		}
+	} else {
+		tokens, err = model.GetAllUserTokens(targetUserID, 0, limit)
+		if err != nil {
+			return toolError(err)
+		}
+		total, err = model.CountUserTokens(targetUserID)
+		if err != nil {
+			return toolError(err)
+		}
+		ids := make([]int, 0, len(tokens))
+		for _, token := range tokens {
+			if token != nil {
+				ids = append(ids, token.Id)
+			}
+		}
+		used, usedErr := model.GetTokenTodayUsedQuota(targetUserID, ids)
+		if usedErr == nil {
+			todayUsed = used
+		}
 	}
 	items := make([]map[string]any, 0, len(tokens))
 	for _, token := range tokens {
 		if token == nil {
 			continue
 		}
+		username, _ := model.GetUsernameById(token.UserId, false)
 		items = append(items, map[string]any{
 			"id":                   token.Id,
+			"user_id":              token.UserId,
+			"username":             username,
 			"name":                 token.Name,
 			"masked_key":           "sk-" + token.GetMaskedKey(),
 			"status":               token.Status,
@@ -231,11 +326,20 @@ func (e *DefaultToolExecutor) listAPIKeys(userID int, rawArguments string) ToolR
 		})
 	}
 	return ToolResult{OK: true, Data: map[string]any{
+		"scope":     scopeLabel(targetUserID),
+		"user_id":   targetUserID,
 		"total":     total,
 		"returned":  len(items),
 		"truncated": total > int64(len(items)),
 		"items":     items,
 	}}
+}
+
+func scopeLabel(targetUserID int) string {
+	if targetUserID == 0 {
+		return "all_users"
+	}
+	return "user"
 }
 
 func consumeTotalsMap(totals model.UserConsumeTotals) map[string]any {

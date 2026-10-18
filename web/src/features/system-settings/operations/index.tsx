@@ -46,6 +46,7 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'assistant_setting.enabled': true,
   'assistant_setting.user_enabled': false,
   'assistant_setting.user_source': 'direct',
   'assistant_setting.user_protocol': 'responses',
