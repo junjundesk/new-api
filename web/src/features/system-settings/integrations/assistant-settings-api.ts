@@ -22,6 +22,8 @@ export type AssistantProfileName = 'user' | 'admin'
 
 export type AssistantSource = 'direct' | 'channel'
 
+export type AssistantProtocol = 'responses' | 'chat'
+
 export type AssistantChannel = {
   id: number
   name: string
@@ -38,14 +40,22 @@ export type AssistantChannelsResponse = {
   data?: AssistantChannel[]
 }
 
-export type AssistantTestRequest = {
+export type AssistantProfileRequest = {
   profile: AssistantProfileName
   source?: AssistantSource
+  protocol?: AssistantProtocol
   base_url?: string
   api_key?: string
   model?: string
   channel_id?: number
   channel_model?: string
+}
+
+export type AssistantTestRequest = AssistantProfileRequest
+
+export type AssistantModelsRequest = AssistantProfileRequest & {
+  context_window?: number
+  max_output_tokens?: number
 }
 
 export type AssistantTestData = {
@@ -60,9 +70,35 @@ export type AssistantTestResponse = {
   data?: AssistantTestData
 }
 
+export type AssistantModelsResponse = {
+  success: boolean
+  message: string
+  data?: {
+    models: string[]
+  }
+}
+
 export type AssistantClearKeyResponse = {
   success: boolean
   message: string
+}
+
+const TOKEN_AMOUNT_PATTERN = /^(\d+(?:\.\d+)?)\s*([kKmM])?$/
+
+/**
+ * Parses a human-readable token amount ("128k", "1M", "1000000") into an
+ * integer. Returns null when the input is not a supported token count.
+ */
+export function parseTokenAmount(raw: string): number | null {
+  const match = TOKEN_AMOUNT_PATTERN.exec(raw.trim())
+  if (!match) return null
+  const base = Number(match[1])
+  if (!Number.isFinite(base)) return null
+  const suffix = match[2]?.toLowerCase()
+  let multiplier = 1
+  if (suffix === 'k') multiplier = 1000
+  if (suffix === 'm') multiplier = 1000000
+  return Math.round(base * multiplier)
 }
 
 /**
@@ -85,6 +121,19 @@ export async function listAssistantChannels() {
 export async function testAssistantConnection(request: AssistantTestRequest) {
   const res = await api.post<AssistantTestResponse>(
     '/api/assistant/admin/test',
+    request,
+    { skipErrorHandler: true, skipBusinessError: true }
+  )
+  return res.data
+}
+
+/**
+ * Fetches the upstream model list for one profile. The same unsaved form values
+ * as the connection test are used, so the model picker works before saving.
+ */
+export async function listAssistantModels(request: AssistantModelsRequest) {
+  const res = await api.post<AssistantModelsResponse>(
+    '/api/assistant/admin/models',
     request,
     { skipErrorHandler: true, skipBusinessError: true }
   )

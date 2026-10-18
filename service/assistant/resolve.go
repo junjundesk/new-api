@@ -17,20 +17,24 @@ import (
 // browser.
 func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 	setting := assistant_setting.Get()
-	dailyLimit := setting.DailyUserMessageLimit
-	if dailyLimit < 0 {
-		dailyLimit = 0
+	protocol := normalizeProtocol(profile.Protocol)
+	contextWindow := profile.ContextWindow
+	if contextWindow <= 0 {
+		contextWindow = 1000000
 	}
-	if dailyLimit > 10000 {
-		dailyLimit = 10000
+	maxOutputTokens := profile.MaxOutputTokens
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = 128000
+	}
+	if maxOutputTokens >= contextWindow {
+		return Config{}, fmt.Errorf("max output tokens must be smaller than the model context window")
 	}
 	cfg := Config{
-		SystemPrompt:          setting.SystemPrompt,
-		MaxToolRounds:         clampInt(setting.MaxToolRounds, 5, 1, 10),
-		RequestTimeout:        time.Duration(clampInt(setting.RequestTimeoutSeconds, 60, 5, 300)) * time.Second,
-		MaxOutputTokens:       clampInt(setting.MaxOutputTokens, 1500, 64, 8192),
-		DailyUserMessageLimit: dailyLimit,
-		AllowTokenActions:     setting.AllowTokenActions,
+		Protocol:        protocol,
+		SystemPrompt:    setting.SystemPrompt,
+		ContextWindow:   contextWindow,
+		MaxOutputTokens: maxOutputTokens,
+		RequestTimeout:  time.Duration(clampInt(setting.RequestTimeoutSeconds, 60, 5, 300)) * time.Second,
 	}
 
 	if profile.Source == assistant_setting.SourceChannel {
@@ -100,6 +104,64 @@ func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 	cfg.APIKey = apiKey
 	cfg.Model = modelName
 	return cfg, nil
+}
+
+// ResolveModelListConnection resolves only the upstream API root and key, so
+// the admin can fetch the model list before selecting a model.
+func ResolveModelListConnection(profile assistant_setting.Profile) (string, string, error) {
+	if profile.Source == assistant_setting.SourceChannel {
+		if profile.ChannelID <= 0 {
+			return "", "", fmt.Errorf("assistant channel is not selected")
+		}
+		channel, err := model.GetChannelById(profile.ChannelID, true)
+		if err != nil {
+			return "", "", fmt.Errorf("assistant channel not found")
+		}
+		if channel.Type == constant.ChannelTypeAzure {
+			return "", "", fmt.Errorf("Azure channels are not supported for the assistant")
+		}
+		baseURL := strings.TrimSpace(channel.GetBaseURL())
+		if baseURL == "" {
+			return "", "", fmt.Errorf("assistant channel has no base URL")
+		}
+		if strings.Contains(baseURL, "{model}") {
+			return "", "", fmt.Errorf("this channel base URL requires a model name; use the channel model list instead")
+		}
+		normalizedBaseURL, err := assistant_setting.NormalizeChannelBaseURL(baseURL)
+		if err != nil {
+			return "", "", err
+		}
+		apiKey := strings.TrimSpace(profile.APIKey)
+		if apiKey == "" {
+			key, _, apiErr := channel.GetNextEnabledKey()
+			if apiErr != nil || strings.TrimSpace(key) == "" {
+				return "", "", fmt.Errorf("assistant channel has no available key")
+			}
+			apiKey = strings.TrimSpace(key)
+		}
+		return normalizedBaseURL, apiKey, nil
+	}
+	baseURL := strings.TrimSpace(profile.BaseURL)
+	if baseURL == "" {
+		return "", "", fmt.Errorf("assistant base URL is not configured")
+	}
+	normalizedBaseURL, err := assistant_setting.NormalizeBaseURL(baseURL)
+	if err != nil {
+		return "", "", err
+	}
+	apiKey := strings.TrimSpace(profile.APIKey)
+	if apiKey == "" {
+		return "", "", fmt.Errorf("assistant API key is not configured")
+	}
+	return normalizedBaseURL, apiKey, nil
+}
+
+func normalizeProtocol(protocol string) string {
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	if protocol == assistant_setting.ProtocolChat {
+		return assistant_setting.ProtocolChat
+	}
+	return assistant_setting.ProtocolResponses
 }
 
 func clampInt(value, fallback, minValue, maxValue int) int {

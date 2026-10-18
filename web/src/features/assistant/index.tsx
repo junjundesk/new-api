@@ -53,7 +53,8 @@ export function Assistant(props: AssistantProps) {
       config?.maxMessageChars ?? ASSISTANT_LIMITS.MAX_MESSAGE_CHARS,
     maxHistoryMessages:
       config?.maxHistoryMessages ?? ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES,
-    maxHistoryChars: ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
+    maxHistoryChars:
+      config?.maxHistoryChars ?? ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
   })
 
   function handleRetry(): void {

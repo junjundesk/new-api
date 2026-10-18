@@ -22,11 +22,11 @@ import (
 )
 
 const (
-	assistantMaxMessageChars     = 4000
-	assistantMaxHistoryMessages  = 20
-	assistantMaxHistoryChars     = 20000
+	assistantMaxMessageChars     = 100000
+	assistantMaxHistoryMessages  = 100
+	assistantMaxHistoryChars     = 400000
 	assistantHeartbeatInterval   = 15 * time.Second
-	assistantChatBodyLimit       = 64 << 10
+	assistantChatBodyLimit       = 2 << 20
 	assistantTestBodyLimit       = 16 << 10
 	assistantMaxResponseTextSize = 500
 )
@@ -37,13 +37,16 @@ type assistantChatRequest struct {
 }
 
 type assistantTestRequest struct {
-	Profile      string `json:"profile"`
-	Source       string `json:"source"`
-	BaseURL      string `json:"base_url"`
-	APIKey       string `json:"api_key"`
-	Model        string `json:"model"`
-	ChannelID    int    `json:"channel_id"`
-	ChannelModel string `json:"channel_model"`
+	Profile         string `json:"profile"`
+	Source          string `json:"source"`
+	Protocol        string `json:"protocol"`
+	BaseURL         string `json:"base_url"`
+	APIKey          string `json:"api_key"`
+	Model           string `json:"model"`
+	ChannelID       int    `json:"channel_id"`
+	ChannelModel    string `json:"channel_model"`
+	ContextWindow   int    `json:"context_window"`
+	MaxOutputTokens int    `json:"max_output_tokens"`
 }
 
 type assistantChannelItem struct {
@@ -73,29 +76,29 @@ func GetAdminAssistantConfig(c *gin.Context) {
 }
 
 func getAssistantRuntimeConfig(c *gin.Context, profileName string) {
-	setting := assistant_setting.Get()
 	common.ApiSuccess(c, gin.H{
 		"enabled":              assistant_setting.IsAvailable(profileName),
 		"model":                assistant_setting.ModelName(profileName),
-		"can_create_tokens":    setting.AllowTokenActions,
+		"can_create_tokens":    true,
 		"max_message_chars":    assistantMaxMessageChars,
 		"max_history_messages": assistantMaxHistoryMessages,
+		"max_history_chars":    assistantMaxHistoryChars,
 	})
 }
 
 // AssistantChat is the free user-facing assistant endpoint.
 func AssistantChat(c *gin.Context) {
-	assistantChatStream(c, assistant_setting.ProfileUser, true)
+	assistantChatStream(c, assistant_setting.ProfileUser)
 }
 
 // AdminAssistantChat is the separate root-only assistant endpoint. It uses the
 // admin profile (its own API/key/channel binding) and is not subject to the
 // user daily message budget.
 func AdminAssistantChat(c *gin.Context) {
-	assistantChatStream(c, assistant_setting.ProfileAdmin, false)
+	assistantChatStream(c, assistant_setting.ProfileAdmin)
 }
 
-func assistantChatStream(c *gin.Context, profileName string, enforceDailyLimit bool) {
+func assistantChatStream(c *gin.Context, profileName string) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, assistantChatBodyLimit)
 	request := assistantChatRequest{}
 	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
@@ -189,16 +192,8 @@ func assistantChatStream(c *gin.Context, profileName string, enforceDailyLimit b
 	}
 	defer assistant.ReleaseGlobal()
 
-	if enforceDailyLimit {
-		allowed, retryAfter := assistant.AcquireDailyLimit(userID, cfg.DailyUserMessageLimit)
-		if !allowed {
-			writeError("assistant_daily_limit", i18n.MsgAssistantDailyLimit, map[string]any{"RetryAfter": retryAfter})
-			return
-		}
-	}
-
 	client := assistant.NewHTTPClient(cfg)
-	executor := assistant.NewDefaultToolExecutor(cfg.AllowTokenActions)
+	executor := assistant.NewDefaultToolExecutor()
 	audit := func(action string, params map[string]any) {
 		recordUserSecurityAudit(c, userID, action, params)
 	}
@@ -225,19 +220,13 @@ func handleAssistantRunError(c *gin.Context, writer *sseWriter, err error) {
 		_ = writer.WriteEvent(assistant.Event{Type: "error", Code: "assistant_upstream_error", Message: common.TranslateMessage(c, i18n.MsgAssistantUpstreamError)})
 		return
 	}
-	var limitError *assistant.DailyLimitError
-	if errors.As(err, &limitError) {
+	var contextError *assistant.ContextExceededError
+	if errors.As(err, &contextError) {
 		_ = writer.WriteEvent(assistant.Event{
-			Type:       "error",
-			Code:       "assistant_daily_limit",
-			Message:    common.TranslateMessage(c, i18n.MsgAssistantDailyLimit, map[string]any{"RetryAfter": limitError.RetryAfter}),
-			RetryAfter: limitError.RetryAfter,
+			Type:    "error",
+			Code:    "assistant_context_exceeded",
+			Message: common.TranslateMessage(c, i18n.MsgAssistantContextExceeded),
 		})
-		return
-	}
-	var roundsError *assistant.TooManyToolRoundsError
-	if errors.As(err, &roundsError) {
-		_ = writer.WriteEvent(assistant.Event{Type: "error", Code: "assistant_too_many_tool_rounds", Message: common.TranslateMessage(c, i18n.MsgAssistantTooManyToolRounds)})
 		return
 	}
 	var incompleteError *assistant.IncompleteError
@@ -300,6 +289,15 @@ func TestAssistantConnection(c *gin.Context) {
 	if request.ChannelModel != "" {
 		profile.ChannelModel = strings.TrimSpace(request.ChannelModel)
 	}
+	if request.Protocol != "" {
+		profile.Protocol = strings.ToLower(strings.TrimSpace(request.Protocol))
+	}
+	if request.ContextWindow > 0 {
+		profile.ContextWindow = request.ContextWindow
+	}
+	if request.MaxOutputTokens > 0 {
+		profile.MaxOutputTokens = request.MaxOutputTokens
+	}
 	cfg, err := assistant.ResolveConfig(profile)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgAssistantConnectionFailed, map[string]any{"Reason": err.Error()})
@@ -328,6 +326,55 @@ func TestAssistantConnection(c *gin.Context) {
 		"model":      cfg.Model,
 		"text":       text,
 	})
+}
+
+// ListAssistantModels fetches the upstream model list for an unsaved or saved
+// admin profile. It never returns the upstream key.
+func ListAssistantModels(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, assistantTestBodyLimit)
+	request := assistantTestRequest{}
+	if c.Request.ContentLength != 0 {
+		if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+	}
+	profileName := strings.TrimSpace(request.Profile)
+	if profileName == "" {
+		profileName = assistant_setting.ProfileUser
+	}
+	if !validAssistantProfile(profileName) {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	profile := assistant_setting.GetProfile(profileName)
+	if source := strings.ToLower(strings.TrimSpace(request.Source)); source != "" {
+		profile.Source = source
+	}
+	if request.BaseURL != "" {
+		profile.BaseURL = strings.TrimSpace(request.BaseURL)
+	}
+	if request.APIKey != "" {
+		profile.APIKey = strings.TrimSpace(request.APIKey)
+	}
+	if request.ChannelID > 0 {
+		profile.ChannelID = request.ChannelID
+	}
+	if request.ChannelModel != "" {
+		profile.ChannelModel = strings.TrimSpace(request.ChannelModel)
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+	models, err := assistant.ListModels(ctx, profile)
+	if err != nil {
+		message := err.Error()
+		if len(message) > assistantMaxResponseTextSize {
+			message = message[:assistantMaxResponseTextSize]
+		}
+		common.ApiErrorI18n(c, i18n.MsgAssistantConnectionFailed, map[string]any{"Reason": message})
+		return
+	}
+	common.ApiSuccess(c, gin.H{"models": models})
 }
 
 // ClearAssistantKey removes one profile's stored API key override and disables

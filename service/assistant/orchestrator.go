@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -14,40 +15,41 @@ const maxToolResultBytes = 32 << 10
 // emit. It does not emit terminal error/done events; the controller owns that.
 type Orchestrator struct {
 	cfg      Config
-	client   ResponsesClient
+	client   Client
 	executor ToolExecutor
 	emit     EmitFunc
 	audit    AuditFunc
 }
 
-func NewOrchestrator(cfg Config, client ResponsesClient, executor ToolExecutor, emit EmitFunc, audit AuditFunc) *Orchestrator {
+func NewOrchestrator(cfg Config, client Client, executor ToolExecutor, emit EmitFunc, audit AuditFunc) *Orchestrator {
 	return &Orchestrator{cfg: cfg, client: client, executor: executor, emit: emit, audit: audit}
 }
 
 func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessage, message string) error {
-	input, err := buildInput(history, message)
-	if err != nil {
-		return err
-	}
 	if err := o.emit(Event{Type: "meta", Model: o.cfg.Model}); err != nil {
 		return err
 	}
-	tools := o.executor.Definitions(o.cfg.AllowTokenActions)
-	maxRounds := o.cfg.MaxToolRounds
-	if maxRounds <= 0 {
-		maxRounds = 5
+	if o.cfg.Protocol == "chat" {
+		return o.runChat(ctx, userID, history, message)
 	}
-	if maxRounds > 10 {
-		maxRounds = 10
-	}
+	return o.runResponses(ctx, userID, history, message)
+}
 
-	for round := 0; round <= maxRounds; round++ {
-		result, err := o.client.CreateResponse(ctx, input, tools, func(text string) error {
-			if text == "" {
-				return nil
-			}
-			return o.emit(Event{Type: "delta", Text: text})
-		})
+func (o *Orchestrator) onDelta(text string) error {
+	if text == "" {
+		return nil
+	}
+	return o.emit(Event{Type: "delta", Text: text})
+}
+
+func (o *Orchestrator) runResponses(ctx context.Context, userID int, history []ChatMessage, message string) error {
+	input, err := buildResponsesInput(o.cfg, history, message)
+	if err != nil {
+		return err
+	}
+	tools := o.executor.Definitions()
+	for {
+		result, err := o.client.CreateResponse(ctx, input, tools, o.onDelta)
 		if err != nil {
 			return err
 		}
@@ -58,40 +60,9 @@ func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessag
 			}
 			return nil
 		}
-		if round == maxRounds {
-			return &TooManyToolRoundsError{Max: maxRounds}
-		}
 		input = append(input, result.Output...)
-
 		for _, call := range calls {
-			var arguments any
-			if call.Arguments != "" {
-				if err := common.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-					arguments = map[string]any{"raw": call.Arguments}
-				}
-			}
-			if err := o.emit(Event{
-				Type:       "tool_start",
-				ToolCallID: call.CallID,
-				Name:       call.Name,
-				Arguments:  arguments,
-			}); err != nil {
-				return err
-			}
-
-			toolResult := o.executor.Execute(ctx, userID, call, o.audit)
-			ok := toolResult.OK
-			if err := o.emit(Event{
-				Type:       "tool_result",
-				ToolCallID: call.CallID,
-				Name:       call.Name,
-				OK:         &ok,
-				Result:     toolResult.Data,
-				Error:      toolResult.Error,
-			}); err != nil {
-				return err
-			}
-
+			toolResult := o.executeTool(ctx, userID, call)
 			output, err := marshalToolOutput(toolResult)
 			if err != nil {
 				return err
@@ -107,22 +78,97 @@ func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessag
 			input = append(input, item)
 		}
 	}
-	return &TooManyToolRoundsError{Max: maxRounds}
 }
 
-func buildInput(history []ChatMessage, message string) ([]json.RawMessage, error) {
-	items := make([]json.RawMessage, 0, len(history)+1)
-	for _, entry := range history {
-		if entry.Role != "user" && entry.Role != "assistant" {
-			continue
+func (o *Orchestrator) runChat(ctx context.Context, userID int, history []ChatMessage, message string) error {
+	messages, err := buildChatMessages(o.cfg, history, message)
+	if err != nil {
+		return err
+	}
+	tools := chatToolDefinitions(o.executor.Definitions())
+	for {
+		result, err := o.client.CreateChatCompletion(ctx, messages, tools, o.onDelta)
+		if err != nil {
+			return err
 		}
-		content := entry.Content
-		if content == "" {
-			continue
+		if len(result.ToolCalls) == 0 {
+			if result.FinishReason == "length" {
+				return &IncompleteError{Reason: "max_output_tokens"}
+			}
+			return nil
 		}
+		assistantCalls := make([]map[string]any, 0, len(result.ToolCalls))
+		for _, call := range result.ToolCalls {
+			assistantCalls = append(assistantCalls, map[string]any{
+				"id":   call.ID,
+				"type": "function",
+				"function": map[string]any{
+					"name":      call.Name,
+					"arguments": call.Arguments,
+				},
+			})
+		}
+		assistantMessage := map[string]any{
+			"role":       "assistant",
+			"content":    result.Content,
+			"tool_calls": assistantCalls,
+		}
+		if result.Content == "" {
+			assistantMessage["content"] = nil
+		}
+		messages = append(messages, assistantMessage)
+		for _, call := range result.ToolCalls {
+			toolCall := ToolCall{CallID: call.ID, Name: call.Name, Arguments: call.Arguments}
+			toolResult := o.executeTool(ctx, userID, toolCall)
+			output, err := marshalToolOutput(toolResult)
+			if err != nil {
+				return err
+			}
+			messages = append(messages, map[string]any{
+				"role":         "tool",
+				"tool_call_id": call.ID,
+				"content":      output,
+			})
+		}
+	}
+}
+
+func (o *Orchestrator) executeTool(ctx context.Context, userID int, call ToolCall) ToolResult {
+	var arguments any
+	if call.Arguments != "" {
+		if err := common.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
+			arguments = map[string]any{"raw": call.Arguments}
+		}
+	}
+	_ = o.emit(Event{
+		Type:       "tool_start",
+		ToolCallID: call.CallID,
+		Name:       call.Name,
+		Arguments:  arguments,
+	})
+	toolResult := o.executor.Execute(ctx, userID, call, o.audit)
+	ok := toolResult.OK
+	_ = o.emit(Event{
+		Type:       "tool_result",
+		ToolCallID: call.CallID,
+		Name:       call.Name,
+		OK:         &ok,
+		Result:     toolResult.Data,
+		Error:      toolResult.Error,
+	})
+	return toolResult
+}
+
+func buildResponsesInput(cfg Config, history []ChatMessage, message string) ([]json.RawMessage, error) {
+	trimmed, err := trimHistoryForContext(cfg, history, message)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]json.RawMessage, 0, len(trimmed)+1)
+	for _, entry := range trimmed {
 		item, err := common.Marshal(map[string]string{
 			"role":    entry.Role,
-			"content": content,
+			"content": entry.Content,
 		})
 		if err != nil {
 			return nil, err
@@ -138,6 +184,86 @@ func buildInput(history []ChatMessage, message string) ([]json.RawMessage, error
 	}
 	items = append(items, current)
 	return items, nil
+}
+
+func buildChatMessages(cfg Config, history []ChatMessage, message string) ([]map[string]any, error) {
+	trimmed, err := trimHistoryForContext(cfg, history, message)
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]map[string]any, 0, len(trimmed)+2)
+	messages = append(messages, map[string]any{
+		"role":    "system",
+		"content": buildInstructions(cfg.SystemPrompt),
+	})
+	for _, entry := range trimmed {
+		messages = append(messages, map[string]any{
+			"role":    entry.Role,
+			"content": entry.Content,
+		})
+	}
+	messages = append(messages, map[string]any{
+		"role":    "user",
+		"content": message,
+	})
+	return messages, nil
+}
+
+// trimHistoryForContext keeps the newest history turns that fit into the model
+// context window while reserving room for the maximum output. The estimate is
+// intentionally conservative (one rune per token).
+func trimHistoryForContext(cfg Config, history []ChatMessage, message string) ([]ChatMessage, error) {
+	budget := cfg.ContextWindow - cfg.MaxOutputTokens
+	if budget <= 0 {
+		return nil, &ContextExceededError{ContextWindow: cfg.ContextWindow, MaxOutput: cfg.MaxOutputTokens}
+	}
+	used := estimateTokens(cfg.SystemPrompt) + estimateTokens(message)
+	if used > budget {
+		return nil, &ContextExceededError{ContextWindow: cfg.ContextWindow, MaxOutput: cfg.MaxOutputTokens}
+	}
+	remaining := budget - used
+	kept := make([]ChatMessage, 0, len(history))
+	for index := len(history) - 1; index >= 0; index-- {
+		entry := history[index]
+		if entry.Role != "user" && entry.Role != "assistant" {
+			continue
+		}
+		if entry.Content == "" {
+			continue
+		}
+		cost := estimateTokens(entry.Content)
+		if cost > remaining {
+			break
+		}
+		kept = append(kept, entry)
+		remaining -= cost
+	}
+	for left, right := 0, len(kept)-1; left < right; left, right = left+1, right-1 {
+		kept[left], kept[right] = kept[right], kept[left]
+	}
+	return kept, nil
+}
+
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	return utf8.RuneCountInString(text)
+}
+
+func chatToolDefinitions(definitions []map[string]any) []map[string]any {
+	result := make([]map[string]any, 0, len(definitions))
+	for _, definition := range definitions {
+		result = append(result, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        definition["name"],
+				"description": definition["description"],
+				"parameters":  definition["parameters"],
+			},
+		})
+	}
+	return result
 }
 
 func marshalToolOutput(result ToolResult) (string, error) {

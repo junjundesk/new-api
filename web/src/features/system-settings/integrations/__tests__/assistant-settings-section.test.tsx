@@ -21,6 +21,7 @@ import { api } from '@/lib/api'
 import type { AssistantChannel } from '../assistant-settings-api'
 import {
   AssistantSettingsSection,
+  type AssistantProfileDefaults,
   type AssistantSettingsDefaults,
 } from '../assistant-settings-section'
 
@@ -31,36 +32,31 @@ await i18n.init({
     en: {
       translation: {
         'Connected in {{latency}} ms': 'Connected in {{latency}} ms',
+        'Resolved value: {{tokens}} tokens':
+          'Resolved value: {{tokens}} tokens',
       },
     },
   },
 })
 
+const baseProfileDefaults: AssistantProfileDefaults = {
+  enabled: false,
+  source: 'direct',
+  protocol: 'responses',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-4.1-mini',
+  channelId: 0,
+  channelModel: '',
+  apiKeyConfigured: false,
+  contextWindow: 1000000,
+  maxOutputTokens: 128000,
+}
+
 const baseDefaults: AssistantSettingsDefaults = {
-  user: {
-    enabled: false,
-    source: 'direct',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4.1-mini',
-    channelId: 0,
-    channelModel: '',
-    apiKeyConfigured: false,
-  },
-  admin: {
-    enabled: false,
-    source: 'direct',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4.1-mini',
-    channelId: 0,
-    channelModel: '',
-    apiKeyConfigured: false,
-  },
+  user: { ...baseProfileDefaults },
+  admin: { ...baseProfileDefaults },
   systemPrompt: '',
-  maxToolRounds: 5,
   requestTimeoutSeconds: 60,
-  maxOutputTokens: 1500,
-  dailyUserMessageLimit: 50,
-  allowTokenActions: true,
 }
 
 const channels: AssistantChannel[] = [
@@ -195,6 +191,7 @@ describe('assistant settings section', () => {
   })
 
   it('saves shared fields first, then each profile with its enabled flag last', async () => {
+    const user = userEvent.setup()
     renderSection()
 
     const userCard = getProfileCard('User assistant')
@@ -204,23 +201,29 @@ describe('assistant settings section', () => {
       target: { value: 'Be concise.' },
     })
     fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Max tool rounds' }),
-      { target: { value: '6' } }
-    )
-    fireEvent.change(
       screen.getByRole('spinbutton', { name: 'Request timeout (seconds)' }),
       { target: { value: '90' } }
     )
-    fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Max output tokens' }),
-      { target: { value: '2000' } }
-    )
-    fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Daily message limit per user' }),
-      { target: { value: '70' } }
-    )
-    fireEvent.click(screen.getByRole('switch', { name: 'Allow token actions' }))
 
+    await selectComboboxOption(
+      user,
+      within(userCard).getByRole('combobox', { name: 'Protocol' }),
+      'OpenAI Chat'
+    )
+    fireEvent.change(
+      within(userCard).getByRole('textbox', { name: 'Context window' }),
+      { target: { value: '256k' } }
+    )
+    fireEvent.change(
+      within(userCard).getByRole('textbox', { name: 'Max output tokens' }),
+      { target: { value: '64k' } }
+    )
+    expect(
+      within(userCard).getByText('Resolved value: 256000 tokens')
+    ).toBeVisible()
+    expect(
+      within(userCard).getByText('Resolved value: 64000 tokens')
+    ).toBeVisible()
     fireEvent.change(within(userCard).getByLabelText(/API Key/), {
       target: { value: ' sk-test ' },
     })
@@ -232,6 +235,14 @@ describe('assistant settings section', () => {
     })
     fireEvent.click(within(userCard).getByRole('switch', { name: 'Enabled' }))
 
+    fireEvent.change(
+      within(adminCard).getByRole('textbox', { name: 'Context window' }),
+      { target: { value: '500000' } }
+    )
+    fireEvent.change(
+      within(adminCard).getByRole('textbox', { name: 'Max output tokens' }),
+      { target: { value: '8192' } }
+    )
     fireEvent.change(within(adminCard).getByLabelText(/API Key/), {
       target: { value: 'sk-admin' },
     })
@@ -245,28 +256,27 @@ describe('assistant settings section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(14))
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(15))
     expect(putSpy.mock.calls).toEqual([
       [
         '/api/option/',
         { key: 'assistant_setting.system_prompt', value: 'Be concise.' },
       ],
-      ['/api/option/', { key: 'assistant_setting.max_tool_rounds', value: 6 }],
       [
         '/api/option/',
         { key: 'assistant_setting.request_timeout_seconds', value: 90 },
       ],
       [
         '/api/option/',
-        { key: 'assistant_setting.max_output_tokens', value: 2000 },
+        { key: 'assistant_setting.user_protocol', value: 'chat' },
       ],
       [
         '/api/option/',
-        { key: 'assistant_setting.daily_user_message_limit', value: 70 },
+        { key: 'assistant_setting.user_context_window', value: 256000 },
       ],
       [
         '/api/option/',
-        { key: 'assistant_setting.allow_token_actions', value: false },
+        { key: 'assistant_setting.user_max_output_tokens', value: 64000 },
       ],
       [
         '/api/option/',
@@ -284,6 +294,14 @@ describe('assistant settings section', () => {
         { key: 'assistant_setting.user_model', value: 'gpt-4o' },
       ],
       ['/api/option/', { key: 'assistant_setting.user_enabled', value: true }],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.admin_context_window', value: 500000 },
+      ],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.admin_max_output_tokens', value: 8192 },
+      ],
       [
         '/api/option/',
         { key: 'assistant_setting.admin_api_key', value: 'sk-admin' },
@@ -312,7 +330,7 @@ describe('assistant settings section', () => {
   })
 
   it('skips an empty API key when other profile fields change', async () => {
-    renderSection({ user: { ...baseDefaults.user, apiKeyConfigured: true } })
+    renderSection({ user: { ...baseProfileDefaults, apiKeyConfigured: true } })
 
     const userCard = getProfileCard('User assistant')
     fireEvent.change(within(userCard).getByLabelText('Model'), {
@@ -331,8 +349,8 @@ describe('assistant settings section', () => {
 
   it('clears only the confirmed profile API key', async () => {
     const { invalidateSpy } = renderSection({
-      user: { ...baseDefaults.user, apiKeyConfigured: true },
-      admin: { ...baseDefaults.admin, apiKeyConfigured: true },
+      user: { ...baseProfileDefaults, apiKeyConfigured: true },
+      admin: { ...baseProfileDefaults, apiKeyConfigured: true },
     })
 
     const userCard = getProfileCard('User assistant')
@@ -403,6 +421,7 @@ describe('assistant settings section', () => {
       {
         profile: 'user',
         source: 'direct',
+        protocol: 'responses',
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4.1-mini',
         api_key: 'sk-test',
@@ -416,7 +435,7 @@ describe('assistant settings section', () => {
     postSpy.mockResolvedValue({
       data: { success: false, message: 'Invalid API key' },
     })
-    renderSection({ user: { ...baseDefaults.user, apiKeyConfigured: true } })
+    renderSection({ user: { ...baseProfileDefaults, apiKeyConfigured: true } })
 
     const userCard = getProfileCard('User assistant')
     fireEvent.click(
@@ -431,6 +450,7 @@ describe('assistant settings section', () => {
       {
         profile: 'user',
         source: 'direct',
+        protocol: 'responses',
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4.1-mini',
       },
@@ -491,6 +511,176 @@ describe('assistant settings section', () => {
 
     expect(await screen.findByText('Channel is required')).toBeVisible()
     expect(screen.getByText('Channel model is required')).toBeVisible()
+    expect(putSpy).not.toHaveBeenCalled()
+  })
+
+  it('fetches models for the direct profile and offers them without selecting one', async () => {
+    postSpy.mockResolvedValue({
+      data: {
+        success: true,
+        message: '',
+        data: { models: ['gpt-4o', 'o3'] },
+      },
+    })
+    renderSection()
+
+    const userCard = getProfileCard('User assistant')
+    const modelInput = within(userCard).getByRole('combobox', {
+      name: 'Model',
+    })
+    fireEvent.click(
+      within(userCard).getByRole('button', { name: 'Fetch models' })
+    )
+
+    await waitFor(() =>
+      expect(getModelSuggestions(modelInput)).toEqual(['gpt-4o', 'o3'])
+    )
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/assistant/admin/models',
+      {
+        profile: 'user',
+        source: 'direct',
+        protocol: 'responses',
+        base_url: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        context_window: 1000000,
+        max_output_tokens: 128000,
+      },
+      testRequestConfig
+    )
+    expect((modelInput as HTMLInputElement).value).toBe('gpt-4.1-mini')
+  })
+
+  it('merges fetched models with the selected channel models', async () => {
+    const user = userEvent.setup()
+    postSpy.mockResolvedValue({
+      data: {
+        success: true,
+        message: '',
+        data: { models: ['gpt-4o', 'extra-model'] },
+      },
+    })
+    renderSection()
+
+    const channelSelect = await switchUserProfileToChannel(user)
+    await selectComboboxOption(user, channelSelect, /Primary/)
+
+    const userCard = getProfileCard('User assistant')
+    const modelInput = within(userCard).getByRole('combobox', {
+      name: 'Channel model',
+    })
+    fireEvent.click(
+      within(userCard).getByRole('button', { name: 'Fetch models' })
+    )
+
+    await waitFor(() =>
+      expect(getModelSuggestions(modelInput)).toEqual([
+        'gpt-4.1-mini',
+        'gpt-4o',
+        'extra-model',
+      ])
+    )
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/assistant/admin/models',
+      {
+        profile: 'user',
+        source: 'channel',
+        protocol: 'responses',
+        channel_id: 1,
+        channel_model: '',
+        context_window: 1000000,
+        max_output_tokens: 128000,
+      },
+      testRequestConfig
+    )
+  })
+
+  it('shows a failed model fetch inline without a toast or suggestions', async () => {
+    postSpy.mockResolvedValue({
+      data: { success: false, message: 'No API key configured' },
+    })
+    renderSection()
+
+    const userCard = getProfileCard('User assistant')
+    const modelInput = within(userCard).getByRole('combobox', {
+      name: 'Model',
+    })
+    fireEvent.click(
+      within(userCard).getByRole('button', { name: 'Fetch models' })
+    )
+
+    expect(await screen.findByText('No API key configured')).toBeVisible()
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(getModelSuggestions(modelInput)).toEqual([])
+  })
+
+  it('blocks saving when max output tokens are not below the context window', async () => {
+    renderSection()
+
+    const userCard = getProfileCard('User assistant')
+    fireEvent.change(
+      within(userCard).getByRole('textbox', { name: 'Context window' }),
+      { target: { value: '200000' } }
+    )
+    fireEvent.change(
+      within(userCard).getByRole('textbox', { name: 'Max output tokens' }),
+      { target: { value: '200000' } }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => {
+      const messages = within(userCard).getAllByText(
+        'Max output tokens must be less than the context window'
+      )
+      expect(messages.length).toBeGreaterThan(0)
+    })
+    expect(putSpy).not.toHaveBeenCalled()
+  })
+
+  it('parses human-readable token amounts and shows the resolved count', () => {
+    renderSection()
+
+    const userCard = getProfileCard('User assistant')
+    const contextInput = within(userCard).getByRole('textbox', {
+      name: 'Context window',
+    })
+    fireEvent.change(contextInput, { target: { value: '1M' } })
+    expect(
+      within(userCard).getByText('Resolved value: 1000000 tokens')
+    ).toBeVisible()
+
+    fireEvent.change(contextInput, { target: { value: '1000000' } })
+    expect(
+      within(userCard).getByText('Resolved value: 1000000 tokens')
+    ).toBeVisible()
+
+    const maxOutputInput = within(userCard).getByRole('textbox', {
+      name: 'Max output tokens',
+    })
+    fireEvent.change(maxOutputInput, { target: { value: '128k' } })
+    expect(
+      within(userCard).getByText('Resolved value: 128000 tokens')
+    ).toBeVisible()
+
+    fireEvent.change(maxOutputInput, { target: { value: '256k' } })
+    expect(
+      within(userCard).getByText('Resolved value: 256000 tokens')
+    ).toBeVisible()
+  })
+
+  it('blocks saving an unparseable token amount', async () => {
+    renderSection()
+
+    const userCard = getProfileCard('User assistant')
+    fireEvent.change(
+      within(userCard).getByRole('textbox', { name: 'Context window' }),
+      { target: { value: 'lots' } }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() =>
+      expect(within(userCard).getByText('Value is out of range')).toBeVisible()
+    )
     expect(putSpy).not.toHaveBeenCalled()
   })
 })

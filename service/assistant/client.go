@@ -482,6 +482,17 @@ func TestConnection(ctx context.Context, cfg Config) (string, time.Duration, err
 	start := time.Now()
 	cfg.MaxOutputTokens = 16
 	client := NewHTTPClient(cfg)
+	if cfg.Protocol == "chat" {
+		result, err := client.createChatCompletion(ctx, []map[string]any{{"role": "user", "content": "Reply with OK."}}, nil, nil, false)
+		if err != nil {
+			return "", time.Since(start), err
+		}
+		text := strings.TrimSpace(result.Content)
+		if text == "" {
+			text = "OK"
+		}
+		return text, time.Since(start), nil
+	}
 	input := []json.RawMessage{json.RawMessage(`{"role":"user","content":"Reply with OK."}`)}
 	result, err := client.createResponse(ctx, input, nil, nil, false)
 	if err != nil {

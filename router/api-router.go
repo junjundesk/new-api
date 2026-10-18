@@ -28,6 +28,7 @@ func SetApiRouter(router *gin.Engine) {
 			assistantAdminRoute.POST("/chat", controller.AdminAssistantChat)
 			assistantAdminRoute.GET("/channels", middleware.DisableCache(), controller.ListAssistantChannels)
 			assistantAdminRoute.POST("/test", middleware.CriticalRateLimit(), controller.TestAssistantConnection)
+			assistantAdminRoute.POST("/models", middleware.CriticalRateLimit(), controller.ListAssistantModels)
 			assistantAdminRoute.DELETE("/key", middleware.CriticalRateLimit(), controller.ClearAssistantKey)
 		}
 	}

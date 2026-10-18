@@ -11,9 +11,12 @@ import (
 )
 
 type fakeResponsesClient struct {
-	responses []*ResponsesResult
-	deltas    [][]string
-	calls     int
+	responses   []*ResponsesResult
+	deltas      [][]string
+	chatResults []*ChatResult
+	chatDeltas  [][]string
+	calls       int
+	chatCalls   int
 }
 
 func (f *fakeResponsesClient) CreateResponse(ctx context.Context, input []json.RawMessage, tools []map[string]any, onDelta func(string) error) (*ResponsesResult, error) {
@@ -32,13 +35,29 @@ func (f *fakeResponsesClient) CreateResponse(ctx context.Context, input []json.R
 	return f.responses[index], nil
 }
 
+func (f *fakeResponsesClient) CreateChatCompletion(ctx context.Context, messages []map[string]any, tools []map[string]any, onDelta func(string) error) (*ChatResult, error) {
+	index := f.chatCalls
+	f.chatCalls++
+	if index >= len(f.chatResults) {
+		return &ChatResult{FinishReason: "stop"}, nil
+	}
+	if index < len(f.chatDeltas) && onDelta != nil {
+		for _, delta := range f.chatDeltas[index] {
+			if err := onDelta(delta); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return f.chatResults[index], nil
+}
+
 type fakeToolExecutor struct {
 	definitions []map[string]any
 	executed    []string
 	result      ToolResult
 }
 
-func (f *fakeToolExecutor) Definitions(allowTokenActions bool) []map[string]any {
+func (f *fakeToolExecutor) Definitions() []map[string]any {
 	return f.definitions
 }
 
@@ -74,6 +93,10 @@ func rawMessage(t *testing.T, text string) json.RawMessage {
 	return item
 }
 
+func testConfig() Config {
+	return Config{Model: "gpt-test", Protocol: "responses", ContextWindow: 1000000, MaxOutputTokens: 128000}
+}
+
 func TestOrchestratorRunsToolThenStreamsFinalText(t *testing.T) {
 	toolItem := rawToolCall(t, "call_1", "get_usage_summary", map[string]any{"days": 7})
 	client := &fakeResponsesClient{
@@ -88,7 +111,7 @@ func TestOrchestratorRunsToolThenStreamsFinalText(t *testing.T) {
 		result:      ToolResult{OK: true, Data: map[string]any{"quota": 1}},
 	}
 	events := make([]Event, 0)
-	orchestrator := NewOrchestrator(Config{Model: "gpt-test", MaxToolRounds: 2}, client, executor, func(event Event) error {
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error {
 		events = append(events, event)
 		return nil
 	}, nil)
@@ -109,18 +132,46 @@ func TestOrchestratorRunsToolThenStreamsFinalText(t *testing.T) {
 	assert.Equal(t, "final", events[3].Text)
 }
 
-func TestOrchestratorStopsAtMaxToolRounds(t *testing.T) {
+func TestOrchestratorRunsMultipleToolRoundsWithoutCap(t *testing.T) {
 	toolItem := rawToolCall(t, "call_1", "get_account_summary", map[string]any{})
 	client := &fakeResponsesClient{responses: []*ResponsesResult{
 		{Status: "completed", Output: []json.RawMessage{toolItem}},
 		{Status: "completed", Output: []json.RawMessage{toolItem}},
+		{Status: "completed", Output: []json.RawMessage{rawMessage(t, "done")}},
 	}}
 	executor := &fakeToolExecutor{definitions: []map[string]any{{"type": "function", "name": "get_account_summary"}}, result: ToolResult{OK: true}}
-	orchestrator := NewOrchestrator(Config{Model: "gpt-test", MaxToolRounds: 1}, client, executor, func(event Event) error { return nil }, nil)
-	err := orchestrator.Run(context.Background(), 1, nil, "hi")
-	var roundsError *TooManyToolRoundsError
-	require.ErrorAs(t, err, &roundsError)
-	assert.Equal(t, 1, roundsError.Max)
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
+	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "hi"))
+	assert.Equal(t, []string{"get_account_summary", "get_account_summary"}, executor.executed)
+}
+
+func TestOrchestratorChatProtocolLoopsTools(t *testing.T) {
+	client := &fakeResponsesClient{
+		chatResults: []*ChatResult{
+			{FinishReason: "tool_calls", ToolCalls: []ChatToolCall{{ID: "call_1", Name: "get_usage_summary", Arguments: "{}"}}},
+			{FinishReason: "stop", Content: "final"},
+		},
+		chatDeltas: [][]string{{}, {"final"}},
+	}
+	executor := &fakeToolExecutor{
+		definitions: []map[string]any{{"type": "function", "name": "get_usage_summary"}},
+		result:      ToolResult{OK: true, Data: map[string]any{"quota": 1}},
+	}
+	events := make([]Event, 0)
+	cfg := testConfig()
+	cfg.Protocol = "chat"
+	orchestrator := NewOrchestrator(cfg, client, executor, func(event Event) error {
+		events = append(events, event)
+		return nil
+	}, nil)
+	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "show usage"))
+	assert.Equal(t, []string{"get_usage_summary"}, executor.executed)
+	types := make([]string, 0, len(events))
+	for _, event := range events {
+		types = append(types, event.Type)
+	}
+	assert.Equal(t, []string{"meta", "tool_start", "tool_result", "delta"}, types)
+	assert.Equal(t, "final", events[3].Text)
 }
 
 func TestOrchestratorReturnsIncompleteError(t *testing.T) {
@@ -128,15 +179,15 @@ func TestOrchestratorReturnsIncompleteError(t *testing.T) {
 		{Status: "incomplete", IncompleteReason: "max_output_tokens", Output: []json.RawMessage{rawMessage(t, "partial")}},
 	}}
 	executor := &fakeToolExecutor{definitions: []map[string]any{}, result: ToolResult{OK: true}}
-	orchestrator := NewOrchestrator(Config{Model: "gpt-test", MaxToolRounds: 1}, client, executor, func(event Event) error { return nil }, nil)
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
 	err := orchestrator.Run(context.Background(), 1, nil, "hi")
 	var incompleteError *IncompleteError
 	require.ErrorAs(t, err, &incompleteError)
 	assert.Equal(t, "max_output_tokens", incompleteError.Reason)
 }
 
-func TestBuildInputSkipsEmptyAndUnknownHistory(t *testing.T) {
-	items, err := buildInput([]ChatMessage{
+func TestBuildResponsesInputSkipsEmptyAndUnknownHistory(t *testing.T) {
+	items, err := buildResponsesInput(testConfig(), []ChatMessage{
 		{Role: "user", Content: "first"},
 		{Role: "system", Content: "ignored"},
 		{Role: "assistant", Content: ""},
@@ -150,4 +201,36 @@ func TestBuildInputSkipsEmptyAndUnknownHistory(t *testing.T) {
 	var last map[string]string
 	require.NoError(t, common.Unmarshal(items[2], &last))
 	assert.Equal(t, "third", last["content"])
+}
+
+func TestTrimHistoryForContext(t *testing.T) {
+	cfg := testConfig()
+	cfg.ContextWindow = 50
+	cfg.MaxOutputTokens = 20
+	history := []ChatMessage{
+		{Role: "user", Content: "old message that is far too long"},
+		{Role: "assistant", Content: "recent"},
+	}
+	trimmed, err := trimHistoryForContext(cfg, history, "hi")
+	require.NoError(t, err)
+	require.Len(t, trimmed, 1)
+	assert.Equal(t, "recent", trimmed[0].Content)
+
+	cfg.ContextWindow = 10
+	cfg.MaxOutputTokens = 8
+	_, err = trimHistoryForContext(cfg, nil, "message too long")
+	var contextError *ContextExceededError
+	require.ErrorAs(t, err, &contextError)
+}
+
+func TestBuildChatMessagesIncludesSystemPrompt(t *testing.T) {
+	cfg := testConfig()
+	cfg.Protocol = "chat"
+	cfg.SystemPrompt = "be helpful"
+	messages, err := buildChatMessages(cfg, []ChatMessage{{Role: "user", Content: "earlier"}}, "now")
+	require.NoError(t, err)
+	require.Len(t, messages, 3)
+	assert.Equal(t, "system", messages[0]["role"])
+	assert.Equal(t, "earlier", messages[1]["content"])
+	assert.Equal(t, "now", messages[2]["content"])
 }

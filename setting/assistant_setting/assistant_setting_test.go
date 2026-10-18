@@ -19,6 +19,7 @@ func TestNormalizeBaseURL(t *testing.T) {
 		{name: "keeps nested path", input: "https://gateway.example.com/openai/v1", want: "https://gateway.example.com/openai/v1"},
 		{name: "allows http for self hosted", input: "http://127.0.0.1:8080", want: "http://127.0.0.1:8080/v1"},
 		{name: "rejects responses endpoint", input: "https://api.openai.com/v1/responses", wantErr: true},
+		{name: "rejects chat endpoint", input: "https://api.openai.com/v1/chat/completions", wantErr: true},
 		{name: "rejects non http scheme", input: "ftp://api.openai.com/v1", wantErr: true},
 		{name: "rejects credentials", input: "https://user:pass@api.openai.com/v1", wantErr: true},
 		{name: "rejects query", input: "https://api.openai.com/v1?debug=1", wantErr: true},
@@ -49,6 +50,7 @@ func TestNormalizeChannelBaseURL(t *testing.T) {
 		{name: "openrouter api path", input: "https://openrouter.ai/api", want: "https://openrouter.ai/api/v1"},
 		{name: "already v1", input: "https://api.openai.com/v1/", want: "https://api.openai.com/v1"},
 		{name: "strips responses suffix", input: "https://api.openai.com/v1/responses", want: "https://api.openai.com/v1"},
+		{name: "strips chat suffix", input: "https://api.openai.com/v1/chat/completions", want: "https://api.openai.com/v1"},
 		{name: "rejects empty", input: "", wantErr: true},
 		{name: "rejects non http", input: "ftp://host/v1", wantErr: true},
 	}
@@ -99,6 +101,27 @@ func TestNormalizeOptionValue(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("validates protocol", func(t *testing.T) {
+		_, _, err := NormalizeOptionValue(OptionKeyAdminProtocol, "grpc")
+		require.Error(t, err)
+		normalized, _, err := NormalizeOptionValue(OptionKeyAdminProtocol, "chat")
+		require.NoError(t, err)
+		assert.Equal(t, "chat", normalized)
+	})
+
+	t.Run("validates context window and output", func(t *testing.T) {
+		_, _, err := NormalizeOptionValue(OptionKeyUserContextWindow, "100")
+		require.Error(t, err)
+		normalized, _, err := NormalizeOptionValue(OptionKeyUserContextWindow, "256000")
+		require.NoError(t, err)
+		assert.Equal(t, "256000", normalized)
+		_, _, err = NormalizeOptionValue(OptionKeyUserMaxOutputTokens, "0")
+		require.Error(t, err)
+		normalized, _, err = NormalizeOptionValue(OptionKeyUserMaxOutputTokens, "128000")
+		require.NoError(t, err)
+		assert.Equal(t, "128000", normalized)
+	})
+
 	t.Run("validates channel id", func(t *testing.T) {
 		_, _, err := NormalizeOptionValue(OptionKeyAdminChannelID, "-1")
 		require.Error(t, err)
@@ -107,20 +130,9 @@ func TestNormalizeOptionValue(t *testing.T) {
 		assert.Equal(t, "12", normalized)
 	})
 
-	t.Run("rejects out of range integers", func(t *testing.T) {
-		for _, key := range []string{OptionKeyMaxToolRounds, OptionKeyRequestTimeout, OptionKeyMaxOutputTokens, OptionKeyDailyMessageLimit} {
-			_, _, err := NormalizeOptionValue(key, "-1")
-			require.Error(t, err, key)
-			_, _, err = NormalizeOptionValue(key, "999999")
-			require.Error(t, err, key)
-		}
-	})
-
-	t.Run("accepts zero daily limit", func(t *testing.T) {
-		normalized, skip, err := NormalizeOptionValue(OptionKeyDailyMessageLimit, "0")
-		require.NoError(t, err)
-		assert.False(t, skip)
-		assert.Equal(t, "0", normalized)
+	t.Run("validates request timeout", func(t *testing.T) {
+		_, _, err := NormalizeOptionValue(OptionKeyRequestTimeout, "1")
+		require.Error(t, err)
 	})
 }
 
@@ -131,12 +143,19 @@ func TestProfiles(t *testing.T) {
 
 	setting.UserEnabled = true
 	setting.UserSource = SourceDirect
+	setting.UserProtocol = ProtocolResponses
 	setting.UserBaseURL = "https://api.openai.com/v1"
 	setting.UserAPIKey = "sk-user"
 	setting.UserModel = "gpt-user"
+	setting.UserContextWindow = 1000000
+	setting.UserMaxOutputTokens = 128000
 	assert.True(t, IsConfigured(ProfileUser))
 	assert.True(t, IsAvailable(ProfileUser))
 	assert.Equal(t, "gpt-user", ModelName(ProfileUser))
+
+	setting.UserMaxOutputTokens = 2000000
+	assert.False(t, IsConfigured(ProfileUser))
+	setting.UserMaxOutputTokens = 128000
 
 	setting.UserSource = SourceChannel
 	setting.UserChannelID = 12
@@ -150,9 +169,12 @@ func TestProfiles(t *testing.T) {
 
 	setting.AdminEnabled = true
 	setting.AdminSource = SourceDirect
+	setting.AdminProtocol = ProtocolChat
 	setting.AdminBaseURL = "https://api.openai.com/v1"
 	setting.AdminAPIKey = "sk-admin"
 	setting.AdminModel = "gpt-admin"
+	setting.AdminContextWindow = 256000
+	setting.AdminMaxOutputTokens = 128000
 	assert.True(t, IsAvailable(ProfileAdmin))
 	assert.Equal(t, "gpt-admin", ModelName(ProfileAdmin))
 	profile, ok := ProfileForOptionKey(OptionKeyAdminChannelID)

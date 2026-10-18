@@ -47,6 +47,9 @@ export const STATUS_RELATED_KEYS = new Set([
   'assistant_setting.user_model',
   'assistant_setting.user_channel_id',
   'assistant_setting.user_channel_model',
+  'assistant_setting.user_protocol',
+  'assistant_setting.user_context_window',
+  'assistant_setting.user_max_output_tokens',
   'assistant_setting.admin_enabled',
   'assistant_setting.admin_source',
   'assistant_setting.admin_base_url',
@@ -54,6 +57,9 @@ export const STATUS_RELATED_KEYS = new Set([
   'assistant_setting.admin_model',
   'assistant_setting.admin_channel_id',
   'assistant_setting.admin_channel_model',
+  'assistant_setting.admin_protocol',
+  'assistant_setting.admin_context_window',
+  'assistant_setting.admin_max_output_tokens',
 ])
 
 export function useUpdateOption() {

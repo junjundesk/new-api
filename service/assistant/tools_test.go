@@ -75,7 +75,7 @@ func seedAssistantLog(t *testing.T, db *gorm.DB, userID int, modelName, tokenNam
 func TestCreateAPIKeyToolReturnsMaskedKeyOnly(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
 	result := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "create_api_key",
 		Arguments: "{\"name\":\"assistant-key\"}",
@@ -99,9 +99,6 @@ func TestCreateAPIKeyToolReturnsMaskedKeyOnly(t *testing.T) {
 	payload, err := common.Marshal(result.Data)
 	require.NoError(t, err)
 	assert.NotContains(t, string(payload), token.Key)
-
-	disabled := NewDefaultToolExecutor(false).Execute(context.Background(), 1, ToolCall{Name: "create_api_key", Arguments: "{\"name\":\"x\"}"}, nil)
-	assert.False(t, disabled.OK)
 }
 
 func TestUsageToolsAreScopedToCurrentUser(t *testing.T) {
@@ -111,7 +108,7 @@ func TestUsageToolsAreScopedToCurrentUser(t *testing.T) {
 	seedAssistantLog(t, db, 1, "model-a", "key-a", "alice consume", 100)
 	seedAssistantLog(t, db, 2, "model-b-secret", "key-b", "bob consume", 999)
 
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
 	summary := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "get_usage_summary",
 		Arguments: "{\"days\":7,\"group_by\":\"model\"}",
@@ -152,7 +149,7 @@ func TestSetAPIKeyStatusRejectsOtherUsersToken(t *testing.T) {
 	bobToken, err := model.GetTokenByKey("sk-bob", true)
 	require.NoError(t, err)
 
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
 	result := executor.Execute(context.Background(), 1, ToolCall{
 		Name:      "set_api_key_status",
 		Arguments: fmt.Sprintf("{\"id\":%d,\"enabled\":false}", bobToken.Id),
@@ -174,7 +171,7 @@ func TestSetAPIKeyStatusRejectsOtherUsersToken(t *testing.T) {
 
 func TestToolArgumentBounds(t *testing.T) {
 	setupToolTestDB(t)
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
 	tests := []struct {
 		name      string
 		arguments string
@@ -200,7 +197,7 @@ func TestGetAccountSummaryIncludesQuota(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
 	seedAssistantLog(t, db, 1, "model-a", "key-a", "consume", 100)
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
 	result := executor.Execute(context.Background(), 1, ToolCall{Name: "get_account_summary"}, nil)
 	require.True(t, result.OK, result.Error)
 	data, ok := result.Data.(map[string]any)
@@ -212,27 +209,17 @@ func TestGetAccountSummaryIncludesQuota(t *testing.T) {
 	assert.Contains(t, string(payload), "\"count\":1")
 }
 
-func TestCreateAPIKeyIsLimitedToOnePerTurn(t *testing.T) {
+func TestTokenToolsAreNotCappedPerTurn(t *testing.T) {
 	db := setupToolTestDB(t)
 	seedAssistantUser(t, db, 1, "alice")
-	executor := NewDefaultToolExecutor(true)
-	first := executor.Execute(context.Background(), 1, ToolCall{
-		Name:      "create_api_key",
-		Arguments: "{\"name\":\"first-key\"}",
-	}, nil)
-	require.True(t, first.OK, first.Error)
-	second := executor.Execute(context.Background(), 1, ToolCall{
-		Name:      "create_api_key",
-		Arguments: "{\"name\":\"second-key\"}",
-	}, nil)
-	assert.False(t, second.OK)
-	assert.Contains(t, second.Error, "only one API key")
-}
-
-func TestSetAPIKeyStatusIsLimitedPerTurn(t *testing.T) {
-	db := setupToolTestDB(t)
-	seedAssistantUser(t, db, 1, "alice")
-	executor := NewDefaultToolExecutor(true)
+	executor := NewDefaultToolExecutor()
+	for index := 0; index < 2; index++ {
+		result := executor.Execute(context.Background(), 1, ToolCall{
+			Name:      "create_api_key",
+			Arguments: fmt.Sprintf("{\"name\":\"key-%d\"}", index),
+		}, nil)
+		require.True(t, result.OK, result.Error)
+	}
 	for index := 0; index < 4; index++ {
 		require.NoError(t, db.Create(&model.Token{
 			UserId:         1,
@@ -243,19 +230,14 @@ func TestSetAPIKeyStatusIsLimitedPerTurn(t *testing.T) {
 			Status:         common.TokenStatusEnabled,
 		}).Error)
 	}
-	tokens, err := model.GetAllUserTokens(1, 0, 10)
+	tokens, err := model.GetAllUserTokens(1, 0, 20)
 	require.NoError(t, err)
-	require.Len(t, tokens, 4)
-	for index, token := range tokens {
+	require.GreaterOrEqual(t, len(tokens), 4)
+	for _, token := range tokens {
 		result := executor.Execute(context.Background(), 1, ToolCall{
 			Name:      "set_api_key_status",
 			Arguments: fmt.Sprintf("{\"id\":%d,\"enabled\":false}", token.Id),
 		}, nil)
-		if index < 3 {
-			require.True(t, result.OK, result.Error)
-		} else {
-			assert.False(t, result.OK)
-			assert.Contains(t, result.Error, "at most three API key status changes")
-		}
+		require.True(t, result.OK, result.Error)
 	}
 }

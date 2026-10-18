@@ -5873,6 +5873,15 @@
     "Used by root administrators in the console assistant.": "供超级管理员在控制台助手中使用。",
     "Used by signed-in users in the console assistant.": "供已登录用户在控制台助手中使用。",
     "User assistant": "用户助手",
-    "Direct": "直连"
+    "Direct": "直连",
+    "Protocol": "协议",
+    "Context window": "上下文窗口",
+    "Fetch models": "拉取模型",
+    "Must be less than the context window": "必须小于上下文窗口",
+    "Max output tokens must be less than the context window": "最大输出 Token 必须小于上下文窗口",
+    "Maximum context window of the model used by this profile.": "此配置所使用模型的最大上下文窗口。",
+    "Maximum output tokens per assistant response.": "每次助手响应的最大输出 Token 数。",
+    "API protocol used to call the upstream endpoint.": "调用上游端点使用的 API 协议。",
+    "Resolved value: {{tokens}} tokens": "解析值：{{tokens}} 个 Token"
   }
 }

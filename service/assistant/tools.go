@@ -10,17 +10,13 @@ import (
 
 // DefaultToolExecutor is the production tool set. It reads and mutates only
 // data owned by the authenticated user.
-type DefaultToolExecutor struct {
-	allowTokenActions  bool
-	tokenCreates       int
-	tokenStatusChanges int
+type DefaultToolExecutor struct{}
+
+func NewDefaultToolExecutor() *DefaultToolExecutor {
+	return &DefaultToolExecutor{}
 }
 
-func NewDefaultToolExecutor(allowTokenActions bool) *DefaultToolExecutor {
-	return &DefaultToolExecutor{allowTokenActions: allowTokenActions}
-}
-
-func (e *DefaultToolExecutor) Definitions(allowTokenActions bool) []map[string]any {
+func (e *DefaultToolExecutor) Definitions() []map[string]any {
 	definitions := []map[string]any{
 		functionTool(
 			"get_account_summary",
@@ -91,43 +87,41 @@ func (e *DefaultToolExecutor) Definitions(allowTokenActions bool) []map[string]a
 			}, nil),
 		),
 	}
-	if allowTokenActions {
-		definitions = append(definitions,
-			functionTool(
-				"create_api_key",
-				"Create a new API key for the current user. The key inherits the user's account group and has unlimited key quota. The full key is never returned; the UI can reveal it on explicit user action.",
-				objectSchema(map[string]any{
-					"name": map[string]any{
-						"type":        "string",
-						"minLength":   1,
-						"maxLength":   50,
-						"description": "Human readable key name.",
-					},
-					"expires_in_days": map[string]any{
-						"type":        "integer",
-						"minimum":     1,
-						"maximum":     3650,
-						"description": "Days until expiry. Omit for never expires.",
-					},
-				}, []string{"name"}),
-			),
-			functionTool(
-				"set_api_key_status",
-				"Enable or disable one of the current user's own API keys. This is reversible and does not delete the key.",
-				objectSchema(map[string]any{
-					"id": map[string]any{
-						"type":        "integer",
-						"minimum":     1,
-						"description": "API key id from list_api_keys or create_api_key.",
-					},
-					"enabled": map[string]any{
-						"type":        "boolean",
-						"description": "True to enable, false to disable.",
-					},
-				}, []string{"id", "enabled"}),
-			),
-		)
-	}
+	definitions = append(definitions,
+		functionTool(
+			"create_api_key",
+			"Create a new API key for the current user. The key inherits the user's account group and has unlimited key quota. The full key is never returned; the UI can reveal it on explicit user action.",
+			objectSchema(map[string]any{
+				"name": map[string]any{
+					"type":        "string",
+					"minLength":   1,
+					"maxLength":   50,
+					"description": "Human readable key name.",
+				},
+				"expires_in_days": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     3650,
+					"description": "Days until expiry. Omit for never expires.",
+				},
+			}, []string{"name"}),
+		),
+		functionTool(
+			"set_api_key_status",
+			"Enable or disable one of the current user's own API keys. This is reversible and does not delete the key.",
+			objectSchema(map[string]any{
+				"id": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"description": "API key id from list_api_keys or create_api_key.",
+				},
+				"enabled": map[string]any{
+					"type":        "boolean",
+					"description": "True to enable, false to disable.",
+				},
+			}, []string{"id", "enabled"}),
+		),
+	)
 	return definitions
 }
 
@@ -142,29 +136,9 @@ func (e *DefaultToolExecutor) Execute(ctx context.Context, userID int, call Tool
 	case "list_api_keys":
 		return e.listAPIKeys(userID, call.Arguments)
 	case "create_api_key":
-		if !e.allowTokenActions {
-			return toolErrorf("API key actions are disabled by the administrator")
-		}
-		if e.tokenCreates >= 1 {
-			return toolErrorf("only one API key can be created per assistant message")
-		}
-		result := e.createAPIKey(userID, call.Arguments, audit)
-		if result.OK {
-			e.tokenCreates++
-		}
-		return result
+		return e.createAPIKey(userID, call.Arguments, audit)
 	case "set_api_key_status":
-		if !e.allowTokenActions {
-			return toolErrorf("API key actions are disabled by the administrator")
-		}
-		if e.tokenStatusChanges >= 3 {
-			return toolErrorf("at most three API key status changes are allowed per assistant message")
-		}
-		result := e.setAPIKeyStatus(userID, call.Arguments, audit)
-		if result.OK {
-			e.tokenStatusChanges++
-		}
-		return result
+		return e.setAPIKeyStatus(userID, call.Arguments, audit)
 	default:
 		return toolErrorf("unknown tool: %s", call.Name)
 	}

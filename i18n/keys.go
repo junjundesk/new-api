@@ -285,6 +285,7 @@ const (
 	MsgAssistantInvalidConfig      = "assistant.invalid_config"
 	MsgAssistantNotConfigured      = "assistant.not_configured"
 	MsgAssistantChannelUnavailable = "assistant.channel_unavailable"
+	MsgAssistantContextExceeded    = "assistant.context_exceeded"
 )
 
 // Rate limit related messages

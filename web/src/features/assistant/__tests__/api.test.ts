@@ -37,8 +37,9 @@ describe('assistant config request', () => {
           enabled: true,
           model: 'gpt-test',
           can_create_tokens: true,
-          max_message_chars: 4000,
-          max_history_messages: 20,
+          max_message_chars: 100000,
+          max_history_messages: 100,
+          max_history_chars: 400000,
         },
       },
     })
@@ -50,8 +51,9 @@ describe('assistant config request', () => {
       enabled: true,
       model: 'gpt-test',
       canCreateTokens: true,
-      maxMessageChars: 4000,
-      maxHistoryMessages: 20,
+      maxMessageChars: 100000,
+      maxHistoryMessages: 100,
+      maxHistoryChars: 400000,
     })
   })
 
@@ -65,6 +67,7 @@ describe('assistant config request', () => {
           can_create_tokens: false,
           max_message_chars: 2000,
           max_history_messages: 10,
+          max_history_chars: 20000,
         },
       },
     })
@@ -76,6 +79,7 @@ describe('assistant config request', () => {
     expect(config.model).toBe('admin-gpt-test')
     expect(config.maxMessageChars).toBe(2000)
     expect(config.maxHistoryMessages).toBe(10)
+    expect(config.maxHistoryChars).toBe(20000)
   })
 })
 
@@ -84,14 +88,16 @@ describe('assistant config normalization', () => {
     expect(normalizeAssistantConfig(undefined)).toEqual({
       enabled: false,
       canCreateTokens: false,
-      maxMessageChars: 4000,
-      maxHistoryMessages: 20,
+      maxMessageChars: 100000,
+      maxHistoryMessages: 100,
+      maxHistoryChars: 400000,
     })
     expect(normalizeAssistantConfig({ success: false })).toEqual({
       enabled: false,
       canCreateTokens: false,
-      maxMessageChars: 4000,
-      maxHistoryMessages: 20,
+      maxMessageChars: 100000,
+      maxHistoryMessages: 100,
+      maxHistoryChars: 400000,
     })
   })
 
@@ -107,7 +113,8 @@ describe('assistant config normalization', () => {
     expect(config.enabled).toBe(false)
     expect(config.canCreateTokens).toBe(false)
     expect(config.model).toBeUndefined()
-    expect(config.maxMessageChars).toBe(4000)
-    expect(config.maxHistoryMessages).toBe(20)
+    expect(config.maxMessageChars).toBe(100000)
+    expect(config.maxHistoryMessages).toBe(100)
+    expect(config.maxHistoryChars).toBe(400000)
   })
 })

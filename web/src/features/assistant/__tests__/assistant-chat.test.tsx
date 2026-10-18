@@ -128,8 +128,9 @@ const enabledConfig: AssistantConfig = {
   enabled: true,
   model: 'gpt-test',
   canCreateTokens: true,
-  maxMessageChars: 4000,
-  maxHistoryMessages: 20,
+  maxMessageChars: 100000,
+  maxHistoryMessages: 100,
+  maxHistoryChars: 400000,
 }
 
 const adminEnabledConfig: AssistantConfig = {

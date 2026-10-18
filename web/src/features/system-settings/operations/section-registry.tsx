@@ -84,6 +84,10 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.user_source'] === 'channel'
                 ? 'channel'
                 : 'direct',
+            protocol:
+              settings['assistant_setting.user_protocol'] === 'chat'
+                ? 'chat'
+                : 'responses',
             baseUrl: settings['assistant_setting.user_base_url'] ?? '',
             model: settings['assistant_setting.user_model'] ?? '',
             channelId: settings['assistant_setting.user_channel_id'] ?? 0,
@@ -91,6 +95,10 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.user_channel_model'] ?? '',
             apiKeyConfigured:
               settings['assistant_setting.user_api_key_configured'] ?? false,
+            contextWindow:
+              settings['assistant_setting.user_context_window'] ?? 1000000,
+            maxOutputTokens:
+              settings['assistant_setting.user_max_output_tokens'] ?? 128000,
           },
           admin: {
             enabled: settings['assistant_setting.admin_enabled'] ?? false,
@@ -98,6 +106,10 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.admin_source'] === 'channel'
                 ? 'channel'
                 : 'direct',
+            protocol:
+              settings['assistant_setting.admin_protocol'] === 'chat'
+                ? 'chat'
+                : 'responses',
             baseUrl: settings['assistant_setting.admin_base_url'] ?? '',
             model: settings['assistant_setting.admin_model'] ?? '',
             channelId: settings['assistant_setting.admin_channel_id'] ?? 0,
@@ -105,17 +117,14 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.admin_channel_model'] ?? '',
             apiKeyConfigured:
               settings['assistant_setting.admin_api_key_configured'] ?? false,
+            contextWindow:
+              settings['assistant_setting.admin_context_window'] ?? 1000000,
+            maxOutputTokens:
+              settings['assistant_setting.admin_max_output_tokens'] ?? 128000,
           },
           systemPrompt: settings['assistant_setting.system_prompt'] ?? '',
-          maxToolRounds: settings['assistant_setting.max_tool_rounds'] ?? 5,
           requestTimeoutSeconds:
             settings['assistant_setting.request_timeout_seconds'] ?? 60,
-          maxOutputTokens:
-            settings['assistant_setting.max_output_tokens'] ?? 1500,
-          dailyUserMessageLimit:
-            settings['assistant_setting.daily_user_message_limit'] ?? 50,
-          allowTokenActions:
-            settings['assistant_setting.allow_token_actions'] ?? true,
         }}
       />
     ),

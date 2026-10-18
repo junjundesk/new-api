@@ -34,10 +34,10 @@ export const ASSISTANT_API_ENDPOINTS = {
 } as const satisfies Record<AssistantProfile, { CONFIG: string; CHAT: string }>
 
 export const ASSISTANT_LIMITS = {
-  MAX_MESSAGE_CHARS: 4000,
-  MAX_HISTORY_MESSAGES: 20,
-  MAX_HISTORY_CHARS: 20000,
-  MAX_STORED_MESSAGES: 50,
+  MAX_MESSAGE_CHARS: 100000,
+  MAX_HISTORY_MESSAGES: 100,
+  MAX_HISTORY_CHARS: 400000,
+  MAX_STORED_MESSAGES: 100,
 } as const
 
 export const ASSISTANT_STORAGE_KEY_PREFIX = 'assistant_chat_messages'

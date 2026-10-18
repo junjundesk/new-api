@@ -7,17 +7,16 @@ import (
 	"time"
 )
 
-// Config is a request-scoped snapshot of the assistant settings.
+// Config is a request-scoped snapshot of one assistant profile.
 type Config struct {
-	BaseURL               string
-	APIKey                string
-	Model                 string
-	SystemPrompt          string
-	MaxToolRounds         int
-	RequestTimeout        time.Duration
-	MaxOutputTokens       int
-	DailyUserMessageLimit int
-	AllowTokenActions     bool
+	Protocol        string
+	BaseURL         string
+	APIKey          string
+	Model           string
+	SystemPrompt    string
+	ContextWindow   int
+	MaxOutputTokens int
+	RequestTimeout  time.Duration
 }
 
 // ChatMessage is one user/assistant text turn from the browser history.
@@ -33,7 +32,7 @@ type Usage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
-// ToolCall is one upstream function_call item.
+// ToolCall is one upstream function/tool call.
 type ToolCall struct {
 	CallID    string
 	Name      string
@@ -50,9 +49,26 @@ type ResponsesResult struct {
 	IncompleteReason string
 }
 
-// ResponsesClient is the upstream abstraction; tests use a fake.
-type ResponsesClient interface {
+// ChatToolCall is one tool call returned by a Chat Completions response.
+type ChatToolCall struct {
+	ID        string
+	Name      string
+	Arguments string
+}
+
+// ChatResult is the normalized result of one upstream Chat Completions call.
+type ChatResult struct {
+	Content      string
+	ToolCalls    []ChatToolCall
+	FinishReason string
+	Usage        *Usage
+}
+
+// Client is the upstream abstraction. HTTPClient implements both protocols;
+// tests use fakes.
+type Client interface {
 	CreateResponse(ctx context.Context, input []json.RawMessage, tools []map[string]any, onDelta func(string) error) (*ResponsesResult, error)
+	CreateChatCompletion(ctx context.Context, messages []map[string]any, tools []map[string]any, onDelta func(string) error) (*ChatResult, error)
 }
 
 // ToolResult is both the model-facing function output and the UI tool result.
@@ -86,15 +102,14 @@ type EmitFunc func(Event) error
 // AuditFunc records a user security audit event.
 type AuditFunc func(action string, params map[string]any)
 
-// ToolExecutor defines the tools exposed to the model. Definitions is called
-// once per request so the allow_token_actions flag can hide side-effecting
-// tools without changing the rest of the prompt.
+// ToolExecutor defines the tools exposed to the model. All tools are available
+// to every authenticated user and are scoped to that user's own data.
 type ToolExecutor interface {
-	Definitions(allowTokenActions bool) []map[string]any
+	Definitions() []map[string]any
 	Execute(ctx context.Context, userID int, call ToolCall, audit AuditFunc) ToolResult
 }
 
-// UpstreamError describes a non-2xx or failed Responses call. Message is
+// UpstreamError describes a non-2xx or failed upstream call. Message is
 // already redacted and safe to log; it is not necessarily safe to show users.
 type UpstreamError struct {
 	StatusCode int
@@ -109,29 +124,10 @@ func (e *UpstreamError) Error() string {
 	return fmt.Sprintf("assistant upstream error (request_id=%s): %s", e.RequestID, e.Message)
 }
 
-// DailyLimitError is returned when the per-user daily message budget is spent.
-type DailyLimitError struct {
-	Limit      int
-	RetryAfter int64
-}
-
-func (e *DailyLimitError) Error() string {
-	return fmt.Sprintf("assistant daily limit reached (limit=%d retry_after=%d)", e.Limit, e.RetryAfter)
-}
-
 // BusyError is returned when the per-user or global concurrency slot is full.
 type BusyError struct{}
 
 func (e *BusyError) Error() string { return "assistant is busy" }
-
-// TooManyToolRoundsError is returned when the model keeps requesting tools.
-type TooManyToolRoundsError struct {
-	Max int
-}
-
-func (e *TooManyToolRoundsError) Error() string {
-	return fmt.Sprintf("assistant exceeded max tool rounds (%d)", e.Max)
-}
 
 // IncompleteError reports an upstream response that stopped early (for
 // example max_output_tokens or content_filter).
@@ -141,4 +137,15 @@ type IncompleteError struct {
 
 func (e *IncompleteError) Error() string {
 	return fmt.Sprintf("assistant response incomplete (%s)", e.Reason)
+}
+
+// ContextExceededError reports that the current message plus output budget
+// cannot fit into the configured model context window.
+type ContextExceededError struct {
+	ContextWindow int
+	MaxOutput     int
+}
+
+func (e *ContextExceededError) Error() string {
+	return fmt.Sprintf("assistant context exceeded (context=%d max_output=%d)", e.ContextWindow, e.MaxOutput)
 }

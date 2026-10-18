@@ -5873,6 +5873,15 @@
     "Used by root administrators in the console assistant.": "Used by root administrators in the console assistant.",
     "Used by signed-in users in the console assistant.": "Used by signed-in users in the console assistant.",
     "User assistant": "User assistant",
-    "Direct": "Direct"
+    "Direct": "Direct",
+    "Protocol": "Protocol",
+    "Context window": "Context window",
+    "Fetch models": "Fetch models",
+    "Must be less than the context window": "Must be less than the context window",
+    "Max output tokens must be less than the context window": "Max output tokens must be less than the context window",
+    "Maximum context window of the model used by this profile.": "Maximum context window of the model used by this profile.",
+    "Maximum output tokens per assistant response.": "Maximum output tokens per assistant response.",
+    "API protocol used to call the upstream endpoint.": "API protocol used to call the upstream endpoint.",
+    "Resolved value: {{tokens}} tokens": "Resolved value: {{tokens}} tokens"
   }
 }

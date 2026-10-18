@@ -31,11 +31,10 @@ func TestAssistantChatStreamsTextOverSSE(t *testing.T) {
 	setting.UserBaseURL = upstream.URL
 	setting.UserAPIKey = "sk-test"
 	setting.UserModel = "gpt-test"
-	setting.MaxToolRounds = 1
+	setting.UserProtocol = assistant_setting.ProtocolResponses
 	setting.RequestTimeoutSeconds = 5
-	setting.MaxOutputTokens = 100
-	setting.DailyUserMessageLimit = 10
-	setting.AllowTokenActions = true
+	setting.UserContextWindow = 1000000
+	setting.UserMaxOutputTokens = 100
 
 	body, err := common.Marshal(map[string]any{"message": "hi", "history": []any{}})
 	require.NoError(t, err)
@@ -78,9 +77,12 @@ func TestAssistantChatErrorEventUsesMessageField(t *testing.T) {
 	setting := assistant_setting.Get()
 	setting.UserEnabled = false
 	setting.UserSource = assistant_setting.SourceDirect
+	setting.UserProtocol = assistant_setting.ProtocolResponses
 	setting.UserBaseURL = "https://api.openai.com/v1"
 	setting.UserAPIKey = "sk-test"
 	setting.UserModel = "gpt-test"
+	setting.UserContextWindow = 1000000
+	setting.UserMaxOutputTokens = 100
 
 	body, err := common.Marshal(map[string]any{"message": "hi", "history": []any{}})
 	require.NoError(t, err)
@@ -127,10 +129,10 @@ func TestAdminAssistantChatStreamsOverSSE(t *testing.T) {
 	setting.AdminBaseURL = upstream.URL
 	setting.AdminAPIKey = "sk-admin"
 	setting.AdminModel = "gpt-admin"
-	setting.MaxToolRounds = 1
+	setting.AdminProtocol = assistant_setting.ProtocolResponses
 	setting.RequestTimeoutSeconds = 5
-	setting.MaxOutputTokens = 100
-	setting.AllowTokenActions = true
+	setting.AdminContextWindow = 1000000
+	setting.AdminMaxOutputTokens = 100
 
 	body, err := common.Marshal(map[string]any{"message": "hi", "history": []any{}})
 	require.NoError(t, err)

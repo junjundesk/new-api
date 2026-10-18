@@ -60,38 +60,46 @@ import {
 
 import {
   clearAssistantApiKey,
+  listAssistantModels,
+  parseTokenAmount,
   testAssistantConnection,
   type AssistantChannel,
+  type AssistantModelsRequest,
   type AssistantProfileName,
+  type AssistantProfileRequest,
+  type AssistantProtocol,
   type AssistantSource,
-  type AssistantTestRequest,
 } from './assistant-settings-api'
 
 export type AssistantProfileFormValues = {
   enabled: boolean
   source: AssistantSource
+  protocol: AssistantProtocol
   baseUrl: string
   model: string
   channelId: number
   channelModel: string
   apiKey: string
+  contextWindow: string
+  maxOutputTokens: string
 }
 
 export type AssistantSettingsFormValues = {
   user: AssistantProfileFormValues
   admin: AssistantProfileFormValues
   systemPrompt: string
-  maxToolRounds: number
   requestTimeoutSeconds: number
-  maxOutputTokens: number
-  dailyUserMessageLimit: number
-  allowTokenActions: boolean
 }
 
 type ConnectionTestState =
   | { status: 'idle' }
   | { status: 'testing' }
   | { status: 'success'; latencyMs?: number }
+  | { status: 'error'; message: string }
+
+type ModelFetchState =
+  | { status: 'idle' }
+  | { status: 'loading' }
   | { status: 'error'; message: string }
 
 type AssistantProfileCardProps = {
@@ -102,6 +110,12 @@ type AssistantProfileCardProps = {
   isBusy: boolean
   apiKeyConfigured: boolean
   onApiKeyCleared: (profile: AssistantProfileName) => void
+}
+
+type FetchModelsButtonProps = {
+  isFetching: boolean
+  disabled: boolean
+  onClick: () => void
 }
 
 /**
@@ -115,6 +129,50 @@ function profileFieldPath<F extends keyof AssistantProfileFormValues>(
   return `${profile}.${field}` as `${AssistantProfileName}.${F}`
 }
 
+/**
+ * Builds the connection fields shared by the connection test and the model-list
+ * request. An empty API key is omitted so the backend keeps the stored key.
+ */
+function buildProfileRequest(
+  profile: AssistantProfileName,
+  values: AssistantProfileFormValues
+): AssistantProfileRequest {
+  const request: AssistantProfileRequest = {
+    profile,
+    source: values.source,
+    protocol: values.protocol,
+  }
+  const apiKey = values.apiKey.trim()
+  if (apiKey !== '') request.api_key = apiKey
+  if (values.source === 'direct') {
+    request.base_url = values.baseUrl.trim()
+    request.model = values.model.trim()
+  } else {
+    request.channel_id = values.channelId
+    request.channel_model = values.channelModel.trim()
+  }
+  return request
+}
+
+function FetchModelsButton(props: FetchModelsButtonProps) {
+  const { t } = useTranslation()
+
+  return (
+    <Button
+      type='button'
+      variant='secondary'
+      className='shrink-0'
+      onClick={props.onClick}
+      disabled={props.disabled || props.isFetching}
+    >
+      {props.isFetching ? (
+        <Loader2 className='me-2 size-4 animate-spin' />
+      ) : null}
+      {t('Fetch models')}
+    </Button>
+  )
+}
+
 export function AssistantProfileCard(props: AssistantProfileCardProps) {
   const { t } = useTranslation()
   const form = useFormContext<AssistantSettingsFormValues>()
@@ -122,6 +180,10 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
   const [testState, setTestState] = useState<ConnectionTestState>({
     status: 'idle',
   })
+  const [fetchState, setFetchState] = useState<ModelFetchState>({
+    status: 'idle',
+  })
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
 
@@ -135,6 +197,14 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
     () => [
       { value: 'direct' as const, label: t('Direct') },
       { value: 'channel' as const, label: t('Channel') },
+    ],
+    [t]
+  )
+
+  const protocolItems = useMemo(
+    () => [
+      { value: 'responses' as const, label: t('OpenAI Responses') },
+      { value: 'chat' as const, label: t('OpenAI Chat') },
     ],
     [t]
   )
@@ -158,33 +228,30 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
     [props.channels, t]
   )
 
-  const channelModelListId = `assistant-${props.profile}-channel-models`
+  const modelSuggestions = useMemo(() => {
+    const merged = new Set<string>()
+    if (source === 'channel') {
+      for (const modelName of selectedChannel?.models ?? []) {
+        merged.add(modelName)
+      }
+    }
+    for (const modelName of fetchedModels) {
+      merged.add(modelName)
+    }
+    return [...merged]
+  }, [source, selectedChannel, fetchedModels])
+
+  const modelListId = `assistant-${props.profile}-model-options`
+  const isFetching = fetchState.status === 'loading'
 
   const handleTestConnection = async () => {
     setTestState({ status: 'testing' })
 
     const profileValues = form.getValues()[props.profile]
-    const request: AssistantTestRequest = {
-      profile: props.profile,
-      source: profileValues.source,
-    }
-    const apiKey = profileValues.apiKey.trim()
-    if (apiKey !== '') request.api_key = apiKey
-    if (profileValues.source === 'direct') {
-      const baseUrl = profileValues.baseUrl.trim()
-      if (baseUrl !== '') request.base_url = baseUrl
-      const model = profileValues.model.trim()
-      if (model !== '') request.model = model
-    } else {
-      if (profileValues.channelId > 0) {
-        request.channel_id = profileValues.channelId
-      }
-      const channelModel = profileValues.channelModel.trim()
-      if (channelModel !== '') request.channel_model = channelModel
-    }
-
     try {
-      const response = await testAssistantConnection(request)
+      const response = await testAssistantConnection(
+        buildProfileRequest(props.profile, profileValues)
+      )
       if (!response.success) {
         setTestState({
           status: 'error',
@@ -201,6 +268,37 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
         status: 'error',
         message:
           error instanceof Error ? error.message : t('Connection failed'),
+      })
+    }
+  }
+
+  const handleFetchModels = async () => {
+    setFetchState({ status: 'loading' })
+
+    const profileValues = form.getValues()[props.profile]
+    const contextWindow = parseTokenAmount(profileValues.contextWindow)
+    const maxOutputTokens = parseTokenAmount(profileValues.maxOutputTokens)
+    const request: AssistantModelsRequest = {
+      ...buildProfileRequest(props.profile, profileValues),
+    }
+    if (contextWindow !== null) request.context_window = contextWindow
+    if (maxOutputTokens !== null) request.max_output_tokens = maxOutputTokens
+    try {
+      const response = await listAssistantModels(request)
+      if (!response.success) {
+        setFetchState({
+          status: 'error',
+          message: response.message || t('Failed to fetch models'),
+        })
+        return
+      }
+      setFetchedModels(response.data?.models ?? [])
+      setFetchState({ status: 'idle' })
+    } catch (error) {
+      setFetchState({
+        status: 'error',
+        message:
+          error instanceof Error ? error.message : t('Failed to fetch models'),
       })
     }
   }
@@ -285,6 +383,8 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
                       '',
                       { shouldDirty: true }
                     )
+                    setFetchedModels([])
+                    setFetchState({ status: 'idle' })
                   }}
                 >
                   <SelectTrigger className='w-full'>
@@ -342,13 +442,29 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Model')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder='gpt-4.1-mini'
-                      autoComplete='off'
-                      {...field}
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <FormControl>
+                      <Input
+                        placeholder='gpt-4.1-mini'
+                        autoComplete='off'
+                        className='min-w-40 flex-1'
+                        list={modelListId}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FetchModelsButton
+                      isFetching={isFetching}
+                      disabled={props.isBusy}
+                      onClick={() => {
+                        void handleFetchModels()
+                      }}
                     />
-                  </FormControl>
+                  </div>
+                  <datalist id={modelListId}>
+                    {modelSuggestions.map((modelName) => (
+                      <option key={modelName} value={modelName} />
+                    ))}
+                  </datalist>
                   <FormDescription>
                     {t('Model name used for assistant conversations')}
                   </FormDescription>
@@ -379,6 +495,8 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
                             '',
                             { shouldDirty: true }
                           )
+                          setFetchedModels([])
+                          setFetchState({ status: 'idle' })
                         }
                       }}
                     >
@@ -432,17 +550,27 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Channel model')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder='gpt-4.1-mini'
-                      autoComplete='off'
-                      list={channelModelListId}
-                      {...field}
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <FormControl>
+                      <Input
+                        placeholder='gpt-4.1-mini'
+                        autoComplete='off'
+                        className='min-w-40 flex-1'
+                        list={modelListId}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FetchModelsButton
+                      isFetching={isFetching}
+                      disabled={props.isBusy}
+                      onClick={() => {
+                        void handleFetchModels()
+                      }}
                     />
-                  </FormControl>
-                  <datalist id={channelModelListId}>
-                    {selectedChannel?.models.map((model) => (
-                      <option key={model} value={model} />
+                  </div>
+                  <datalist id={modelListId}>
+                    {modelSuggestions.map((modelName) => (
+                      <option key={modelName} value={modelName} />
                     ))}
                   </datalist>
                   <FormDescription>
@@ -454,6 +582,107 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
             />
           </>
         )}
+
+        <FormField
+          control={form.control}
+          name={profileFieldPath(props.profile, 'protocol')}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Protocol')}</FormLabel>
+              <FormControl>
+                <Select
+                  items={protocolItems}
+                  value={field.value}
+                  onValueChange={(value) => {
+                    if (value !== 'responses' && value !== 'chat') return
+                    field.onChange(value)
+                  }}
+                >
+                  <SelectTrigger className='w-full'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {protocolItems.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormDescription>
+                {t('API protocol used to call the upstream endpoint.')}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name={profileFieldPath(props.profile, 'contextWindow')}
+          render={({ field }) => {
+            const resolved = parseTokenAmount(field.value)
+            return (
+              <FormItem>
+                <FormLabel>{t('Context window')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='1000000, 1M, 256k'
+                    autoComplete='off'
+                    {...field}
+                  />
+                </FormControl>
+                {resolved === null ? null : (
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Resolved value: {{tokens}} tokens', {
+                      tokens: resolved,
+                    })}
+                  </p>
+                )}
+                <FormDescription>
+                  {t(
+                    'Maximum context window of the model used by this profile.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )
+          }}
+        />
+
+        <FormField
+          control={form.control}
+          name={profileFieldPath(props.profile, 'maxOutputTokens')}
+          render={({ field }) => {
+            const resolved = parseTokenAmount(field.value)
+            return (
+              <FormItem>
+                <FormLabel>{t('Max output tokens')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='128000, 128k'
+                    autoComplete='off'
+                    {...field}
+                  />
+                </FormControl>
+                {resolved === null ? null : (
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Resolved value: {{tokens}} tokens', {
+                      tokens: resolved,
+                    })}
+                  </p>
+                )}
+                <FormDescription>
+                  {t('Must be less than the context window')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )
+          }}
+        />
 
         <FormField
           control={form.control}
@@ -508,6 +737,12 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
           )}
         />
       </div>
+
+      {fetchState.status === 'error' ? (
+        <p role='alert' className='text-destructive text-sm'>
+          {fetchState.message}
+        </p>
+      ) : null}
 
       {testState.status === 'success' ? (
         <Alert variant='default' className='flex items-center gap-2'>

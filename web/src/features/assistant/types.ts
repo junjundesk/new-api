@@ -75,6 +75,7 @@ export interface AssistantConfig {
   canCreateTokens: boolean
   maxMessageChars: number
   maxHistoryMessages: number
+  maxHistoryChars: number
 }
 
 // ============================================================================

@@ -370,24 +370,26 @@ export type OperationsSettings = {
   'perf_metrics_setting.retention_days': number
   'assistant_setting.user_enabled': boolean
   'assistant_setting.user_source': string
+  'assistant_setting.user_protocol': string
   'assistant_setting.user_base_url': string
   'assistant_setting.user_api_key': string
   'assistant_setting.user_model': string
   'assistant_setting.user_channel_id': number
   'assistant_setting.user_channel_model': string
+  'assistant_setting.user_context_window': number
+  'assistant_setting.user_max_output_tokens': number
   'assistant_setting.admin_enabled': boolean
   'assistant_setting.admin_source': string
+  'assistant_setting.admin_protocol': string
   'assistant_setting.admin_base_url': string
   'assistant_setting.admin_api_key': string
   'assistant_setting.admin_model': string
   'assistant_setting.admin_channel_id': number
   'assistant_setting.admin_channel_model': string
+  'assistant_setting.admin_context_window': number
+  'assistant_setting.admin_max_output_tokens': number
   'assistant_setting.system_prompt': string
-  'assistant_setting.max_tool_rounds': number
   'assistant_setting.request_timeout_seconds': number
-  'assistant_setting.max_output_tokens': number
-  'assistant_setting.daily_user_message_limit': number
-  'assistant_setting.allow_token_actions': boolean
   'assistant_setting.user_api_key_configured': boolean
   'assistant_setting.admin_api_key_configured': boolean
 }

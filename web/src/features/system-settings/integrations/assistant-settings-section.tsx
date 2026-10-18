@@ -35,14 +35,9 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
-import {
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
+import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
@@ -56,29 +51,30 @@ import {
 } from './assistant-profile-card'
 import {
   listAssistantChannels,
+  parseTokenAmount,
   type AssistantProfileName,
+  type AssistantProtocol,
   type AssistantSource,
 } from './assistant-settings-api'
 
 export type AssistantProfileDefaults = {
   enabled: boolean
   source: AssistantSource
+  protocol: AssistantProtocol
   baseUrl: string
   model: string
   channelId: number
   channelModel: string
   apiKeyConfigured: boolean
+  contextWindow: number
+  maxOutputTokens: number
 }
 
 export type AssistantSettingsDefaults = {
   user: AssistantProfileDefaults
   admin: AssistantProfileDefaults
   systemPrompt: string
-  maxToolRounds: number
   requestTimeoutSeconds: number
-  maxOutputTokens: number
-  dailyUserMessageLimit: number
-  allowTokenActions: boolean
 }
 
 type AssistantSettingsSectionProps = {
@@ -87,49 +83,92 @@ type AssistantSettingsSectionProps = {
 
 const OPTION_KEYS = {
   systemPrompt: 'assistant_setting.system_prompt',
-  maxToolRounds: 'assistant_setting.max_tool_rounds',
   requestTimeoutSeconds: 'assistant_setting.request_timeout_seconds',
-  maxOutputTokens: 'assistant_setting.max_output_tokens',
-  dailyUserMessageLimit: 'assistant_setting.daily_user_message_limit',
-  allowTokenActions: 'assistant_setting.allow_token_actions',
   user: {
     enabled: 'assistant_setting.user_enabled',
     source: 'assistant_setting.user_source',
+    protocol: 'assistant_setting.user_protocol',
     baseUrl: 'assistant_setting.user_base_url',
     apiKey: 'assistant_setting.user_api_key',
     model: 'assistant_setting.user_model',
     channelId: 'assistant_setting.user_channel_id',
     channelModel: 'assistant_setting.user_channel_model',
+    contextWindow: 'assistant_setting.user_context_window',
+    maxOutputTokens: 'assistant_setting.user_max_output_tokens',
   },
   admin: {
     enabled: 'assistant_setting.admin_enabled',
     source: 'assistant_setting.admin_source',
+    protocol: 'assistant_setting.admin_protocol',
     baseUrl: 'assistant_setting.admin_base_url',
     apiKey: 'assistant_setting.admin_api_key',
     model: 'assistant_setting.admin_model',
     channelId: 'assistant_setting.admin_channel_id',
     channelModel: 'assistant_setting.admin_channel_model',
+    contextWindow: 'assistant_setting.admin_context_window',
+    maxOutputTokens: 'assistant_setting.admin_max_output_tokens',
   },
 } as const
 
 /**
- * One profile is only usable when its selected source is fully configured:
- * a direct profile needs an API root and model, a channel profile needs the
- * channel and one of its models. The API key stays optional because an empty
- * field means "keep the stored key" (direct) or "use the channel key" (channel).
+ * One profile is only usable when its selected source is fully configured and
+ * its token limits are consistent: a direct profile needs an API root and
+ * model, a channel profile needs the channel and one of its models, and the
+ * output limit must stay strictly below the context window. The API key stays
+ * optional because an empty field means "keep the stored key" (direct) or
+ * "use the channel key" (channel).
  */
 const createAssistantSettingsSchema = (t: TFunction) => {
+  const rangeMessage = t('Value is out of range')
   const profileSchema = z
     .object({
       enabled: z.boolean(),
       source: z.enum(['direct', 'channel']),
+      protocol: z.enum(['responses', 'chat']),
       baseUrl: z.string(),
       model: z.string(),
       channelId: z.number().int(),
       channelModel: z.string(),
       apiKey: z.string(),
+      contextWindow: z.string(),
+      maxOutputTokens: z.string(),
     })
     .superRefine((profile, ctx) => {
+      const contextWindow = parseTokenAmount(profile.contextWindow)
+      if (
+        contextWindow === null ||
+        contextWindow < 1024 ||
+        contextWindow > 10000000
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['contextWindow'],
+          message: rangeMessage,
+        })
+      }
+      const maxOutputTokens = parseTokenAmount(profile.maxOutputTokens)
+      if (
+        maxOutputTokens === null ||
+        maxOutputTokens < 1 ||
+        maxOutputTokens > 1000000
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['maxOutputTokens'],
+          message: rangeMessage,
+        })
+      }
+      if (
+        contextWindow !== null &&
+        maxOutputTokens !== null &&
+        maxOutputTokens >= contextWindow
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['maxOutputTokens'],
+          message: t('Max output tokens must be less than the context window'),
+        })
+      }
       if (!profile.enabled) return
 
       if (profile.source === 'direct') {
@@ -177,27 +216,11 @@ const createAssistantSettingsSchema = (t: TFunction) => {
     user: profileSchema,
     admin: profileSchema,
     systemPrompt: z.string(),
-    maxToolRounds: z
-      .number()
-      .int(t('Value is out of range'))
-      .min(1, t('Value is out of range'))
-      .max(10, t('Value is out of range')),
     requestTimeoutSeconds: z
       .number()
-      .int(t('Value is out of range'))
-      .min(5, t('Value is out of range'))
-      .max(300, t('Value is out of range')),
-    maxOutputTokens: z
-      .number()
-      .int(t('Value is out of range'))
-      .min(64, t('Value is out of range'))
-      .max(8192, t('Value is out of range')),
-    dailyUserMessageLimit: z
-      .number()
-      .int(t('Value is out of range'))
-      .min(0, t('Value is out of range'))
-      .max(10000, t('Value is out of range')),
-    allowTokenActions: z.boolean(),
+      .int(rangeMessage)
+      .min(5, rangeMessage)
+      .max(300, rangeMessage),
   })
 }
 
@@ -207,11 +230,14 @@ function buildProfileFormDefaults(
   return {
     enabled: defaults.enabled,
     source: defaults.source,
+    protocol: defaults.protocol,
     baseUrl: defaults.baseUrl,
     model: defaults.model,
     channelId: defaults.channelId,
     channelModel: defaults.channelModel,
     apiKey: '',
+    contextWindow: String(defaults.contextWindow),
+    maxOutputTokens: String(defaults.maxOutputTokens),
   }
 }
 
@@ -222,11 +248,7 @@ function buildFormDefaults(
     user: buildProfileFormDefaults(defaults.user),
     admin: buildProfileFormDefaults(defaults.admin),
     systemPrompt: defaults.systemPrompt,
-    maxToolRounds: defaults.maxToolRounds,
     requestTimeoutSeconds: defaults.requestTimeoutSeconds,
-    maxOutputTokens: defaults.maxOutputTokens,
-    dailyUserMessageLimit: defaults.dailyUserMessageLimit,
-    allowTokenActions: defaults.allowTokenActions,
   }
 }
 
@@ -243,6 +265,20 @@ function buildProfileOptionEntries(
   const keys = OPTION_KEYS[profile]
   const entries: UpdateOptionRequest[] = []
 
+  if (values.protocol !== defaults.protocol) {
+    entries.push({ key: keys.protocol, value: values.protocol })
+  }
+  const contextWindow = parseTokenAmount(values.contextWindow)
+  if (contextWindow !== null && contextWindow !== defaults.contextWindow) {
+    entries.push({ key: keys.contextWindow, value: contextWindow })
+  }
+  const maxOutputTokens = parseTokenAmount(values.maxOutputTokens)
+  if (
+    maxOutputTokens !== null &&
+    maxOutputTokens !== defaults.maxOutputTokens
+  ) {
+    entries.push({ key: keys.maxOutputTokens, value: maxOutputTokens })
+  }
   const apiKey = values.apiKey.trim()
   if (apiKey !== '') {
     entries.push({ key: keys.apiKey, value: apiKey })
@@ -281,33 +317,10 @@ function buildOptionEntries(
   if (values.systemPrompt !== defaults.systemPrompt) {
     entries.push({ key: OPTION_KEYS.systemPrompt, value: values.systemPrompt })
   }
-
-  const numericEntries: Array<[string, number, number]> = [
-    [OPTION_KEYS.maxToolRounds, values.maxToolRounds, defaults.maxToolRounds],
-    [
-      OPTION_KEYS.requestTimeoutSeconds,
-      values.requestTimeoutSeconds,
-      defaults.requestTimeoutSeconds,
-    ],
-    [
-      OPTION_KEYS.maxOutputTokens,
-      values.maxOutputTokens,
-      defaults.maxOutputTokens,
-    ],
-    [
-      OPTION_KEYS.dailyUserMessageLimit,
-      values.dailyUserMessageLimit,
-      defaults.dailyUserMessageLimit,
-    ],
-  ]
-  for (const [key, value, defaultValue] of numericEntries) {
-    if (value !== defaultValue) entries.push({ key, value })
-  }
-
-  if (values.allowTokenActions !== defaults.allowTokenActions) {
+  if (values.requestTimeoutSeconds !== defaults.requestTimeoutSeconds) {
     entries.push({
-      key: OPTION_KEYS.allowTokenActions,
-      value: values.allowTokenActions,
+      key: OPTION_KEYS.requestTimeoutSeconds,
+      value: values.requestTimeoutSeconds,
     })
   }
 
@@ -445,29 +458,6 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
 
           <FormField
             control={form.control}
-            name='maxToolRounds'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Max tool rounds')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type='number'
-                    min={1}
-                    max={10}
-                    step={1}
-                    {...safeNumberFieldProps(field)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t('From {{min}} to {{max}}', { min: 1, max: 10 })}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
             name='requestTimeoutSeconds'
             render={({ field }) => (
               <FormItem>
@@ -486,76 +476,6 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
                 </FormDescription>
                 <FormMessage />
               </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name='maxOutputTokens'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Max output tokens')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type='number'
-                    min={64}
-                    max={8192}
-                    step={1}
-                    {...safeNumberFieldProps(field)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t('From {{min}} to {{max}}', { min: 64, max: 8192 })}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name='dailyUserMessageLimit'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Daily message limit per user')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type='number'
-                    min={0}
-                    max={10000}
-                    step={1}
-                    {...safeNumberFieldProps(field)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t('From {{min}} to {{max}}', { min: 0, max: 10000 })}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name='allowTokenActions'
-            render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Allow token actions')}</FormLabel>
-                  <FormDescription>
-                    {t(
-                      'Allow the assistant to create and manage API tokens through tools'
-                    )}
-                  </FormDescription>
-                </SettingsSwitchContent>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={isBusy}
-                  />
-                </FormControl>
-              </SettingsSwitchItem>
             )}
           />
 

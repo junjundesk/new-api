@@ -17,26 +17,31 @@ const (
 	SourceDirect  = "direct"
 	SourceChannel = "channel"
 
+	ProtocolResponses = "responses"
+	ProtocolChat      = "chat"
+
 	OptionKeyUserEnabled           = "assistant_setting.user_enabled"
 	OptionKeyUserSource            = "assistant_setting.user_source"
+	OptionKeyUserProtocol          = "assistant_setting.user_protocol"
 	OptionKeyUserBaseURL           = "assistant_setting.user_base_url"
 	OptionKeyUserAPIKey            = "assistant_setting.user_api_key"
 	OptionKeyUserModel             = "assistant_setting.user_model"
 	OptionKeyUserChannelID         = "assistant_setting.user_channel_id"
 	OptionKeyUserChannelModel      = "assistant_setting.user_channel_model"
+	OptionKeyUserContextWindow     = "assistant_setting.user_context_window"
+	OptionKeyUserMaxOutputTokens   = "assistant_setting.user_max_output_tokens"
 	OptionKeyAdminEnabled          = "assistant_setting.admin_enabled"
 	OptionKeyAdminSource           = "assistant_setting.admin_source"
+	OptionKeyAdminProtocol         = "assistant_setting.admin_protocol"
 	OptionKeyAdminBaseURL          = "assistant_setting.admin_base_url"
 	OptionKeyAdminAPIKey           = "assistant_setting.admin_api_key"
 	OptionKeyAdminModel            = "assistant_setting.admin_model"
 	OptionKeyAdminChannelID        = "assistant_setting.admin_channel_id"
 	OptionKeyAdminChannelModel     = "assistant_setting.admin_channel_model"
+	OptionKeyAdminContextWindow    = "assistant_setting.admin_context_window"
+	OptionKeyAdminMaxOutputTokens  = "assistant_setting.admin_max_output_tokens"
 	OptionKeySystemPrompt          = "assistant_setting.system_prompt"
-	OptionKeyMaxToolRounds         = "assistant_setting.max_tool_rounds"
 	OptionKeyRequestTimeout        = "assistant_setting.request_timeout_seconds"
-	OptionKeyMaxOutputTokens       = "assistant_setting.max_output_tokens"
-	OptionKeyDailyMessageLimit     = "assistant_setting.daily_user_message_limit"
-	OptionKeyAllowTokenActions     = "assistant_setting.allow_token_actions"
 	OptionKeyUserAPIKeyConfigured  = "assistant_setting.user_api_key_configured"
 	OptionKeyAdminAPIKeyConfigured = "assistant_setting.admin_api_key_configured"
 )
@@ -45,63 +50,70 @@ const (
 // use a direct OpenAI-compatible endpoint or bind a channel (including a
 // disabled channel) and one of that channel's models.
 type AssistantSetting struct {
-	UserEnabled      bool   `json:"user_enabled"`
-	UserSource       string `json:"user_source"`
-	UserBaseURL      string `json:"user_base_url"`
-	UserAPIKey       string `json:"user_api_key"`
-	UserModel        string `json:"user_model"`
-	UserChannelID    int    `json:"user_channel_id"`
-	UserChannelModel string `json:"user_channel_model"`
+	UserEnabled         bool   `json:"user_enabled"`
+	UserSource          string `json:"user_source"`
+	UserProtocol        string `json:"user_protocol"`
+	UserBaseURL         string `json:"user_base_url"`
+	UserAPIKey          string `json:"user_api_key"`
+	UserModel           string `json:"user_model"`
+	UserChannelID       int    `json:"user_channel_id"`
+	UserChannelModel    string `json:"user_channel_model"`
+	UserContextWindow   int    `json:"user_context_window"`
+	UserMaxOutputTokens int    `json:"user_max_output_tokens"`
 
-	AdminEnabled      bool   `json:"admin_enabled"`
-	AdminSource       string `json:"admin_source"`
-	AdminBaseURL      string `json:"admin_base_url"`
-	AdminAPIKey       string `json:"admin_api_key"`
-	AdminModel        string `json:"admin_model"`
-	AdminChannelID    int    `json:"admin_channel_id"`
-	AdminChannelModel string `json:"admin_channel_model"`
+	AdminEnabled         bool   `json:"admin_enabled"`
+	AdminSource          string `json:"admin_source"`
+	AdminProtocol        string `json:"admin_protocol"`
+	AdminBaseURL         string `json:"admin_base_url"`
+	AdminAPIKey          string `json:"admin_api_key"`
+	AdminModel           string `json:"admin_model"`
+	AdminChannelID       int    `json:"admin_channel_id"`
+	AdminChannelModel    string `json:"admin_channel_model"`
+	AdminContextWindow   int    `json:"admin_context_window"`
+	AdminMaxOutputTokens int    `json:"admin_max_output_tokens"`
 
 	SystemPrompt          string `json:"system_prompt"`
-	MaxToolRounds         int    `json:"max_tool_rounds"`
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
-	MaxOutputTokens       int    `json:"max_output_tokens"`
-	DailyUserMessageLimit int    `json:"daily_user_message_limit"`
-	AllowTokenActions     bool   `json:"allow_token_actions"`
 }
 
 // Profile is a request-scoped subset used by the assistant runtime.
 type Profile struct {
-	Name         string
-	Enabled      bool
-	Source       string
-	BaseURL      string
-	APIKey       string
-	Model        string
-	ChannelID    int
-	ChannelModel string
+	Name            string
+	Enabled         bool
+	Source          string
+	Protocol        string
+	BaseURL         string
+	APIKey          string
+	Model           string
+	ChannelID       int
+	ChannelModel    string
+	ContextWindow   int
+	MaxOutputTokens int
 }
 
 var assistantSetting = AssistantSetting{
 	UserEnabled:           false,
 	UserSource:            SourceDirect,
+	UserProtocol:          ProtocolResponses,
 	UserBaseURL:           "https://api.openai.com/v1",
 	UserAPIKey:            "",
 	UserModel:             "gpt-4.1-mini",
 	UserChannelID:         0,
 	UserChannelModel:      "",
+	UserContextWindow:     1000000,
+	UserMaxOutputTokens:   128000,
 	AdminEnabled:          false,
 	AdminSource:           SourceDirect,
+	AdminProtocol:         ProtocolResponses,
 	AdminBaseURL:          "https://api.openai.com/v1",
 	AdminAPIKey:           "",
 	AdminModel:            "gpt-4.1-mini",
 	AdminChannelID:        0,
 	AdminChannelModel:     "",
+	AdminContextWindow:    1000000,
+	AdminMaxOutputTokens:  128000,
 	SystemPrompt:          "",
-	MaxToolRounds:         5,
 	RequestTimeoutSeconds: 60,
-	MaxOutputTokens:       1500,
-	DailyUserMessageLimit: 50,
-	AllowTokenActions:     true,
 }
 
 func init() {
@@ -115,25 +127,31 @@ func Get() *AssistantSetting {
 func GetProfile(name string) Profile {
 	if name == ProfileAdmin {
 		return Profile{
-			Name:         ProfileAdmin,
-			Enabled:      assistantSetting.AdminEnabled,
-			Source:       normalizeSource(assistantSetting.AdminSource),
-			BaseURL:      strings.TrimSpace(assistantSetting.AdminBaseURL),
-			APIKey:       strings.TrimSpace(assistantSetting.AdminAPIKey),
-			Model:        strings.TrimSpace(assistantSetting.AdminModel),
-			ChannelID:    assistantSetting.AdminChannelID,
-			ChannelModel: strings.TrimSpace(assistantSetting.AdminChannelModel),
+			Name:            ProfileAdmin,
+			Enabled:         assistantSetting.AdminEnabled,
+			Source:          normalizeSource(assistantSetting.AdminSource),
+			Protocol:        normalizeProtocol(assistantSetting.AdminProtocol),
+			BaseURL:         strings.TrimSpace(assistantSetting.AdminBaseURL),
+			APIKey:          strings.TrimSpace(assistantSetting.AdminAPIKey),
+			Model:           strings.TrimSpace(assistantSetting.AdminModel),
+			ChannelID:       assistantSetting.AdminChannelID,
+			ChannelModel:    strings.TrimSpace(assistantSetting.AdminChannelModel),
+			ContextWindow:   assistantSetting.AdminContextWindow,
+			MaxOutputTokens: assistantSetting.AdminMaxOutputTokens,
 		}
 	}
 	return Profile{
-		Name:         ProfileUser,
-		Enabled:      assistantSetting.UserEnabled,
-		Source:       normalizeSource(assistantSetting.UserSource),
-		BaseURL:      strings.TrimSpace(assistantSetting.UserBaseURL),
-		APIKey:       strings.TrimSpace(assistantSetting.UserAPIKey),
-		Model:        strings.TrimSpace(assistantSetting.UserModel),
-		ChannelID:    assistantSetting.UserChannelID,
-		ChannelModel: strings.TrimSpace(assistantSetting.UserChannelModel),
+		Name:            ProfileUser,
+		Enabled:         assistantSetting.UserEnabled,
+		Source:          normalizeSource(assistantSetting.UserSource),
+		Protocol:        normalizeProtocol(assistantSetting.UserProtocol),
+		BaseURL:         strings.TrimSpace(assistantSetting.UserBaseURL),
+		APIKey:          strings.TrimSpace(assistantSetting.UserAPIKey),
+		Model:           strings.TrimSpace(assistantSetting.UserModel),
+		ChannelID:       assistantSetting.UserChannelID,
+		ChannelModel:    strings.TrimSpace(assistantSetting.UserChannelModel),
+		ContextWindow:   assistantSetting.UserContextWindow,
+		MaxOutputTokens: assistantSetting.UserMaxOutputTokens,
 	}
 }
 
@@ -142,6 +160,12 @@ func GetProfile(name string) Profile {
 // the channel key is used unless the profile overrides it.
 func IsConfigured(name string) bool {
 	profile := GetProfile(name)
+	if profile.Protocol != ProtocolResponses && profile.Protocol != ProtocolChat {
+		return false
+	}
+	if profile.ContextWindow <= 0 || profile.MaxOutputTokens <= 0 || profile.MaxOutputTokens >= profile.ContextWindow {
+		return false
+	}
 	if profile.Source == SourceChannel {
 		return profile.ChannelID > 0 && profile.ChannelModel != ""
 	}
@@ -184,8 +208,20 @@ func normalizeSource(source string) string {
 	return SourceDirect
 }
 
+func normalizeProtocol(protocol string) string {
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	switch protocol {
+	case ProtocolChat:
+		return ProtocolChat
+	case "", ProtocolResponses:
+		return ProtocolResponses
+	default:
+		return protocol
+	}
+}
+
 // NormalizeBaseURL validates a direct OpenAI-compatible API root. The client
-// appends "/responses" to the returned value.
+// appends "/responses" or "/chat/completions" to the returned value.
 func NormalizeBaseURL(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -208,8 +244,8 @@ func NormalizeBaseURL(raw string) (string, error) {
 		return "", errors.New("base URL must not include a query string or fragment")
 	}
 	path := strings.TrimSuffix(parsed.Path, "/")
-	if strings.HasSuffix(strings.ToLower(path), "/responses") {
-		return "", errors.New("base URL must be the API root, not the /responses endpoint")
+	if strings.HasSuffix(strings.ToLower(path), "/responses") || strings.HasSuffix(strings.ToLower(path), "/chat/completions") {
+		return "", errors.New("base URL must be the API root, not a completions endpoint")
 	}
 	if path == "" {
 		path = "/v1"
@@ -222,7 +258,7 @@ func NormalizeBaseURL(raw string) (string, error) {
 // NormalizeChannelBaseURL converts a channel base URL into the API root used by
 // the assistant client. OpenAI channels store "https://api.openai.com" while
 // other OpenAI-compatible gateways may store "/api" or "/v1"; the result always
-// ends with "/v1" so the client can append "/responses".
+// ends with "/v1" so the client can append its protocol endpoint.
 func NormalizeChannelBaseURL(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -248,6 +284,9 @@ func NormalizeChannelBaseURL(raw string) (string, error) {
 	if strings.HasSuffix(strings.ToLower(path), "/responses") {
 		path = strings.TrimSuffix(path, "/responses")
 	}
+	if strings.HasSuffix(strings.ToLower(path), "/chat/completions") {
+		path = strings.TrimSuffix(path, "/chat/completions")
+	}
 	if path == "" {
 		path = "/v1"
 	} else if !strings.HasSuffix(strings.ToLower(path), "/v1") {
@@ -272,20 +311,8 @@ func NormalizeOptionValue(key, value string) (normalized string, skip bool, err 
 			return "", false, errors.New("system prompt is too long (max 8000 characters)")
 		}
 		return value, false, nil
-	case OptionKeyMaxToolRounds:
-		return normalizeIntOption(value, 1, 10)
 	case OptionKeyRequestTimeout:
 		return normalizeIntOption(value, 5, 300)
-	case OptionKeyMaxOutputTokens:
-		return normalizeIntOption(value, 64, 8192)
-	case OptionKeyDailyMessageLimit:
-		return normalizeIntOption(value, 0, 10000)
-	case OptionKeyAllowTokenActions:
-		parsed, parseErr := strconv.ParseBool(strings.TrimSpace(value))
-		if parseErr != nil {
-			return "", false, fmt.Errorf("%s must be true or false", key)
-		}
-		return strconv.FormatBool(parsed), false, nil
 	default:
 		return "", false, fmt.Errorf("unknown assistant setting: %s", key)
 	}
@@ -305,6 +332,12 @@ func normalizeProfileOption(profileName, field, value string) (string, bool, err
 			return "", false, fmt.Errorf("%s source must be direct or channel", profileName)
 		}
 		return source, false, nil
+	case "protocol":
+		protocol := strings.ToLower(strings.TrimSpace(value))
+		if protocol != ProtocolResponses && protocol != ProtocolChat {
+			return "", false, fmt.Errorf("%s protocol must be responses or chat", profileName)
+		}
+		return protocol, false, nil
 	case "base_url":
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
@@ -343,6 +376,10 @@ func normalizeProfileOption(profileName, field, value string) (string, bool, err
 			return "", false, errors.New("channel model name is too long")
 		}
 		return trimmed, false, nil
+	case "context_window":
+		return normalizeIntOption(value, 1024, 10000000)
+	case "max_output_tokens":
+		return normalizeIntOption(value, 1, 1000000)
 	default:
 		return "", false, fmt.Errorf("unknown assistant profile setting: %s", field)
 	}
