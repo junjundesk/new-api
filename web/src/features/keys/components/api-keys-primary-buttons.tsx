@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
+import { ApiAddressesPopover } from './api-addresses-popover'
 import { useApiKeys } from './api-keys-provider'
 import { ChannelChainsDialog } from './channel-chains-dialog'
 
@@ -31,12 +32,9 @@ export function ApiKeysPrimaryButtons() {
   const [chainsOpen, setChainsOpen] = useState(false)
   return (
     <>
-      <div className='flex gap-2'>
-        <Button
-          size='sm'
-          variant='outline'
-          onClick={() => setChainsOpen(true)}
-        >
+      <div className='flex flex-wrap gap-2'>
+        <ApiAddressesPopover />
+        <Button size='sm' variant='outline' onClick={() => setChainsOpen(true)}>
           <Workflow className='h-4 w-4' />
           {t('Model Group Chains')}
         </Button>

@@ -40,14 +40,14 @@ AI API 网关（Go + React），把 40+ 上游 AI 提供方统一成一个类 Op
 | `router/` | 10 | 14 | Gin 路由挂载（main.go、relay-router.go、web-router.go、channel-router.go、api-router.go） |
 | `middleware/` | 33 | 148 | TokenAuth、Distribute（渠道分发+预扣费）、限流、CORS、审计；热点 `getModelRequest`(65) |
 | `controller/` | 89 | 736 | HTTP 处理器，业务公式解耦在 service；复杂度热点 `ManageMultiKeys`(87)、`FetchUpstreamRatios`(85)、`testChannel`(84) |
-| `service/` | 90 | 788 | 业务逻辑：token 计数、文本/图像/视频计费、任务轮询（task_polling.go）、日志生成；热点 `EstimateRequestToken`(35)、`getImageToken`(44) |
+| `service/` | 90 | 788 | 业务逻辑：token 计数、文本/图像/视频计费、任务轮询（task_polling.go）、日志生成、内置 AI 助手（service/assistant/，用户/管理员双配置、直连或绑定渠道模型、OpenAI Responses + 工具调用 + SSE）；热点 `EstimateRequestToken`(35)、`getImageToken`(44) |
 | `model/` | 77 | 894 | GORM 模型 + 数据访问（用户/令牌/日志/渠道/任务/订阅/选项）；热点 `updateOptionMap`(154)、`updatePricing`(63) |
 | `relay/` | 242 | 1607 | 中转过户链路：请求转换、流式转发、任务平台（Midjourney 等）；热点 `RelayMidjourneySubmit`(74)、`applyOperations`(84) |
 | 　└ `relay/channel/` | 192 | 1187 | 提供方适配器（见 §4） |
 | 　└ `relay/channel/task/` | — | — | 异步任务平台：ali/doubao/gemini/hailuo/jimeng/kling/sora/suno/vertex/vidu |
 | `relay/helper` `common` `constant` | — | — | 中转工具：请求校验、token 换算、格式类型常量 |
 | `relaykit/` | — | — | **独立 Go module**，relayconvert（OpenAI/Claude/Gemini/Responses 互转）、types、dto、reasonmap、reasoning；不得引入根 module（见 AGENTS.md 强制校验：`cd relaykit && GOWORK=off go build ./...`） |
-| `setting/` | 52 | 248 | 运行期配置：model/ratio/billing/system/operation/console/perf；热点 `getHardcodedCompletionModelRatio`(60) |
+| `setting/` | 52 | 248 | 运行期配置：model/ratio/billing/system/operation/console/perf/assistant_setting；热点 `getHardcodedCompletionModelRatio`(60) |
 | `common/` | 58 | 343 | 共享工具：JSON 包装（Marshal/Unmarshal 统一走 `common.*`）、quota_math（配额换算防溢出）、限流 Lua、sys_log |
 | `constant/` | 13 | 1 | 渠道类型/API 类型/上下文键常量 |
 | `dto/` | 4 | 31(类) | 请求/响应 DTO |
@@ -104,6 +104,7 @@ web/src/
 │   ├── models     模型定价（动态计费表达式预览）
 │   ├── dashboard  首页看板（图表）
 │   ├── playground / chat  在线体验聊天
+│   ├── assistant  内置 AI 助手（/assistant，聊天查询用量、管理 Key）
 │   ├── system-settings  系统设置（分域注册 section-registry，含 auth/billing/content/models/operations/security/site）
 │   ├── subscriptions / pricing  订阅与定价页
 │   └── home / about / errors / legal / rankings / setup / performance / system-info / profile

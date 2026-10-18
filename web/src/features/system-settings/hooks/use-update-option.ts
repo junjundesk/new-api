@@ -40,6 +40,20 @@ export const STATUS_RELATED_KEYS = new Set([
   'general_setting.custom_currency_symbol',
   'general_setting.custom_currency_exchange_rate',
   'oidc.display_name',
+  'assistant_setting.user_enabled',
+  'assistant_setting.user_source',
+  'assistant_setting.user_base_url',
+  'assistant_setting.user_api_key',
+  'assistant_setting.user_model',
+  'assistant_setting.user_channel_id',
+  'assistant_setting.user_channel_model',
+  'assistant_setting.admin_enabled',
+  'assistant_setting.admin_source',
+  'assistant_setting.admin_base_url',
+  'assistant_setting.admin_api_key',
+  'assistant_setting.admin_model',
+  'assistant_setting.admin_channel_id',
+  'assistant_setting.admin_channel_model',
 ])
 
 export function useUpdateOption() {

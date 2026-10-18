@@ -1,9 +1,9 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -38,14 +38,30 @@ type tokenRequest struct {
 	ModelMappings *[]setting.TokenModelMapping `json:"model_mappings"`
 }
 
-var validTokenNamePattern = regexp.MustCompile(`^[\p{L}\p{N} _\-\.\(\)\[\]@#+]{1,50}$`)
-
-func normalizeTokenName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", false
+// respondTokenValidationError maps the sentinel errors returned by the shared
+// token service to the localized API responses the token endpoints have always
+// used, so validation can be shared without changing client-visible messages.
+func respondTokenValidationError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrTokenNameTooLong):
+		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
+	case errors.Is(err, service.ErrTokenNameInvalid):
+		common.ApiErrorI18n(c, i18n.MsgTokenNameInvalid)
+	case errors.Is(err, service.ErrTokenQuotaNegative):
+		common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
+	case errors.Is(err, service.ErrTokenQuotaExceedMax):
+		common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": service.MaxUserTokenQuota()})
+	case errors.Is(err, service.ErrTokenLimitReached):
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("已达到最大令牌数量限制 (%d)", operation_setting.GetMaxUserTokens()),
+		})
+	case errors.Is(err, service.ErrTokenKeyGenerateFailed):
+		common.SysLog("failed to generate token key: " + err.Error())
+		common.ApiErrorI18n(c, i18n.MsgTokenGenerateFailed)
+	default:
+		common.ApiError(c, err)
 	}
-	return name, validTokenNamePattern.MatchString(name)
 }
 
 type tokenResponse struct {
@@ -462,40 +478,14 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	token := request.Token
-	if len(token.Name) > 50 {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
-		return
-	}
-	normalizedName, ok := normalizeTokenName(token.Name)
-	if !ok {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameInvalid)
+	normalizedName, err := service.NormalizeUserTokenName(token.Name)
+	if err != nil {
+		respondTokenValidationError(c, err)
 		return
 	}
 	token.Name = normalizedName
-	// 非无限额度时，检查额度值是否超出有效范围
-	if !token.UnlimitedQuota {
-		if token.RemainQuota < 0 {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
-			return
-		}
-		maxQuotaValue := int((1000000000 * common.QuotaPerUnit))
-		if token.RemainQuota > maxQuotaValue {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
-			return
-		}
-	}
-	// 检查用户令牌数量是否已达上限
-	maxTokens := operation_setting.GetMaxUserTokens()
-	count, err := model.CountUserTokens(c.GetInt("id"))
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if int(count) >= maxTokens {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": fmt.Sprintf("已达到最大令牌数量限制 (%d)", maxTokens),
-		})
+	if err := service.ValidateUserTokenQuota(token.RemainQuota, token.UnlimitedQuota); err != nil {
+		respondTokenValidationError(c, err)
 		return
 	}
 	if token.Group == "auto" {
@@ -510,18 +500,8 @@ func AddToken(c *gin.Context) {
 		token.CrossGroupRetry = false
 		_ = token.SetAutoGroups(nil)
 	}
-	key, err := common.GenerateKey()
-	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgTokenGenerateFailed)
-		common.SysLog("failed to generate token key: " + err.Error())
-		return
-	}
 	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
 		Name:               token.Name,
-		Key:                key,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
 		ExpiredTime:        token.ExpiredTime,
 		RemainQuota:        token.RemainQuota,
 		UnlimitedQuota:     token.UnlimitedQuota,
@@ -537,9 +517,8 @@ func AddToken(c *gin.Context) {
 			return
 		}
 	}
-	err = cleanToken.Insert()
-	if err != nil {
-		common.ApiError(c, err)
+	if err := service.InsertUserToken(c.GetInt("id"), &cleanToken); err != nil {
+		respondTokenValidationError(c, err)
 		return
 	}
 	recordUserSecurityAudit(c, cleanToken.UserId, "token.create", map[string]interface{}{
@@ -585,20 +564,9 @@ func UpdateToken(c *gin.Context) {
 		return
 	}
 	token := request.Token
-	if len(token.Name) > 50 {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
+	if err := service.ValidateUserTokenQuota(token.RemainQuota, token.UnlimitedQuota); err != nil {
+		respondTokenValidationError(c, err)
 		return
-	}
-	if !token.UnlimitedQuota {
-		if token.RemainQuota < 0 {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
-			return
-		}
-		maxQuotaValue := int((1000000000 * common.QuotaPerUnit))
-		if token.RemainQuota > maxQuotaValue {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
-			return
-		}
 	}
 	cleanToken, err := model.GetTokenByIds(token.Id, userId)
 	if err != nil {
@@ -636,12 +604,12 @@ func UpdateToken(c *gin.Context) {
 		}
 	} else {
 		// If you add more fields, please also update token.Update()
-		if normalizedName, ok := normalizeTokenName(token.Name); ok {
-			cleanToken.Name = normalizedName
-		} else {
-			common.ApiErrorI18n(c, i18n.MsgTokenNameInvalid)
+		normalizedName, err := service.NormalizeUserTokenName(token.Name)
+		if err != nil {
+			respondTokenValidationError(c, err)
 			return
 		}
+		cleanToken.Name = normalizedName
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota

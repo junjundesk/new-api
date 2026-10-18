@@ -267,6 +267,26 @@ const (
 	MsgTwoFACodeInvalid   = "twofa.code_invalid"
 )
 
+// AI assistant messages
+const (
+	MsgAssistantDisabled           = "assistant.disabled"
+	MsgAssistantMessageTooLong     = "assistant.message_too_long"
+	MsgAssistantHistoryTooLong     = "assistant.history_too_long"
+	MsgAssistantBusy               = "assistant.busy"
+	MsgAssistantDailyLimit         = "assistant.daily_limit"
+	MsgAssistantUpstreamError      = "assistant.upstream_error"
+	MsgAssistantUpstreamTimeout    = "assistant.upstream_timeout"
+	MsgAssistantTooManyToolRounds  = "assistant.too_many_tool_rounds"
+	MsgAssistantIncomplete         = "assistant.incomplete"
+	MsgAssistantConnectionFailed   = "assistant.connection_failed"
+	MsgAssistantAPIKeyRequired     = "assistant.api_key_required"
+	MsgAssistantModelRequired      = "assistant.model_required"
+	MsgAssistantConfigIncomplete   = "assistant.config_incomplete"
+	MsgAssistantInvalidConfig      = "assistant.invalid_config"
+	MsgAssistantNotConfigured      = "assistant.not_configured"
+	MsgAssistantChannelUnavailable = "assistant.channel_unavailable"
+)
+
 // Rate limit related messages
 const (
 	MsgRateLimitReached      = "rate_limit.reached"

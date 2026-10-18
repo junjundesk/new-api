@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/assistant_setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -123,6 +124,7 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":              legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":              legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":                     operation_setting.GetCheckinSetting().Enabled,
+		"assistant_enabled":                   assistant_setting.IsAvailable(assistant_setting.ProfileUser),
 		"enterprise_enabled":                  operation_setting.IsEnterpriseEnabled(),
 		"enterprise_total_recharge_threshold": operation_setting.GetEnterpriseTotalRechargeThreshold(),
 	}

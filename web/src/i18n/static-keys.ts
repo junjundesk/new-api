@@ -612,4 +612,12 @@ export const STATIC_I18N_KEYS = [
   'Activity code must be 1-64 letters (any language), digits, _ or -',
   'Active',
   'Revoked',
+
+  // Built-in AI assistant (dynamic error keys)
+  'Failed to load the AI assistant configuration',
+  'The assistant request failed',
+  'Failed to start the assistant request',
+  'Failed to read the assistant response',
+  'The connection closed before the assistant finished',
+  'Failed to load the full API key',
 ] as const

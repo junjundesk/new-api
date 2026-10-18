@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/assistant_setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -104,11 +105,17 @@ func GetOptions(c *gin.Context) {
 			}
 		}
 	}
+	userAPIKeyConfigured := strings.TrimSpace(common.OptionMap[assistant_setting.OptionKeyUserAPIKey]) != ""
+	adminAPIKeyConfigured := strings.TrimSpace(common.OptionMap[assistant_setting.OptionKeyAdminAPIKey]) != ""
 	common.OptionMapRWMutex.Unlock()
 	options = append(options, &model.Option{
 		Key:   "CompletionRatioMeta",
 		Value: buildCompletionRatioMetaValue(optionValues),
 	})
+	options = append(options,
+		&model.Option{Key: assistant_setting.OptionKeyUserAPIKeyConfigured, Value: strconv.FormatBool(userAPIKeyConfigured)},
+		&model.Option{Key: assistant_setting.OptionKeyAdminAPIKeyConfigured, Value: strconv.FormatBool(adminAPIKeyConfigured)},
+	)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -140,6 +147,29 @@ func UpdateOption(c *gin.Context) {
 		option.Value = common.Interface2String(option.Value.(int))
 	default:
 		option.Value = fmt.Sprintf("%v", option.Value)
+	}
+	if option.Key == assistant_setting.OptionKeyUserAPIKeyConfigured || option.Key == assistant_setting.OptionKeyAdminAPIKeyConfigured {
+		common.ApiErrorMsg(c, "read-only option")
+		return
+	}
+	if assistant_setting.IsOptionKey(option.Key) {
+		normalized, skip, err := assistant_setting.NormalizeOptionValue(option.Key, option.Value.(string))
+		if err != nil {
+			common.ApiErrorI18n(c, i18n.MsgAssistantInvalidConfig, map[string]any{"Reason": err.Error()})
+			return
+		}
+		if skip {
+			common.ApiSuccess(c, nil)
+			return
+		}
+		if strings.HasSuffix(option.Key, "_enabled") && normalized == "true" {
+			profileName, ok := assistant_setting.ProfileForOptionKey(option.Key)
+			if !ok || !assistant_setting.IsConfigured(profileName) {
+				common.ApiErrorI18n(c, i18n.MsgAssistantConfigIncomplete)
+				return
+			}
+		}
+		option.Value = normalized
 	}
 	switch option.Key {
 	case "QuotaForInviter", "QuotaForInvitee":

@@ -12,6 +12,26 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// The assistant chat endpoint is SSE. Register it on the engine instead of
+	// the gzip-wrapped /api group so responses are flushed as they arrive.
+	assistantRoute := router.Group("/api/assistant")
+	assistantRoute.Use(middleware.RouteTag("api"))
+	assistantRoute.Use(middleware.GlobalAPIRateLimit())
+	{
+		assistantRoute.GET("/config", middleware.UserAuth(), middleware.DisableCache(), controller.GetAssistantConfig)
+		assistantRoute.POST("/chat", middleware.UserAuth(), controller.AssistantChat)
+
+		assistantAdminRoute := assistantRoute.Group("/admin")
+		assistantAdminRoute.Use(middleware.RootAuth())
+		{
+			assistantAdminRoute.GET("/runtime-config", middleware.DisableCache(), controller.GetAdminAssistantConfig)
+			assistantAdminRoute.POST("/chat", controller.AdminAssistantChat)
+			assistantAdminRoute.GET("/channels", middleware.DisableCache(), controller.ListAssistantChannels)
+			assistantAdminRoute.POST("/test", middleware.CriticalRateLimit(), controller.TestAssistantConnection)
+			assistantAdminRoute.DELETE("/key", middleware.CriticalRateLimit(), controller.ClearAssistantKey)
+		}
+	}
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))

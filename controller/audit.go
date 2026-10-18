@@ -29,6 +29,7 @@ var auditContentTemplates = map[string]string{
 	"user.passkey_delete":   "Deleted a passkey",
 	"user.reset_passkey":    "Reset the user passkey",
 	"option.update":         "Updated system setting ${key}",
+	"assistant.key_clear":   "Cleared the AI assistant API key",
 
 	"user.email_send":     "Sent email ${subject} to ${sent}/${targeted} recipients (failed: ${failed}, skipped: ${skipped})",
 	"user.email_send_all": "Sent email ${subject} to all users (targeted: ${targeted}, skipped: ${skipped})",

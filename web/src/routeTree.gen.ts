@@ -36,6 +36,7 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
 import { Route as AuthenticatedActivityCodesIndexRouteImport } from './routes/_authenticated/activity-codes/index'
 import { Route as AuthenticatedActivityIndexRouteImport } from './routes/_authenticated/activity/index'
+import { Route as AuthenticatedAssistantIndexRouteImport } from './routes/_authenticated/assistant/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
@@ -58,6 +59,7 @@ import { Route as AuthenticatedUserLogsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
+import { Route as AuthenticatedAssistantAdminIndexRouteImport } from './routes/_authenticated/assistant/admin/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
 import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './routes/_authenticated/system-settings/billing/index'
@@ -209,6 +211,12 @@ const AuthenticatedActivityIndexRoute =
     path: '/activity/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAssistantIndexRoute =
+  AuthenticatedAssistantIndexRouteImport.update({
+    id: '/assistant/',
+    path: '/assistant/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
     id: '/channels/',
@@ -336,6 +344,12 @@ const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   path: '/pricing/$modelId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAssistantAdminIndexRoute =
+  AuthenticatedAssistantAdminIndexRouteImport.update({
+    id: '/assistant/admin/',
+    path: '/assistant/admin/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsAuthIndexRoute =
   AuthenticatedSystemSettingsAuthIndexRouteImport.update({
     id: '/auth/',
@@ -452,6 +466,7 @@ export interface FileRoutesByFullPath {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/activity-codes/': typeof AuthenticatedActivityCodesIndexRoute
   '/activity/': typeof AuthenticatedActivityIndexRoute
+  '/assistant/': typeof AuthenticatedAssistantIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/email/': typeof AuthenticatedEmailIndexRoute
@@ -476,6 +491,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/assistant/admin/': typeof AuthenticatedAssistantAdminIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -514,6 +530,7 @@ export interface FileRoutesByTo {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/activity-codes': typeof AuthenticatedActivityCodesIndexRoute
   '/activity': typeof AuthenticatedActivityIndexRoute
+  '/assistant': typeof AuthenticatedAssistantIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/email': typeof AuthenticatedEmailIndexRoute
@@ -538,6 +555,7 @@ export interface FileRoutesByTo {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/assistant/admin': typeof AuthenticatedAssistantAdminIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -580,6 +598,7 @@ export interface FileRoutesById {
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/activity-codes/': typeof AuthenticatedActivityCodesIndexRoute
   '/_authenticated/activity/': typeof AuthenticatedActivityIndexRoute
+  '/_authenticated/assistant/': typeof AuthenticatedAssistantIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/email/': typeof AuthenticatedEmailIndexRoute
@@ -604,6 +623,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/_authenticated/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/_authenticated/assistant/admin/': typeof AuthenticatedAssistantAdminIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -645,6 +665,7 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/activity-codes/'
     | '/activity/'
+    | '/assistant/'
     | '/channels/'
     | '/dashboard/'
     | '/email/'
@@ -669,6 +690,7 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/assistant/admin/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -707,6 +729,7 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/activity-codes'
     | '/activity'
+    | '/assistant'
     | '/channels'
     | '/dashboard'
     | '/email'
@@ -731,6 +754,7 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/assistant/admin'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -772,6 +796,7 @@ export interface FileRouteTypes {
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/activity-codes/'
     | '/_authenticated/activity/'
+    | '/_authenticated/assistant/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/email/'
@@ -796,6 +821,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/operations/$section'
     | '/_authenticated/system-settings/security/$section'
     | '/_authenticated/system-settings/site/$section'
+    | '/_authenticated/assistant/admin/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -1015,6 +1041,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedActivityIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/assistant/': {
+      id: '/_authenticated/assistant/'
+      path: '/assistant'
+      fullPath: '/assistant/'
+      preLoaderRoute: typeof AuthenticatedAssistantIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
       path: '/channels'
@@ -1168,6 +1201,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/pricing/$modelId/'
       preLoaderRoute: typeof PricingModelIdIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/assistant/admin/': {
+      id: '/_authenticated/assistant/admin/'
+      path: '/assistant/admin'
+      fullPath: '/assistant/admin/'
+      preLoaderRoute: typeof AuthenticatedAssistantAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/system-settings/auth/': {
       id: '/_authenticated/system-settings/auth/'
@@ -1363,6 +1403,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedActivityCodesIndexRoute: typeof AuthenticatedActivityCodesIndexRoute
   AuthenticatedActivityIndexRoute: typeof AuthenticatedActivityIndexRoute
+  AuthenticatedAssistantIndexRoute: typeof AuthenticatedAssistantIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedEmailIndexRoute: typeof AuthenticatedEmailIndexRoute
@@ -1378,6 +1419,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUserLogsIndexRoute: typeof AuthenticatedUserLogsIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
+  AuthenticatedAssistantAdminIndexRoute: typeof AuthenticatedAssistantAdminIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1391,6 +1433,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedActivityCodesIndexRoute: AuthenticatedActivityCodesIndexRoute,
   AuthenticatedActivityIndexRoute: AuthenticatedActivityIndexRoute,
+  AuthenticatedAssistantIndexRoute: AuthenticatedAssistantIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedEmailIndexRoute: AuthenticatedEmailIndexRoute,
@@ -1407,6 +1450,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUserLogsIndexRoute: AuthenticatedUserLogsIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
+  AuthenticatedAssistantAdminIndexRoute: AuthenticatedAssistantAdminIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

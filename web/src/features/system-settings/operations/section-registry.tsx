@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
+import { AssistantSettingsSection } from '../integrations/assistant-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
@@ -67,6 +68,54 @@ const OPERATIONS_SECTIONS = [
           WorkerValidKey: settings.WorkerValidKey,
           WorkerAllowHttpImageRequestEnabled:
             settings.WorkerAllowHttpImageRequestEnabled,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'assistant',
+    titleKey: 'AI Assistant',
+    build: (settings: OperationsSettings) => (
+      <AssistantSettingsSection
+        defaultValues={{
+          user: {
+            enabled: settings['assistant_setting.user_enabled'] ?? false,
+            source:
+              settings['assistant_setting.user_source'] === 'channel'
+                ? 'channel'
+                : 'direct',
+            baseUrl: settings['assistant_setting.user_base_url'] ?? '',
+            model: settings['assistant_setting.user_model'] ?? '',
+            channelId: settings['assistant_setting.user_channel_id'] ?? 0,
+            channelModel:
+              settings['assistant_setting.user_channel_model'] ?? '',
+            apiKeyConfigured:
+              settings['assistant_setting.user_api_key_configured'] ?? false,
+          },
+          admin: {
+            enabled: settings['assistant_setting.admin_enabled'] ?? false,
+            source:
+              settings['assistant_setting.admin_source'] === 'channel'
+                ? 'channel'
+                : 'direct',
+            baseUrl: settings['assistant_setting.admin_base_url'] ?? '',
+            model: settings['assistant_setting.admin_model'] ?? '',
+            channelId: settings['assistant_setting.admin_channel_id'] ?? 0,
+            channelModel:
+              settings['assistant_setting.admin_channel_model'] ?? '',
+            apiKeyConfigured:
+              settings['assistant_setting.admin_api_key_configured'] ?? false,
+          },
+          systemPrompt: settings['assistant_setting.system_prompt'] ?? '',
+          maxToolRounds: settings['assistant_setting.max_tool_rounds'] ?? 5,
+          requestTimeoutSeconds:
+            settings['assistant_setting.request_timeout_seconds'] ?? 60,
+          maxOutputTokens:
+            settings['assistant_setting.max_output_tokens'] ?? 1500,
+          dailyUserMessageLimit:
+            settings['assistant_setting.daily_user_message_limit'] ?? 50,
+          allowTokenActions:
+            settings['assistant_setting.allow_token_actions'] ?? true,
         }}
       />
     ),

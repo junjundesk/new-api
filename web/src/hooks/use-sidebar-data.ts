@@ -33,6 +33,8 @@ import {
   Radio,
   ServerCog,
   Settings,
+  ShieldCheck,
+  Sparkles,
   Ticket,
   User,
   Users,
@@ -43,6 +45,8 @@ import { useTranslation } from 'react-i18next'
 import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 
+import { useStatus } from './use-status'
+
 /**
  * Root navigation groups for the application sidebar.
  *
@@ -51,6 +55,8 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const assistantEnabled = status?.assistant_enabled === true
 
   return {
     navGroups: [
@@ -63,6 +69,15 @@ export function useSidebarData(): SidebarData {
             url: '/playground',
             icon: FlaskConical,
           },
+          ...(assistantEnabled
+            ? [
+                {
+                  title: t('AI Assistant'),
+                  url: '/assistant',
+                  icon: Sparkles,
+                },
+              ]
+            : []),
           {
             title: t('Chat'),
             icon: MessageSquare,
@@ -138,6 +153,12 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          {
+            title: t('Admin Assistant'),
+            url: '/assistant/admin',
+            icon: ShieldCheck,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
           {
             title: t('Channels'),
             url: '/channels',
