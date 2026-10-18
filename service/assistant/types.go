@@ -121,11 +121,17 @@ type EmitFunc func(Event) error
 // AuditFunc records a user security audit event.
 type AuditFunc func(action string, params map[string]any)
 
-// ToolExecutor defines the tools exposed to the model. All tools are available
-// to every authenticated user and are scoped to that user's own data.
+// ToolExecutor defines the tools exposed to the model for one assistant
+// profile. Each profile only receives the tools its permissions allow.
 type ToolExecutor interface {
 	Definitions() []map[string]any
 	Execute(ctx context.Context, userID int, call ToolCall, audit AuditFunc) ToolResult
+}
+
+// toolNameResolver lets an executor collapse a tool it does not expose for its
+// profile to a neutral display name in the client transcript.
+type toolNameResolver interface {
+	DisplayToolName(name string) string
 }
 
 // UpstreamError describes a non-2xx or failed upstream call. Message is

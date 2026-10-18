@@ -10,12 +10,15 @@ import (
 )
 
 func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
+	executeDescription := "Execute one dashboard API operation within your own account. Write operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body."
+	if e.adminScope {
+		executeDescription = "Execute one dashboard API operation within the administrator's permissions. Write and destructive operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body."
+	}
 	defs := []map[string]any{
 		functionTool(
 			"list_operations",
 			"List dashboard API operations available to the current assistant profile. Use this to discover the exact operation_id, method, path, risk, and path parameters before executing anything.",
 			objectSchema(map[string]any{
-				"scope":  map[string]any{"type": "string", "description": "Optional user/admin scope filter."},
 				"domain": map[string]any{"type": "string", "description": "Optional domain such as user, token, channel, log."},
 				"query":  map[string]any{"type": "string", "maxLength": 128, "description": "Optional text search."},
 				"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Maximum operations to return. Defaults to 50."},
@@ -30,7 +33,7 @@ func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
 		),
 		functionTool(
 			"execute_operation",
-			"Execute one dashboard API operation within the current user's or administrator's permissions. Write and destructive operations require user confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body.",
+			executeDescription,
 			objectSchema(map[string]any{
 				"operation_id": map[string]any{"type": "string"},
 				"path_params":  map[string]any{"type": "object", "additionalProperties": true},
@@ -39,7 +42,9 @@ func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
 				"reason":       map[string]any{"type": "string", "maxLength": 500},
 			}, []string{"operation_id"}),
 		),
-		functionTool(
+	}
+	if e.adminScope {
+		defs = append(defs, functionTool(
 			"batch_operation",
 			"Run one user-targeted operation for many users after one confirmation. Provide user_ids or a user filter, or explicit items. Maximum 100 targets. Per-target results are returned; there is no rollback.",
 			objectSchema(map[string]any{
@@ -79,7 +84,7 @@ func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
 				},
 				"reason": map[string]any{"type": "string", "maxLength": 500},
 			}, []string{"operation_id"}),
-		),
+		))
 	}
 	if e.adminScope && e.actorRole >= 100 && e.adminDBTools {
 		defs = append(defs, e.dbDefinitions()...)
@@ -108,7 +113,7 @@ func (e *DefaultToolExecutor) listOperations(rawArguments string) ToolResult {
 	operations := assistantops.List(profile, e.actorRole, args.Domain, args.Query, limit)
 	items := make([]map[string]any, 0, len(operations))
 	for _, op := range operations {
-		items = append(items, map[string]any{
+		item := map[string]any{
 			"operation_id": op.ID,
 			"method":       op.Method,
 			"path":         op.Path,
@@ -117,8 +122,11 @@ func (e *DefaultToolExecutor) listOperations(rawArguments string) ToolResult {
 			"risk":         op.Risk,
 			"summary":      op.Summary,
 			"path_params":  op.PathParams,
-			"batchable":    op.Batchable,
-		})
+		}
+		if e.adminScope {
+			item["batchable"] = op.Batchable
+		}
+		items = append(items, item)
 	}
 	return ToolResult{OK: true, Data: map[string]any{"operations": items, "returned": len(items)}}
 }
@@ -137,7 +145,7 @@ func (e *DefaultToolExecutor) getOperation(rawArguments string) ToolResult {
 	if !assistantops.Visible(op, e.actor().Profile, e.actorRole) {
 		return toolErrorf("operation is not available to this assistant profile")
 	}
-	return ToolResult{OK: true, Data: map[string]any{
+	data := map[string]any{
 		"operation_id": op.ID,
 		"method":       op.Method,
 		"path":         op.Path,
@@ -147,8 +155,11 @@ func (e *DefaultToolExecutor) getOperation(rawArguments string) ToolResult {
 		"summary":      op.Summary,
 		"description":  op.Description,
 		"path_params":  op.PathParams,
-		"batchable":    op.Batchable,
-	}}
+	}
+	if e.adminScope {
+		data["batchable"] = op.Batchable
+	}
+	return ToolResult{OK: true, Data: data}
 }
 
 type executeOperationArguments struct {

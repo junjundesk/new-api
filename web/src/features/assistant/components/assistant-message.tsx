@@ -23,14 +23,19 @@ import { Loader } from '@/components/ai-elements/loader'
 import { Message, MessageContent } from '@/components/ai-elements/message'
 import { Response } from '@/components/ai-elements/response'
 
-import { ASSISTANT_ERROR_KEYS, ASSISTANT_MESSAGE_STATUS } from '../constants'
+import {
+  ASSISTANT_ERROR_KEYS,
+  ASSISTANT_MESSAGE_STATUS,
+  ASSISTANT_USER_TOOL_NAMES,
+} from '../constants'
 import { getMessageText } from '../lib/messages'
-import type { AssistantChatMessage } from '../types'
+import type { AssistantChatMessage, AssistantProfile } from '../types'
 import { AssistantConfirmationCard } from './assistant-confirmation-card'
 import { AssistantToolCard } from './assistant-tool-card'
 
 interface AssistantMessageProps {
   message: AssistantChatMessage
+  profile?: AssistantProfile
   onConfirm: (confirmationId: string, approve: boolean) => Promise<void>
 }
 
@@ -72,6 +77,12 @@ export function AssistantMessage(props: AssistantMessageProps) {
                 part={part}
               />
             )
+          }
+          if (
+            props.profile !== 'admin' &&
+            !ASSISTANT_USER_TOOL_NAMES.has(part.name)
+          ) {
+            return null
           }
           return <AssistantToolCard key={part.id} part={part} />
         })}

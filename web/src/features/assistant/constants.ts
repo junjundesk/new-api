@@ -48,6 +48,20 @@ export const ASSISTANT_LIMITS = {
 
 export const ASSISTANT_STORAGE_KEY_PREFIX = 'assistant_chat_messages'
 
+// Tools exposed to the user profile. Administrator-only tools are filtered out
+// of the transcript so their names never appear in the user assistant.
+export const ASSISTANT_USER_TOOL_NAMES = new Set<string>([
+  'get_account_summary',
+  'get_usage_summary',
+  'list_usage_logs',
+  'list_api_keys',
+  'create_api_key',
+  'set_api_key_status',
+  'list_operations',
+  'get_operation',
+  'execute_operation',
+])
+
 export const ASSISTANT_MESSAGE_STATUS = {
   STREAMING: 'streaming',
   DONE: 'done',

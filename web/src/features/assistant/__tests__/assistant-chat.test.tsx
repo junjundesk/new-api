@@ -397,6 +397,41 @@ describe('assistant chat page', () => {
     expect(configMock.confirmAssistantOperation).not.toHaveBeenCalled()
   })
 
+  it('hides administrator-only tool cards from the user transcript', async () => {
+    renderAssistant()
+
+    const source = await sendMessage('Query the database')
+    source.emit(
+      'message',
+      '{"type":"tool_start","tool_call_id":"call-db","name":"admin_db_query","arguments":{"table":"users"}}'
+    )
+    source.emit(
+      'message',
+      '{"type":"tool_result","tool_call_id":"call-db","name":"admin_db_query","ok":false,"error":"not available"}'
+    )
+    source.emit('message', '{"type":"delta","text":"I cannot access that."}')
+
+    await waitFor(() => {
+      expect(screen.getByRole('log').textContent).toContain(
+        'I cannot access that.'
+      )
+    })
+    expect(screen.queryByText('Database query')).toBeNull()
+    expect(screen.queryByText('admin_db_query')).toBeNull()
+  })
+
+  it('shows administrator tool cards on the admin transcript', async () => {
+    renderAssistant('admin')
+
+    const source = await sendMessage('Query the database')
+    source.emit(
+      'message',
+      '{"type":"tool_start","tool_call_id":"call-db","name":"admin_db_query","arguments":{"table":"users"}}'
+    )
+
+    expect(await screen.findByText('Database query')).toBeVisible()
+  })
+
   it('shows a retryable error when the configuration fails to load', async () => {
     configMock.getAssistantConfig.mockRejectedValue(new Error('offline'))
     renderAssistant()

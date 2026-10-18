@@ -48,6 +48,7 @@ export function AssistantConversation(props: AssistantConversationProps) {
         key={message.id}
         message={message}
         onConfirm={props.onConfirm}
+        profile={props.profile}
       />
     ))
   }

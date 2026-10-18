@@ -5905,6 +5905,7 @@
     "Data": "数据",
     "Succeeded": "成功",
     "Tables": "数据表",
-    "Rows": "行数"
+    "Rows": "行数",
+    "Unsupported tool": "不支持的工具"
   }
 }

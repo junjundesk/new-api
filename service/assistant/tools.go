@@ -27,6 +27,7 @@ type DefaultToolExecutor struct {
 	adminDBTools   bool
 	emit           EmitFunc
 	confirmation   *ConfirmationBroker
+	toolNames      map[string]struct{}
 }
 
 func NewDefaultToolExecutor(adminScope bool) *DefaultToolExecutor {
@@ -192,7 +193,38 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 	return definitions
 }
 
+// availableToolNames returns the tool set this executor exposes for its
+// profile. Names outside the set must never reach the client transcript.
+func (e *DefaultToolExecutor) availableToolNames() map[string]struct{} {
+	if e.toolNames != nil {
+		return e.toolNames
+	}
+	names := make(map[string]struct{})
+	for _, definition := range e.Definitions() {
+		name, ok := definition["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+		names[name] = struct{}{}
+	}
+	e.toolNames = names
+	return names
+}
+
+// DisplayToolName maps a model-requested tool name to the name shown to the
+// user. A name outside the profile tool set collapses to a neutral label so a
+// hallucinated administrator tool cannot surface in the transcript.
+func (e *DefaultToolExecutor) DisplayToolName(name string) string {
+	if _, ok := e.availableToolNames()[name]; ok {
+		return name
+	}
+	return "unsupported_tool"
+}
+
 func (e *DefaultToolExecutor) Execute(ctx context.Context, userID int, call ToolCall, audit AuditFunc) ToolResult {
+	if _, ok := e.availableToolNames()[call.Name]; !ok {
+		return toolErrorf("tool is not available for this assistant profile")
+	}
 	switch call.Name {
 	case "list_operations":
 		return e.listOperations(call.Arguments)

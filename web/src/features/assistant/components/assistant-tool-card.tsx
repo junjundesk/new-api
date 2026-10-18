@@ -70,6 +70,8 @@ function getToolTitle(name: string, t: TFunction): string {
       return t('Database schema')
     case 'admin_db_query':
       return t('Database query')
+    case 'unsupported_tool':
+      return t('Unsupported tool')
     default:
       return name.replaceAll('_', ' ')
   }

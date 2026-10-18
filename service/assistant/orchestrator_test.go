@@ -66,6 +66,13 @@ func (f *fakeToolExecutor) Execute(ctx context.Context, userID int, call ToolCal
 	return f.result
 }
 
+func (f *fakeToolExecutor) DisplayToolName(name string) string {
+	if name == "admin_db_query" {
+		return "unsupported_tool"
+	}
+	return name
+}
+
 func rawToolCall(t *testing.T, callID, name string, arguments map[string]any) json.RawMessage {
 	t.Helper()
 	rawArguments, err := common.Marshal(arguments)
@@ -130,6 +137,35 @@ func TestOrchestratorRunsToolThenStreamsFinalText(t *testing.T) {
 	assert.NotNil(t, events[2].OK)
 	assert.True(t, *events[2].OK)
 	assert.Equal(t, "final", events[3].Text)
+}
+
+func TestOrchestratorHidesToolsOutsideProfileSet(t *testing.T) {
+	toolItem := rawToolCall(t, "call_1", "admin_db_query", map[string]any{"table": "users"})
+	client := &fakeResponsesClient{responses: []*ResponsesResult{
+		{Status: "completed", Output: []json.RawMessage{toolItem}},
+		{Status: "completed", Output: []json.RawMessage{rawMessage(t, "done")}},
+	}}
+	executor := &fakeToolExecutor{
+		definitions: []map[string]any{{"type": "function", "name": "list_operations"}},
+		result:      ToolResult{OK: false, Error: "tool is not available for this assistant profile"},
+	}
+	events := make([]Event, 0)
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error {
+		events = append(events, event)
+		return nil
+	}, nil)
+	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "hi"))
+
+	var start *Event
+	for index := range events {
+		assert.NotEqual(t, "admin_db_query", events[index].Name)
+		if events[index].Type == "tool_start" {
+			start = &events[index]
+		}
+	}
+	require.NotNil(t, start)
+	assert.Equal(t, "unsupported_tool", start.Name)
+	assert.Nil(t, start.Arguments)
 }
 
 func TestOrchestratorRunsMultipleToolRoundsWithoutCap(t *testing.T) {

@@ -72,6 +72,45 @@ func TestGenericExecuteOperationRunsCatalogRoute(t *testing.T) {
 
 	list := executor.Execute(context.Background(), 1, ToolCall{Name: "list_operations", Arguments: "{\"query\":\"token/probe\"}"}, nil)
 	require.True(t, list.OK, list.Error)
+	listData, ok := list.Data.(map[string]any)
+	require.True(t, ok)
+	operations, ok := listData["operations"].([]map[string]any)
+	require.True(t, ok)
+	require.NotEmpty(t, operations)
+	for _, operation := range operations {
+		assert.NotContains(t, operation, "batchable")
+	}
+}
+
+func TestUserToolSetHidesAdministratorTools(t *testing.T) {
+	userExecutor := NewRuntimeToolExecutor(Config{ActorID: 1, ActorRole: common.RoleCommonUser, Profile: "user"}, nil)
+	userTools := map[string]struct{}{}
+	for _, definition := range userExecutor.Definitions() {
+		name, ok := definition["name"].(string)
+		require.True(t, ok)
+		userTools[name] = struct{}{}
+	}
+	for _, hidden := range []string{"list_users", "batch_operation", "admin_db_schema", "admin_db_query"} {
+		assert.NotContains(t, userTools, hidden)
+		assert.Equal(t, "unsupported_tool", userExecutor.DisplayToolName(hidden))
+	}
+	for _, visible := range []string{"list_operations", "get_operation", "execute_operation", "create_api_key", "list_api_keys"} {
+		assert.Contains(t, userTools, visible)
+		assert.Equal(t, visible, userExecutor.DisplayToolName(visible))
+	}
+	rejected := userExecutor.Execute(context.Background(), 1, ToolCall{Name: "batch_operation", Arguments: "{}"}, nil)
+	require.False(t, rejected.OK)
+
+	adminExecutor := NewRuntimeToolExecutor(Config{AdminScope: true, ActorID: 2, ActorRole: common.RoleRootUser, Profile: "admin", AdminDBTools: true}, nil)
+	adminTools := map[string]struct{}{}
+	for _, definition := range adminExecutor.Definitions() {
+		name, ok := definition["name"].(string)
+		require.True(t, ok)
+		adminTools[name] = struct{}{}
+	}
+	for _, visible := range []string{"list_users", "batch_operation", "admin_db_schema", "admin_db_query"} {
+		assert.Contains(t, adminTools, visible)
+	}
 }
 
 func TestBatchOperationRunsPerTargetAndEnforcesLimit(t *testing.T) {

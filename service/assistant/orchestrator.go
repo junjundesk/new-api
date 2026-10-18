@@ -141,10 +141,17 @@ func (o *Orchestrator) executeTool(ctx context.Context, userID int, call ToolCal
 		}
 	}
 	arguments = redactValue(arguments, []string{"password", "original_password", "access_token", "refresh_token", "api_key", "secret", "private_key", "key"})
+	displayName := call.Name
+	if resolver, ok := o.executor.(toolNameResolver); ok {
+		displayName = resolver.DisplayToolName(call.Name)
+	}
+	if displayName != call.Name {
+		arguments = nil
+	}
 	_ = o.emit(Event{
 		Type:       "tool_start",
 		ToolCallID: call.CallID,
-		Name:       call.Name,
+		Name:       displayName,
 		Arguments:  arguments,
 	})
 	toolResult := o.executor.Execute(ctx, userID, call, o.audit)
@@ -152,7 +159,7 @@ func (o *Orchestrator) executeTool(ctx context.Context, userID int, call ToolCal
 	_ = o.emit(Event{
 		Type:       "tool_result",
 		ToolCallID: call.CallID,
-		Name:       call.Name,
+		Name:       displayName,
 		OK:         &ok,
 		Result:     toolResult.Data,
 		Error:      toolResult.Error,

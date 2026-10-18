@@ -5905,6 +5905,7 @@
     "Data": "Data",
     "Succeeded": "Succeeded",
     "Tables": "Tables",
-    "Rows": "Rows"
+    "Rows": "Rows",
+    "Unsupported tool": "Unsupported tool"
   }
 }
