@@ -10,14 +10,14 @@ import (
 )
 
 func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
-	executeDescription := "Execute one dashboard API operation within your own account. Write operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body."
+	executeDescription := "Execute one dashboard API operation within your own account. Write operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body. Call get_operation first when the body fields or units are unclear."
 	if e.adminScope {
-		executeDescription = "Execute one dashboard API operation within the administrator's permissions. Write and destructive operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body."
+		executeDescription = "Execute one dashboard API operation within the administrator's permissions. Write and destructive operations require confirmation. Use path_params for :id style segments, query for query parameters, and body for the JSON request body. Call get_operation first when the body fields or units are unclear."
 	}
 	defs := []map[string]any{
 		functionTool(
 			"list_operations",
-			"List dashboard API operations available to the current assistant profile. Use this to discover the exact operation_id, method, path, risk, and path parameters before executing anything.",
+			"List dashboard API operations available to the current assistant profile. Use this to discover the exact operation_id, method, path, risk, and path parameters. Call get_operation to read documented request body fields before executing anything.",
 			objectSchema(map[string]any{
 				"domain": map[string]any{"type": "string", "description": "Optional domain such as user, token, channel, log."},
 				"query":  map[string]any{"type": "string", "maxLength": 128, "description": "Optional text search."},
@@ -26,7 +26,7 @@ func (e *DefaultToolExecutor) genericDefinitions() []map[string]any {
 		),
 		functionTool(
 			"get_operation",
-			"Get the full description and parameter requirements of one operation_id returned by list_operations.",
+			"Get the full description, path parameters, and documented request body fields of one operation_id returned by list_operations. Use body_fields before calling execute_operation so field names and units are not guessed.",
 			objectSchema(map[string]any{
 				"operation_id": map[string]any{"type": "string", "description": "Operation id such as POST /api/token."},
 			}, []string{"operation_id"}),
@@ -155,6 +155,12 @@ func (e *DefaultToolExecutor) getOperation(rawArguments string) ToolResult {
 		"summary":      op.Summary,
 		"description":  op.Description,
 		"path_params":  op.PathParams,
+	}
+	if len(op.BodyFields) > 0 {
+		data["body_fields"] = op.BodyFields
+	}
+	if op.BodyNotes != "" {
+		data["body_notes"] = op.BodyNotes
 	}
 	if e.adminScope {
 		data["batchable"] = op.Batchable

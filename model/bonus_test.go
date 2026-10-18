@@ -77,3 +77,45 @@ func TestPreConsumeUserBonusConsumesSoonestExpiryFirst(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1200), refunded)
 }
+
+func TestRevokeUserBonusGrantRemovesRemainingCredit(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&UserBonusGrant{}, &BonusPreConsumeRecord{}, &BonusPreConsumeAllocation{}))
+	reset := func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&UserBonusGrant{}).Error)
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&BonusPreConsumeRecord{}).Error)
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&BonusPreConsumeAllocation{}).Error)
+	}
+	reset()
+	t.Cleanup(reset)
+
+	const userId = 5252
+	grant := &UserBonusGrant{UserId: userId, AmountTotal: 1000, ExpireTime: 0, Status: BonusStatusActive, Remark: "wrong expiry"}
+	require.NoError(t, DB.Create(grant).Error)
+	other := &UserBonusGrant{UserId: userId, AmountTotal: 500, ExpireTime: 0, Status: BonusStatusActive}
+	require.NoError(t, DB.Create(other).Error)
+
+	_, err := PreConsumeUserBonus("req-revoke-1", userId, 200)
+	require.NoError(t, err)
+
+	revoked, amount, err := RevokeUserBonusGrant(userId, grant.Id, "expiry entered incorrectly")
+	require.NoError(t, err)
+	assert.Equal(t, BonusStatusRevoked, revoked.Status)
+	assert.Equal(t, int64(800), amount, "only the unconsumed amount is removed")
+	assert.Equal(t, "expiry entered incorrectly", revoked.RevokeRemark)
+	assert.NotZero(t, revoked.RevokedAt)
+
+	remaining, err := GetActiveBonusRemaining(userId)
+	require.NoError(t, err)
+	assert.Equal(t, int64(500), remaining, "revoked grant no longer counts as active credit")
+
+	_, _, err = RevokeUserBonusGrant(userId, grant.Id, "")
+	require.ErrorIs(t, err, ErrBonusGrantRevoked)
+
+	_, _, err = RevokeUserBonusGrant(userId+1, other.Id, "")
+	require.ErrorIs(t, err, ErrBonusGrantNotFound)
+
+	used := &UserBonusGrant{UserId: userId, AmountTotal: 100, AmountUsed: 100, ExpireTime: 0, Status: BonusStatusUsed}
+	require.NoError(t, DB.Create(used).Error)
+	_, _, err = RevokeUserBonusGrant(userId, used.Id, "")
+	require.ErrorIs(t, err, ErrBonusGrantNotActive)
+}

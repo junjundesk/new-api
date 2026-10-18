@@ -62,4 +62,28 @@ func TestAssistantOperationCatalogCoversDashboardAPIRoutes(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, assistantops.Visible(rootOption, "admin", common.RoleAdminUser))
 	assert.True(t, assistantops.Visible(rootOption, "admin", common.RoleRootUser))
+
+	bonusGrant, ok := assistantops.Find("POST /api/user/:id/bonus")
+	require.True(t, ok)
+	assert.Equal(t, assistantops.ScopeAdmin, bonusGrant.Scope)
+	assert.Equal(t, assistantops.RiskWrite, bonusGrant.Risk)
+	bonusFields := map[string]assistantops.BodyField{}
+	for _, field := range bonusGrant.BodyFields {
+		bonusFields[field.Name] = field
+	}
+	require.Contains(t, bonusFields, "amount")
+	require.Contains(t, bonusFields, "expire_input")
+	require.Contains(t, bonusFields, "send_email")
+	assert.True(t, bonusFields["amount"].Required)
+
+	bonusRevoke, ok := assistantops.Find("POST /api/user/:id/bonus/:grant_id/revoke")
+	require.True(t, ok)
+	assert.Equal(t, assistantops.RiskDestructive, bonusRevoke.Risk)
+	assert.False(t, bonusRevoke.Batchable)
+	require.Len(t, bonusRevoke.BodyFields, 1)
+	assert.Equal(t, "remark", bonusRevoke.BodyFields[0].Name)
+
+	bonusList, ok := assistantops.Find("GET /api/user/:id/bonus")
+	require.True(t, ok)
+	assert.Equal(t, assistantops.RiskRead, bonusList.Risk)
 }

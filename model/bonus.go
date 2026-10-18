@@ -4,10 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm"
+)
+
+var (
+	ErrBonusGrantNotFound  = errors.New("bonus grant not found")
+	ErrBonusGrantRevoked   = errors.New("bonus grant is already revoked")
+	ErrBonusGrantNotActive = errors.New("bonus grant is not active")
 )
 
 // Bonus grant statuses.
@@ -32,16 +39,18 @@ const (
 // consumed oldest-expiring-first so no credit is wasted. AmountTotal == 0
 // means the grant is exhausted; expiry is enforced on read.
 type UserBonusGrant struct {
-	Id          int    `json:"id"`
-	UserId      int    `json:"user_id" gorm:"index;index:idx_bonus_user_status,priority:1"`
-	AmountTotal int64  `json:"amount_total" gorm:"type:bigint;not null;default:0"`
-	AmountUsed  int64  `json:"amount_used" gorm:"type:bigint;not null;default:0"`
-	ExpireTime  int64  `json:"expire_time" gorm:"bigint;index"` // 0 = never expires
-	Status      string `json:"status" gorm:"type:varchar(32);index;index:idx_bonus_user_status,priority:2"`
-	Source      string `json:"source" gorm:"type:varchar(32);default:'admin'"`
-	Remark      string `json:"remark" gorm:"type:varchar(255);default:''"`
-	CreatedAt   int64  `json:"created_at" gorm:"bigint"`
-	UpdatedAt   int64  `json:"updated_at" gorm:"bigint"`
+	Id           int    `json:"id"`
+	UserId       int    `json:"user_id" gorm:"index;index:idx_bonus_user_status,priority:1"`
+	AmountTotal  int64  `json:"amount_total" gorm:"type:bigint;not null;default:0"`
+	AmountUsed   int64  `json:"amount_used" gorm:"type:bigint;not null;default:0"`
+	ExpireTime   int64  `json:"expire_time" gorm:"bigint;index"` // 0 = never expires
+	Status       string `json:"status" gorm:"type:varchar(32);index;index:idx_bonus_user_status,priority:2"`
+	Source       string `json:"source" gorm:"type:varchar(32);default:'admin'"`
+	Remark       string `json:"remark" gorm:"type:varchar(255);default:''"`
+	RevokedAt    int64  `json:"revoked_at" gorm:"bigint;default:0"`
+	RevokeRemark string `json:"revoke_remark" gorm:"type:varchar(255);default:''"`
+	CreatedAt    int64  `json:"created_at" gorm:"bigint"`
+	UpdatedAt    int64  `json:"updated_at" gorm:"bigint"`
 }
 
 func (b *UserBonusGrant) BeforeCreate(tx *gorm.DB) error {
@@ -156,6 +165,57 @@ func ExpireDueBonusGrants() (int64, error) {
 		Where("status = ? AND expire_time != 0 AND expire_time <= ?", BonusStatusActive, now).
 		Update("status", BonusStatusExpired)
 	return res.RowsAffected, res.Error
+}
+
+// RevokeUserBonusGrant revokes one active grant and returns the unconsumed
+// amount removed from the user's bonus balance. Amounts already consumed are
+// not refunded; a later refund of an order funded by this grant stays forfeited
+// because revoked grants never count as active credit again.
+func RevokeUserBonusGrant(userId, grantId int, remark string) (*UserBonusGrant, int64, error) {
+	if userId <= 0 || grantId <= 0 {
+		return nil, 0, ErrBonusGrantNotFound
+	}
+	var revoked UserBonusGrant
+	var remaining int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var grant UserBonusGrant
+		if err := lockForUpdate(tx).Where("id = ? AND user_id = ?", grantId, userId).First(&grant).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrBonusGrantNotFound
+			}
+			return err
+		}
+		if grant.Status == BonusStatusRevoked {
+			return ErrBonusGrantRevoked
+		}
+		if grant.Status != BonusStatusActive {
+			return ErrBonusGrantNotActive
+		}
+		now := common.GetTimestamp()
+		if grant.ExpireTime != 0 && grant.ExpireTime <= now {
+			return ErrBonusGrantNotActive
+		}
+		remaining = grant.Remaining()
+		if remaining <= 0 {
+			return ErrBonusGrantNotActive
+		}
+		trimmed := strings.TrimSpace(remark)
+		if utf8.RuneCountInString(trimmed) > 255 {
+			trimmed = string([]rune(trimmed)[:255])
+		}
+		grant.Status = BonusStatusRevoked
+		grant.RevokedAt = now
+		grant.RevokeRemark = trimmed
+		if err := tx.Save(&grant).Error; err != nil {
+			return err
+		}
+		revoked = grant
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return &revoked, remaining, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -27,6 +27,8 @@ func classifyRoute(method, path string) Operation {
 		return op
 	}
 
+	op.BodyFields, op.BodyNotes = bodySpecFor(method, path)
+
 	scope, minRole := scopeFor(method, path)
 	op.Scope = scope
 	op.MinRole = minRole
@@ -34,6 +36,10 @@ func classifyRoute(method, path string) Operation {
 	if strings.Contains(path, "/user/:id") {
 		op.Batchable = true
 		op.BatchTarget = "id"
+	}
+	if method == "POST" && path == "/api/user/:id/bonus/:grant_id/revoke" {
+		op.Batchable = false
+		op.BatchTarget = ""
 	}
 	if method == "POST" && path == "/api/user/manage" {
 		op.Batchable = true
@@ -160,6 +166,16 @@ func domainFor(path string) string {
 }
 
 func summaryFor(method, path string) string {
+	switch method + " " + path {
+	case "GET /api/user/:id/bonus":
+		return "List user bonus grants"
+	case "POST /api/user/:id/bonus":
+		return "Grant bonus to one user"
+	case "POST /api/user/bonus/grant_all":
+		return "Grant bonus to all users"
+	case "POST /api/user/:id/bonus/:grant_id/revoke":
+		return "Revoke a user bonus grant"
+	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	resource := parts[len(parts)-1]
 	if strings.HasPrefix(resource, ":") && len(parts) >= 2 {
@@ -175,7 +191,43 @@ func summaryFor(method, path string) string {
 }
 
 func descriptionFor(method, path string) string {
+	switch method + " " + path {
+	case "GET /api/user/:id/bonus":
+		return "List every bonus grant for one user (active, used, expired, revoked) plus the active balance summary."
+	case "POST /api/user/:id/bonus":
+		return "Grant bonus quota to one user. amount is quota units, not currency; expire_input controls the expiry."
+	case "POST /api/user/bonus/grant_all":
+		return "Grant bonus quota to every non-deleted user. The same expiry applies to each grant."
+	case "POST /api/user/:id/bonus/:grant_id/revoke":
+		return "Revoke one active bonus grant. The unconsumed amount leaves the user's bonus balance; amounts already consumed are not refunded."
+	}
 	return "Dashboard API operation " + method + " " + path + ". Parameters are validated by the existing endpoint."
+}
+
+// bodySpecFor documents request body fields for operations whose JSON body is
+// not self-explanatory. Field names match the controller request structs.
+func bodySpecFor(method, path string) ([]BodyField, string) {
+	switch method + " " + path {
+	case "POST /api/user/:id/bonus":
+		return []BodyField{
+			{Name: "amount", Type: "integer", Required: true, Description: "Bonus quota to grant, in internal quota units (not currency). Must be greater than 0.", Example: 500000},
+			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration. A bare number means hours (\"1\" = 1 hour); units may be combined (\"1天\" = 24 hours, \"1天2小时\" = 26 hours). Empty or omitted means the grant never expires.", Example: "24"},
+			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on the grant.", Example: "活动赠金"},
+			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
+		}, "The target user id comes from the path, not the body. amount is quota units, not dollars. expire_input empty means permanent."
+	case "POST /api/user/bonus/grant_all":
+		return []BodyField{
+			{Name: "amount", Type: "integer", Required: true, Description: "Bonus quota granted to each user, in internal quota units (not currency). Must be greater than 0.", Example: 500000},
+			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration applied to every grant. A bare number means hours (\"1\" = 1 hour); units may be combined. Empty or omitted means the grants never expire.", Example: "24"},
+			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on each grant.", Example: "活动赠金"},
+			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
+		}, "This endpoint always targets every non-deleted user; there is no user_id field."
+	case "POST /api/user/:id/bonus/:grant_id/revoke":
+		return []BodyField{
+			{Name: "remark", Type: "string", Required: false, Description: "Optional reason stored on the revoked grant.", Example: "expiry was entered incorrectly"},
+		}, "Only an active grant can be revoked. The unconsumed amount is removed from the user's bonus balance; already consumed amounts are not refunded. Use GET /api/user/:id/bonus to find grant_id."
+	}
+	return nil, ""
 }
 
 func pathParams(path string) []string {

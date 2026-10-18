@@ -209,3 +209,29 @@ func TestBatchOperationSupportsBodyTarget(t *testing.T) {
 	require.True(t, ok)
 	assert.EqualValues(t, 2, data["succeeded"])
 }
+
+func TestGetOperationExposesRequestBodyFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.POST("/api/user/:id/bonus", func(c *gin.Context) {
+		c.JSON(200, gin.H{"success": true})
+	})
+	assistantops.Initialize(engine)
+	t.Cleanup(assistantops.ResetForTest)
+	executor := NewRuntimeToolExecutor(Config{AdminScope: true, ActorID: 1, ActorRole: common.RoleAdminUser, Profile: "admin"}, nil)
+	result := executor.Execute(context.Background(), 1, ToolCall{
+		Name:      "get_operation",
+		Arguments: "{\"operation_id\":\"POST /api/user/:id/bonus\"}",
+	}, nil)
+	require.True(t, result.OK, result.Error)
+	data, ok := result.Data.(map[string]any)
+	require.True(t, ok)
+	fields, ok := data["body_fields"].([]assistantops.BodyField)
+	require.True(t, ok)
+	names := make([]string, 0, len(fields))
+	for _, field := range fields {
+		names = append(names, field.Name)
+	}
+	assert.ElementsMatch(t, []string{"amount", "expire_input", "remark", "send_email"}, names)
+	assert.Contains(t, data["body_notes"], "quota units")
+}

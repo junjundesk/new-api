@@ -184,6 +184,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.POST("/bonus/grant_all", controller.AdminGrantBonusAll)
 				adminRoute.GET("/:id/bonus", controller.AdminListUserBonus)
 				adminRoute.POST("/:id/bonus", controller.AdminGrantBonus)
+				adminRoute.POST("/:id/bonus/:grant_id/revoke", controller.AdminRevokeUserBonus)
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)

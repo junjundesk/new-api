@@ -50,23 +50,35 @@ const (
 	ScopeRoot  = "root"
 )
 
+// BodyField documents one JSON request body property of an operation. It is
+// returned by get_operation so the model does not have to guess field names.
+type BodyField struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required"`
+	Description string `json:"description"`
+	Example     any    `json:"example,omitempty"`
+}
+
 // Operation describes one callable dashboard API endpoint.
 type Operation struct {
-	ID             string   `json:"id"`
-	Method         string   `json:"method"`
-	Path           string   `json:"path"`
-	Domain         string   `json:"domain"`
-	Scope          string   `json:"scope"`
-	MinRole        int      `json:"min_role"`
-	Risk           Risk     `json:"risk"`
-	Summary        string   `json:"summary"`
-	Description    string   `json:"description,omitempty"`
-	PathParams     []string `json:"path_params,omitempty"`
-	BodyAllowed    bool     `json:"body_allowed"`
-	Batchable      bool     `json:"batchable,omitempty"`
-	BatchTarget    string   `json:"batch_target,omitempty"`
-	RedactFields   []string `json:"-"`
-	ExcludedReason string   `json:"-"`
+	ID             string      `json:"id"`
+	Method         string      `json:"method"`
+	Path           string      `json:"path"`
+	Domain         string      `json:"domain"`
+	Scope          string      `json:"scope"`
+	MinRole        int         `json:"min_role"`
+	Risk           Risk        `json:"risk"`
+	Summary        string      `json:"summary"`
+	Description    string      `json:"description,omitempty"`
+	PathParams     []string    `json:"path_params,omitempty"`
+	BodyAllowed    bool        `json:"body_allowed"`
+	BodyFields     []BodyField `json:"body_fields,omitempty"`
+	BodyNotes      string      `json:"body_notes,omitempty"`
+	Batchable      bool        `json:"batchable,omitempty"`
+	BatchTarget    string      `json:"batch_target,omitempty"`
+	RedactFields   []string    `json:"-"`
+	ExcludedReason string      `json:"-"`
 }
 
 // Result is the normalized outcome of an in-process route invocation.

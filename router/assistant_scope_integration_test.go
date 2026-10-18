@@ -73,3 +73,61 @@ func TestUserOperationCannotReadAnotherUsersToken(t *testing.T) {
 	require.False(t, other.Success)
 	assert.NotContains(t, fmt.Sprint(other.Data), "bob-key")
 }
+
+func TestAdminRevokeUserBonusViaOperationCatalog(t *testing.T) {
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	common.RedisEnabled = false
+	model.InitDatabaseColumnNames()
+	dsn := fmt.Sprintf("file:assistant_bonus_%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	originalDB := model.DB
+	originalLogDB := model.LOG_DB
+	model.DB = db
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.DB = originalDB
+		model.LOG_DB = originalLogDB
+		sqlDB, closeErr := db.DB()
+		if closeErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	require.NoError(t, db.AutoMigrate(
+		&model.User{},
+		&model.UserBonusGrant{},
+		&model.BonusPreConsumeRecord{},
+		&model.BonusPreConsumeAllocation{},
+		&model.Log{},
+	))
+	require.NoError(t, db.Create(&model.User{
+		Id: 1, Username: "root", Password: "password", DisplayName: "root",
+		Role: common.RoleRootUser, Status: common.UserStatusEnabled, Group: "default",
+		AffCode: "aff-bonus-root", AuthVersion: 1,
+	}).Error)
+	require.NoError(t, db.Create(&model.User{
+		Id: 2, Username: "target", Password: "password", DisplayName: "target",
+		Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default",
+		AffCode: "aff-bonus-target", AuthVersion: 1,
+	}).Error)
+	grant := &model.UserBonusGrant{UserId: 2, AmountTotal: 1000, ExpireTime: 0, Status: model.BonusStatusActive}
+	require.NoError(t, db.Create(grant).Error)
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	SetApiRouter(engine)
+	op, ok := assistantops.Find("POST /api/user/:id/bonus/:grant_id/revoke")
+	require.True(t, ok)
+	actor := assistantops.Actor{UserID: 1, Role: common.RoleRootUser, Profile: "admin"}
+	result := assistantops.Invoke(context.Background(), actor, op, map[string]any{"id": 2, "grant_id": grant.Id}, nil, map[string]any{"remark": "wrong expiry"})
+	require.True(t, result.Success, result.Message)
+	data, ok := result.Data.(map[string]any)
+	require.True(t, ok)
+	assert.EqualValues(t, 1000, data["revoked_amount"])
+
+	var reloaded model.UserBonusGrant
+	require.NoError(t, db.First(&reloaded, grant.Id).Error)
+	assert.Equal(t, model.BonusStatusRevoked, reloaded.Status)
+	assert.Equal(t, "wrong expiry", reloaded.RevokeRemark)
+	assert.NotZero(t, reloaded.RevokedAt)
+}

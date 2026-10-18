@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -215,4 +217,58 @@ func AdminListUserBonus(c *gin.Context) {
 	summary := bonusSummary(activeGrants)
 	summary["grants"] = grants
 	common.ApiSuccess(c, summary)
+}
+
+// BonusRevokeRequest is the optional payload for revoking one bonus grant.
+type BonusRevokeRequest struct {
+	Remark string `json:"remark"` // optional audit note stored on the grant
+}
+
+// AdminRevokeUserBonus revokes one active bonus grant.
+// POST /api/user/:id/bonus/:grant_id/revoke
+func AdminRevokeUserBonus(c *gin.Context) {
+	userId, _ := strconv.Atoi(c.Param("id"))
+	grantId, _ := strconv.Atoi(c.Param("grant_id"))
+	if userId <= 0 || grantId <= 0 {
+		common.ApiErrorMsg(c, "无效的用户ID或赠金ID")
+		return
+	}
+	var req BonusRevokeRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !canManageTargetRole(c.GetInt("role"), user.Role) {
+		common.ApiErrorMsg(c, "无权管理该用户")
+		return
+	}
+	grant, revokedAmount, err := model.RevokeUserBonusGrant(userId, grantId, req.Remark)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrBonusGrantNotFound):
+			common.ApiErrorMsg(c, "赠金记录不存在")
+		case errors.Is(err, model.ErrBonusGrantRevoked):
+			common.ApiErrorMsg(c, "该赠金已撤销")
+		case errors.Is(err, model.ErrBonusGrantNotActive):
+			common.ApiErrorMsg(c, "仅可撤销仍有效的赠金（已用完或已过期）")
+		default:
+			common.ApiError(c, err)
+		}
+		return
+	}
+	recordManageAuditFor(c, userId, "user.bonus_revoke", map[string]interface{}{
+		"grant_id":       grant.Id,
+		"revoked_amount": logger.LogQuota(int(revokedAmount)),
+		"remark":         req.Remark,
+	})
+	common.ApiSuccess(c, gin.H{
+		"grant_id":       grant.Id,
+		"revoked_amount": revokedAmount,
+		"status":         grant.Status,
+	})
 }

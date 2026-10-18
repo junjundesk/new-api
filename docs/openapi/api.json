@@ -5229,6 +5229,236 @@
           }
         ]
       }
+    },
+    "/api/user/{id}/bonus": {
+      "get": {
+        "summary": "查看用户赠金明细",
+        "deprecated": false,
+        "description": "👨‍💼 需要管理员权限（Admin）\n返回该用户的全部赠金记录（含已使用、已过期、已撤销）与可用赠金汇总。",
+        "tags": [
+          "用户管理"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "用户 ID",
+            "required": true,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "Combination343": []
+          },
+          {
+            "Combination1243": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "给指定用户发放赠金",
+        "deprecated": false,
+        "description": "👨‍💼 需要管理员权限（Admin）\n用户 ID 来自路径，不需要放在 body 中。amount 使用额度单位（非货币金额），必须大于 0；expire_input 为空表示永久有效。发放后可调用 GET 获取 grant_id，再用撤销接口回滚。",
+        "tags": [
+          "用户管理"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "用户 ID",
+            "required": true,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "赠金额度（内部额度单位，不是货币金额），必须大于 0",
+                    "example": 500000
+                  },
+                  "expire_input": {
+                    "type": "string",
+                    "description": "有效期。纯数字表示小时（\"1\" = 1 小时）；支持组合单位（\"1天\" = 24 小时，\"1天2小时\" = 26 小时）；留空表示永久有效",
+                    "example": "24"
+                  },
+                  "remark": {
+                    "type": "string",
+                    "description": "备注",
+                    "example": "活动赠金"
+                  },
+                  "send_email": {
+                    "type": "boolean",
+                    "description": "是否发送到账邮件，默认 true",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "Combination343": []
+          },
+          {
+            "Combination1243": []
+          }
+        ]
+      }
+    },
+    "/api/user/bonus/grant_all": {
+      "post": {
+        "summary": "给全部用户发放赠金",
+        "deprecated": false,
+        "description": "👨‍💼 需要管理员权限（Admin）\n给全部未删除用户各发放一条赠金，所有赠金使用相同的有效期。没有 user_id 字段。",
+        "tags": [
+          "用户管理"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "赠金额度（内部额度单位，不是货币金额），必须大于 0",
+                    "example": 500000
+                  },
+                  "expire_input": {
+                    "type": "string",
+                    "description": "有效期。纯数字表示小时（\"1\" = 1 小时）；支持组合单位（\"1天\" = 24 小时，\"1天2小时\" = 26 小时）；留空表示永久有效",
+                    "example": "24"
+                  },
+                  "remark": {
+                    "type": "string",
+                    "description": "备注",
+                    "example": "活动赠金"
+                  },
+                  "send_email": {
+                    "type": "boolean",
+                    "description": "是否发送到账邮件，默认 true",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "Combination343": []
+          },
+          {
+            "Combination1243": []
+          }
+        ]
+      }
+    },
+    "/api/user/{id}/bonus/{grant_id}/revoke": {
+      "post": {
+        "summary": "撤销用户赠金",
+        "deprecated": false,
+        "description": "👨‍💼 需要管理员权限（Admin）\n撤销一条仍有效的赠金。未使用部分会从用户赠金余额中移除；已使用的部分不退还。已用完、已过期或已撤销的赠金不能再次撤销。",
+        "tags": [
+          "用户管理"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "用户 ID",
+            "required": true,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "grant_id",
+            "in": "path",
+            "description": "赠金记录 ID（可从 GET /api/user/{id}/bonus 获取）",
+            "required": true,
+            "example": 12,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "remark": {
+                    "type": "string",
+                    "description": "撤销原因，记录在赠金记录上",
+                    "example": "有效期填写错误"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "Combination343": []
+          },
+          {
+            "Combination1243": []
+          }
+        ]
+      }
     }
   },
   "components": {
