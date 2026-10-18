@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -20,16 +21,18 @@ func SetApiRouter(router *gin.Engine) {
 	{
 		assistantRoute.GET("/config", middleware.UserAuth(), middleware.DisableCache(), controller.GetAssistantConfig)
 		assistantRoute.POST("/chat", middleware.UserAuth(), controller.AssistantChat)
+		assistantRoute.POST("/confirm", middleware.UserAuth(), controller.ConfirmAssistantOperation)
 
 		assistantAdminRoute := assistantRoute.Group("/admin")
-		assistantAdminRoute.Use(middleware.RootAuth())
+		assistantAdminRoute.Use(middleware.AdminAuth())
 		{
 			assistantAdminRoute.GET("/runtime-config", middleware.DisableCache(), controller.GetAdminAssistantConfig)
 			assistantAdminRoute.POST("/chat", controller.AdminAssistantChat)
-			assistantAdminRoute.GET("/channels", middleware.DisableCache(), controller.ListAssistantChannels)
-			assistantAdminRoute.POST("/test", middleware.CriticalRateLimit(), controller.TestAssistantConnection)
-			assistantAdminRoute.POST("/models", middleware.CriticalRateLimit(), controller.ListAssistantModels)
-			assistantAdminRoute.DELETE("/key", middleware.CriticalRateLimit(), controller.ClearAssistantKey)
+			assistantAdminRoute.POST("/confirm", controller.ConfirmAdminAssistantOperation)
+			assistantAdminRoute.GET("/channels", middleware.RootAuth(), middleware.DisableCache(), controller.ListAssistantChannels)
+			assistantAdminRoute.POST("/test", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.TestAssistantConnection)
+			assistantAdminRoute.POST("/models", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.ListAssistantModels)
+			assistantAdminRoute.DELETE("/key", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.ClearAssistantKey)
 		}
 	}
 
@@ -445,4 +448,6 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
 	}
+
+	assistantops.Initialize(router)
 }

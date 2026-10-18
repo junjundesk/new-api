@@ -30,6 +30,7 @@ interface AssistantConversationProps {
   profile?: AssistantProfile
   messages: AssistantChatMessage[]
   onSelectPrompt: (prompt: string) => void
+  onConfirm: (confirmationId: string, approve: boolean) => Promise<void>
 }
 
 export function AssistantConversation(props: AssistantConversationProps) {
@@ -43,7 +44,11 @@ export function AssistantConversation(props: AssistantConversationProps) {
     )
   } else {
     content = props.messages.map((message) => (
-      <AssistantMessage key={message.id} message={message} />
+      <AssistantMessage
+        key={message.id}
+        message={message}
+        onConfirm={props.onConfirm}
+      />
     ))
   }
 

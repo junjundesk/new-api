@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 	"github.com/gin-gonic/gin"
 )
 
@@ -147,12 +148,20 @@ func writeRateLimited(c *gin.Context, retryAfterSeconds int64) {
 func rateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
 	if common.RedisEnabled {
 		return func(c *gin.Context) {
+			if assistantops.IsInternal(c.Request.Context()) {
+				c.Next()
+				return
+			}
 			redisRateLimiter(c, maxRequestNum, duration, mark)
 		}
 	}
 	// It's safe to call multi times.
 	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
 	return func(c *gin.Context) {
+		if assistantops.IsInternal(c.Request.Context()) {
+			c.Next()
+			return
+		}
 		memoryRateLimiter(c, maxRequestNum, duration, mark)
 	}
 }
@@ -203,6 +212,10 @@ func UploadRateLimit() func(c *gin.Context) {
 func userRateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
 	if common.RedisEnabled {
 		return func(c *gin.Context) {
+			if assistantops.IsInternal(c.Request.Context()) {
+				c.Next()
+				return
+			}
 			userID := c.GetInt("id")
 			if userID == 0 {
 				c.Status(http.StatusUnauthorized)
@@ -215,6 +228,10 @@ func userRateLimitFactory(maxRequestNum int, duration int64, mark string) func(c
 	// It's safe to call multi times.
 	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
 	return func(c *gin.Context) {
+		if assistantops.IsInternal(c.Request.Context()) {
+			c.Next()
+			return
+		}
 		userID := c.GetInt("id")
 		if userID == 0 {
 			c.Status(http.StatusUnauthorized)

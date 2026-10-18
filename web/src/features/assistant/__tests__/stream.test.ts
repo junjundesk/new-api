@@ -153,6 +153,48 @@ describe('assistant stream event parsing', () => {
     })
   })
 
+  it('parses confirmation required and resolved events', () => {
+    expect(
+      parseAssistantStreamEvent(
+        '{"type":"confirmation_required","confirmation_id":"conf-1","operation_id":"POST /api/token","risk":"write","summary":"Create an API key","params":{"body":{"name":"test"}},"expires_at":1700000000}'
+      )
+    ).toEqual({
+      type: 'confirmation_required',
+      confirmationId: 'conf-1',
+      operationId: 'POST /api/token',
+      risk: 'write',
+      summary: 'Create an API key',
+      params: { body: { name: 'test' } },
+      expiresAt: 1700000000,
+    })
+    expect(
+      parseAssistantStreamEvent(
+        '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"approved"}'
+      )
+    ).toEqual({
+      type: 'confirmation_resolved',
+      confirmationId: 'conf-1',
+      status: 'approved',
+    })
+    expect(
+      parseAssistantStreamEvent(
+        '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"expired"}'
+      )
+    ).toEqual({
+      type: 'confirmation_resolved',
+      confirmationId: 'conf-1',
+      status: 'expired',
+    })
+    expect(
+      parseAssistantStreamEvent('{"type":"confirmation_required"}')
+    ).toBeNull()
+    expect(
+      parseAssistantStreamEvent(
+        '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"unknown"}'
+      )
+    ).toBeNull()
+  })
+
   it('ignores keep-alives, done sentinels and unknown event types', () => {
     expect(parseAssistantStreamEvent('')).toBeNull()
     expect(parseAssistantStreamEvent('[DONE]')).toBeNull()
@@ -220,6 +262,58 @@ describe('assistant stream controller', () => {
     expect(harness.source.closed).toBe(true)
     expect(harness.setStreaming.mock.calls.at(-1)).toEqual([false])
     expect(harness.onEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the connection open while a confirmation is pending', async () => {
+    const harness = createHarness()
+
+    await harness.controller.send(request)
+    harness.source.emit(
+      'message',
+      '{"type":"confirmation_required","confirmation_id":"conf-1","operation_id":"POST /api/token","risk":"write","summary":"Create an API key","expires_at":1700000000}'
+    )
+
+    expect(harness.onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'confirmation_required',
+        confirmationId: 'conf-1',
+      })
+    )
+    expect(harness.source.closed).toBe(false)
+    expect(harness.setStreaming.mock.calls.at(-1)).toEqual([true])
+    expect(harness.onDone).not.toHaveBeenCalled()
+    expect(harness.onError).not.toHaveBeenCalled()
+
+    harness.source.emit(
+      'message',
+      '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"approved"}'
+    )
+    expect(harness.source.closed).toBe(false)
+
+    harness.source.emit('message', '{"type":"done"}')
+    expect(harness.onDone).toHaveBeenCalledTimes(1)
+    expect(harness.source.closed).toBe(true)
+  })
+
+  it('cancels a pending confirmation when the stream is stopped', async () => {
+    const harness = createHarness()
+
+    await harness.controller.send(request)
+    harness.source.emit(
+      'message',
+      '{"type":"confirmation_required","confirmation_id":"conf-1","operation_id":"POST /api/token"}'
+    )
+    harness.controller.stop()
+
+    expect(harness.source.closed).toBe(true)
+    expect(harness.setStreaming.mock.calls.at(-1)).toEqual([false])
+
+    harness.source.emit(
+      'message',
+      '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"expired"}'
+    )
+    expect(harness.onEvent).toHaveBeenCalledTimes(1)
+    expect(harness.onError).not.toHaveBeenCalled()
   })
 
   it('reports stream errors and closes the connection', async () => {

@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/QuantumNous/new-api/common"
+	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,6 +15,10 @@ type turnstileCheckResponse struct {
 
 func TurnstileCheck() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if assistantops.IsInternal(c.Request.Context()) {
+			c.Next()
+			return
+		}
 		if common.TurnstileCheckEnabled {
 			response := c.Query("turnstile")
 			if response == "" {

@@ -93,7 +93,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
   }
 })
 
-const configMock = vi.hoisted(() => ({ getAssistantConfig: vi.fn() }))
+const configMock = vi.hoisted(() => ({
+  getAssistantConfig: vi.fn(),
+  confirmAssistantOperation: vi.fn(),
+}))
 vi.mock('@/features/assistant/api', () => configMock)
 
 const i18n = createInstance()
@@ -164,6 +167,8 @@ async function sendMessage(text: string): Promise<FakeSseInstance> {
 
 beforeEach(() => {
   configMock.getAssistantConfig.mockReset()
+  configMock.confirmAssistantOperation.mockReset()
+  configMock.confirmAssistantOperation.mockResolvedValue(undefined)
   mockConfigs()
 })
 
@@ -300,6 +305,96 @@ describe('assistant chat page', () => {
 
     expect(await screen.findByText('Ask about your account')).toBeVisible()
     expect(screen.queryByText('user-only history')).toBeNull()
+  })
+
+  it('shows the audit warning on the admin assistant page', async () => {
+    renderAssistant('admin')
+
+    expect(
+      await screen.findByText(
+        'Administrator operations are audited, and write operations require your confirmation.'
+      )
+    ).toBeVisible()
+  })
+
+  it('shows a pending confirmation and approves it through the user endpoint', async () => {
+    const user = userEvent.setup()
+    renderAssistant()
+
+    const source = await sendMessage('Create an API key for me')
+    const expiresAt = Math.floor(Date.now() / 1000) + 120
+    source.emit(
+      'message',
+      '{"type":"tool_start","tool_call_id":"call-1","name":"execute_operation","arguments":{"operation_id":"POST /api/token"}}'
+    )
+    source.emit(
+      'message',
+      `{"type":"confirmation_required","confirmation_id":"conf-1","operation_id":"POST /api/token","risk":"write","summary":"Create an API key","params":{"body":{"name":"test-key"}},"expires_at":${expiresAt}}`
+    )
+
+    expect(await screen.findByText('Confirmation required')).toBeVisible()
+    expect(screen.getByText('Create an API key')).toBeVisible()
+    expect(screen.getAllByText('POST /api/token').length).toBeGreaterThan(0)
+    expect(source.closed).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+    expect(configMock.confirmAssistantOperation).toHaveBeenCalledWith(
+      'user',
+      'conf-1',
+      true
+    )
+
+    source.emit(
+      'message',
+      '{"type":"confirmation_resolved","confirmation_id":"conf-1","status":"approved"}'
+    )
+    expect(await screen.findByText('Approved')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+
+    source.emit('message', '{"type":"done"}')
+    await waitFor(() => expect(source.closed).toBe(true))
+  })
+
+  it('denies an admin confirmation through the admin endpoint', async () => {
+    const user = userEvent.setup()
+    renderAssistant('admin')
+
+    const source = await sendMessage('Delete that channel')
+    source.emit(
+      'message',
+      '{"type":"tool_start","tool_call_id":"call-1","name":"execute_operation","arguments":{"operation_id":"DELETE /api/channel/3"}}'
+    )
+    source.emit(
+      'message',
+      '{"type":"confirmation_required","confirmation_id":"conf-2","operation_id":"DELETE /api/channel/3","risk":"destructive","summary":"Delete channel 3"}'
+    )
+
+    expect(await screen.findByText('Destructive operation')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Deny' }))
+    expect(configMock.confirmAssistantOperation).toHaveBeenCalledWith(
+      'admin',
+      'conf-2',
+      false
+    )
+  })
+
+  it('expires a pending confirmation when the user stops the run', async () => {
+    const user = userEvent.setup()
+    renderAssistant()
+
+    const source = await sendMessage('Create an API key for me')
+    source.emit(
+      'message',
+      '{"type":"confirmation_required","confirmation_id":"conf-3","operation_id":"POST /api/token","risk":"write","summary":"Create an API key"}'
+    )
+    expect(await screen.findByText('Confirmation required')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+
+    expect(source.closed).toBe(true)
+    expect(await screen.findByText('Expired')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(configMock.confirmAssistantOperation).not.toHaveBeenCalled()
   })
 
   it('shows a retryable error when the configuration fails to load', async () => {

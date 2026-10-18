@@ -81,3 +81,25 @@ export async function getAssistantConfig(
   const res = await api.get(ASSISTANT_API_ENDPOINTS[profile].CONFIG)
   return normalizeAssistantConfig(res.data)
 }
+
+/**
+ * Send the user's decision for one pending write confirmation. The pending
+ * operation is resolved by the backend and the SSE stream continues with the
+ * matching confirmation_resolved event.
+ */
+export async function confirmAssistantOperation(
+  profile: AssistantProfile,
+  confirmationId: string,
+  approve: boolean
+): Promise<void> {
+  const res = await api.post(ASSISTANT_API_ENDPOINTS[profile].CONFIRM, {
+    confirmation_id: confirmationId,
+    approve,
+  })
+  const envelope = readRecord(res.data)
+  if (envelope?.success === false) {
+    throw new Error(
+      typeof envelope.message === 'string' ? envelope.message : ''
+    )
+  }
+}

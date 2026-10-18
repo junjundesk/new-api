@@ -16,9 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ASSISTANT_MESSAGE_STATUS } from '../constants'
+import {
+  ASSISTANT_CONFIRMATION_STATUS,
+  ASSISTANT_MESSAGE_STATUS,
+} from '../constants'
 import type {
   AssistantChatMessage,
+  AssistantConfirmationPart,
   AssistantMessagePart,
   AssistantMessageStatus,
   AssistantStreamEvent,
@@ -132,6 +136,69 @@ export function addAssistantToolResult(
   return { ...message, parts }
 }
 
+export function addAssistantConfirmation(
+  message: AssistantChatMessage,
+  event: Extract<AssistantStreamEvent, { type: 'confirmation_required' }>
+): AssistantChatMessage {
+  const exists = message.parts.some(
+    (part) =>
+      part.type === 'confirmation' &&
+      part.confirmationId === event.confirmationId
+  )
+  if (exists) return message
+  const part: AssistantConfirmationPart = {
+    id: `confirmation-${event.confirmationId}`,
+    type: 'confirmation',
+    confirmationId: event.confirmationId,
+    operationId: event.operationId,
+    risk: event.risk ?? '',
+    summary: event.summary ?? '',
+    params: event.params,
+    expiresAt: event.expiresAt,
+    status: ASSISTANT_CONFIRMATION_STATUS.PENDING,
+  }
+  return { ...message, parts: [...message.parts, part] }
+}
+
+export function resolveAssistantConfirmation(
+  message: AssistantChatMessage,
+  event: Extract<AssistantStreamEvent, { type: 'confirmation_resolved' }>
+): AssistantChatMessage {
+  return {
+    ...message,
+    parts: message.parts.map((part) =>
+      part.type === 'confirmation' &&
+      part.confirmationId === event.confirmationId
+        ? { ...part, status: event.status }
+        : part
+    ),
+  }
+}
+
+/**
+ * Any confirmation still pending when the run ends (stopped, failed or
+ * finished) can no longer be resolved and must never be approved later.
+ */
+export function expirePendingConfirmations(
+  message: AssistantChatMessage
+): AssistantChatMessage {
+  const hasPending = message.parts.some(
+    (part) =>
+      part.type === 'confirmation' &&
+      part.status === ASSISTANT_CONFIRMATION_STATUS.PENDING
+  )
+  if (!hasPending) return message
+  return {
+    ...message,
+    parts: message.parts.map((part) =>
+      part.type === 'confirmation' &&
+      part.status === ASSISTANT_CONFIRMATION_STATUS.PENDING
+        ? { ...part, status: ASSISTANT_CONFIRMATION_STATUS.EXPIRED }
+        : part
+    ),
+  }
+}
+
 export function finishAssistantMessage(
   message: AssistantChatMessage,
   status: Exclude<AssistantMessageStatus, 'streaming'>,
@@ -151,6 +218,10 @@ export function applyAssistantStreamEvent(
       return addAssistantToolStart(message, event)
     case 'tool_result':
       return addAssistantToolResult(message, event)
+    case 'confirmation_required':
+      return addAssistantConfirmation(message, event)
+    case 'confirmation_resolved':
+      return resolveAssistantConfirmation(message, event)
     default:
       return message
   }

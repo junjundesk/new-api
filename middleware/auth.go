@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -43,6 +44,10 @@ func validUserInfo(username string, role int) bool {
 }
 
 func authHelper(c *gin.Context, minRole int) {
+	if actor, ok := assistantops.ActorFromContext(c.Request.Context()); ok {
+		authenticateInternalActor(c, actor, minRole)
+		return
+	}
 	user, identity, useAccessToken, err := authenticateDashboardRequest(c)
 	if err != nil {
 		writeDashboardAuthError(c, err)
@@ -73,6 +78,44 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Next()
 
 	finishAdminAudit(c, auditWriter)
+}
+
+// authenticateInternalActor authorizes an in-process assistant operation.
+// The actor context can only be attached by the assistant dispatcher, never by
+// an external request. Role and account status are always reloaded from the
+// database, and the original login session is revalidated when present.
+func authenticateInternalActor(c *gin.Context, actor assistantops.Actor, minRole int) {
+	user, err := model.GetUserCache(actor.UserID)
+	if err != nil {
+		writeDashboardAuthError(c, err)
+		return
+	}
+	if user.Status != common.UserStatusEnabled {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "code": "AUTH_USER_DISABLED", "message": common.TranslateMessage(c, i18n.MsgAuthUserBanned)})
+		return
+	}
+	if user.Role < minRole {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "AUTH_INSUFFICIENT_PRIVILEGE", "message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege)})
+		return
+	}
+	if !validUserInfo(user.Username, user.Role) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "code": "AUTH_USER_INVALID", "message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid)})
+		return
+	}
+	identity := service.AuthIdentity{
+		UserID:          user.Id,
+		SessionID:       actor.SessionID,
+		UserAuthVersion: actor.AuthVersion,
+		SessionVersion:  actor.SessionVersion,
+	}
+	if actor.SessionID != "" {
+		if _, _, err := service.ValidateLoginSession(identity); err != nil {
+			writeDashboardAuthError(c, err)
+			return
+		}
+	}
+	setDashboardAuthContext(c, user, identity, false)
+	c.Next()
 }
 
 func TryUserAuth() func(c *gin.Context) {

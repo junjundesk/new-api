@@ -26,6 +26,7 @@ const (
 	assistantMaxHistoryMessages  = 100
 	assistantMaxHistoryChars     = 400000
 	assistantHeartbeatInterval   = 15 * time.Second
+	assistantMaxRunDuration      = 15 * time.Minute
 	assistantChatBodyLimit       = 2 << 20
 	assistantTestBodyLimit       = 16 << 10
 	assistantMaxResponseTextSize = 500
@@ -91,9 +92,9 @@ func AssistantChat(c *gin.Context) {
 	assistantChatStream(c, assistant_setting.ProfileUser)
 }
 
-// AdminAssistantChat is the separate root-only assistant endpoint. It uses the
-// admin profile (its own API/key/channel binding) and is not subject to the
-// user daily message budget.
+// AdminAssistantChat is the separate administrator assistant endpoint. It
+// uses the admin profile (its own API/key/channel binding); root-only routes
+// remain protected by RootAuth when tools invoke them.
 func AdminAssistantChat(c *gin.Context) {
 	assistantChatStream(c, assistant_setting.ProfileAdmin)
 }
@@ -177,8 +178,17 @@ func assistantChatStream(c *gin.Context, profileName string) {
 		writeError("assistant_disabled", i18n.MsgAssistantDisabled)
 		return
 	}
+	cfg.ActorID = userID
+	cfg.ActorUsername = c.GetString("username")
+	cfg.ActorRole = c.GetInt("role")
+	cfg.Profile = profileName
+	cfg.ActorSessionID = c.GetString("session_id")
+	cfg.AuthVersion = c.GetInt64("auth_version")
+	cfg.SessionVersion = c.GetInt64("session_version")
+	cfg.ActorIP = c.ClientIP()
+	cfg.ActorUserAgent = c.Request.UserAgent()
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.RequestTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), assistantMaxRunDuration)
 	defer cancel()
 
 	if !assistant.AcquireUser(userID) {
@@ -193,7 +203,7 @@ func assistantChatStream(c *gin.Context, profileName string) {
 	defer assistant.ReleaseGlobal()
 
 	client := assistant.NewHTTPClient(cfg)
-	executor := assistant.NewDefaultToolExecutor(cfg.AdminScope)
+	executor := assistant.NewRuntimeToolExecutor(cfg, writer.WriteEvent)
 	audit := func(action string, params map[string]any) {
 		if profileName == assistant_setting.ProfileAdmin {
 			recordManageAudit(c, action, params)
@@ -212,6 +222,40 @@ func assistantChatStream(c *gin.Context, profileName string) {
 		return
 	}
 	logger.LogInfo(c.Request.Context(), fmt.Sprintf("assistant chat completed profile=%s user_id=%d model=%s", profileName, userID, cfg.Model))
+}
+
+type assistantConfirmRequest struct {
+	ConfirmationID string `json:"confirmation_id"`
+	Approve        bool   `json:"approve"`
+}
+
+// ConfirmAssistantOperation resolves one pending user assistant write.
+func ConfirmAssistantOperation(c *gin.Context) {
+	confirmAssistantOperation(c, assistant_setting.ProfileUser)
+}
+
+// ConfirmAdminAssistantOperation resolves one pending admin assistant write.
+func ConfirmAdminAssistantOperation(c *gin.Context) {
+	confirmAssistantOperation(c, assistant_setting.ProfileAdmin)
+}
+
+func confirmAssistantOperation(c *gin.Context, profileName string) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, assistantTestBodyLimit)
+	request := assistantConfirmRequest{}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	id := strings.TrimSpace(request.ConfirmationID)
+	if id == "" {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if err := assistant.DefaultConfirmationBroker().Resolve(c.GetInt("id"), profileName, id, request.Approve); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func handleAssistantRunError(c *gin.Context, writer *sseWriter, err error) {

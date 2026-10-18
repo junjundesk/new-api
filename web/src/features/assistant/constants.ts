@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type {
+  AssistantConfirmationStatus,
   AssistantMessageStatus,
   AssistantProfile,
   AssistantToolPartStatus,
@@ -26,12 +27,17 @@ export const ASSISTANT_API_ENDPOINTS = {
   user: {
     CONFIG: '/api/assistant/config',
     CHAT: '/api/assistant/chat',
+    CONFIRM: '/api/assistant/confirm',
   },
   admin: {
     CONFIG: '/api/assistant/admin/runtime-config',
     CHAT: '/api/assistant/admin/chat',
+    CONFIRM: '/api/assistant/admin/confirm',
   },
-} as const satisfies Record<AssistantProfile, { CONFIG: string; CHAT: string }>
+} as const satisfies Record<
+  AssistantProfile,
+  { CONFIG: string; CHAT: string; CONFIRM: string }
+>
 
 export const ASSISTANT_LIMITS = {
   MAX_MESSAGE_CHARS: 100000,
@@ -55,6 +61,13 @@ export const ASSISTANT_TOOL_STATUS = {
   ERROR: 'error',
 } as const satisfies Record<string, AssistantToolPartStatus>
 
+export const ASSISTANT_CONFIRMATION_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  EXPIRED: 'expired',
+} as const satisfies Record<string, AssistantConfirmationStatus>
+
 // i18n keys: render through t(ASSISTANT_ERROR_KEYS.xxx)
 export const ASSISTANT_ERROR_KEYS = {
   CONFIG_LOAD_FAILED: 'Failed to load the AI assistant configuration',
@@ -63,4 +76,5 @@ export const ASSISTANT_ERROR_KEYS = {
   STREAM_PARSE_FAILED: 'Failed to read the assistant response',
   CONNECTION_CLOSED: 'The connection closed before the assistant finished',
   REVEAL_KEY_FAILED: 'Failed to load the full API key',
+  CONFIRM_FAILED: 'Failed to send the confirmation decision',
 } as const

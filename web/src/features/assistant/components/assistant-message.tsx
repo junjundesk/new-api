@@ -26,10 +26,12 @@ import { Response } from '@/components/ai-elements/response'
 import { ASSISTANT_ERROR_KEYS, ASSISTANT_MESSAGE_STATUS } from '../constants'
 import { getMessageText } from '../lib/messages'
 import type { AssistantChatMessage } from '../types'
+import { AssistantConfirmationCard } from './assistant-confirmation-card'
 import { AssistantToolCard } from './assistant-tool-card'
 
 interface AssistantMessageProps {
   message: AssistantChatMessage
+  onConfirm: (confirmationId: string, approve: boolean) => Promise<void>
 }
 
 export function AssistantMessage(props: AssistantMessageProps) {
@@ -60,6 +62,15 @@ export function AssistantMessage(props: AssistantMessageProps) {
               <Response final={!isStreaming} key={part.id}>
                 {part.text}
               </Response>
+            )
+          }
+          if (part.type === 'confirmation') {
+            return (
+              <AssistantConfirmationCard
+                key={part.id}
+                onConfirm={props.onConfirm}
+                part={part}
+              />
             )
           }
           return <AssistantToolCard key={part.id} part={part} />

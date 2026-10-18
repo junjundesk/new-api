@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useTranslation } from 'react-i18next'
+
 import { useAuthStore } from '@/stores/auth-store'
 
 import { AssistantConversation } from './components/assistant-conversation'
@@ -41,6 +43,7 @@ interface AssistantProps {
 }
 
 export function Assistant(props: AssistantProps) {
+  const { t } = useTranslation()
   const profile = props.profile ?? 'user'
   const userId = useAuthStore((state) => state.auth.user?.id)
   const configQuery = useAssistantConfig(profile)
@@ -81,9 +84,17 @@ export function Assistant(props: AssistantProps) {
         onClear={chat.clearMessages}
         profile={profile}
       />
+      {profile === 'admin' ? (
+        <p className='text-muted-foreground mx-auto w-full max-w-4xl px-4 pb-1 text-xs'>
+          {t(
+            'Administrator operations are audited, and write operations require your confirmation.'
+          )}
+        </p>
+      ) : null}
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
         <AssistantConversation
           messages={chat.messages}
+          onConfirm={chat.confirmOperation}
           onSelectPrompt={chat.sendMessage}
           profile={profile}
         />

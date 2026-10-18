@@ -75,6 +75,17 @@ func TestNormalizeOptionValue(t *testing.T) {
 		assert.Empty(t, normalized)
 	})
 
+	t.Run("normalizes safety switches", func(t *testing.T) {
+		normalized, skip, err := NormalizeOptionValue(OptionKeyConfirmWrites, "false")
+		require.NoError(t, err)
+		assert.False(t, skip)
+		assert.Equal(t, "false", normalized)
+		normalized, skip, err = NormalizeOptionValue(OptionKeyAdminDBToolsEnabled, "false")
+		require.NoError(t, err)
+		assert.False(t, skip)
+		assert.Equal(t, "false", normalized)
+	})
+
 	t.Run("normalizes master switch", func(t *testing.T) {
 		normalized, skip, err := NormalizeOptionValue(OptionKeyEnabled, "false")
 		require.NoError(t, err)

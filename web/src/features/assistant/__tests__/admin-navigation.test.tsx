@@ -108,10 +108,10 @@ describe('admin assistant sidebar entry', () => {
     expect(screen.getByText('AI Assistant')).toBeVisible()
   })
 
-  it('hides the admin assistant from a non-root admin', async () => {
+  it('shows the admin assistant to an admin', async () => {
     await renderSidebar(ROLE.ADMIN, true)
 
-    expect(screen.queryByText('Admin Assistant')).toBeNull()
+    expect(screen.getByText('Admin Assistant')).toBeVisible()
     expect(screen.getByText('AI Assistant')).toBeVisible()
   })
 

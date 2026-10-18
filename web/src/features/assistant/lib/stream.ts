@@ -20,6 +20,7 @@ import type { TFunction } from 'i18next'
 
 import { ASSISTANT_ERROR_KEYS } from '../constants'
 import type {
+  AssistantConfirmationResolutionStatus,
   AssistantStreamError,
   AssistantStreamEvent,
   AssistantUsage,
@@ -42,6 +43,15 @@ function readString(value: unknown): string | undefined {
 function readNumber(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return value
+}
+
+function readConfirmationResolutionStatus(
+  value: unknown
+): AssistantConfirmationResolutionStatus | undefined {
+  if (value === 'approved' || value === 'denied' || value === 'expired') {
+    return value
+  }
+  return undefined
 }
 
 function parseUsage(value: unknown): AssistantUsage | undefined {
@@ -113,6 +123,25 @@ export function parseAssistantStreamEvent(
         result: record.result,
         error: readString(record.error),
       }
+    }
+    case 'confirmation_required': {
+      const confirmationId = readString(record.confirmation_id)
+      if (!confirmationId) return null
+      return {
+        type: 'confirmation_required',
+        confirmationId,
+        operationId: readString(record.operation_id) ?? '',
+        risk: readString(record.risk),
+        summary: readString(record.summary),
+        params: record.params,
+        expiresAt: readNumber(record.expires_at),
+      }
+    }
+    case 'confirmation_resolved': {
+      const confirmationId = readString(record.confirmation_id)
+      const status = readConfirmationResolutionStatus(record.status)
+      if (!confirmationId || !status) return null
+      return { type: 'confirmation_resolved', confirmationId, status }
     }
     case 'error':
       return {

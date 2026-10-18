@@ -620,4 +620,5 @@ export const STATIC_I18N_KEYS = [
   'Failed to read the assistant response',
   'The connection closed before the assistant finished',
   'Failed to load the full API key',
+  'Failed to send the confirmation decision',
 ] as const

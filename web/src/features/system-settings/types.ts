@@ -391,6 +391,8 @@ export type OperationsSettings = {
   'assistant_setting.admin_max_output_tokens': number
   'assistant_setting.system_prompt': string
   'assistant_setting.request_timeout_seconds': number
+  'assistant_setting.confirm_writes': boolean
+  'assistant_setting.admin_db_tools_enabled': boolean
   'assistant_setting.user_api_key_configured': boolean
   'assistant_setting.admin_api_key_configured': boolean
 }

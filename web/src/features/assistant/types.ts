@@ -37,6 +37,17 @@ export type AssistantMessageStatus = 'streaming' | 'done' | 'error' | 'stopped'
 
 export type AssistantToolPartStatus = 'running' | 'done' | 'error'
 
+export type AssistantConfirmationStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'expired'
+
+export type AssistantConfirmationResolutionStatus = Exclude<
+  AssistantConfirmationStatus,
+  'pending'
+>
+
 export interface AssistantTextPart {
   id: string
   type: 'text'
@@ -54,7 +65,29 @@ export interface AssistantToolPart {
   error?: string
 }
 
-export type AssistantMessagePart = AssistantTextPart | AssistantToolPart
+/**
+ * A write/destructive operation the model wants to run. The backend emits the
+ * confirmation request over SSE and blocks the run until the user approves or
+ * denies it (or it expires).
+ */
+export interface AssistantConfirmationPart {
+  id: string
+  type: 'confirmation'
+  confirmationId: string
+  operationId: string
+  risk: string
+  summary: string
+  /** Server-side redacted path/query/body arguments. */
+  params?: unknown
+  /** Unix timestamp (seconds) after which the confirmation expires. */
+  expiresAt?: number
+  status: AssistantConfirmationStatus
+}
+
+export type AssistantMessagePart =
+  | AssistantTextPart
+  | AssistantToolPart
+  | AssistantConfirmationPart
 
 export interface AssistantChatMessage {
   id: string
@@ -118,6 +151,20 @@ export type AssistantStreamEvent =
       ok: boolean
       result?: unknown
       error?: string
+    }
+  | {
+      type: 'confirmation_required'
+      confirmationId: string
+      operationId: string
+      risk?: string
+      summary?: string
+      params?: unknown
+      expiresAt?: number
+    }
+  | {
+      type: 'confirmation_resolved'
+      confirmationId: string
+      status: AssistantConfirmationResolutionStatus
     }
   | { type: 'error'; code?: string; message?: string; retryAfter?: number }
   | { type: 'done'; usage?: AssistantUsage }

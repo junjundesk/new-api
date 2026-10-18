@@ -20,9 +20,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
-import { getAssistantConfig, normalizeAssistantConfig } from '../api'
+import {
+  confirmAssistantOperation,
+  getAssistantConfig,
+  normalizeAssistantConfig,
+} from '../api'
 
-vi.mock('@/lib/api', () => ({ api: { get: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -80,6 +84,43 @@ describe('assistant config request', () => {
     expect(config.maxMessageChars).toBe(2000)
     expect(config.maxHistoryMessages).toBe(10)
     expect(config.maxHistoryChars).toBe(20000)
+  })
+})
+
+describe('assistant confirmation request', () => {
+  it('posts a user approval to the user confirm endpoint', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: { success: true } })
+
+    await confirmAssistantOperation('user', 'conf-1', true)
+
+    expect(api.post).toHaveBeenCalledWith('/api/assistant/confirm', {
+      confirmation_id: 'conf-1',
+      approve: true,
+    })
+  })
+
+  it('posts an admin denial to the admin confirm endpoint', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: { success: true } })
+
+    await confirmAssistantOperation('admin', 'conf-2', false)
+
+    expect(api.post).toHaveBeenCalledWith('/api/assistant/admin/confirm', {
+      confirmation_id: 'conf-2',
+      approve: false,
+    })
+  })
+
+  it('surfaces the server message when the confirmation is rejected', async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      data: {
+        success: false,
+        message: 'confirmation not found or expired',
+      },
+    })
+
+    await expect(
+      confirmAssistantOperation('user', 'conf-3', true)
+    ).rejects.toThrow('confirmation not found or expired')
   })
 })
 

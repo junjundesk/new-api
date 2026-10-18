@@ -162,9 +162,8 @@ func UpdateOption(c *gin.Context) {
 			common.ApiSuccess(c, nil)
 			return
 		}
-		if strings.HasSuffix(option.Key, "_enabled") && normalized == "true" {
-			profileName, ok := assistant_setting.ProfileForOptionKey(option.Key)
-			if !ok || !assistant_setting.IsConfigured(profileName) {
+		if profileName, ok := assistant_setting.ProfileForOptionKey(option.Key); ok && strings.HasSuffix(option.Key, "_enabled") && normalized == "true" {
+			if !assistant_setting.IsConfigured(profileName) {
 				common.ApiErrorI18n(c, i18n.MsgAssistantConfigIncomplete)
 				return
 			}

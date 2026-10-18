@@ -26,8 +26,9 @@ import { useAuthStore } from '@/stores/auth-store'
 export const Route = createFileRoute('/_authenticated/assistant/admin/')({
   beforeLoad: () => {
     const { auth } = useAuthStore.getState()
+    const role = auth.user?.role ?? ROLE.GUEST
 
-    if (auth.user?.role !== ROLE.SUPER_ADMIN) {
+    if (role < ROLE.ADMIN) {
       throw redirect({
         to: '/403',
       })

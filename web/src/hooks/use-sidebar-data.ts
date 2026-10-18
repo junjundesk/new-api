@@ -157,7 +157,7 @@ export function useSidebarData(): SidebarData {
             title: t('Admin Assistant'),
             url: '/assistant/admin',
             icon: ShieldCheck,
-            requiredRole: ROLE.SUPER_ADMIN,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Channels'),

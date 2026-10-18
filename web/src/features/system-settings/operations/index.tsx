@@ -69,6 +69,8 @@ const defaultOperationsSettings: OperationsSettings = {
   'assistant_setting.admin_max_output_tokens': 128000,
   'assistant_setting.system_prompt': '',
   'assistant_setting.request_timeout_seconds': 60,
+  'assistant_setting.confirm_writes': true,
+  'assistant_setting.admin_db_tools_enabled': true,
   'assistant_setting.user_api_key_configured': false,
   'assistant_setting.admin_api_key_configured': false,
 }

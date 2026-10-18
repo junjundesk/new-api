@@ -26,7 +26,11 @@ import {
   loadStoredMessages,
   saveStoredMessages,
 } from '../lib/history'
-import type { AssistantChatMessage, AssistantMessageStatus } from '../types'
+import type {
+  AssistantChatMessage,
+  AssistantConfirmationStatus,
+  AssistantMessageStatus,
+} from '../types'
 
 interface MessageOptions {
   id: string
@@ -43,6 +47,31 @@ function createMessage(options: MessageOptions): AssistantChatMessage {
       { id: `${options.id}-text`, type: 'text', text: options.text ?? '' },
     ],
     status: options.status ?? 'done',
+    createdAt: 0,
+  }
+}
+
+function createConfirmationMessage(
+  confirmationStatus: AssistantConfirmationStatus
+): AssistantChatMessage {
+  return {
+    id: 'confirmation-message',
+    role: 'assistant',
+    parts: [
+      { id: 'confirmation-text', type: 'text', text: 'Please confirm' },
+      {
+        id: 'confirmation-conf-1',
+        type: 'confirmation',
+        confirmationId: 'conf-1',
+        operationId: 'POST /api/token',
+        risk: 'write',
+        summary: 'Create an API key',
+        params: { body: { name: 'test' } },
+        expiresAt: 1700000000,
+        status: confirmationStatus,
+      },
+    ],
+    status: 'done',
     createdAt: 0,
   }
 }
@@ -163,6 +192,45 @@ describe('assistant message persistence', () => {
         (message) => message.id
       )
     ).toEqual(['2'])
+  })
+
+  it('restores a pending confirmation as expired after a reload', () => {
+    saveStoredMessages(STORAGE_KEY, [createConfirmationMessage('pending')])
+
+    const stored = loadStoredMessages(STORAGE_KEY)
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0].parts[1]).toMatchObject({
+      type: 'confirmation',
+      confirmationId: 'conf-1',
+      status: 'expired',
+    })
+  })
+
+  it('never persists a pending confirmation as approvable', () => {
+    saveStoredMessages(STORAGE_KEY, [createConfirmationMessage('pending')])
+
+    const raw = window.sessionStorage.getItem(STORAGE_KEY) ?? ''
+
+    expect(raw).toContain('"status":"expired"')
+    expect(raw).not.toContain('"status":"pending"')
+  })
+
+  it('keeps an already resolved confirmation status after a reload', () => {
+    saveStoredMessages(STORAGE_KEY, [createConfirmationMessage('approved')])
+
+    const stored = loadStoredMessages(STORAGE_KEY)
+
+    expect(stored[0].parts[1]).toMatchObject({
+      type: 'confirmation',
+      status: 'approved',
+    })
+  })
+
+  it('keeps confirmation parts out of the request history', () => {
+    expect(
+      buildAssistantRequestHistory([createConfirmationMessage('denied')])
+    ).toEqual([{ role: 'assistant', content: 'Please confirm' }])
   })
 
   it('scopes storage keys per user and per profile', () => {

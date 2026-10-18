@@ -25,6 +25,7 @@ import {
   applyAssistantStreamEvent,
   createAssistantMessage,
   createUserMessage,
+  expirePendingConfirmations,
   finishAssistantMessage,
   getMessageText,
   hasRunningTool,
@@ -147,6 +148,54 @@ describe('assistant message parts', () => {
     expect(stopped.status).toBe('stopped')
     expect(getMessageText(failed)).toBe('Partial answer')
     expect(failed.error).toBe('Network down')
+  })
+
+  it('adds a pending confirmation part and resolves it from the stream', () => {
+    let message = createAssistantMessage()
+    message = applyAssistantStreamEvent(message, {
+      type: 'confirmation_required',
+      confirmationId: 'conf-1',
+      operationId: 'DELETE /api/token/7',
+      risk: 'destructive',
+      summary: 'Delete the API key',
+      params: { path_params: { id: 7 } },
+      expiresAt: 1700000000,
+    })
+
+    expect(message.parts).toHaveLength(1)
+    expect(message.parts[0]).toMatchObject({
+      type: 'confirmation',
+      confirmationId: 'conf-1',
+      operationId: 'DELETE /api/token/7',
+      status: 'pending',
+    })
+
+    message = applyAssistantStreamEvent(message, {
+      type: 'confirmation_resolved',
+      confirmationId: 'conf-1',
+      status: 'denied',
+    })
+
+    expect(message.parts[0]).toMatchObject({
+      type: 'confirmation',
+      status: 'denied',
+    })
+  })
+
+  it('expires any confirmation still pending when the run ends', () => {
+    let message = createAssistantMessage()
+    message = applyAssistantStreamEvent(message, {
+      type: 'confirmation_required',
+      confirmationId: 'conf-1',
+      operationId: 'POST /api/token',
+    })
+
+    const expired = expirePendingConfirmations(message)
+
+    expect(expired.parts[0]).toMatchObject({
+      type: 'confirmation',
+      status: 'expired',
+    })
   })
 
   it('updates only the targeted message', () => {

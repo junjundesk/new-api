@@ -46,7 +46,10 @@ const adminAssistantOptions = AdminAssistantRoute.options as unknown as {
   component?: () => ReactNode
 }
 
-const configMock = vi.hoisted(() => ({ getAssistantConfig: vi.fn() }))
+const configMock = vi.hoisted(() => ({
+  getAssistantConfig: vi.fn(),
+  confirmAssistantOperation: vi.fn(),
+}))
 vi.mock('@/features/assistant/api', () => configMock)
 
 const clients: QueryClient[] = []
@@ -141,13 +144,13 @@ describe('admin assistant route guard', () => {
     expect(configMock.getAssistantConfig).not.toHaveBeenCalled()
   })
 
-  it('redirects a non-root admin to 403', async () => {
+  it('lets an admin reach the admin assistant page', async () => {
     await renderAdminRoute(ROLE.ADMIN)
 
     expect(
-      await screen.findByRole('heading', { name: 'Forbidden' })
+      await screen.findByRole('heading', { name: 'Admin Assistant' })
     ).toBeVisible()
-    expect(configMock.getAssistantConfig).not.toHaveBeenCalled()
+    expect(configMock.getAssistantConfig).toHaveBeenCalledWith('admin')
   })
 
   it('redirects a guest to 403', async () => {

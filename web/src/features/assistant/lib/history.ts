@@ -29,7 +29,7 @@ import type {
   AssistantProfile,
   AssistantRole,
 } from '../types'
-import { getMessageText } from './messages'
+import { expirePendingConfirmations, getMessageText } from './messages'
 
 export interface AssistantHistoryLimits {
   maxMessages: number
@@ -115,11 +115,28 @@ function isToolPart(value: Record<string, unknown>): boolean {
   )
 }
 
+function isConfirmationPart(value: Record<string, unknown>): boolean {
+  if (typeof value.confirmationId !== 'string') return false
+  if (typeof value.operationId !== 'string') return false
+  if (typeof value.risk !== 'string') return false
+  if (typeof value.summary !== 'string') return false
+  if (
+    value.status !== 'pending' &&
+    value.status !== 'approved' &&
+    value.status !== 'denied' &&
+    value.status !== 'expired'
+  ) {
+    return false
+  }
+  return value.expiresAt === undefined || typeof value.expiresAt === 'number'
+}
+
 function isMessagePart(value: unknown): value is AssistantMessagePart {
   const record = readRecord(value)
   if (!record || typeof record.id !== 'string') return false
   if (record.type === 'text') return typeof record.text === 'string'
   if (record.type === 'tool') return isToolPart(record)
+  if (record.type === 'confirmation') return isConfirmationPart(record)
   return false
 }
 
@@ -147,9 +164,14 @@ export function loadStoredMessages(storageKey: string): AssistantChatMessage[] {
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
     const messages = parsed.filter(isStoredMessage)
-    return messages
-      .filter((message) => message.status !== 'streaming')
-      .slice(-ASSISTANT_LIMITS.MAX_STORED_MESSAGES)
+    return (
+      messages
+        .filter((message) => message.status !== 'streaming')
+        .slice(-ASSISTANT_LIMITS.MAX_STORED_MESSAGES)
+        // A confirmation left pending by a reload can no longer be resolved by
+        // the server, so it must be restored as expired instead of approvable.
+        .map((message) => expirePendingConfirmations(message))
+    )
   } catch {
     return []
   }
@@ -157,8 +179,10 @@ export function loadStoredMessages(storageKey: string): AssistantChatMessage[] {
 
 /**
  * Persist only settled messages. Streaming messages are intentionally skipped
- * so a mid-stream refresh never restores a half-written response, and the full
- * API key never enters this payload because it is never added to message state.
+ * so a mid-stream refresh never restores a half-written response, the full API
+ * key never enters this payload because it is never added to message state, and
+ * any still-pending confirmation is serialized as expired so a reloaded page
+ * can never re-approve it.
  */
 export function saveStoredMessages(
   storageKey: string,
@@ -167,6 +191,7 @@ export function saveStoredMessages(
   if (storageKey === '' || typeof window === 'undefined') return
   const settled = messages
     .filter((message) => message.status !== 'streaming')
+    .map((message) => expirePendingConfirmations(message))
     .slice(-ASSISTANT_LIMITS.MAX_STORED_MESSAGES)
   try {
     window.sessionStorage.setItem(storageKey, JSON.stringify(settled))

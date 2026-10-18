@@ -31,6 +31,9 @@ func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 	}
 	cfg := Config{
 		AdminScope:      profile.Name == assistant_setting.ProfileAdmin,
+		Profile:         profile.Name,
+		ConfirmWrites:   setting.ConfirmWrites,
+		AdminDBTools:    setting.AdminDBToolsEnabled,
 		Protocol:        protocol,
 		SystemPrompt:    setting.SystemPrompt,
 		ContextWindow:   contextWindow,

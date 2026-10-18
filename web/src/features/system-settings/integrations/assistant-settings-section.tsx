@@ -81,6 +81,8 @@ export type AssistantSettingsDefaults = {
   admin: AssistantProfileDefaults
   systemPrompt: string
   requestTimeoutSeconds: number
+  confirmWrites: boolean
+  adminDbToolsEnabled: boolean
 }
 
 type AssistantSettingsSectionProps = {
@@ -88,17 +90,21 @@ type AssistantSettingsSectionProps = {
 }
 
 /**
- * The shared form carries the master switch in addition to the profile cards
- * rendered by AssistantProfileCard.
+ * The shared form carries the master and safety switches in addition to the
+ * profile cards rendered by AssistantProfileCard.
  */
 type AssistantSettingsFormValuesWithMaster = AssistantSettingsFormValues & {
   enabled: boolean
+  confirmWrites: boolean
+  adminDbToolsEnabled: boolean
 }
 
 const OPTION_KEYS = {
   enabled: 'assistant_setting.enabled',
   systemPrompt: 'assistant_setting.system_prompt',
   requestTimeoutSeconds: 'assistant_setting.request_timeout_seconds',
+  confirmWrites: 'assistant_setting.confirm_writes',
+  adminDbToolsEnabled: 'assistant_setting.admin_db_tools_enabled',
   user: {
     enabled: 'assistant_setting.user_enabled',
     source: 'assistant_setting.user_source',
@@ -162,6 +168,8 @@ const createAssistantSettingsSchema = (t: TFunction) => {
         .int(rangeMessage)
         .min(5, rangeMessage)
         .max(300, rangeMessage),
+      confirmWrites: z.boolean(),
+      adminDbToolsEnabled: z.boolean(),
     })
     .superRefine((values, ctx) => {
       if (!values.enabled) return
@@ -256,6 +264,8 @@ function buildFormDefaults(
     admin: buildProfileFormDefaults(defaults.admin),
     systemPrompt: defaults.systemPrompt,
     requestTimeoutSeconds: defaults.requestTimeoutSeconds,
+    confirmWrites: defaults.confirmWrites,
+    adminDbToolsEnabled: defaults.adminDbToolsEnabled,
   }
 }
 
@@ -332,6 +342,19 @@ function buildOptionEntries(
     entries.push({
       key: OPTION_KEYS.requestTimeoutSeconds,
       value: values.requestTimeoutSeconds,
+    })
+  }
+
+  if (values.confirmWrites !== defaults.confirmWrites) {
+    entries.push({
+      key: OPTION_KEYS.confirmWrites,
+      value: values.confirmWrites,
+    })
+  }
+  if (values.adminDbToolsEnabled !== defaults.adminDbToolsEnabled) {
+    entries.push({
+      key: OPTION_KEYS.adminDbToolsEnabled,
+      value: values.adminDbToolsEnabled,
     })
   }
 
@@ -509,6 +532,60 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
                 </FormDescription>
                 <FormMessage />
               </FormItem>
+            )}
+          />
+
+          <div data-settings-form-span='full' className='min-w-0'>
+            <h4 className='text-sm font-semibold'>{t('Safety')}</h4>
+          </div>
+
+          <FormField
+            control={form.control}
+            name='confirmWrites'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>
+                    {t('Require confirmation for AI write operations')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Ask for confirmation before the assistant creates or changes data. Enabled by default.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={isBusy}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='adminDbToolsEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Allow root database tools')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Allow database tools in the root admin assistant only. Enabled by default.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={isBusy}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
             )}
           />
 

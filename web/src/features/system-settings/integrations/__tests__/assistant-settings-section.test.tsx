@@ -58,6 +58,8 @@ const baseDefaults: AssistantSettingsDefaults = {
   admin: { ...baseProfileDefaults },
   systemPrompt: '',
   requestTimeoutSeconds: 60,
+  confirmWrites: true,
+  adminDbToolsEnabled: true,
 }
 
 const channels: AssistantChannel[] = [
@@ -207,6 +209,14 @@ describe('assistant settings section', () => {
       screen.getByRole('spinbutton', { name: 'Request timeout (seconds)' }),
       { target: { value: '90' } }
     )
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Require confirmation for AI write operations',
+      })
+    )
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Allow root database tools' })
+    )
 
     await selectComboboxOption(
       user,
@@ -259,7 +269,7 @@ describe('assistant settings section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(16))
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(18))
     expect(putSpy.mock.calls).toEqual([
       ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
       [
@@ -269,6 +279,14 @@ describe('assistant settings section', () => {
       [
         '/api/option/',
         { key: 'assistant_setting.request_timeout_seconds', value: 90 },
+      ],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.confirm_writes', value: false },
+      ],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.admin_db_tools_enabled', value: false },
       ],
       [
         '/api/option/',
@@ -333,12 +351,20 @@ describe('assistant settings section', () => {
     ).toBe('')
   })
 
-  it('shows exactly three switches with the master switch on by default', () => {
+  it('shows the master and safety switches on by default', () => {
     renderSection()
 
-    expect(screen.getAllByRole('switch')).toHaveLength(3)
+    expect(screen.getAllByRole('switch')).toHaveLength(5)
     expect(
       screen.getByRole('switch', { name: 'Enable AI Assistant' })
+    ).toBeChecked()
+    expect(
+      screen.getByRole('switch', {
+        name: 'Require confirmation for AI write operations',
+      })
+    ).toBeChecked()
+    expect(
+      screen.getByRole('switch', { name: 'Allow root database tools' })
     ).toBeChecked()
     expect(
       within(getProfileCard('User assistant')).getByRole('switch', {
@@ -387,6 +413,43 @@ describe('assistant settings section', () => {
       [
         '/api/option/',
         { key: 'assistant_setting.system_prompt', value: 'Paused.' },
+      ],
+    ])
+    await waitFor(() => expect(successSpy).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Base URL is required')).toBeNull()
+  })
+
+  it('saves safety switches with the master switch off while profiles are invalid', async () => {
+    renderSection({
+      user: {
+        ...baseProfileDefaults,
+        enabled: true,
+        baseUrl: '',
+        model: '',
+      },
+    })
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable AI Assistant' }))
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Require confirmation for AI write operations',
+      })
+    )
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Allow root database tools' })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(3))
+    expect(putSpy.mock.calls).toEqual([
+      ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.confirm_writes', value: false },
+      ],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.admin_db_tools_enabled', value: false },
       ],
     ])
     await waitFor(() => expect(successSpy).toHaveBeenCalledTimes(1))

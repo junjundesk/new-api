@@ -10,6 +10,17 @@ import (
 // Config is a request-scoped snapshot of one assistant profile.
 type Config struct {
 	AdminScope      bool
+	Profile         string
+	ActorID         int
+	ActorUsername   string
+	ActorRole       int
+	ActorSessionID  string
+	AuthVersion     int64
+	SessionVersion  int64
+	ActorIP         string
+	ActorUserAgent  string
+	ConfirmWrites   bool
+	AdminDBTools    bool
 	Protocol        string
 	BaseURL         string
 	APIKey          string
@@ -82,19 +93,26 @@ type ToolResult struct {
 
 // Event is one SSE event sent to the browser.
 type Event struct {
-	Type       string `json:"type"`
-	Model      string `json:"model,omitempty"`
-	Text       string `json:"text,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Arguments  any    `json:"arguments,omitempty"`
-	OK         *bool  `json:"ok,omitempty"`
-	Result     any    `json:"result,omitempty"`
-	Message    string `json:"message,omitempty"`
-	Error      string `json:"error,omitempty"`
-	Code       string `json:"code,omitempty"`
-	RetryAfter int64  `json:"retry_after,omitempty"`
-	Usage      *Usage `json:"usage,omitempty"`
+	Type           string `json:"type"`
+	Model          string `json:"model,omitempty"`
+	Text           string `json:"text,omitempty"`
+	ToolCallID     string `json:"tool_call_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Arguments      any    `json:"arguments,omitempty"`
+	OK             *bool  `json:"ok,omitempty"`
+	Result         any    `json:"result,omitempty"`
+	Message        string `json:"message,omitempty"`
+	Error          string `json:"error,omitempty"`
+	Code           string `json:"code,omitempty"`
+	RetryAfter     int64  `json:"retry_after,omitempty"`
+	Usage          *Usage `json:"usage,omitempty"`
+	ConfirmationID string `json:"confirmation_id,omitempty"`
+	Operation      string `json:"operation_id,omitempty"`
+	Risk           string `json:"risk,omitempty"`
+	Summary        string `json:"summary,omitempty"`
+	Params         any    `json:"params,omitempty"`
+	ExpiresAt      int64  `json:"expires_at,omitempty"`
+	Status         string `json:"status,omitempty"`
 }
 
 // EmitFunc writes one SSE event. Returning an error cancels the run.

@@ -43,6 +43,8 @@ const (
 	OptionKeyAdminMaxOutputTokens  = "assistant_setting.admin_max_output_tokens"
 	OptionKeySystemPrompt          = "assistant_setting.system_prompt"
 	OptionKeyRequestTimeout        = "assistant_setting.request_timeout_seconds"
+	OptionKeyConfirmWrites         = "assistant_setting.confirm_writes"
+	OptionKeyAdminDBToolsEnabled   = "assistant_setting.admin_db_tools_enabled"
 	OptionKeyUserAPIKeyConfigured  = "assistant_setting.user_api_key_configured"
 	OptionKeyAdminAPIKeyConfigured = "assistant_setting.admin_api_key_configured"
 )
@@ -77,6 +79,8 @@ type AssistantSetting struct {
 
 	SystemPrompt          string `json:"system_prompt"`
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
+	ConfirmWrites         bool   `json:"confirm_writes"`
+	AdminDBToolsEnabled   bool   `json:"admin_db_tools_enabled"`
 }
 
 // Profile is a request-scoped subset used by the assistant runtime.
@@ -118,6 +122,8 @@ var assistantSetting = AssistantSetting{
 	AdminMaxOutputTokens:  128000,
 	SystemPrompt:          "",
 	RequestTimeoutSeconds: 60,
+	ConfirmWrites:         true,
+	AdminDBToolsEnabled:   true,
 }
 
 func init() {
@@ -194,6 +200,11 @@ func ModelName(name string) string {
 
 // ProfileForOptionKey reports which profile an option key belongs to.
 func ProfileForOptionKey(key string) (string, bool) {
+	switch key {
+	case OptionKeyEnabled, OptionKeySystemPrompt, OptionKeyRequestTimeout, OptionKeyConfirmWrites,
+		OptionKeyAdminDBToolsEnabled, OptionKeyUserAPIKeyConfigured, OptionKeyAdminAPIKeyConfigured:
+		return "", false
+	}
 	if strings.HasPrefix(key, "assistant_setting.user_") {
 		return ProfileUser, true
 	}
@@ -326,6 +337,18 @@ func NormalizeOptionValue(key, value string) (normalized string, skip bool, err 
 		return value, false, nil
 	case OptionKeyRequestTimeout:
 		return normalizeIntOption(value, 5, 300)
+	case OptionKeyConfirmWrites:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", false, errors.New("confirm_writes must be true or false")
+		}
+		return strconv.FormatBool(parsed), false, nil
+	case OptionKeyAdminDBToolsEnabled:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", false, errors.New("admin_db_tools_enabled must be true or false")
+		}
+		return strconv.FormatBool(parsed), false, nil
 	default:
 		return "", false, fmt.Errorf("unknown assistant setting: %s", key)
 	}

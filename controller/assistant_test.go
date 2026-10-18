@@ -214,3 +214,46 @@ func TestUpdateOptionAssistantKeyThenEnable(t *testing.T) {
 	assert.True(t, assistant_setting.Get().UserEnabled)
 	assert.True(t, assistant_setting.IsAvailable(assistant_setting.ProfileUser))
 }
+
+func TestUpdateOptionAssistantSafetySwitches(t *testing.T) {
+	setupAssistantOptionsTest(t)
+	originalDB := model.DB
+	originalLogDB := model.LOG_DB
+	dsn := fmt.Sprintf("file:assistant_safety_option_%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	model.LOG_DB = db
+	require.NoError(t, db.AutoMigrate(&model.Option{}, &model.Log{}, &model.User{}))
+	t.Cleanup(func() {
+		model.DB = originalDB
+		model.LOG_DB = originalLogDB
+		sqlDB, closeErr := db.DB()
+		if closeErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	postOption := func(t *testing.T, key string, value any) map[string]any {
+		t.Helper()
+		body, err := common.Marshal(map[string]any{"key": key, "value": value})
+		require.NoError(t, err)
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPut, "/api/option/", bytes.NewReader(body))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Set("id", 1)
+		ctx.Set("username", "root")
+		ctx.Set("role", common.RoleRootUser)
+		UpdateOption(ctx)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		payload := map[string]any{}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+		return payload
+	}
+	payload := postOption(t, assistant_setting.OptionKeyConfirmWrites, false)
+	assert.Equal(t, true, payload["success"])
+	payload = postOption(t, assistant_setting.OptionKeyAdminDBToolsEnabled, false)
+	assert.Equal(t, true, payload["success"])
+	assert.Equal(t, "false", common.OptionMap[assistant_setting.OptionKeyConfirmWrites])
+	assert.Equal(t, "false", common.OptionMap[assistant_setting.OptionKeyAdminDBToolsEnabled])
+}

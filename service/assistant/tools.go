@@ -13,7 +13,20 @@ import (
 // read and mutate the authenticated user's own data; the admin profile can
 // target every user's usage, logs, and API keys.
 type DefaultToolExecutor struct {
-	adminScope bool
+	adminScope     bool
+	actorID        int
+	actorUsername  string
+	actorRole      int
+	profile        string
+	actorSessionID string
+	authVersion    int64
+	sessionVersion int64
+	actorIP        string
+	actorUserAgent string
+	confirmWrites  bool
+	adminDBTools   bool
+	emit           EmitFunc
+	confirmation   *ConfirmationBroker
 }
 
 func NewDefaultToolExecutor(adminScope bool) *DefaultToolExecutor {
@@ -175,11 +188,24 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 			}, nil),
 		))
 	}
+	definitions = append(definitions, e.genericDefinitions()...)
 	return definitions
 }
 
 func (e *DefaultToolExecutor) Execute(ctx context.Context, userID int, call ToolCall, audit AuditFunc) ToolResult {
 	switch call.Name {
+	case "list_operations":
+		return e.listOperations(call.Arguments)
+	case "get_operation":
+		return e.getOperation(call.Arguments)
+	case "execute_operation":
+		return e.executeOperation(ctx, call.Arguments, audit)
+	case "batch_operation":
+		return e.batchOperation(ctx, call.Arguments, audit)
+	case "admin_db_schema":
+		return e.adminDBSchema()
+	case "admin_db_query":
+		return e.adminDBQuery(ctx, call.Arguments)
 	case "get_account_summary":
 		targetUserID, err := e.resolveTargetUser(userID, call.Arguments, false)
 		if err != nil {
@@ -209,8 +235,14 @@ func (e *DefaultToolExecutor) Execute(ctx context.Context, userID int, call Tool
 		if err != nil {
 			return toolError(err)
 		}
+		if err := e.askConfirmation(ctx, ConfirmationRequest{OperationID: "create_api_key", Risk: "write", Summary: "Create an API key"}); err != nil {
+			return toolError(err)
+		}
 		return e.createAPIKey(targetUserID, call.Arguments, audit)
 	case "set_api_key_status":
+		if err := e.askConfirmation(ctx, ConfirmationRequest{OperationID: "set_api_key_status", Risk: "write", Summary: "Enable or disable an API key"}); err != nil {
+			return toolError(err)
+		}
 		return e.setAPIKeyStatus(userID, call.Arguments, audit)
 	case "list_users":
 		if !e.adminScope {

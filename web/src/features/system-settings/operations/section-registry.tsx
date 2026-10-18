@@ -126,6 +126,9 @@ const OPERATIONS_SECTIONS = [
           systemPrompt: settings['assistant_setting.system_prompt'] ?? '',
           requestTimeoutSeconds:
             settings['assistant_setting.request_timeout_seconds'] ?? 60,
+          confirmWrites: settings['assistant_setting.confirm_writes'] ?? true,
+          adminDbToolsEnabled:
+            settings['assistant_setting.admin_db_tools_enabled'] ?? true,
         }}
       />
     ),

@@ -58,9 +58,126 @@ function getToolTitle(name: string, t: TFunction): string {
       return t('Update API key status')
     case 'list_users':
       return t('Users')
+    case 'list_operations':
+      return t('Operations')
+    case 'get_operation':
+      return t('Operation')
+    case 'execute_operation':
+      return t('Execute operation')
+    case 'batch_operation':
+      return t('Batch operation')
+    case 'admin_db_schema':
+      return t('Database schema')
+    case 'admin_db_query':
+      return t('Database query')
     default:
       return name.replaceAll('_', ' ')
   }
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.trim() === '') return undefined
+  return value.trim()
+}
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return value
+}
+
+interface OperationSummaryRow {
+  label: string
+  value: string
+}
+
+/**
+ * Compact per-operation summary for the generic operation tools. The full
+ * arguments and result stay available in the collapsible details below.
+ */
+function getOperationSummaryRows(
+  part: AssistantToolPart,
+  t: TFunction
+): OperationSummaryRow[] {
+  const args = readRecord(part.arguments)
+  const result = readRecord(part.result)
+
+  if (part.name === 'execute_operation') {
+    const rows: OperationSummaryRow[] = []
+    const operationId = readString(args?.operation_id)
+    if (operationId !== undefined) {
+      rows.push({ label: t('Operation'), value: operationId })
+    }
+    const statusCode = readNumber(result?.status_code)
+    if (statusCode !== undefined) {
+      const state = result?.success === true ? t('Success') : t('Failed')
+      rows.push({ label: t('Status'), value: `HTTP ${statusCode} · ${state}` })
+    }
+    const data = result?.data
+    if (data !== undefined) {
+      rows.push({ label: t('Data'), value: stringifyToolValue(data) })
+    }
+    return rows
+  }
+  if (part.name === 'batch_operation') {
+    const rows: OperationSummaryRow[] = []
+    const operationId = readString(args?.operation_id)
+    if (operationId !== undefined) {
+      rows.push({ label: t('Operation'), value: operationId })
+    }
+    const succeeded = readNumber(result?.succeeded)
+    const total = readNumber(result?.total)
+    if (succeeded !== undefined && total !== undefined) {
+      rows.push({ label: t('Succeeded'), value: `${succeeded} / ${total}` })
+    }
+    const results = result?.results
+    if (results !== undefined) {
+      rows.push({ label: t('Data'), value: stringifyToolValue(results) })
+    }
+    return rows
+  }
+  if (part.name === 'admin_db_schema') {
+    const tables = result?.tables
+    if (!Array.isArray(tables)) return []
+    return [{ label: t('Tables'), value: String(tables.length) }]
+  }
+  if (part.name === 'admin_db_query') {
+    const rows: OperationSummaryRow[] = []
+    const table = readString(result?.table) ?? readString(args?.table)
+    if (table !== undefined) {
+      rows.push({ label: t('Operation'), value: table })
+    }
+    const count = readNumber(result?.count)
+    if (count !== undefined) {
+      rows.push({ label: t('Rows'), value: String(count) })
+    }
+    return rows
+  }
+  return []
+}
+
+function OperationSummary(props: { rows: OperationSummaryRow[] }) {
+  return (
+    <div className='bg-muted/20 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-2.5 py-2 text-xs'>
+      {props.rows.map((row) => (
+        <span
+          className='inline-flex min-w-0 items-center gap-1'
+          key={row.label}
+        >
+          <span className='text-muted-foreground shrink-0'>{row.label}</span>
+          <span className='max-w-64 truncate font-mono' title={row.value}>
+            {row.value}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function stringifyToolValue(value: unknown): string {
@@ -142,35 +259,43 @@ function GenericToolCard(props: { part: AssistantToolPart }) {
   const errorText = part.error ?? ''
   const hasDetails =
     argumentsText !== '' || resultText !== '' || errorText !== ''
+  const summaryRows = getOperationSummaryRows(part, t)
 
   return (
-    <Collapsible className='bg-muted/20 w-full rounded-lg border'>
-      <CollapsibleTrigger className='group flex w-full items-center gap-2 p-2.5 text-left'>
-        <Wrench
-          className='text-muted-foreground size-4 shrink-0'
-          aria-hidden='true'
-        />
-        <span className='min-w-0 truncate text-sm font-medium'>{title}</span>
-        <ToolStatusBadge status={part.status} />
-        <ChevronDown
-          className='text-muted-foreground ml-auto size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180'
-          aria-hidden='true'
-        />
-      </CollapsibleTrigger>
-      {hasDetails ? (
-        <CollapsibleContent className='space-y-2 border-t p-2.5'>
-          {argumentsText !== '' ? (
-            <ToolValueBlock label={t('Arguments')} value={argumentsText} />
-          ) : null}
-          {errorText !== '' ? (
-            <ToolValueBlock destructive label={t('Error')} value={errorText} />
-          ) : null}
-          {resultText !== '' ? (
-            <ToolValueBlock label={t('Result')} value={resultText} />
-          ) : null}
-        </CollapsibleContent>
-      ) : null}
-    </Collapsible>
+    <div className='w-full space-y-1.5'>
+      {summaryRows.length > 0 ? <OperationSummary rows={summaryRows} /> : null}
+      <Collapsible className='bg-muted/20 w-full rounded-lg border'>
+        <CollapsibleTrigger className='group flex w-full items-center gap-2 p-2.5 text-left'>
+          <Wrench
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
+          <span className='min-w-0 truncate text-sm font-medium'>{title}</span>
+          <ToolStatusBadge status={part.status} />
+          <ChevronDown
+            className='text-muted-foreground ml-auto size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180'
+            aria-hidden='true'
+          />
+        </CollapsibleTrigger>
+        {hasDetails ? (
+          <CollapsibleContent className='space-y-2 border-t p-2.5'>
+            {argumentsText !== '' ? (
+              <ToolValueBlock label={t('Arguments')} value={argumentsText} />
+            ) : null}
+            {errorText !== '' ? (
+              <ToolValueBlock
+                destructive
+                label={t('Error')}
+                value={errorText}
+              />
+            ) : null}
+            {resultText !== '' ? (
+              <ToolValueBlock label={t('Result')} value={resultText} />
+            ) : null}
+          </CollapsibleContent>
+        ) : null}
+      </Collapsible>
+    </div>
   )
 }
 

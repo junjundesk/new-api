@@ -40,7 +40,7 @@ AI API 网关（Go + React），把 40+ 上游 AI 提供方统一成一个类 Op
 | `router/` | 10 | 14 | Gin 路由挂载（main.go、relay-router.go、web-router.go、channel-router.go、api-router.go） |
 | `middleware/` | 33 | 148 | TokenAuth、Distribute（渠道分发+预扣费）、限流、CORS、审计；热点 `getModelRequest`(65) |
 | `controller/` | 89 | 736 | HTTP 处理器，业务公式解耦在 service；复杂度热点 `ManageMultiKeys`(87)、`FetchUpstreamRatios`(85)、`testChannel`(84) |
-| `service/` | 90 | 788 | 业务逻辑：token 计数、文本/图像/视频计费、任务轮询（task_polling.go）、日志生成、内置 AI 助手（service/assistant/，用户/管理员双配置、直连或绑定渠道模型、OpenAI Responses + 工具调用 + SSE）；热点 `EstimateRequestToken`(35)、`getImageToken`(44) |
+| `service/` | 90 | 788 | 业务逻辑：token 计数、文本/图像/视频计费、任务轮询（task_polling.go）、日志生成、内置 AI 助手（service/assistant/，用户/管理员双配置、直连或绑定渠道模型、OpenAI Responses/Chat、完整操作目录与 root 只读数据库工具、写操作确认、SSE）；热点 `EstimateRequestToken`(35)、`getImageToken`(44) |
 | `model/` | 77 | 894 | GORM 模型 + 数据访问（用户/令牌/日志/渠道/任务/订阅/选项）；热点 `updateOptionMap`(154)、`updatePricing`(63) |
 | `relay/` | 242 | 1607 | 中转过户链路：请求转换、流式转发、任务平台（Midjourney 等）；热点 `RelayMidjourneySubmit`(74)、`applyOperations`(84) |
 | 　└ `relay/channel/` | 192 | 1187 | 提供方适配器（见 §4） |

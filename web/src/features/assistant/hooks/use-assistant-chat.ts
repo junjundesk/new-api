@@ -22,6 +22,7 @@ import { SSE } from 'sse.js'
 
 import { getFreshAuthHeaders } from '@/lib/api'
 
+import { confirmAssistantOperation } from '../api'
 import { ASSISTANT_API_ENDPOINTS } from '../constants'
 import {
   buildAssistantRequestHistory,
@@ -33,6 +34,7 @@ import {
   applyAssistantStreamEvent,
   createAssistantMessage,
   createUserMessage,
+  expirePendingConfirmations,
   finishAssistantMessage,
   updateMessageById,
 } from '../lib/messages'
@@ -71,6 +73,7 @@ export interface UseAssistantChatResult {
   sendMessage: (text: string) => void
   stopStreaming: () => void
   clearMessages: () => void
+  confirmOperation: (confirmationId: string, approve: boolean) => Promise<void>
 }
 
 export function useAssistantChat(
@@ -175,7 +178,11 @@ export function useAssistantChat(
           const errorText = resolveAssistantStreamError(error, t)
           setMessages((current) =>
             updateMessageById(current, assistantMessage.id, (message) =>
-              finishAssistantMessage(message, 'error', errorText)
+              finishAssistantMessage(
+                expirePendingConfirmations(message),
+                'error',
+                errorText
+              )
             )
           )
         },
@@ -185,7 +192,10 @@ export function useAssistantChat(
           }
           setMessages((current) =>
             updateMessageById(current, assistantMessage.id, (message) =>
-              finishAssistantMessage(message, 'done')
+              finishAssistantMessage(
+                expirePendingConfirmations(message),
+                'done'
+              )
             )
           )
         },
@@ -206,7 +216,7 @@ export function useAssistantChat(
     if (!assistantId) return
     setMessages((current) =>
       updateMessageById(current, assistantId, (message) =>
-        finishAssistantMessage(message, 'stopped')
+        finishAssistantMessage(expirePendingConfirmations(message), 'stopped')
       )
     )
   }, [controller])
@@ -219,6 +229,13 @@ export function useAssistantChat(
     clearStoredMessages(storageKey)
   }, [controller, storageKey])
 
+  const confirmOperation = useCallback(
+    async (confirmationId: string, approve: boolean): Promise<void> => {
+      await confirmAssistantOperation(profile, confirmationId, approve)
+    },
+    [profile]
+  )
+
   return {
     messages,
     isStreaming,
@@ -226,5 +243,6 @@ export function useAssistantChat(
     sendMessage,
     stopStreaming,
     clearMessages,
+    confirmOperation,
   }
 }

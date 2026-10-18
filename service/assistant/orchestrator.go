@@ -140,6 +140,7 @@ func (o *Orchestrator) executeTool(ctx context.Context, userID int, call ToolCal
 			arguments = map[string]any{"raw": call.Arguments}
 		}
 	}
+	arguments = redactValue(arguments, []string{"password", "original_password", "access_token", "refresh_token", "api_key", "secret", "private_key", "key"})
 	_ = o.emit(Event{
 		Type:       "tool_start",
 		ToolCallID: call.CallID,
