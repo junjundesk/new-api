@@ -107,6 +107,7 @@ vi.mock('@/features/assistant/api', () => configMock)
 const i18n = createInstance()
 await i18n.init({
   lng: 'en',
+  supportedLngs: ['en', 'zhCN'],
   resources: { en: { translation: {} } },
   interpolation: { escapeValue: false },
 })
@@ -473,6 +474,16 @@ describe('assistant chat page', () => {
     expect(
       screen.getByRole('progressbar', { name: 'Context usage' })
     ).toHaveAttribute('aria-valuenow', '12345')
+  })
+
+  it('renders context usage when the interface language is zhCN', async () => {
+    await i18n.changeLanguage('zhCN')
+    try {
+      renderAssistant()
+      expect(await screen.findByText('0 / 100万 tokens')).toBeVisible()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('copies the text of each message', async () => {

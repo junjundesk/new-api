@@ -29,6 +29,7 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button'
+import { toIntlLocale } from '@/i18n/languages'
 import { cn } from '@/lib/utils'
 
 interface AssistantInputProps {
@@ -48,7 +49,7 @@ export function AssistantInput(props: AssistantInputProps) {
   // and left the send button disabled.
   const [value, setValue] = useState('')
   const canSend = !props.isStreaming && value.trim().length > 0
-  const tokenFormat = new Intl.NumberFormat(i18n.language, {
+  const tokenFormat = new Intl.NumberFormat(toIntlLocale(i18n.language), {
     notation: 'compact',
     maximumFractionDigits: 1,
   })
