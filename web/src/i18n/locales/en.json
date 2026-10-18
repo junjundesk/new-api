@@ -5906,6 +5906,7 @@
     "Succeeded": "Succeeded",
     "Tables": "Tables",
     "Rows": "Rows",
+    "Page Cache Rate": "Page Cache Rate",
     "Unsupported tool": "Unsupported tool"
   }
 }

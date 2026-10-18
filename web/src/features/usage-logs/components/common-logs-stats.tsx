@@ -22,32 +22,17 @@ import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatLogQuota } from '@/lib/format'
-import { cn } from '@/lib/utils'
 
 import { getLogStats, getUserLogStats } from '../api'
 import { DEFAULT_LOG_STATS } from '../constants'
 import { buildApiParams } from '../lib/utils'
+import { PageCacheRateBadge } from './page-cache-rate-badge'
+import { StatBadge } from './stat-badge'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
-function StatBadge(props: {
-  label: string
-  value: string | number
-  accent: string
-}) {
-  return (
-    <span className='border-border/60 bg-muted/25 inline-flex h-7 items-center gap-2 rounded-md border px-2.5 text-xs shadow-xs'>
-      <span className={cn('h-3.5 w-0.5 rounded-full', props.accent)} />
-      <span className='text-muted-foreground'>{props.label}</span>
-      <span className='text-foreground/85 font-mono font-semibold tabular-nums'>
-        {props.value}
-      </span>
-    </span>
-  )
-}
-
-export function CommonLogsStats() {
+export function CommonLogsStats(props: { pageCacheRate?: number | null }) {
   const { t } = useTranslation()
   const { isAdminView: isAdmin } = useLogsViewScope()
   const searchParams = route.useSearch()
@@ -81,6 +66,9 @@ export function CommonLogsStats() {
         <Skeleton className='h-7 w-[150px] rounded-md' />
         <Skeleton className='h-7 w-[100px] rounded-md' />
         <Skeleton className='h-7 w-[120px] rounded-md' />
+        {props.pageCacheRate !== undefined && (
+          <Skeleton className='h-7 w-[110px] rounded-md' />
+        )}
       </div>
     )
   }
@@ -102,6 +90,9 @@ export function CommonLogsStats() {
         value={stats?.tpm || 0}
         accent='bg-slate-400/70'
       />
+      {props.pageCacheRate !== undefined && (
+        <PageCacheRateBadge rate={props.pageCacheRate} />
+      )}
     </div>
   )
 }

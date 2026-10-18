@@ -110,6 +110,7 @@ function buildSearchSourceKey(values: {
 
 interface CommonLogsFilterBarProps<TData> {
   table: Table<TData>
+  pageCacheRate?: number | null
 }
 
 export function CommonLogsFilterBar<TData>(
@@ -282,7 +283,7 @@ export function CommonLogsFilterBar<TData>(
 
   const statsBar = (
     <div className='flex flex-wrap items-center gap-2'>
-      <CommonLogsStats />
+      <CommonLogsStats pageCacheRate={props.pageCacheRate} />
     </div>
   )
   const sensitiveToggle = (

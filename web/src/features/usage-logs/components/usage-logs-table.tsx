@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -36,6 +37,8 @@ import {
   LOG_TYPE_ALL_VALUE,
   LOG_TYPE_ENUM,
 } from '../constants'
+import type { UsageLog } from '../data/schema'
+import { getPageCacheRate } from '../lib/cache-rate'
 import { useColumnsByCategory } from '../lib/columns'
 import { parseLogOther } from '../lib/format'
 import { fetchLogsByCategory } from '../lib/utils'
@@ -160,6 +163,12 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const logs = data?.items || []
   const columns = useColumnsByCategory(logCategory, canManageScope)
   const isLoadingData = isLoading || (isFetching && !data)
+  const isCommon = logCategory === 'common'
+  const pageCacheRate = useMemo(
+    () =>
+      isCommon && data ? getPageCacheRate(data.items as UsageLog[]) : undefined,
+    [isCommon, data]
+  )
 
   const { table } = useDataTable({
     data: logs as Record<string, unknown>[],
@@ -178,8 +187,6 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     totalCount: data?.total || 0,
     ensurePageInRange,
   })
-
-  const isCommon = logCategory === 'common'
 
   return (
     <DataTablePage
@@ -205,7 +212,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       }
       toolbar={
         isCommon ? (
-          <CommonLogsFilterBar table={table} />
+          <CommonLogsFilterBar table={table} pageCacheRate={pageCacheRate} />
         ) : (
           <TaskLogsFilterBar table={table} logCategory={logCategory} />
         )
