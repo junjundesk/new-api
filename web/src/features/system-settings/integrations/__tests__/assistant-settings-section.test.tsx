@@ -43,6 +43,7 @@ const baseProfileDefaults: AssistantProfileDefaults = {
   enabled: false,
   source: 'direct',
   protocol: 'responses',
+  reasoningEffort: 'high',
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-4.1-mini',
   channelId: 0,
@@ -228,6 +229,11 @@ describe('assistant settings section', () => {
       within(userCard).getByRole('combobox', { name: 'Protocol' }),
       'OpenAI Chat'
     )
+    await selectComboboxOption(
+      user,
+      within(userCard).getByRole('combobox', { name: 'Reasoning effort' }),
+      'Extra high'
+    )
     fireEvent.change(
       within(userCard).getByRole('textbox', { name: 'Context window' }),
       { target: { value: '256k' } }
@@ -274,7 +280,7 @@ describe('assistant settings section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(19))
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(20))
     expect(putSpy.mock.calls).toEqual([
       ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
       [
@@ -300,6 +306,13 @@ describe('assistant settings section', () => {
       [
         '/api/option/',
         { key: 'assistant_setting.user_protocol', value: 'chat' },
+      ],
+      [
+        '/api/option/',
+        {
+          key: 'assistant_setting.user_reasoning_effort',
+          value: 'xhigh',
+        },
       ],
       [
         '/api/option/',
@@ -638,6 +651,7 @@ describe('assistant settings section', () => {
         profile: 'user',
         source: 'direct',
         protocol: 'responses',
+        reasoning_effort: 'high',
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4.1-mini',
         api_key: 'sk-test',
@@ -667,6 +681,7 @@ describe('assistant settings section', () => {
         profile: 'user',
         source: 'direct',
         protocol: 'responses',
+        reasoning_effort: 'high',
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4.1-mini',
       },
@@ -760,6 +775,7 @@ describe('assistant settings section', () => {
         profile: 'user',
         source: 'direct',
         protocol: 'responses',
+        reasoning_effort: 'high',
         base_url: 'https://api.openai.com/v1',
         model: 'gpt-4.1-mini',
         context_window: 1000000,
@@ -805,6 +821,7 @@ describe('assistant settings section', () => {
         profile: 'user',
         source: 'channel',
         protocol: 'responses',
+        reasoning_effort: 'high',
         channel_id: 1,
         channel_model: '',
         context_window: 1000000,

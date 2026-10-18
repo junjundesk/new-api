@@ -21,6 +21,7 @@ func TestCreateChatCompletionStreamsTextAndToolCalls(t *testing.T) {
 		require.NoError(t, err)
 		requestBody := map[string]any{}
 		require.NoError(t, common.Unmarshal(body, &requestBody))
+		assert.Equal(t, "max", requestBody["reasoning_effort"])
 		streamOptions, ok := requestBody["stream_options"].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, true, streamOptions["include_usage"])
@@ -34,7 +35,7 @@ func TestCreateChatCompletionStreamsTextAndToolCalls(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewHTTPClient(Config{Protocol: "chat", BaseURL: server.URL + "/v1", APIKey: "sk-test", Model: "gpt-test", MaxOutputTokens: 100})
+	client := NewHTTPClient(Config{Protocol: "chat", BaseURL: server.URL + "/v1", APIKey: "sk-test", Model: "gpt-test", MaxOutputTokens: 100, ReasoningEffort: "max"})
 	deltas := make([]string, 0)
 	result, err := client.CreateChatCompletion(context.Background(), []map[string]any{{"role": "user", "content": "hi"}}, nil, func(delta string) error {
 		deltas = append(deltas, delta)

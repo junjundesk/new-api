@@ -42,6 +42,7 @@ describe('assistant config request', () => {
           model: 'gpt-test',
           can_create_tokens: true,
           max_message_chars: 100000,
+          context_window: 500000,
         },
       },
     })
@@ -54,6 +55,7 @@ describe('assistant config request', () => {
       model: 'gpt-test',
       canCreateTokens: true,
       maxMessageChars: 100000,
+      contextWindow: 500000,
     })
   })
 

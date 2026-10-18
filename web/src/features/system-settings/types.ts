@@ -379,6 +379,7 @@ export type OperationsSettings = {
   'assistant_setting.user_channel_model': string
   'assistant_setting.user_context_window': number
   'assistant_setting.user_max_output_tokens': number
+  'assistant_setting.user_reasoning_effort': string
   'assistant_setting.admin_enabled': boolean
   'assistant_setting.admin_source': string
   'assistant_setting.admin_protocol': string
@@ -389,6 +390,7 @@ export type OperationsSettings = {
   'assistant_setting.admin_channel_model': string
   'assistant_setting.admin_context_window': number
   'assistant_setting.admin_max_output_tokens': number
+  'assistant_setting.admin_reasoning_effort': string
   'assistant_setting.system_prompt': string
   'assistant_setting.request_timeout_seconds': number
   'assistant_setting.confirm_writes': boolean

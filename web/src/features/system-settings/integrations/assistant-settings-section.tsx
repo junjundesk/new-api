@@ -59,13 +59,16 @@ import {
   parseTokenAmount,
   type AssistantProfileName,
   type AssistantProtocol,
+  type AssistantReasoningEffort,
   type AssistantSource,
+  normalizeAssistantReasoningEffort,
 } from './assistant-settings-api'
 
 export type AssistantProfileDefaults = {
   enabled: boolean
   source: AssistantSource
   protocol: AssistantProtocol
+  reasoningEffort: AssistantReasoningEffort
   baseUrl: string
   model: string
   channelId: number
@@ -112,6 +115,7 @@ const OPTION_KEYS = {
     enabled: 'assistant_setting.user_enabled',
     source: 'assistant_setting.user_source',
     protocol: 'assistant_setting.user_protocol',
+    reasoningEffort: 'assistant_setting.user_reasoning_effort',
     baseUrl: 'assistant_setting.user_base_url',
     apiKey: 'assistant_setting.user_api_key',
     model: 'assistant_setting.user_model',
@@ -124,6 +128,7 @@ const OPTION_KEYS = {
     enabled: 'assistant_setting.admin_enabled',
     source: 'assistant_setting.admin_source',
     protocol: 'assistant_setting.admin_protocol',
+    reasoningEffort: 'assistant_setting.admin_reasoning_effort',
     baseUrl: 'assistant_setting.admin_base_url',
     apiKey: 'assistant_setting.admin_api_key',
     model: 'assistant_setting.admin_model',
@@ -151,6 +156,7 @@ const createAssistantSettingsSchema = (t: TFunction) => {
     enabled: z.boolean(),
     source: z.enum(['direct', 'channel']),
     protocol: z.enum(['responses', 'chat']),
+    reasoningEffort: z.enum(['high', 'xhigh', 'max']),
     baseUrl: z.string(),
     model: z.string(),
     channelId: z.number().int(),
@@ -252,6 +258,9 @@ function buildProfileFormDefaults(
     enabled: defaults.enabled,
     source: defaults.source,
     protocol: defaults.protocol,
+    reasoningEffort: normalizeAssistantReasoningEffort(
+      defaults.reasoningEffort
+    ),
     baseUrl: defaults.baseUrl,
     model: defaults.model,
     channelId: defaults.channelId,
@@ -292,6 +301,12 @@ function buildProfileOptionEntries(
 
   if (values.protocol !== defaults.protocol) {
     entries.push({ key: keys.protocol, value: values.protocol })
+  }
+  if (values.reasoningEffort !== defaults.reasoningEffort) {
+    entries.push({
+      key: keys.reasoningEffort,
+      value: values.reasoningEffort,
+    })
   }
   const contextWindow = parseTokenAmount(values.contextWindow)
   if (contextWindow !== null && contextWindow !== defaults.contextWindow) {

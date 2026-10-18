@@ -54,14 +54,16 @@ func TestGetAdminAssistantConfig(t *testing.T) {
 	var payload struct {
 		Success bool `json:"success"`
 		Data    struct {
-			Enabled bool   `json:"enabled"`
-			Model   string `json:"model"`
+			Enabled       bool   `json:"enabled"`
+			Model         string `json:"model"`
+			ContextWindow int    `json:"context_window"`
 		} `json:"data"`
 	}
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	assert.True(t, payload.Success)
 	assert.True(t, payload.Data.Enabled)
 	assert.Equal(t, "gpt-admin", payload.Data.Model)
+	assert.Equal(t, 1000000, payload.Data.ContextWindow)
 	assert.NotContains(t, recorder.Body.String(), "sk-admin-secret")
 }
 

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
+import { normalizeAssistantReasoningEffort } from '../integrations/assistant-settings-api'
 import { AssistantSettingsSection } from '../integrations/assistant-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
@@ -89,6 +90,9 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.user_protocol'] === 'chat'
                 ? 'chat'
                 : 'responses',
+            reasoningEffort: normalizeAssistantReasoningEffort(
+              settings['assistant_setting.user_reasoning_effort']
+            ),
             baseUrl: settings['assistant_setting.user_base_url'] ?? '',
             model: settings['assistant_setting.user_model'] ?? '',
             channelId: settings['assistant_setting.user_channel_id'] ?? 0,
@@ -111,6 +115,9 @@ const OPERATIONS_SECTIONS = [
               settings['assistant_setting.admin_protocol'] === 'chat'
                 ? 'chat'
                 : 'responses',
+            reasoningEffort: normalizeAssistantReasoningEffort(
+              settings['assistant_setting.admin_reasoning_effort']
+            ),
             baseUrl: settings['assistant_setting.admin_base_url'] ?? '',
             model: settings['assistant_setting.admin_model'] ?? '',
             channelId: settings['assistant_setting.admin_channel_id'] ?? 0,

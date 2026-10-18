@@ -27,6 +27,7 @@ type chatCompletionRequest struct {
 	Stream            bool               `json:"stream"`
 	StreamOptions     *chatStreamOptions `json:"stream_options,omitempty"`
 	MaxTokens         int                `json:"max_tokens,omitempty"`
+	ReasoningEffort   string             `json:"reasoning_effort,omitempty"`
 }
 
 type chatCompletionToolCall struct {
@@ -82,6 +83,7 @@ func (c *HTTPClient) createChatCompletion(ctx context.Context, messages []map[st
 		ParallelToolCalls: false,
 		Stream:            stream,
 		MaxTokens:         c.cfg.MaxOutputTokens,
+		ReasoningEffort:   c.cfg.ReasoningEffort,
 	}
 	if stream {
 		requestBody.StreamOptions = &chatStreamOptions{IncludeUsage: true}

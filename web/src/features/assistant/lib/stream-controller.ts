@@ -146,6 +146,7 @@ export function createAssistantStreamController(
       if (!streamEvent) return
 
       if (streamEvent.type === 'done') {
+        runtime.onEvent(streamEvent)
         finish(() => runtime.onDone())
         return
       }

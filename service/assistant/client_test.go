@@ -42,7 +42,7 @@ func TestCreateResponseSendsResponsesRequestAndParsesStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := Config{BaseURL: server.URL, APIKey: "sk-test", Model: "gpt-test", MaxOutputTokens: 100}
+	cfg := Config{BaseURL: server.URL, APIKey: "sk-test", Model: "gpt-test", MaxOutputTokens: 100, ReasoningEffort: "xhigh"}
 	client := NewHTTPClient(cfg)
 	var deltas []string
 	tools := []map[string]any{{"type": "function", "name": "get_account_summary", "parameters": map[string]any{"type": "object"}}}
@@ -65,6 +65,9 @@ func TestCreateResponseSendsResponsesRequestAndParsesStream(t *testing.T) {
 
 	assert.Equal(t, false, received["store"])
 	assert.Equal(t, true, received["stream"])
+	reasoning, ok := received["reasoning"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "xhigh", reasoning["effort"])
 	requestTools, ok := received["tools"].([]any)
 	require.True(t, ok)
 	require.Len(t, requestTools, 1)

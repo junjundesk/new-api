@@ -25,7 +25,7 @@ func TestAssistantChatStreamsTextOverSSE(t *testing.T) {
 		assert.Equal(t, "/v1/responses", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}]}]}")
+		fmt.Fprint(w, "{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}]}],\"usage\":{\"input_tokens\":42,\"output_tokens\":5,\"total_tokens\":47}}")
 	}))
 	defer upstream.Close()
 
@@ -72,6 +72,12 @@ func TestAssistantChatStreamsTextOverSSE(t *testing.T) {
 	for _, event := range events {
 		if event.Type == "delta" {
 			assert.Equal(t, "Hello", event.Text)
+		}
+		if event.Type == "done" {
+			assert.Equal(t, 42, event.ContextTokens)
+			assert.Equal(t, 1000000, event.ContextWindow)
+			require.NotNil(t, event.Usage)
+			assert.Equal(t, 47, event.Usage.TotalTokens)
 		}
 	}
 }

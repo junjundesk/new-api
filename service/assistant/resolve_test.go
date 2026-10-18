@@ -80,16 +80,36 @@ func TestResolveConfigFromDisabledChannel(t *testing.T) {
 func TestResolveConfigDirectProfile(t *testing.T) {
 	setupResolveTestDB(t)
 	cfg, err := ResolveConfig(assistant_setting.Profile{
-		Name:    assistant_setting.ProfileAdmin,
+		Name:            assistant_setting.ProfileAdmin,
+		Source:          assistant_setting.SourceDirect,
+		BaseURL:         "https://api.openai.com/v1",
+		APIKey:          "sk-admin",
+		Model:           "gpt-admin",
+		ReasoningEffort: "xhigh",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.openai.com/v1", cfg.BaseURL)
+	assert.Equal(t, "sk-admin", cfg.APIKey)
+	assert.Equal(t, "gpt-admin", cfg.Model)
+	assert.Equal(t, "xhigh", cfg.ReasoningEffort)
+
+	defaulted, err := ResolveConfig(assistant_setting.Profile{
 		Source:  assistant_setting.SourceDirect,
 		BaseURL: "https://api.openai.com/v1",
 		APIKey:  "sk-admin",
 		Model:   "gpt-admin",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "https://api.openai.com/v1", cfg.BaseURL)
-	assert.Equal(t, "sk-admin", cfg.APIKey)
-	assert.Equal(t, "gpt-admin", cfg.Model)
+	assert.Equal(t, "high", defaulted.ReasoningEffort)
+
+	_, err = ResolveConfig(assistant_setting.Profile{
+		Source:          assistant_setting.SourceDirect,
+		BaseURL:         "https://api.openai.com/v1",
+		APIKey:          "sk-admin",
+		Model:           "gpt-admin",
+		ReasoningEffort: "ultra",
+	})
+	require.Error(t, err)
 }
 
 func TestResolveConfigRejectsMissingChannelAndAzure(t *testing.T) {

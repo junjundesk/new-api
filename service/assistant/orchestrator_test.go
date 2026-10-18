@@ -287,4 +287,5 @@ func TestOrchestratorAccumulatesUsageAcrossToolRounds(t *testing.T) {
 	assert.Equal(t, 30, usage.InputTokens)
 	assert.Equal(t, 5, usage.OutputTokens)
 	assert.Equal(t, 35, usage.TotalTokens)
+	assert.Equal(t, 20, orchestrator.ContextTokens(), "context size is the latest request input, not the summed usage")
 }

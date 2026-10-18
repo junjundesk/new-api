@@ -97,6 +97,8 @@ export function Assistant(props: AssistantProps) {
       </div>
       <div className='mx-auto w-full max-w-4xl px-4 pb-4'>
         <AssistantInput
+          contextTokens={chat.contextTokens}
+          contextWindow={config.contextWindow ?? 0}
           isStreaming={chat.isStreaming}
           maxMessageChars={config.maxMessageChars}
           onSend={chat.sendMessage}

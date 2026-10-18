@@ -254,14 +254,24 @@ describe('assistant stream controller', () => {
       text: 'Hello',
     })
 
-    harness.source.emit('message', '{"type":"done"}')
+    harness.source.emit(
+      'message',
+      '{"type":"done","context_tokens":123,"context_window":1000}'
+    )
     harness.source.emit('message', '{"type":"delta","text":"late"}')
 
     expect(harness.onDone).toHaveBeenCalledTimes(1)
     expect(harness.onError).not.toHaveBeenCalled()
     expect(harness.source.closed).toBe(true)
     expect(harness.setStreaming.mock.calls.at(-1)).toEqual([false])
-    expect(harness.onEvent).toHaveBeenCalledTimes(1)
+    expect(harness.onEvent).toHaveBeenCalledTimes(2)
+    expect(harness.onEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'done',
+        context_tokens: 123,
+        context_window: 1000,
+      })
+    )
   })
 
   it('keeps the connection open while a confirmation is pending', async () => {

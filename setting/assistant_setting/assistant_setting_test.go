@@ -140,6 +140,19 @@ func TestNormalizeOptionValue(t *testing.T) {
 		assert.Equal(t, "128000", normalized)
 	})
 
+	t.Run("validates reasoning effort", func(t *testing.T) {
+		normalized, skip, err := NormalizeOptionValue(OptionKeyUserReasoningEffort, " High ")
+		require.NoError(t, err)
+		assert.False(t, skip)
+		assert.Equal(t, "high", normalized)
+		normalized, skip, err = NormalizeOptionValue(OptionKeyAdminReasoningEffort, " ")
+		require.NoError(t, err)
+		assert.False(t, skip)
+		assert.Equal(t, "high", normalized)
+		_, _, err = NormalizeOptionValue(OptionKeyUserReasoningEffort, "ultra")
+		require.Error(t, err)
+	})
+
 	t.Run("validates daily token limit", func(t *testing.T) {
 		normalized, _, err := NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "100M")
 		require.NoError(t, err)
@@ -244,4 +257,37 @@ func TestParseTokenAmount(t *testing.T) {
 		require.NoError(t, err, tc.input)
 		assert.Equal(t, tc.want, got, tc.input)
 	}
+}
+
+func TestNormalizeReasoningEffort(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "", want: "high"},
+		{input: " High ", want: "high"},
+		{input: "xhigh", want: "xhigh"},
+		{input: "max", want: "max"},
+	}
+	for _, tt := range tests {
+		got, err := NormalizeReasoningEffort(tt.input)
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, got)
+	}
+	_, err := NormalizeReasoningEffort("ultra")
+	require.Error(t, err)
+}
+
+func TestProfileReasoningEffortDefaultsToHigh(t *testing.T) {
+	setting := Get()
+	original := *setting
+	t.Cleanup(func() { *setting = original })
+
+	setting.UserReasoningEffort = ""
+	setting.AdminReasoningEffort = ""
+	assert.Equal(t, "high", GetProfile(ProfileUser).ReasoningEffort)
+	assert.Equal(t, "high", GetProfile(ProfileAdmin).ReasoningEffort)
+
+	setting.UserReasoningEffort = "xhigh"
+	assert.Equal(t, "xhigh", GetProfile(ProfileUser).ReasoningEffort)
 }

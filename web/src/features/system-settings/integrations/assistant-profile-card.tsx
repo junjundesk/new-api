@@ -68,6 +68,7 @@ import {
   type AssistantProfileName,
   type AssistantProfileRequest,
   type AssistantProtocol,
+  type AssistantReasoningEffort,
   type AssistantSource,
 } from './assistant-settings-api'
 
@@ -75,6 +76,7 @@ export type AssistantProfileFormValues = {
   enabled: boolean
   source: AssistantSource
   protocol: AssistantProtocol
+  reasoningEffort: AssistantReasoningEffort
   baseUrl: string
   model: string
   channelId: number
@@ -141,6 +143,7 @@ function buildProfileRequest(
     profile,
     source: values.source,
     protocol: values.protocol,
+    reasoning_effort: values.reasoningEffort,
   }
   const apiKey = values.apiKey.trim()
   if (apiKey !== '') request.api_key = apiKey
@@ -205,6 +208,15 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
     () => [
       { value: 'responses' as const, label: t('OpenAI Responses') },
       { value: 'chat' as const, label: t('OpenAI Chat') },
+    ],
+    [t]
+  )
+
+  const reasoningItems = useMemo(
+    () => [
+      { value: 'high' as const, label: t('High') },
+      { value: 'xhigh' as const, label: t('Extra high') },
+      { value: 'max' as const, label: t('Maximum') },
     ],
     [t]
   )
@@ -614,6 +626,51 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
               </FormControl>
               <FormDescription>
                 {t('API protocol used to call the upstream endpoint.')}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name={profileFieldPath(props.profile, 'reasoningEffort')}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Reasoning effort')}</FormLabel>
+              <FormControl>
+                <Select
+                  items={reasoningItems}
+                  value={field.value}
+                  onValueChange={(value) => {
+                    if (
+                      value !== 'high' &&
+                      value !== 'xhigh' &&
+                      value !== 'max'
+                    ) {
+                      return
+                    }
+                    field.onChange(value)
+                  }}
+                >
+                  <SelectTrigger className='w-full'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {reasoningItems.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormDescription>
+                {t(
+                  'Sent upstream as reasoning.effort (Responses) or reasoning_effort (Chat). Default: High.'
+                )}
               </FormDescription>
               <FormMessage />
             </FormItem>

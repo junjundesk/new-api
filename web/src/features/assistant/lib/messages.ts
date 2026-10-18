@@ -222,6 +222,9 @@ export function applyAssistantStreamEvent(
       return addAssistantConfirmation(message, event)
     case 'confirmation_resolved':
       return resolveAssistantConfirmation(message, event)
+    case 'done':
+      if (event.context_tokens === undefined) return message
+      return { ...message, contextTokens: event.context_tokens }
     default:
       return message
   }

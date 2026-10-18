@@ -28,6 +28,7 @@ type Config struct {
 	SystemPrompt    string
 	ContextWindow   int
 	MaxOutputTokens int
+	ReasoningEffort string
 	RequestTimeout  time.Duration
 }
 
@@ -106,6 +107,8 @@ type Event struct {
 	Code           string `json:"code,omitempty"`
 	RetryAfter     int64  `json:"retry_after,omitempty"`
 	Usage          *Usage `json:"usage,omitempty"`
+	ContextTokens  int    `json:"context_tokens,omitempty"`
+	ContextWindow  int    `json:"context_window,omitempty"`
 	ConfirmationID string `json:"confirmation_id,omitempty"`
 	Operation      string `json:"operation_id,omitempty"`
 	Risk           string `json:"risk,omitempty"`

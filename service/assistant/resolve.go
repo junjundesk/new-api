@@ -29,6 +29,10 @@ func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 	if maxOutputTokens >= contextWindow {
 		return Config{}, fmt.Errorf("max output tokens must be smaller than the model context window")
 	}
+	reasoningEffort, err := assistant_setting.NormalizeReasoningEffort(profile.ReasoningEffort)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		AdminScope:      profile.Name == assistant_setting.ProfileAdmin,
 		Profile:         profile.Name,
@@ -38,6 +42,7 @@ func ResolveConfig(profile assistant_setting.Profile) (Config, error) {
 		SystemPrompt:    setting.SystemPrompt,
 		ContextWindow:   contextWindow,
 		MaxOutputTokens: maxOutputTokens,
+		ReasoningEffort: reasoningEffort,
 		RequestTimeout:  time.Duration(clampInt(setting.RequestTimeoutSeconds, 60, 5, 300)) * time.Second,
 	}
 

@@ -20,6 +20,9 @@ type Orchestrator struct {
 	emit     EmitFunc
 	audit    AuditFunc
 	usage    Usage
+	// contextTokens is the input size of the most recent upstream request, not
+	// the sum across tool rounds, so the UI can show the live context size.
+	contextTokens int
 }
 
 func NewOrchestrator(cfg Config, client Client, executor ToolExecutor, emit EmitFunc, audit AuditFunc) *Orchestrator {
@@ -41,10 +44,17 @@ func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessag
 	return o.usage, err
 }
 
+// ContextTokens returns the input token count of the latest upstream request.
+// It is zero until the first request completes.
+func (o *Orchestrator) ContextTokens() int {
+	return o.contextTokens
+}
+
 func (o *Orchestrator) addUsage(usage *Usage) {
 	if usage == nil {
 		return
 	}
+	o.contextTokens = usage.InputTokens
 	o.usage.InputTokens += usage.InputTokens
 	o.usage.OutputTokens += usage.OutputTokens
 	total := usage.TotalTokens

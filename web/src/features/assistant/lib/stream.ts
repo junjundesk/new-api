@@ -151,7 +151,12 @@ export function parseAssistantStreamEvent(
         retryAfter: readNumber(record.retry_after),
       }
     case 'done':
-      return { type: 'done', usage: parseUsage(record.usage) }
+      return {
+        type: 'done',
+        usage: parseUsage(record.usage),
+        context_tokens: readNumber(record.context_tokens),
+        context_window: readNumber(record.context_window),
+      }
     default:
       return null
   }

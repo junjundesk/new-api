@@ -24,6 +24,16 @@ export type AssistantSource = 'direct' | 'channel'
 
 export type AssistantProtocol = 'responses' | 'chat'
 
+export type AssistantReasoningEffort = 'high' | 'xhigh' | 'max'
+
+/** Missing or legacy values fall back to the project default, high. */
+export function normalizeAssistantReasoningEffort(
+  value: unknown
+): AssistantReasoningEffort {
+  if (value === 'xhigh' || value === 'max') return value
+  return 'high'
+}
+
 export type AssistantChannel = {
   id: number
   name: string
@@ -44,6 +54,7 @@ export type AssistantProfileRequest = {
   profile: AssistantProfileName
   source?: AssistantSource
   protocol?: AssistantProtocol
+  reasoning_effort?: AssistantReasoningEffort
   base_url?: string
   api_key?: string
   model?: string

@@ -68,6 +68,7 @@ export interface UseAssistantChatResult {
   messages: AssistantChatMessage[]
   isStreaming: boolean
   activeModel: string | null
+  contextTokens: number
   sendMessage: (text: string) => void
   stopStreaming: () => void
   clearMessages: () => void
@@ -229,10 +230,19 @@ export function useAssistantChat(
     [profile]
   )
 
+  const contextTokens = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const tokens = messages[index].contextTokens
+      if (typeof tokens === 'number') return tokens
+    }
+    return 0
+  }, [messages])
+
   return {
     messages,
     isStreaming,
     activeModel,
+    contextTokens,
     sendMessage,
     stopStreaming,
     clearMessages,

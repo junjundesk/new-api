@@ -32,6 +32,7 @@ const (
 	OptionKeyUserChannelModel      = "assistant_setting.user_channel_model"
 	OptionKeyUserContextWindow     = "assistant_setting.user_context_window"
 	OptionKeyUserMaxOutputTokens   = "assistant_setting.user_max_output_tokens"
+	OptionKeyUserReasoningEffort   = "assistant_setting.user_reasoning_effort"
 	OptionKeyAdminEnabled          = "assistant_setting.admin_enabled"
 	OptionKeyAdminSource           = "assistant_setting.admin_source"
 	OptionKeyAdminProtocol         = "assistant_setting.admin_protocol"
@@ -42,6 +43,7 @@ const (
 	OptionKeyAdminChannelModel     = "assistant_setting.admin_channel_model"
 	OptionKeyAdminContextWindow    = "assistant_setting.admin_context_window"
 	OptionKeyAdminMaxOutputTokens  = "assistant_setting.admin_max_output_tokens"
+	OptionKeyAdminReasoningEffort  = "assistant_setting.admin_reasoning_effort"
 	OptionKeySystemPrompt          = "assistant_setting.system_prompt"
 	OptionKeyRequestTimeout        = "assistant_setting.request_timeout_seconds"
 	OptionKeyConfirmWrites         = "assistant_setting.confirm_writes"
@@ -67,6 +69,7 @@ type AssistantSetting struct {
 	UserChannelModel    string `json:"user_channel_model"`
 	UserContextWindow   int    `json:"user_context_window"`
 	UserMaxOutputTokens int    `json:"user_max_output_tokens"`
+	UserReasoningEffort string `json:"user_reasoning_effort"`
 
 	AdminEnabled         bool   `json:"admin_enabled"`
 	AdminSource          string `json:"admin_source"`
@@ -78,6 +81,7 @@ type AssistantSetting struct {
 	AdminChannelModel    string `json:"admin_channel_model"`
 	AdminContextWindow   int    `json:"admin_context_window"`
 	AdminMaxOutputTokens int    `json:"admin_max_output_tokens"`
+	AdminReasoningEffort string `json:"admin_reasoning_effort"`
 
 	SystemPrompt          string `json:"system_prompt"`
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
@@ -99,6 +103,7 @@ type Profile struct {
 	ChannelModel    string
 	ContextWindow   int
 	MaxOutputTokens int
+	ReasoningEffort string
 }
 
 var assistantSetting = AssistantSetting{
@@ -113,6 +118,7 @@ var assistantSetting = AssistantSetting{
 	UserChannelModel:      "",
 	UserContextWindow:     1000000,
 	UserMaxOutputTokens:   128000,
+	UserReasoningEffort:   "high",
 	AdminEnabled:          false,
 	AdminSource:           SourceDirect,
 	AdminProtocol:         ProtocolResponses,
@@ -123,6 +129,7 @@ var assistantSetting = AssistantSetting{
 	AdminChannelModel:     "",
 	AdminContextWindow:    1000000,
 	AdminMaxOutputTokens:  128000,
+	AdminReasoningEffort:  "high",
 	SystemPrompt:          "",
 	RequestTimeoutSeconds: 60,
 	ConfirmWrites:         true,
@@ -152,6 +159,7 @@ func GetProfile(name string) Profile {
 			ChannelModel:    strings.TrimSpace(assistantSetting.AdminChannelModel),
 			ContextWindow:   assistantSetting.AdminContextWindow,
 			MaxOutputTokens: assistantSetting.AdminMaxOutputTokens,
+			ReasoningEffort: normalizeReasoningEffortValue(assistantSetting.AdminReasoningEffort),
 		}
 	}
 	return Profile{
@@ -166,6 +174,7 @@ func GetProfile(name string) Profile {
 		ChannelModel:    strings.TrimSpace(assistantSetting.UserChannelModel),
 		ContextWindow:   assistantSetting.UserContextWindow,
 		MaxOutputTokens: assistantSetting.UserMaxOutputTokens,
+		ReasoningEffort: normalizeReasoningEffortValue(assistantSetting.UserReasoningEffort),
 	}
 }
 
@@ -240,6 +249,28 @@ func normalizeProtocol(protocol string) string {
 	default:
 		return protocol
 	}
+}
+
+// NormalizeReasoningEffort validates the upstream reasoning effort. Empty
+// falls back to the project default, high.
+func NormalizeReasoningEffort(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "":
+		return "high", nil
+	case "high", "xhigh", "max":
+		return value, nil
+	default:
+		return "", errors.New("reasoning effort must be high, xhigh, or max")
+	}
+}
+
+func normalizeReasoningEffortValue(raw string) string {
+	value, err := NormalizeReasoningEffort(raw)
+	if err != nil {
+		return "high"
+	}
+	return value
 }
 
 // NormalizeBaseURL validates a direct OpenAI-compatible API root. The client
@@ -422,6 +453,9 @@ func normalizeProfileOption(profileName, field, value string) (string, bool, err
 		return normalizeTokenOption(value, 1024, 10000000)
 	case "max_output_tokens":
 		return normalizeTokenOption(value, 1, 1000000)
+	case "reasoning_effort":
+		normalized, err := NormalizeReasoningEffort(value)
+		return normalized, false, err
 	default:
 		return "", false, fmt.Errorf("unknown assistant profile setting: %s", field)
 	}

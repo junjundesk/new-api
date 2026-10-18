@@ -130,6 +130,12 @@ function isStoredMessage(value: unknown): value is AssistantChatMessage {
   if (typeof record.createdAt !== 'number') return false
   if (!Array.isArray(record.parts)) return false
   if (!record.parts.every(isMessagePart)) return false
+  if (
+    record.contextTokens !== undefined &&
+    typeof record.contextTokens !== 'number'
+  ) {
+    return false
+  }
   return record.error === undefined || typeof record.error === 'string'
 }
 

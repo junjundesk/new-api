@@ -96,6 +96,8 @@ export interface AssistantChatMessage {
   status: AssistantMessageStatus
   createdAt: number
   error?: string
+  /** Latest real upstream prompt token count for this conversation. */
+  contextTokens?: number
 }
 
 // ============================================================================
@@ -107,6 +109,7 @@ export interface AssistantConfig {
   model?: string
   canCreateTokens: boolean
   maxMessageChars: number
+  contextWindow?: number
 }
 
 // ============================================================================
@@ -165,7 +168,12 @@ export type AssistantStreamEvent =
       status: AssistantConfirmationResolutionStatus
     }
   | { type: 'error'; code?: string; message?: string; retryAfter?: number }
-  | { type: 'done'; usage?: AssistantUsage }
+  | {
+      type: 'done'
+      usage?: AssistantUsage
+      context_tokens?: number
+      context_window?: number
+    }
 
 export interface AssistantStreamError {
   code?: string

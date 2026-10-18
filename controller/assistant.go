@@ -46,6 +46,7 @@ type assistantTestRequest struct {
 	ChannelModel    string `json:"channel_model"`
 	ContextWindow   int    `json:"context_window"`
 	MaxOutputTokens int    `json:"max_output_tokens"`
+	ReasoningEffort string `json:"reasoning_effort"`
 }
 
 type assistantChannelItem struct {
@@ -75,11 +76,16 @@ func GetAdminAssistantConfig(c *gin.Context) {
 }
 
 func getAssistantRuntimeConfig(c *gin.Context, profileName string) {
+	contextWindow := assistant_setting.GetProfile(profileName).ContextWindow
+	if contextWindow <= 0 {
+		contextWindow = 1000000
+	}
 	common.ApiSuccess(c, gin.H{
 		"enabled":           assistant_setting.IsAvailable(profileName),
 		"model":             assistant_setting.ModelName(profileName),
 		"can_create_tokens": true,
 		"max_message_chars": assistantMaxMessageChars,
+		"context_window":    contextWindow,
 	})
 }
 
@@ -222,7 +228,13 @@ func assistantChatStream(c *gin.Context, profileName string) {
 		handleAssistantRunError(c, writer, err)
 		return
 	}
-	if err := writer.WriteEvent(assistant.Event{Type: "done"}); err != nil {
+	doneEvent := assistant.Event{
+		Type:          "done",
+		Usage:         &runUsage,
+		ContextTokens: orchestrator.ContextTokens(),
+		ContextWindow: cfg.ContextWindow,
+	}
+	if err := writer.WriteEvent(doneEvent); err != nil {
 		logger.LogWarn(c.Request.Context(), "assistant done event write failed: "+err.Error())
 		return
 	}
@@ -347,6 +359,9 @@ func TestAssistantConnection(c *gin.Context) {
 	}
 	if request.ContextWindow > 0 {
 		profile.ContextWindow = request.ContextWindow
+	}
+	if request.ReasoningEffort != "" {
+		profile.ReasoningEffort = request.ReasoningEffort
 	}
 	if request.MaxOutputTokens > 0 {
 		profile.MaxOutputTokens = request.MaxOutputTokens

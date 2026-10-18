@@ -51,7 +51,7 @@ export function normalizeAssistantConfig(payload: unknown): AssistantConfig {
     }
   }
   const model = typeof source.model === 'string' ? source.model.trim() : ''
-  return {
+  const config: AssistantConfig = {
     enabled: source.enabled === true,
     model: model === '' ? undefined : model,
     canCreateTokens: source.can_create_tokens === true,
@@ -61,6 +61,11 @@ export function normalizeAssistantConfig(payload: unknown): AssistantConfig {
       ASSISTANT_LIMITS.MAX_MESSAGE_CHARS
     ),
   }
+  const contextWindow = readPositiveInt(source.context_window, 0, 10000000)
+  if (contextWindow > 0) {
+    config.contextWindow = contextWindow
+  }
+  return config
 }
 
 export async function getAssistantConfig(

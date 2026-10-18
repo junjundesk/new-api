@@ -137,6 +137,7 @@ const enabledConfig: AssistantConfig = {
   model: 'gpt-test',
   canCreateTokens: true,
   maxMessageChars: 100000,
+  contextWindow: 1000000,
 }
 
 const adminEnabledConfig: AssistantConfig = {
@@ -452,6 +453,26 @@ describe('assistant chat page', () => {
     await user.click(textarea)
     await user.paste('trigger an error')
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  })
+
+  it('shows real context token usage from the latest upstream turn', async () => {
+    renderAssistant()
+
+    expect(await screen.findByText('0 / 1M tokens')).toBeVisible()
+
+    const source = await sendMessage('Hello')
+    source.emit('message', '{"type":"delta","text":"Hi"}')
+    source.emit(
+      'message',
+      '{"type":"done","context_tokens":12345,"context_window":1000000}'
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('12.3K / 1M tokens')).toBeVisible()
+    })
+    expect(
+      screen.getByRole('progressbar', { name: 'Context usage' })
+    ).toHaveAttribute('aria-valuenow', '12345')
   })
 
   it('copies the text of each message', async () => {

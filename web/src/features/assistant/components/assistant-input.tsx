@@ -29,8 +29,11 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface AssistantInputProps {
+  contextTokens: number
+  contextWindow: number
   isStreaming: boolean
   maxMessageChars: number
   onSend: (text: string) => void
@@ -38,13 +41,28 @@ interface AssistantInputProps {
 }
 
 export function AssistantInput(props: AssistantInputProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // The textarea is controlled: PromptInput resets the form after a submit, and
   // an uncontrolled value would leave React's change tracker stale, so pasting
   // the same prompt again (a common retry after an error) fired no change event
   // and left the send button disabled.
   const [value, setValue] = useState('')
   const canSend = !props.isStreaming && value.trim().length > 0
+  const tokenFormat = new Intl.NumberFormat(i18n.language, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+  const contextTokens = Math.max(0, props.contextTokens)
+  const contextPercent =
+    props.contextWindow > 0
+      ? Math.min(100, Math.round((contextTokens / props.contextWindow) * 100))
+      : 0
+  let contextBarClass = 'bg-primary'
+  if (contextPercent >= 90) {
+    contextBarClass = 'bg-destructive'
+  } else if (contextPercent >= 70) {
+    contextBarClass = 'bg-amber-500'
+  }
 
   function handleSubmit(message: PromptInputMessage): void {
     const text = (message.text ?? '').trim()
@@ -70,12 +88,45 @@ export function AssistantInput(props: AssistantInputProps) {
         />
         <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5'>
           <PromptInputTools>
-            <span className='text-muted-foreground text-xs tabular-nums'>
-              {t('{{count}} / {{max}} characters', {
-                count: value.length,
-                max: props.maxMessageChars,
-              })}
-            </span>
+            {props.contextWindow > 0 ? (
+              <div
+                className='flex min-w-0 items-center gap-2'
+                title={t(
+                  'Latest upstream prompt tokens for this conversation. Older messages are trimmed when the context window is full.'
+                )}
+              >
+                <div
+                  role='progressbar'
+                  aria-label={t('Context usage')}
+                  aria-valuemin={0}
+                  aria-valuemax={props.contextWindow}
+                  aria-valuenow={Math.min(contextTokens, props.contextWindow)}
+                  aria-valuetext={t(
+                    '{{used}} of {{total}} tokens ({{percent}}%)',
+                    {
+                      used: tokenFormat.format(contextTokens),
+                      total: tokenFormat.format(props.contextWindow),
+                      percent: contextPercent,
+                    }
+                  )}
+                  className='bg-muted h-1.5 w-20 overflow-hidden rounded-full'
+                >
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      contextBarClass
+                    )}
+                    style={{ width: `${contextPercent}%` }}
+                  />
+                </div>
+                <span className='text-muted-foreground text-xs tabular-nums'>
+                  {t('{{used}} / {{total}} tokens', {
+                    used: tokenFormat.format(contextTokens),
+                    total: tokenFormat.format(props.contextWindow),
+                  })}
+                </span>
+              </div>
+            ) : null}
           </PromptInputTools>
           {props.isStreaming ? (
             <Button

@@ -71,6 +71,9 @@ func (c *HTTPClient) createResponse(ctx context.Context, input []json.RawMessage
 		Stream:             &stream,
 		MaxOutputTokens:    uintPtr(c.cfg.MaxOutputTokens),
 	}
+	if c.cfg.ReasoningEffort != "" {
+		request.Reasoning = &dto.Reasoning{Effort: c.cfg.ReasoningEffort}
+	}
 	if stream {
 		toolChoice, err := common.Marshal("auto")
 		if err != nil {
