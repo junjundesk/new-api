@@ -5268,7 +5268,7 @@
       "post": {
         "summary": "给指定用户发放赠金",
         "deprecated": false,
-        "description": "👨‍💼 需要管理员权限（Admin）\n用户 ID 来自路径，不需要放在 body 中。amount 使用额度单位（非货币金额），必须大于 0；expire_input 为空表示永久有效。发放后可调用 GET 获取 grant_id，再用撤销接口回滚。",
+        "description": "👨‍💼 需要管理员权限（Admin）\n用户 ID 来自路径，不需要放在 body 中；body 中的 all_users 会被拒绝。amount 使用额度单位（非货币金额），必须大于 0；expire_input 为空表示永久有效。发放后可调用 GET 获取 grant_id，再用撤销接口回滚。",
         "tags": [
           "用户管理"
         ],
@@ -5340,7 +5340,7 @@
       "post": {
         "summary": "给全部用户发放赠金",
         "deprecated": false,
-        "description": "👨‍💼 需要管理员权限（Admin）\n给全部未删除用户各发放一条赠金，所有赠金使用相同的有效期。没有 user_id 字段。",
+        "description": "👨‍💼 需要管理员权限（Admin）\n给全部未删除用户各发放一条赠金，所有赠金使用相同的有效期。body 中的 user_id 会被拒绝；单用户发放请使用 POST /api/user/{id}/bonus。",
         "tags": [
           "用户管理"
         ],

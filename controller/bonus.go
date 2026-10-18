@@ -24,11 +24,11 @@ import (
 // ("1" = 1 hour), and units may be spelled out ("1天" = 24h, "1天2小时" =
 // 26h). Empty means the grant never expires.
 type BonusGrantRequest struct {
-	UserId      int    `json:"user_id"`      // required for single-user grant
+	UserId      int    `json:"user_id"`      // rejected by the all-user endpoint
 	Amount      int64  `json:"amount"`       // bonus quota, > 0
 	ExpireInput string `json:"expire_input"` // duration string; empty = never expires
 	Remark      string `json:"remark"`
-	AllUsers    bool   `json:"all_users"` // grant to every user
+	AllUsers    bool   `json:"all_users"` // rejected by the single-user endpoint
 	// SendEmail controls the arrival notification. Defaults to true when the
 	// client omits the field, matching the admin dialog's default-checked box.
 	SendEmail *bool `json:"send_email"`
@@ -66,6 +66,10 @@ func AdminGrantBonus(c *gin.Context) {
 	var req BonusGrantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if req.AllUsers {
+		common.ApiErrorMsg(c, "单用户发放接口不接受 all_users，请改用 /api/user/bonus/grant_all")
 		return
 	}
 	if req.Amount <= 0 {
@@ -115,6 +119,10 @@ func AdminGrantBonusAll(c *gin.Context) {
 	var req BonusGrantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if req.UserId > 0 {
+		common.ApiErrorMsg(c, "全部用户发放接口不接受 user_id，请改用 /api/user/:id/bonus")
 		return
 	}
 	if req.Amount <= 0 {

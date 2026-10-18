@@ -214,14 +214,14 @@ func bodySpecFor(method, path string) ([]BodyField, string) {
 			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration. A bare number means hours (\"1\" = 1 hour); units may be combined (\"1天\" = 24 hours, \"1天2小时\" = 26 hours). Empty or omitted means the grant never expires.", Example: "24"},
 			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on the grant.", Example: "活动赠金"},
 			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
-		}, "The target user id comes from the path, not the body. amount is quota units, not dollars. expire_input empty means permanent."
+		}, "The target user id comes from the path, not the body; all_users is rejected here. amount is quota units, not dollars. expire_input empty means permanent."
 	case "POST /api/user/bonus/grant_all":
 		return []BodyField{
 			{Name: "amount", Type: "integer", Required: true, Description: "Bonus quota granted to each user, in internal quota units (not currency). Must be greater than 0.", Example: 500000},
 			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration applied to every grant. A bare number means hours (\"1\" = 1 hour); units may be combined. Empty or omitted means the grants never expire.", Example: "24"},
 			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on each grant.", Example: "活动赠金"},
 			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
-		}, "This endpoint always targets every non-deleted user; there is no user_id field."
+		}, "This endpoint always targets every non-deleted user; user_id is rejected here. Use POST /api/user/:id/bonus for one user."
 	case "POST /api/user/:id/bonus/:grant_id/revoke":
 		return []BodyField{
 			{Name: "remark", Type: "string", Required: false, Description: "Optional reason stored on the revoked grant.", Example: "expiry was entered incorrectly"},
