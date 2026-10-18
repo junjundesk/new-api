@@ -393,6 +393,7 @@ export type OperationsSettings = {
   'assistant_setting.request_timeout_seconds': number
   'assistant_setting.confirm_writes': boolean
   'assistant_setting.admin_db_tools_enabled': boolean
+  'assistant_setting.user_daily_token_limit': number
   'assistant_setting.user_api_key_configured': boolean
   'assistant_setting.admin_api_key_configured': boolean
 }

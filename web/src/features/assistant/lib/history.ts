@@ -31,46 +31,27 @@ import type {
 } from '../types'
 import { expirePendingConfirmations, getMessageText } from './messages'
 
-export interface AssistantHistoryLimits {
-  maxMessages: number
-  maxChars: number
-}
-
-const DEFAULT_HISTORY_LIMITS: AssistantHistoryLimits = {
-  maxMessages: ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES,
-  maxChars: ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
-}
-
 /**
  * Build the history sent to POST /api/assistant/chat.
  *
  * Only completed, non-empty text messages are included; streaming, stopped and
- * errored messages are never sent back. The suffix is kept within both the
- * message-count and character budgets.
+ * errored messages are never sent back. Every remaining turn is sent in
+ * chronological order without count or size clipping: the server trims the
+ * whole session context against the configured context window.
  */
 export function buildAssistantRequestHistory(
-  messages: readonly AssistantChatMessage[],
-  limits: AssistantHistoryLimits = DEFAULT_HISTORY_LIMITS
+  messages: readonly AssistantChatMessage[]
 ): AssistantChatTurn[] {
-  const maxMessages = Math.max(0, limits.maxMessages)
   const turns: AssistantChatTurn[] = []
-  let remainingChars = Math.max(0, limits.maxChars)
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (turns.length >= maxMessages || remainingChars <= 0) break
-    const message = messages[index]
+  for (const message of messages) {
     if (message.status !== ASSISTANT_MESSAGE_STATUS.DONE) continue
     const content = getMessageText(message).trim()
     if (content === '') continue
-    const clipped =
-      content.length > remainingChars
-        ? content.slice(content.length - remainingChars)
-        : content
-    turns.push({ role: message.role, content: clipped })
-    remainingChars -= clipped.length
+    turns.push({ role: message.role, content })
   }
 
-  return turns.reverse()
+  return turns
 }
 
 /**

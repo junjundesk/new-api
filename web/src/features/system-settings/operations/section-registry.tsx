@@ -129,6 +129,8 @@ const OPERATIONS_SECTIONS = [
           confirmWrites: settings['assistant_setting.confirm_writes'] ?? true,
           adminDbToolsEnabled:
             settings['assistant_setting.admin_db_tools_enabled'] ?? true,
+          dailyTokenLimit:
+            settings['assistant_setting.user_daily_token_limit'] ?? 100000000,
         }}
       />
     ),

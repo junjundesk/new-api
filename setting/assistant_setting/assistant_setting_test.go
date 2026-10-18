@@ -140,6 +140,22 @@ func TestNormalizeOptionValue(t *testing.T) {
 		assert.Equal(t, "128000", normalized)
 	})
 
+	t.Run("validates daily token limit", func(t *testing.T) {
+		normalized, _, err := NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "100M")
+		require.NoError(t, err)
+		assert.Equal(t, "100000000", normalized)
+		normalized, _, err = NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "1亿")
+		require.NoError(t, err)
+		assert.Equal(t, "100000000", normalized)
+		normalized, _, err = NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "0")
+		require.NoError(t, err)
+		assert.Equal(t, "0", normalized)
+		_, _, err = NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "-1")
+		require.Error(t, err)
+		_, _, err = NormalizeOptionValue(OptionKeyUserDailyTokenLimit, "1000000000001")
+		require.Error(t, err)
+	})
+
 	t.Run("validates channel id", func(t *testing.T) {
 		_, _, err := NormalizeOptionValue(OptionKeyAdminChannelID, "-1")
 		require.Error(t, err)
@@ -201,4 +217,31 @@ func TestProfiles(t *testing.T) {
 	profile, ok := ProfileForOptionKey(OptionKeyAdminChannelID)
 	assert.True(t, ok)
 	assert.Equal(t, ProfileAdmin, profile)
+}
+
+func TestParseTokenAmount(t *testing.T) {
+	cases := []struct {
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{input: "10000", want: 10000},
+		{input: "100k", want: 100000},
+		{input: "1M", want: 1000000},
+		{input: "1亿", want: 100000000},
+		{input: "2b", want: 2000000000},
+		{input: "1.5万", want: 15000},
+		{input: "", wantErr: true},
+		{input: "abc", wantErr: true},
+		{input: "-5", wantErr: true},
+	}
+	for _, tc := range cases {
+		got, err := ParseTokenAmount(tc.input)
+		if tc.wantErr {
+			require.Error(t, err, tc.input)
+			continue
+		}
+		require.NoError(t, err, tc.input)
+		assert.Equal(t, tc.want, got, tc.input)
+	}
 }

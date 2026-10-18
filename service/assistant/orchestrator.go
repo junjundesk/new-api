@@ -19,20 +19,39 @@ type Orchestrator struct {
 	executor ToolExecutor
 	emit     EmitFunc
 	audit    AuditFunc
+	usage    Usage
 }
 
 func NewOrchestrator(cfg Config, client Client, executor ToolExecutor, emit EmitFunc, audit AuditFunc) *Orchestrator {
 	return &Orchestrator{cfg: cfg, client: client, executor: executor, emit: emit, audit: audit}
 }
 
-func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessage, message string) error {
+// Run executes one assistant turn and returns the upstream token usage
+// accumulated across every tool round.
+func (o *Orchestrator) Run(ctx context.Context, userID int, history []ChatMessage, message string) (Usage, error) {
 	if err := o.emit(Event{Type: "meta", Model: o.cfg.Model}); err != nil {
-		return err
+		return o.usage, err
 	}
+	var err error
 	if o.cfg.Protocol == "chat" {
-		return o.runChat(ctx, userID, history, message)
+		err = o.runChat(ctx, userID, history, message)
+	} else {
+		err = o.runResponses(ctx, userID, history, message)
 	}
-	return o.runResponses(ctx, userID, history, message)
+	return o.usage, err
+}
+
+func (o *Orchestrator) addUsage(usage *Usage) {
+	if usage == nil {
+		return
+	}
+	o.usage.InputTokens += usage.InputTokens
+	o.usage.OutputTokens += usage.OutputTokens
+	total := usage.TotalTokens
+	if total <= 0 {
+		total = usage.InputTokens + usage.OutputTokens
+	}
+	o.usage.TotalTokens += total
 }
 
 func (o *Orchestrator) onDelta(text string) error {
@@ -53,6 +72,7 @@ func (o *Orchestrator) runResponses(ctx context.Context, userID int, history []C
 		if err != nil {
 			return err
 		}
+		o.addUsage(result.Usage)
 		calls := extractFunctionCalls(result.Output)
 		if len(calls) == 0 {
 			if result.Status == "incomplete" || result.IncompleteReason != "" {
@@ -91,6 +111,7 @@ func (o *Orchestrator) runChat(ctx context.Context, userID int, history []ChatMe
 		if err != nil {
 			return err
 		}
+		o.addUsage(result.Usage)
 		if len(result.ToolCalls) == 0 {
 			if result.FinishReason == "length" {
 				return &IncompleteError{Reason: "max_output_tokens"}

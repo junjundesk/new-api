@@ -110,32 +110,37 @@ describe('assistant request history', () => {
     ])
   })
 
-  it('keeps only the newest turns within the message budget', () => {
-    const messages = [
-      createMessage({ id: '1', text: 'one' }),
-      createMessage({ id: '2', text: 'two' }),
-      createMessage({ id: '3', text: 'three' }),
-    ]
+  it('keeps the whole conversation when it is longer than the former message cap', () => {
+    const messages = Array.from({ length: 150 }, (_, index) =>
+      createMessage({
+        id: `message-${index}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        text: `turn ${index}`,
+      })
+    )
 
-    expect(
-      buildAssistantRequestHistory(messages, { maxMessages: 2, maxChars: 100 })
-    ).toEqual([
-      { role: 'user', content: 'two' },
-      { role: 'user', content: 'three' },
-    ])
+    const history = buildAssistantRequestHistory(messages)
+
+    expect(history).toHaveLength(150)
+    expect(history.map((turn) => turn.content)).toEqual(
+      messages.map((_, index) => `turn ${index}`)
+    )
+    expect(history[0].role).toBe('user')
+    expect(history[1].role).toBe('assistant')
   })
 
-  it('keeps the newest characters within the character budget', () => {
+  it('keeps full message text beyond the former character budget', () => {
+    const longText = 'x'.repeat(300000)
     const messages = [
-      createMessage({ id: '1', text: 'aaaa' }),
-      createMessage({ id: '2', role: 'assistant', text: 'bbbbbb' }),
+      createMessage({ id: '1', text: longText }),
+      createMessage({ id: '2', role: 'assistant', text: 'short answer' }),
+      createMessage({ id: '3', text: longText }),
     ]
 
-    expect(
-      buildAssistantRequestHistory(messages, { maxMessages: 20, maxChars: 8 })
-    ).toEqual([
-      { role: 'user', content: 'aa' },
-      { role: 'assistant', content: 'bbbbbb' },
+    expect(buildAssistantRequestHistory(messages)).toEqual([
+      { role: 'user', content: longText },
+      { role: 'assistant', content: 'short answer' },
+      { role: 'user', content: longText },
     ])
   })
 })
@@ -152,6 +157,23 @@ describe('assistant message persistence', () => {
     const stored = loadStoredMessages(STORAGE_KEY)
     expect(stored).toHaveLength(1)
     expect(stored[0].id).toBe('1')
+  })
+
+  it('persists at most the newest 500 settled messages', () => {
+    const messages = Array.from({ length: 600 }, (_, index) =>
+      createMessage({ id: `message-${index}`, text: `stored ${index}` })
+    )
+
+    saveStoredMessages(STORAGE_KEY, messages)
+
+    const raw = window.sessionStorage.getItem(STORAGE_KEY) ?? '[]'
+    const storedIds = (JSON.parse(raw) as AssistantChatMessage[]).map(
+      (message) => message.id
+    )
+    expect(storedIds).toHaveLength(500)
+    expect(storedIds[0]).toBe('message-100')
+    expect(storedIds[499]).toBe('message-599')
+    expect(loadStoredMessages(STORAGE_KEY)).toHaveLength(500)
   })
 
   it('ignores corrupt or unexpected stored payloads', () => {

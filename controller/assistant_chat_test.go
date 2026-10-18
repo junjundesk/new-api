@@ -6,13 +6,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service/assistant"
 	"github.com/QuantumNous/new-api/setting/assistant_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestAssistantChatStreamsTextOverSSE(t *testing.T) {
@@ -145,4 +149,49 @@ func TestAdminAssistantChatStreamsOverSSE(t *testing.T) {
 	AdminAssistantChat(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "AdminHello")
+}
+
+func TestAssistantChatRejectsWhenDailyTokenLimitReached(t *testing.T) {
+	setupAssistantOptionsTest(t)
+	originalDB := model.DB
+	dsn := fmt.Sprintf("file:assistant_chat_quota_%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.AssistantUsageDaily{}))
+	t.Cleanup(func() {
+		model.DB = originalDB
+		sqlDB, closeErr := db.DB()
+		if closeErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	setting := assistant_setting.Get()
+	setting.UserEnabled = true
+	setting.UserSource = assistant_setting.SourceDirect
+	setting.UserBaseURL = "https://api.openai.com/v1"
+	setting.UserAPIKey = "sk-test"
+	setting.UserModel = "gpt-test"
+	setting.UserProtocol = assistant_setting.ProtocolResponses
+	setting.UserContextWindow = 1000000
+	setting.UserMaxOutputTokens = 100
+	setting.UserDailyTokenLimit = 10
+
+	now := time.Now()
+	day := now.Year()*10000 + int(now.Month())*100 + now.Day()
+	require.NoError(t, model.AddAssistantDailyUsage(9996, day, 10, 0, 10))
+
+	body, err := common.Marshal(map[string]any{"message": "hi"})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/assistant/chat", strings.NewReader(string(body)))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Set("id", 9996)
+
+	AssistantChat(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "assistant_daily_token_limit")
+	assert.Contains(t, recorder.Body.String(), "retry_after")
 }

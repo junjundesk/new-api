@@ -3,6 +3,7 @@ package assistant_setting
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -45,6 +46,7 @@ const (
 	OptionKeyRequestTimeout        = "assistant_setting.request_timeout_seconds"
 	OptionKeyConfirmWrites         = "assistant_setting.confirm_writes"
 	OptionKeyAdminDBToolsEnabled   = "assistant_setting.admin_db_tools_enabled"
+	OptionKeyUserDailyTokenLimit   = "assistant_setting.user_daily_token_limit"
 	OptionKeyUserAPIKeyConfigured  = "assistant_setting.user_api_key_configured"
 	OptionKeyAdminAPIKeyConfigured = "assistant_setting.admin_api_key_configured"
 )
@@ -81,6 +83,7 @@ type AssistantSetting struct {
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
 	ConfirmWrites         bool   `json:"confirm_writes"`
 	AdminDBToolsEnabled   bool   `json:"admin_db_tools_enabled"`
+	UserDailyTokenLimit   int    `json:"user_daily_token_limit"`
 }
 
 // Profile is a request-scoped subset used by the assistant runtime.
@@ -124,6 +127,7 @@ var assistantSetting = AssistantSetting{
 	RequestTimeoutSeconds: 60,
 	ConfirmWrites:         true,
 	AdminDBToolsEnabled:   true,
+	UserDailyTokenLimit:   100000000,
 }
 
 func init() {
@@ -202,7 +206,7 @@ func ModelName(name string) string {
 func ProfileForOptionKey(key string) (string, bool) {
 	switch key {
 	case OptionKeyEnabled, OptionKeySystemPrompt, OptionKeyRequestTimeout, OptionKeyConfirmWrites,
-		OptionKeyAdminDBToolsEnabled, OptionKeyUserAPIKeyConfigured, OptionKeyAdminAPIKeyConfigured:
+		OptionKeyAdminDBToolsEnabled, OptionKeyUserDailyTokenLimit, OptionKeyUserAPIKeyConfigured, OptionKeyAdminAPIKeyConfigured:
 		return "", false
 	}
 	if strings.HasPrefix(key, "assistant_setting.user_") {
@@ -349,6 +353,8 @@ func NormalizeOptionValue(key, value string) (normalized string, skip bool, err 
 			return "", false, errors.New("admin_db_tools_enabled must be true or false")
 		}
 		return strconv.FormatBool(parsed), false, nil
+	case OptionKeyUserDailyTokenLimit:
+		return normalizeTokenOption(value, 0, 1000000000000)
 	default:
 		return "", false, fmt.Errorf("unknown assistant setting: %s", key)
 	}
@@ -413,12 +419,56 @@ func normalizeProfileOption(profileName, field, value string) (string, bool, err
 		}
 		return trimmed, false, nil
 	case "context_window":
-		return normalizeIntOption(value, 1024, 10000000)
+		return normalizeTokenOption(value, 1024, 10000000)
 	case "max_output_tokens":
-		return normalizeIntOption(value, 1, 1000000)
+		return normalizeTokenOption(value, 1, 1000000)
 	default:
 		return "", false, fmt.Errorf("unknown assistant profile setting: %s", field)
 	}
+}
+
+// ParseTokenAmount parses a human-readable token count such as "128k", "1M",
+// "1亿", or "1000000". Negative, non-numeric, and absurdly large values fail.
+func ParseTokenAmount(raw string) (int, error) {
+	text := strings.ToLower(strings.TrimSpace(raw))
+	multiplier := 1.0
+	switch {
+	case strings.HasSuffix(text, "亿"):
+		multiplier = 100000000
+		text = strings.TrimSuffix(text, "亿")
+	case strings.HasSuffix(text, "万"):
+		multiplier = 10000
+		text = strings.TrimSuffix(text, "万")
+	case strings.HasSuffix(text, "b"):
+		multiplier = 1000000000
+		text = strings.TrimSuffix(text, "b")
+	case strings.HasSuffix(text, "m"):
+		multiplier = 1000000
+		text = strings.TrimSuffix(text, "m")
+	case strings.HasSuffix(text, "k"):
+		multiplier = 1000
+		text = strings.TrimSuffix(text, "k")
+	}
+	base, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil || math.IsNaN(base) || math.IsInf(base, 0) {
+		return 0, errors.New("token amount must be a number such as 100000, 100k, 1M, or 1亿")
+	}
+	value := base * multiplier
+	if value < 0 || value > 1e15 {
+		return 0, errors.New("token amount is out of range")
+	}
+	return int(value), nil
+}
+
+func normalizeTokenOption(value string, minValue, maxValue int) (string, bool, error) {
+	parsed, err := ParseTokenAmount(value)
+	if err != nil {
+		return "", false, err
+	}
+	if parsed < minValue || parsed > maxValue {
+		return "", false, fmt.Errorf("value must be between %d and %d", minValue, maxValue)
+	}
+	return strconv.Itoa(parsed), false, nil
 }
 
 func normalizeIntOption(value string, minValue, maxValue int) (string, bool, error) {

@@ -23,11 +23,9 @@ import (
 
 const (
 	assistantMaxMessageChars     = 100000
-	assistantMaxHistoryMessages  = 100
-	assistantMaxHistoryChars     = 400000
 	assistantHeartbeatInterval   = 15 * time.Second
 	assistantMaxRunDuration      = 15 * time.Minute
-	assistantChatBodyLimit       = 2 << 20
+	assistantChatBodyLimit       = 8 << 20
 	assistantTestBodyLimit       = 16 << 10
 	assistantMaxResponseTextSize = 500
 )
@@ -78,12 +76,10 @@ func GetAdminAssistantConfig(c *gin.Context) {
 
 func getAssistantRuntimeConfig(c *gin.Context, profileName string) {
 	common.ApiSuccess(c, gin.H{
-		"enabled":              assistant_setting.IsAvailable(profileName),
-		"model":                assistant_setting.ModelName(profileName),
-		"can_create_tokens":    true,
-		"max_message_chars":    assistantMaxMessageChars,
-		"max_history_messages": assistantMaxHistoryMessages,
-		"max_history_chars":    assistantMaxHistoryChars,
+		"enabled":           assistant_setting.IsAvailable(profileName),
+		"model":             assistant_setting.ModelName(profileName),
+		"can_create_tokens": true,
+		"max_message_chars": assistantMaxMessageChars,
 	})
 }
 
@@ -112,32 +108,17 @@ func assistantChatStream(c *gin.Context, profileName string) {
 		return
 	}
 	history := make([]assistant.ChatMessage, 0, len(request.History))
-	totalChars := 0
 	for _, entry := range request.History {
 		role := strings.TrimSpace(entry.Role)
 		if role != "user" && role != "assistant" {
-			common.ApiErrorI18n(c, i18n.MsgAssistantHistoryTooLong)
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 			return
 		}
 		content := strings.TrimSpace(entry.Content)
 		if content == "" {
 			continue
 		}
-		chars := utf8.RuneCountInString(content)
-		if chars > assistantMaxMessageChars {
-			common.ApiErrorI18n(c, i18n.MsgAssistantHistoryTooLong)
-			return
-		}
-		totalChars += chars
-		if totalChars > assistantMaxHistoryChars {
-			common.ApiErrorI18n(c, i18n.MsgAssistantHistoryTooLong)
-			return
-		}
 		history = append(history, assistant.ChatMessage{Role: role, Content: content})
-	}
-	if len(history) > assistantMaxHistoryMessages {
-		common.ApiErrorI18n(c, i18n.MsgAssistantHistoryTooLong)
-		return
 	}
 
 	c.Writer.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -188,6 +169,25 @@ func assistantChatStream(c *gin.Context, profileName string) {
 	cfg.ActorIP = c.ClientIP()
 	cfg.ActorUserAgent = c.Request.UserAgent()
 
+	if profileName == assistant_setting.ProfileUser {
+		limit := assistant_setting.Get().UserDailyTokenLimit
+		exceeded, retryAfter, quotaErr := assistant.CheckDailyTokenQuota(userID, limit)
+		if quotaErr != nil {
+			logger.LogError(c.Request.Context(), "assistant daily quota check failed: "+quotaErr.Error())
+			writeError("assistant_quota_error", i18n.MsgAssistantUpstreamError)
+			return
+		}
+		if exceeded {
+			_ = writer.WriteEvent(assistant.Event{
+				Type:       "error",
+				Code:       "assistant_daily_token_limit",
+				Message:    common.TranslateMessage(c, i18n.MsgAssistantDailyTokenLimit, map[string]any{"Limit": limit}),
+				RetryAfter: retryAfter,
+			})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), assistantMaxRunDuration)
 	defer cancel()
 
@@ -212,7 +212,12 @@ func assistantChatStream(c *gin.Context, profileName string) {
 		recordUserSecurityAudit(c, userID, action, params)
 	}
 	orchestrator := assistant.NewOrchestrator(cfg, client, executor, writer.WriteEvent, audit)
-	err = orchestrator.Run(ctx, userID, history, message)
+	runUsage, err := orchestrator.Run(ctx, userID, history, message)
+	if profileName == assistant_setting.ProfileUser {
+		if recordErr := assistant.RecordTokenUsage(userID, runUsage); recordErr != nil {
+			logger.LogError(c.Request.Context(), "assistant usage record failed: "+recordErr.Error())
+		}
+	}
 	if err != nil {
 		handleAssistantRunError(c, writer, err)
 		return

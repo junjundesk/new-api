@@ -307,6 +307,7 @@ func migrateDB() error {
 		&ReferralCharge{},
 		&ActivityCode{},
 		&ActivityGrant{},
+		&AssistantUsageDaily{},
 	)
 	if err != nil {
 		return err
@@ -376,6 +377,7 @@ func migrateDBFast() error {
 		{&ReferralCharge{}, "ReferralCharge"},
 		{&ActivityCode{}, "ActivityCode"},
 		{&ActivityGrant{}, "ActivityGrant"},
+		{&AssistantUsageDaily{}, "AssistantUsageDaily"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

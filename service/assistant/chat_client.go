@@ -14,14 +14,19 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
+type chatStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
 type chatCompletionRequest struct {
-	Model             string           `json:"model"`
-	Messages          []map[string]any `json:"messages"`
-	Tools             []map[string]any `json:"tools,omitempty"`
-	ToolChoice        string           `json:"tool_choice,omitempty"`
-	ParallelToolCalls bool             `json:"parallel_tool_calls"`
-	Stream            bool             `json:"stream"`
-	MaxTokens         int              `json:"max_tokens,omitempty"`
+	Model             string             `json:"model"`
+	Messages          []map[string]any   `json:"messages"`
+	Tools             []map[string]any   `json:"tools,omitempty"`
+	ToolChoice        string             `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool               `json:"parallel_tool_calls"`
+	Stream            bool               `json:"stream"`
+	StreamOptions     *chatStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens         int                `json:"max_tokens,omitempty"`
 }
 
 type chatCompletionToolCall struct {
@@ -77,6 +82,9 @@ func (c *HTTPClient) createChatCompletion(ctx context.Context, messages []map[st
 		ParallelToolCalls: false,
 		Stream:            stream,
 		MaxTokens:         c.cfg.MaxOutputTokens,
+	}
+	if stream {
+		requestBody.StreamOptions = &chatStreamOptions{IncludeUsage: true}
 	}
 	body, err := common.Marshal(requestBody)
 	if err != nil {

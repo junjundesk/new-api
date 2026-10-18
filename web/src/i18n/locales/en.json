@@ -5879,7 +5879,6 @@
     "Fetch models": "Fetch models",
     "Must be less than the context window": "Must be less than the context window",
     "Max output tokens must be less than the context window": "Max output tokens must be less than the context window",
-    "Maximum context window of the model used by this profile.": "Maximum context window of the model used by this profile.",
     "Maximum output tokens per assistant response.": "Maximum output tokens per assistant response.",
     "API protocol used to call the upstream endpoint.": "API protocol used to call the upstream endpoint.",
     "Resolved value: {{tokens}} tokens": "Resolved value: {{tokens}} tokens",
@@ -5907,6 +5906,9 @@
     "Tables": "Tables",
     "Rows": "Rows",
     "Page Cache Rate": "Page Cache Rate",
-    "Unsupported tool": "Unsupported tool"
+    "Unsupported tool": "Unsupported tool",
+    "Daily token limit per user": "Daily token limit per user",
+    "Maximum tokens one user can consume through the assistant per day. 0 means unlimited.": "Maximum tokens one user can consume through the assistant per day. 0 means unlimited.",
+    "Maximum total chat context kept for one session. Older messages are dropped when it is exceeded.": "Maximum total chat context kept for one session. Older messages are dropped when it is exceeded."
   }
 }

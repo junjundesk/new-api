@@ -62,8 +62,6 @@ export interface UseAssistantChatOptions {
   profile?: AssistantProfile
   storageKey: string
   maxMessageChars: number
-  maxHistoryMessages: number
-  maxHistoryChars: number
 }
 
 export interface UseAssistantChatResult {
@@ -83,8 +81,6 @@ export function useAssistantChat(
   const profile = options.profile ?? 'user'
   const storageKey = options.storageKey
   const maxMessageChars = options.maxMessageChars
-  const maxHistoryMessages = options.maxHistoryMessages
-  const maxHistoryChars = options.maxHistoryChars
 
   const [messages, setMessages] = useState<AssistantChatMessage[]>(() =>
     loadStoredMessages(storageKey)
@@ -151,10 +147,7 @@ export function useAssistantChat(
       const text = rawText.trim().slice(0, maxMessageChars)
       if (text === '' || isStreamingRef.current) return
 
-      const history = buildAssistantRequestHistory(messagesRef.current, {
-        maxMessages: maxHistoryMessages,
-        maxChars: maxHistoryChars,
-      })
+      const history = buildAssistantRequestHistory(messagesRef.current)
       const userMessage = createUserMessage(text)
       const assistantMessage = createAssistantMessage()
       activeAssistantIdRef.current = assistantMessage.id
@@ -206,7 +199,7 @@ export function useAssistantChat(
         /* The controller reports every failure through onError. */
       })
     },
-    [controller, maxHistoryChars, maxHistoryMessages, maxMessageChars, t]
+    [controller, maxMessageChars, t]
   )
 
   const stopStreaming = useCallback((): void => {

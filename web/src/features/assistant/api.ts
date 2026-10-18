@@ -48,8 +48,6 @@ export function normalizeAssistantConfig(payload: unknown): AssistantConfig {
       enabled: false,
       canCreateTokens: false,
       maxMessageChars: ASSISTANT_LIMITS.MAX_MESSAGE_CHARS,
-      maxHistoryMessages: ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES,
-      maxHistoryChars: ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
     }
   }
   const model = typeof source.model === 'string' ? source.model.trim() : ''
@@ -61,16 +59,6 @@ export function normalizeAssistantConfig(payload: unknown): AssistantConfig {
       source.max_message_chars,
       ASSISTANT_LIMITS.MAX_MESSAGE_CHARS,
       ASSISTANT_LIMITS.MAX_MESSAGE_CHARS
-    ),
-    maxHistoryMessages: readPositiveInt(
-      source.max_history_messages,
-      ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES,
-      ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES
-    ),
-    maxHistoryChars: readPositiveInt(
-      source.max_history_chars,
-      ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
-      ASSISTANT_LIMITS.MAX_HISTORY_CHARS
     ),
   }
 }

@@ -107,8 +107,6 @@ export interface AssistantConfig {
   model?: string
   canCreateTokens: boolean
   maxMessageChars: number
-  maxHistoryMessages: number
-  maxHistoryChars: number
 }
 
 // ============================================================================

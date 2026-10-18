@@ -54,10 +54,6 @@ export function Assistant(props: AssistantProps) {
     storageKey: getAssistantStorageKey(userId, profile),
     maxMessageChars:
       config?.maxMessageChars ?? ASSISTANT_LIMITS.MAX_MESSAGE_CHARS,
-    maxHistoryMessages:
-      config?.maxHistoryMessages ?? ASSISTANT_LIMITS.MAX_HISTORY_MESSAGES,
-    maxHistoryChars:
-      config?.maxHistoryChars ?? ASSISTANT_LIMITS.MAX_HISTORY_CHARS,
   })
 
   function handleRetry(): void {

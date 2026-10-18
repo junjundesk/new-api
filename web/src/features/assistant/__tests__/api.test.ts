@@ -42,8 +42,6 @@ describe('assistant config request', () => {
           model: 'gpt-test',
           can_create_tokens: true,
           max_message_chars: 100000,
-          max_history_messages: 100,
-          max_history_chars: 400000,
         },
       },
     })
@@ -56,8 +54,6 @@ describe('assistant config request', () => {
       model: 'gpt-test',
       canCreateTokens: true,
       maxMessageChars: 100000,
-      maxHistoryMessages: 100,
-      maxHistoryChars: 400000,
     })
   })
 
@@ -70,8 +66,6 @@ describe('assistant config request', () => {
           model: 'admin-gpt-test',
           can_create_tokens: false,
           max_message_chars: 2000,
-          max_history_messages: 10,
-          max_history_chars: 20000,
         },
       },
     })
@@ -82,8 +76,6 @@ describe('assistant config request', () => {
     expect(config.enabled).toBe(false)
     expect(config.model).toBe('admin-gpt-test')
     expect(config.maxMessageChars).toBe(2000)
-    expect(config.maxHistoryMessages).toBe(10)
-    expect(config.maxHistoryChars).toBe(20000)
   })
 })
 
@@ -130,15 +122,11 @@ describe('assistant config normalization', () => {
       enabled: false,
       canCreateTokens: false,
       maxMessageChars: 100000,
-      maxHistoryMessages: 100,
-      maxHistoryChars: 400000,
     })
     expect(normalizeAssistantConfig({ success: false })).toEqual({
       enabled: false,
       canCreateTokens: false,
       maxMessageChars: 100000,
-      maxHistoryMessages: 100,
-      maxHistoryChars: 400000,
     })
   })
 
@@ -148,14 +136,11 @@ describe('assistant config normalization', () => {
       model: '   ',
       can_create_tokens: 1,
       max_message_chars: 100000,
-      max_history_messages: -3,
     })
 
     expect(config.enabled).toBe(false)
     expect(config.canCreateTokens).toBe(false)
     expect(config.model).toBeUndefined()
     expect(config.maxMessageChars).toBe(100000)
-    expect(config.maxHistoryMessages).toBe(100)
-    expect(config.maxHistoryChars).toBe(400000)
   })
 })

@@ -122,7 +122,7 @@ func TestOrchestratorRunsToolThenStreamsFinalText(t *testing.T) {
 		events = append(events, event)
 		return nil
 	}, nil)
-	err := orchestrator.Run(context.Background(), 1, []ChatMessage{{Role: "user", Content: "hi"}}, "show usage")
+	_, err := orchestrator.Run(context.Background(), 1, []ChatMessage{{Role: "user", Content: "hi"}}, "show usage")
 	require.NoError(t, err)
 	require.Len(t, executor.executed, 1)
 	assert.Equal(t, "get_usage_summary", executor.executed[0])
@@ -154,7 +154,8 @@ func TestOrchestratorHidesToolsOutsideProfileSet(t *testing.T) {
 		events = append(events, event)
 		return nil
 	}, nil)
-	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "hi"))
+	_, runErr := orchestrator.Run(context.Background(), 1, nil, "hi")
+	require.NoError(t, runErr)
 
 	var start *Event
 	for index := range events {
@@ -177,7 +178,8 @@ func TestOrchestratorRunsMultipleToolRoundsWithoutCap(t *testing.T) {
 	}}
 	executor := &fakeToolExecutor{definitions: []map[string]any{{"type": "function", "name": "get_account_summary"}}, result: ToolResult{OK: true}}
 	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
-	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "hi"))
+	_, runErr := orchestrator.Run(context.Background(), 1, nil, "hi")
+	require.NoError(t, runErr)
 	assert.Equal(t, []string{"get_account_summary", "get_account_summary"}, executor.executed)
 }
 
@@ -200,7 +202,8 @@ func TestOrchestratorChatProtocolLoopsTools(t *testing.T) {
 		events = append(events, event)
 		return nil
 	}, nil)
-	require.NoError(t, orchestrator.Run(context.Background(), 1, nil, "show usage"))
+	_, runErr := orchestrator.Run(context.Background(), 1, nil, "show usage")
+	require.NoError(t, runErr)
 	assert.Equal(t, []string{"get_usage_summary"}, executor.executed)
 	types := make([]string, 0, len(events))
 	for _, event := range events {
@@ -216,7 +219,7 @@ func TestOrchestratorReturnsIncompleteError(t *testing.T) {
 	}}
 	executor := &fakeToolExecutor{definitions: []map[string]any{}, result: ToolResult{OK: true}}
 	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
-	err := orchestrator.Run(context.Background(), 1, nil, "hi")
+	_, err := orchestrator.Run(context.Background(), 1, nil, "hi")
 	var incompleteError *IncompleteError
 	require.ErrorAs(t, err, &incompleteError)
 	assert.Equal(t, "max_output_tokens", incompleteError.Reason)
@@ -269,4 +272,19 @@ func TestBuildChatMessagesIncludesSystemPrompt(t *testing.T) {
 	assert.Equal(t, "system", messages[0]["role"])
 	assert.Equal(t, "earlier", messages[1]["content"])
 	assert.Equal(t, "now", messages[2]["content"])
+}
+
+func TestOrchestratorAccumulatesUsageAcrossToolRounds(t *testing.T) {
+	toolItem := rawToolCall(t, "call_1", "get_usage_summary", map[string]any{})
+	client := &fakeResponsesClient{responses: []*ResponsesResult{
+		{Status: "completed", Output: []json.RawMessage{toolItem}, Usage: &Usage{InputTokens: 10, OutputTokens: 2, TotalTokens: 12}},
+		{Status: "completed", Output: []json.RawMessage{rawMessage(t, "done")}, Usage: &Usage{InputTokens: 20, OutputTokens: 3, TotalTokens: 23}},
+	}}
+	executor := &fakeToolExecutor{definitions: []map[string]any{{"type": "function", "name": "get_usage_summary"}}, result: ToolResult{OK: true}}
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
+	usage, err := orchestrator.Run(context.Background(), 1, nil, "hi")
+	require.NoError(t, err)
+	assert.Equal(t, 30, usage.InputTokens)
+	assert.Equal(t, 5, usage.OutputTokens)
+	assert.Equal(t, 35, usage.TotalTokens)
 }

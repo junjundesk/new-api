@@ -644,7 +644,7 @@ export function AssistantProfileCard(props: AssistantProfileCardProps) {
                 )}
                 <FormDescription>
                   {t(
-                    'Maximum context window of the model used by this profile.'
+                    'Maximum total chat context kept for one session. Older messages are dropped when it is exceeded.'
                   )}
                 </FormDescription>
                 <FormMessage />

@@ -273,7 +273,7 @@ const (
 	MsgAssistantMessageTooLong     = "assistant.message_too_long"
 	MsgAssistantHistoryTooLong     = "assistant.history_too_long"
 	MsgAssistantBusy               = "assistant.busy"
-	MsgAssistantDailyLimit         = "assistant.daily_limit"
+	MsgAssistantDailyTokenLimit    = "assistant.daily_token_limit"
 	MsgAssistantUpstreamError      = "assistant.upstream_error"
 	MsgAssistantUpstreamTimeout    = "assistant.upstream_timeout"
 	MsgAssistantTooManyToolRounds  = "assistant.too_many_tool_rounds"

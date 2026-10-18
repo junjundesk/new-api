@@ -5677,7 +5677,7 @@
     "Group Default Ratio": "分组默认倍率",
     "Inherited": "继承分组倍率",
     "Invalid activity code": "无效的活动码",
-    "Limits": "限额",
+    "Limits": "限制",
     "Lowercase letters, digits, _ and - only. The code cannot be changed after creation.": "只能使用小写字母、数字、_ 和 -；活动码创建后不可修改。",
     "My Activity Grants": "我的活动授权",
     "Name must be 1-64 characters": "名称长度必须在 1-64 之间",
@@ -5879,7 +5879,6 @@
     "Fetch models": "拉取模型",
     "Must be less than the context window": "必须小于上下文窗口",
     "Max output tokens must be less than the context window": "最大输出 Token 必须小于上下文窗口",
-    "Maximum context window of the model used by this profile.": "此配置所使用模型的最大上下文窗口。",
     "Maximum output tokens per assistant response.": "每次助手响应的最大输出 Token 数。",
     "API protocol used to call the upstream endpoint.": "调用上游端点使用的 API 协议。",
     "Resolved value: {{tokens}} tokens": "解析值：{{tokens}} 个 Token",
@@ -5907,6 +5906,9 @@
     "Tables": "数据表",
     "Rows": "行数",
     "Page Cache Rate": "本页缓存率",
-    "Unsupported tool": "不支持的工具"
+    "Unsupported tool": "不支持的工具",
+    "Daily token limit per user": "每用户每日 Token 上限",
+    "Maximum tokens one user can consume through the assistant per day. 0 means unlimited.": "单个用户每天可通过助手消耗的最大 Token 数。0 表示不限制。",
+    "Maximum total chat context kept for one session. Older messages are dropped when it is exceeded.": "单个会话保留的最大聊天上下文总量。超出后将丢弃较早的消息。"
   }
 }

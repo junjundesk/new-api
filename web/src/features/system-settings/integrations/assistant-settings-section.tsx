@@ -83,6 +83,7 @@ export type AssistantSettingsDefaults = {
   requestTimeoutSeconds: number
   confirmWrites: boolean
   adminDbToolsEnabled: boolean
+  dailyTokenLimit: number
 }
 
 type AssistantSettingsSectionProps = {
@@ -97,6 +98,7 @@ type AssistantSettingsFormValuesWithMaster = AssistantSettingsFormValues & {
   enabled: boolean
   confirmWrites: boolean
   adminDbToolsEnabled: boolean
+  dailyTokenLimit: string
 }
 
 const OPTION_KEYS = {
@@ -105,6 +107,7 @@ const OPTION_KEYS = {
   requestTimeoutSeconds: 'assistant_setting.request_timeout_seconds',
   confirmWrites: 'assistant_setting.confirm_writes',
   adminDbToolsEnabled: 'assistant_setting.admin_db_tools_enabled',
+  dailyTokenLimit: 'assistant_setting.user_daily_token_limit',
   user: {
     enabled: 'assistant_setting.user_enabled',
     source: 'assistant_setting.user_source',
@@ -170,6 +173,10 @@ const createAssistantSettingsSchema = (t: TFunction) => {
         .max(300, rangeMessage),
       confirmWrites: z.boolean(),
       adminDbToolsEnabled: z.boolean(),
+      dailyTokenLimit: z.string().refine((value) => {
+        const parsed = parseTokenAmount(value)
+        return parsed !== null && parsed >= 0 && parsed <= 1000000000000
+      }, rangeMessage),
     })
     .superRefine((values, ctx) => {
       if (!values.enabled) return
@@ -266,6 +273,7 @@ function buildFormDefaults(
     requestTimeoutSeconds: defaults.requestTimeoutSeconds,
     confirmWrites: defaults.confirmWrites,
     adminDbToolsEnabled: defaults.adminDbToolsEnabled,
+    dailyTokenLimit: String(defaults.dailyTokenLimit),
   }
 }
 
@@ -356,6 +364,14 @@ function buildOptionEntries(
       key: OPTION_KEYS.adminDbToolsEnabled,
       value: values.adminDbToolsEnabled,
     })
+  }
+
+  const dailyTokenLimit = parseTokenAmount(values.dailyTokenLimit)
+  if (
+    dailyTokenLimit !== null &&
+    dailyTokenLimit !== defaults.dailyTokenLimit
+  ) {
+    entries.push({ key: OPTION_KEYS.dailyTokenLimit, value: dailyTokenLimit })
   }
 
   entries.push(...buildProfileOptionEntries('user', values.user, defaults.user))
@@ -587,6 +603,43 @@ export function AssistantSettingsSection(props: AssistantSettingsSectionProps) {
                 </FormControl>
               </SettingsSwitchItem>
             )}
+          />
+
+          <div data-settings-form-span='full' className='min-w-0'>
+            <h4 className='text-sm font-semibold'>{t('Limits')}</h4>
+          </div>
+
+          <FormField
+            control={form.control}
+            name='dailyTokenLimit'
+            render={({ field }) => {
+              const resolved = parseTokenAmount(field.value)
+              return (
+                <FormItem>
+                  <FormLabel>{t('Daily token limit per user')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder='100M, 1亿, 100k, 10000'
+                      autoComplete='off'
+                      {...field}
+                    />
+                  </FormControl>
+                  {resolved === null ? null : (
+                    <p className='text-muted-foreground text-xs'>
+                      {t('Resolved value: {{tokens}} tokens', {
+                        tokens: resolved,
+                      })}
+                    </p>
+                  )}
+                  <FormDescription>
+                    {t(
+                      'Maximum tokens one user can consume through the assistant per day. 0 means unlimited.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )
+            }}
           />
 
           <Alert variant='default'>

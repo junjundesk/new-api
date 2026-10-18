@@ -233,7 +233,8 @@ twofa.code_invalid: "验证码或备用码不正确"
 
 # AI assistant messages
 assistant.disabled: "管理员尚未启用 AI 助手"
-assistant.message_too_long: "消息过长（最多 4000 字符）"
+assistant.message_too_long: "消息过长"
+assistant.daily_token_limit: "AI 助手今日 Token 用量已达上限（{{.Limit}} tokens），明天 0 点重置"
 assistant.history_too_long: "对话历史过长"
 assistant.busy: "AI 助手正忙，请稍后重试"
 assistant.context_exceeded: "消息超出已配置的模型上下文窗口，请缩短消息或增大上下文窗口"

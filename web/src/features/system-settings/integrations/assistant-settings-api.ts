@@ -83,22 +83,27 @@ export type AssistantClearKeyResponse = {
   message: string
 }
 
-const TOKEN_AMOUNT_PATTERN = /^(\d+(?:\.\d+)?)\s*([kKmM])?$/
+const TOKEN_AMOUNT_PATTERN = /^(\d+(?:\.\d+)?)\s*([kmb万亿])?$/i
+
+const TOKEN_AMOUNT_MULTIPLIERS: Record<string, number> = {
+  k: 1000,
+  m: 1000000,
+  b: 1000000000,
+  万: 10000,
+  亿: 100000000,
+}
 
 /**
- * Parses a human-readable token amount ("128k", "1M", "1000000") into an
- * integer. Returns null when the input is not a supported token count.
+ * Parses a human-readable token amount ("128k", "1M", "1亿", "1000000") into
+ * an integer. Returns null when the input is not a supported token count.
  */
 export function parseTokenAmount(raw: string): number | null {
   const match = TOKEN_AMOUNT_PATTERN.exec(raw.trim())
   if (!match) return null
   const base = Number(match[1])
   if (!Number.isFinite(base)) return null
-  const suffix = match[2]?.toLowerCase()
-  let multiplier = 1
-  if (suffix === 'k') multiplier = 1000
-  if (suffix === 'm') multiplier = 1000000
-  return Math.round(base * multiplier)
+  const suffix = match[2]?.toLowerCase() ?? ''
+  return Math.round(base * (TOKEN_AMOUNT_MULTIPLIERS[suffix] ?? 1))
 }
 
 /**

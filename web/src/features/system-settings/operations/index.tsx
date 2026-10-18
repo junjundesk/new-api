@@ -71,6 +71,7 @@ const defaultOperationsSettings: OperationsSettings = {
   'assistant_setting.request_timeout_seconds': 60,
   'assistant_setting.confirm_writes': true,
   'assistant_setting.admin_db_tools_enabled': true,
+  'assistant_setting.user_daily_token_limit': 100000000,
   'assistant_setting.user_api_key_configured': false,
   'assistant_setting.admin_api_key_configured': false,
 }

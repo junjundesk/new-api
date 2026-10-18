@@ -29,6 +29,7 @@ func setupAssistantOptionsTest(t *testing.T) {
 	common.OptionMapRWMutex.Unlock()
 	setting := assistant_setting.Get()
 	originalSetting := *setting
+	setting.UserDailyTokenLimit = 0
 	t.Cleanup(func() {
 		common.OptionMapRWMutex.Lock()
 		common.OptionMap = original

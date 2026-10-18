@@ -232,7 +232,8 @@ twofa.code_invalid: "Verification code or backup code is incorrect"
 
 # AI assistant messages
 assistant.disabled: "The AI assistant is not enabled by the administrator"
-assistant.message_too_long: "Message is too long (max 4000 characters)"
+assistant.message_too_long: "Message is too long"
+assistant.daily_token_limit: "The assistant daily token limit has been reached ({{.Limit}} tokens). It resets at midnight."
 assistant.history_too_long: "Conversation history is too long"
 assistant.busy: "The AI assistant is busy. Please try again in a moment."
 assistant.context_exceeded: "The message is too long for the configured model context window. Please shorten it or increase the context window."

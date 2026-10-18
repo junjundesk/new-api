@@ -60,6 +60,7 @@ const baseDefaults: AssistantSettingsDefaults = {
   requestTimeoutSeconds: 60,
   confirmWrites: true,
   adminDbToolsEnabled: true,
+  dailyTokenLimit: 100000000,
 }
 
 const channels: AssistantChannel[] = [
@@ -217,6 +218,10 @@ describe('assistant settings section', () => {
     fireEvent.click(
       screen.getByRole('switch', { name: 'Allow root database tools' })
     )
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Daily token limit per user' }),
+      { target: { value: '200M' } }
+    )
 
     await selectComboboxOption(
       user,
@@ -269,7 +274,7 @@ describe('assistant settings section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(18))
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(19))
     expect(putSpy.mock.calls).toEqual([
       ['/api/option/', { key: 'assistant_setting.enabled', value: false }],
       [
@@ -287,6 +292,10 @@ describe('assistant settings section', () => {
       [
         '/api/option/',
         { key: 'assistant_setting.admin_db_tools_enabled', value: false },
+      ],
+      [
+        '/api/option/',
+        { key: 'assistant_setting.user_daily_token_limit', value: 200000000 },
       ],
       [
         '/api/option/',
@@ -349,6 +358,66 @@ describe('assistant settings section', () => {
     expect(
       (within(adminCard).getByLabelText(/API Key/) as HTMLInputElement).value
     ).toBe('')
+  })
+
+  it('saves the daily token limit per user from a readable amount', async () => {
+    renderSection()
+
+    const input = screen.getByRole('textbox', {
+      name: 'Daily token limit per user',
+    })
+    expect(input).toHaveAttribute('placeholder', '100M, 1亿, 100k, 10000')
+    expect(
+      screen.getByText(
+        'Maximum tokens one user can consume through the assistant per day. 0 means unlimited.'
+      )
+    ).toBeVisible()
+
+    fireEvent.change(input, { target: { value: '3亿' } })
+    expect(screen.getByText('Resolved value: 300000000 tokens')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1))
+    expect(putSpy.mock.calls).toEqual([
+      [
+        '/api/option/',
+        { key: 'assistant_setting.user_daily_token_limit', value: 300000000 },
+      ],
+    ])
+  })
+
+  it('saves a zero daily token limit as unlimited', async () => {
+    renderSection()
+
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Daily token limit per user' }),
+      { target: { value: '0' } }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1))
+    expect(putSpy.mock.calls).toEqual([
+      [
+        '/api/option/',
+        { key: 'assistant_setting.user_daily_token_limit', value: 0 },
+      ],
+    ])
+  })
+
+  it('blocks saving a daily token limit above the supported maximum', async () => {
+    renderSection()
+
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Daily token limit per user' }),
+      { target: { value: '20000亿' } }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Value is out of range')).toBeVisible()
+    )
+    expect(putSpy).not.toHaveBeenCalled()
   })
 
   it('shows the master and safety switches on by default', () => {
@@ -816,6 +885,21 @@ describe('assistant settings section', () => {
     expect(
       within(userCard).getByText('Resolved value: 256000 tokens')
     ).toBeVisible()
+
+    const dailyLimitInput = screen.getByRole('textbox', {
+      name: 'Daily token limit per user',
+    })
+    fireEvent.change(dailyLimitInput, { target: { value: '100M' } })
+    expect(screen.getByText('Resolved value: 100000000 tokens')).toBeVisible()
+
+    fireEvent.change(dailyLimitInput, { target: { value: '1亿' } })
+    expect(screen.getByText('Resolved value: 100000000 tokens')).toBeVisible()
+
+    fireEvent.change(dailyLimitInput, { target: { value: '2b' } })
+    expect(screen.getByText('Resolved value: 2000000000 tokens')).toBeVisible()
+
+    fireEvent.change(dailyLimitInput, { target: { value: '3万' } })
+    expect(screen.getByText('Resolved value: 30000 tokens')).toBeVisible()
   })
 
   it('blocks saving an unparseable token amount', async () => {
