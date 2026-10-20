@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -74,9 +80,10 @@ interface BreakdownMock {
 
 const mockedFetch = getUserQuotaBreakdown as unknown as BreakdownMock
 
-function payload(
-  overrides: Partial<UserQuotaBreakdownData> = {}
-): { success: true; data: UserQuotaBreakdownData } {
+function payload(overrides: Partial<UserQuotaBreakdownData> = {}): {
+  success: true
+  data: UserQuotaBreakdownData
+} {
   return {
     success: true,
     data: {
@@ -91,12 +98,21 @@ function payload(
           token_used: 1234,
         },
         {
+          user_id: 1,
+          username: 'alice',
+          use_group: 'default',
+          model_name: 'gpt-5',
+          count: 3,
+          quota: 50,
+          token_used: 100,
+        },
+        {
           user_id: 2,
           username: 'bob',
           use_group: 'default',
           model_name: 'gpt-5',
           count: 1,
-          quota: 100,
+          quota: 150,
           token_used: 10,
         },
       ],
@@ -113,10 +129,7 @@ function Harness() {
     DEFAULT_BREAKDOWN_FILTERS
   )
   return (
-    <UserConsumptionBreakdown
-      filters={filters}
-      onFiltersChange={setFilters}
-    />
+    <UserConsumptionBreakdown filters={filters} onFiltersChange={setFilters} />
   )
 }
 
@@ -187,7 +200,7 @@ describe('UserConsumptionBreakdown', () => {
 
     expect(
       await screen.findByText(
-        'Only the top 2 rows by cost are shown. Narrow the time range for complete data.'
+        'Only the top 3 rows by cost are shown. Narrow the time range for complete data.'
       )
     ).not.toBeNull()
   })
@@ -206,30 +219,38 @@ describe('UserConsumptionBreakdown', () => {
     ).not.toBeNull()
   })
 
-  test('renders cost and share per user, group and model', async () => {
+  test('renders one total row per user with collapsed group and model details', async () => {
     mockedFetch.mockResolvedValue(payload())
 
     renderPanel()
 
-    expect(await screen.findByText('alice')).not.toBeNull()
-    expect(screen.getByText('bob')).not.toBeNull()
-    expect(screen.getByText('vip')).not.toBeNull()
-    expect(screen.getByText('gpt-4.1')).not.toBeNull()
-    expect(screen.getByText('42')).not.toBeNull()
-    // Both rows split the filtered total evenly.
+    await screen.findByRole('button', { name: 'alice' })
+    expect(screen.getByRole('button', { name: 'bob' })).not.toBeNull()
+    // Alice's two group/model rows collapse into one user row: 42 + 3 requests.
+    const aliceRow = screen
+      .getByRole('button', { name: 'alice' })
+      .closest('tr') as HTMLElement
+    expect(within(aliceRow).getByText('45')).not.toBeNull()
+    expect(screen.queryByText('vip')).toBeNull()
+    expect(screen.queryByText('gpt-4.1')).toBeNull()
+    // Alice and Bob each account for half of the filtered total.
     expect(screen.getAllByText('50%').length).toBe(2)
   })
 
-  test('clicking a username narrows the table to that user', async () => {
+  test('clicking a username expands and collapses group and model details', async () => {
     mockedFetch.mockResolvedValue(payload())
 
     renderPanel()
-    await screen.findByText('alice')
+    await screen.findByRole('button', { name: 'alice' })
+    expect(screen.queryByText('vip')).toBeNull()
 
     await userEvent.click(screen.getByRole('button', { name: 'alice' }))
-
-    await waitFor(() => expect(screen.queryByText('bob')).toBeNull())
-    expect(screen.queryByText('gpt-5')).toBeNull()
+    expect(await screen.findByText('vip')).not.toBeNull()
     expect(screen.getByText('gpt-4.1')).not.toBeNull()
+    expect(screen.getByText('default')).not.toBeNull()
+    expect(screen.getByText('gpt-5')).not.toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'alice' }))
+    await waitFor(() => expect(screen.queryByText('vip')).toBeNull())
   })
 })

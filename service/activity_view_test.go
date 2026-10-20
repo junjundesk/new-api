@@ -48,7 +48,10 @@ func TestActivityViewBillingRatioOverride(t *testing.T) {
 	assert.Nil(t, nilView.BillingRatioOverride(), "nil 视图不 panic")
 
 	inherited := &ActivityView{GroupName: "vip", RatioMode: model.ActivityRatioModeInherit}
-	assert.Nil(t, inherited.BillingRatioOverride(), "没有任何覆盖时返回 nil，让计费走原价链路")
+	inheritedOverride := inherited.BillingRatioOverride()
+	require.NotNil(t, inheritedOverride, "继承授权仍然标记授权有效，供计费保护最高优先级")
+	assert.Nil(t, inheritedOverride.GroupRatio)
+	assert.Empty(t, inheritedOverride.ModelRatios)
 
 	groupOnly := (&ActivityView{GroupName: "vip", RatioMode: model.ActivityRatioModeOverride}).BillingRatioOverride()
 	require.NotNil(t, groupOnly)
@@ -74,7 +77,7 @@ func TestGetActivityOverridesAndActivityRatioFor(t *testing.T) {
 	}
 
 	overrides := GetActivityOverrides(views)
-	assert.Len(t, overrides, 2, "没有任何覆盖的授权不进映射")
+	assert.Len(t, overrides, 3, "继承型授权也保留在映射中，表示活动授权有效")
 
 	groupRatio := ActivityRatioFor(overrides, "vip")
 	require.NotNil(t, groupRatio)
@@ -83,5 +86,6 @@ func TestGetActivityOverridesAndActivityRatioFor(t *testing.T) {
 	assert.Nil(t, ActivityRatioFor(overrides, "svip"), "指定模型类型没有分组级倍率")
 	assert.Nil(t, ActivityRatioFor(overrides, "plain"))
 	assert.NotEmpty(t, overrides["svip"].ModelRatios)
+	assert.Empty(t, overrides["plain"].ModelRatios)
 	assert.Nil(t, ActivityRatioFor(nil, "vip"))
 }

@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,42 +17,53 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import type { Row } from '@tanstack/react-table'
 import { AlertTriangle, Loader2, Search } from 'lucide-react'
-import { useCallback, useMemo, type ReactNode } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useId,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   DataTablePagination,
+  DataTableRow,
   DataTableView,
   useDataTable,
+  type DataTableRenderRowHelpers,
 } from '@/components/data-table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
+import { TableCell, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getUserQuotaBreakdown } from '@/features/dashboard/api'
 import { BREAKDOWN_TIME_PRESETS } from '@/features/dashboard/constants'
 import {
   buildBreakdownFilterOptions,
   filterBreakdownRows,
+  groupBreakdownRowsByUser,
+  isGroupedBreakdownRow,
   resolveBreakdownTimeRange,
   summarizeBreakdownRows,
 } from '@/features/dashboard/lib'
 import type {
   BreakdownFilters,
   BreakdownTimePreset,
+  UserQuotaBreakdownRow,
 } from '@/features/dashboard/types'
-import {
-  formatCompactNumber,
-  formatNumber,
-  formatQuota,
-} from '@/lib/format'
+import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { PanelWrapper } from '../ui/panel-wrapper'
 import { useBreakdownColumns } from './breakdown-columns'
 import { BreakdownFilterSelect } from './breakdown-filters'
+import { UserBreakdownDetails } from './user-breakdown-details'
 
 interface UserConsumptionBreakdownProps {
   filters: BreakdownFilters
@@ -71,9 +83,7 @@ function BreakdownNotice(props: BreakdownNoticeProps) {
   )
 }
 
-export function UserConsumptionBreakdown(
-  props: UserConsumptionBreakdownProps
-) {
+export function UserConsumptionBreakdown(props: UserConsumptionBreakdownProps) {
   const { t } = useTranslation()
   const role = useAuthStore((state) => state.auth.user?.role)
   const isAdmin = Boolean(role && role >= ROLE.ADMIN)
@@ -105,16 +115,36 @@ export function UserConsumptionBreakdown(
   )
   const hasDimensionFilter = Boolean(
     filters.username ||
-      filters.use_group ||
-      filters.model_name ||
-      filters.query.trim()
+    filters.use_group ||
+    filters.model_name ||
+    filters.query.trim()
   )
 
-  const handleSelectUsername = useCallback(
-    (username: string) => {
-      onFiltersChange({ ...filters, username })
-    },
-    [filters, onFiltersChange]
+  const [expandedRowKeys, setExpandedRowKeys] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
+  const detailPanelPrefix = useId()
+  const getDetailPanelId = useCallback(
+    (key: string) => `${detailPanelPrefix}-${encodeURIComponent(key)}`,
+    [detailPanelPrefix]
+  )
+  const handleToggleRow = useCallback((key: string) => {
+    setExpandedRowKeys((previous) => {
+      const next = new Set(previous)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
+
+  // Admins get one row per user with the group/model rows tucked behind the
+  // username; non-admins already only see their own flat rows.
+  const tableRows = useMemo(
+    () => (isAdmin ? groupBreakdownRowsByUser(visibleRows) : visibleRows),
+    [isAdmin, visibleRows]
   )
 
   const handleFilterChange = useCallback(
@@ -125,17 +155,56 @@ export function UserConsumptionBreakdown(
   )
 
   const columns = useBreakdownColumns({
+    grouped: isAdmin,
     showUsername: isAdmin,
     totalQuota: summary.quota,
-    onSelectUsername: handleSelectUsername,
+    expandedRowKeys,
+    getDetailPanelId,
+    onToggleRow: handleToggleRow,
   })
 
   const { table } = useDataTable({
-    data: visibleRows,
+    data: tableRows,
     columns,
     initialSorting: [{ id: 'quota', desc: true }],
     initialPagination: { pageIndex: 0, pageSize: 20 },
   })
+
+  const columnCount = table.getVisibleLeafColumns().length
+  const renderRow = useCallback(
+    (row: Row<UserQuotaBreakdownRow>, helpers: DataTableRenderRowHelpers) => {
+      const groupedRow = isGroupedBreakdownRow(row.original)
+        ? row.original
+        : null
+      const expanded = groupedRow ? expandedRowKeys.has(groupedRow.key) : false
+      const parent = (
+        <DataTableRow
+          key={row.id}
+          row={row}
+          cellRenderColumns={table.options.columns}
+          getColumnClassName={(columnId) => helpers.getCellClassName(columnId)}
+          className={cn(expanded && 'bg-muted/30')}
+        />
+      )
+      if (!groupedRow || !expanded) {
+        return parent
+      }
+      return (
+        <Fragment key={row.id}>
+          {parent}
+          <TableRow
+            id={getDetailPanelId(groupedRow.key)}
+            className='bg-muted/30 hover:bg-muted/30'
+          >
+            <TableCell colSpan={columnCount} className='p-0 whitespace-normal'>
+              <UserBreakdownDetails details={groupedRow.details} />
+            </TableCell>
+          </TableRow>
+        </Fragment>
+      )
+    },
+    [columnCount, expandedRowKeys, getDetailPanelId, table]
+  )
 
   const tiles = [
     { key: 'cost', label: t('Total Cost'), value: formatQuota(summary.quota) },
@@ -277,6 +346,7 @@ export function UserConsumptionBreakdown(
 
       <DataTableView
         table={table}
+        renderRow={renderRow}
         isLoading={isLoading}
         emptyTitle={
           hasDimensionFilter

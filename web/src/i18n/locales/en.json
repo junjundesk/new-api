@@ -3669,7 +3669,7 @@
     "Override request parameters. Cannot override stream parameter.": "Override request parameters. Cannot override stream parameter.",
     "Override rule: when a vip user is billed as premium, the ratio is 0.3 instead of 0.5": "Override rule: when a vip user is billed as premium, the ratio is 0.3 instead of 0.5",
     "Override Rules": "Override Rules",
-    "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. Applies to every group on this channel.": "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. Applies to every group on this channel.",
+    "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. An active activity-code grant for the group takes precedence over this setting.": "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. An active activity-code grant for the group takes precedence over this setting.",
     "Override the endpoint used for testing. Leave empty to auto detect.": "Override the endpoint used for testing. Leave empty to auto detect.",
     "overrides for matching model prefix.": "overrides for matching model prefix.",
     "Overrode user quota from {{from}} to {{to}}": "Overrode user quota from {{from}} to {{to}}",

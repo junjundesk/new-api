@@ -228,6 +228,29 @@ func TestPricingBillingSnapshotRefreshWithAndWithoutMemoryCache(t *testing.T) {
 	}
 }
 
+func TestPricingBillingActivityGrantOutranksChannelModelRatio(t *testing.T) {
+	setupPricingBillingTest(t)
+	insertPricingBillingChannel(t, "activity-model", "default", `{"model_group_ratios":{"activity-model":1}}`, common.ChannelStatusEnabled, true, 10)
+	RefreshPricing()
+	visible := map[string]string{"default": "Default"}
+
+	// An inherit-mode grant on a paid group keeps the group matrix (0.5) even
+	// though the channel configured an explicit 1× override.
+	inherited := GetPricingForUser("member", visible, map[string]ratio_setting.ActivityRatioOverride{
+		"default": {},
+	})
+	require.Len(t, inherited, 1)
+	assert.Equal(t, BillingRatioRange{0.5, 0.5, "activity"}, inherited[0].BillingRatios["default"])
+
+	// An explicit zero grant makes the group free despite the channel override.
+	zero := 0.0
+	free := GetPricingForUser("member", visible, map[string]ratio_setting.ActivityRatioOverride{
+		"default": {GroupRatio: &zero},
+	})
+	require.Len(t, free, 1)
+	assert.Equal(t, BillingRatioRange{0, 0, "activity"}, free[0].BillingRatios["default"])
+}
+
 func TestPricingPublicCopyDoesNotMutateCache(t *testing.T) {
 	setupPricingBillingTest(t)
 	cacheRatios := ratio_setting.CacheRatio2JSONString()

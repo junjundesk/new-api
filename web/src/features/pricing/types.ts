@@ -30,7 +30,7 @@ export type PricingVendor = {
 export type BillingRatio = {
   min: number
   max: number
-  source: 'channel_model' | 'user_group' | 'group' | 'mixed'
+  source: 'channel_model' | 'activity' | 'user_group' | 'group' | 'mixed'
 }
 
 export type PricingModel = {

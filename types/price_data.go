@@ -12,7 +12,8 @@ const (
 	GroupRatioSourceUserGroup    = "user_group"
 	GroupRatioSourceGroup        = "group"
 	// GroupRatioSourceActivity marks a ratio granted by an activity code that the
-	// user redeemed; it outranks the user-group matrix but not a channel-model override.
+	// user redeemed; it outranks both the user-group matrix and a channel-model
+	// override.
 	GroupRatioSourceActivity = "activity"
 )
 
@@ -29,26 +30,35 @@ type GroupRatioInfo struct {
 	ActivityOriginalRatio *float64
 }
 
+// IsActivityFree reports whether an active activity-code grant made the request
+// free. Such a request skips pre-consume validation entirely, independent of the
+// free-model pre-consume setting.
+func (info GroupRatioInfo) IsActivityFree() bool {
+	return info.Source == GroupRatioSourceActivity && info.GroupRatio == 0
+}
+
 type PriceData struct {
 	// BillingModelName and the unscaled estimate stay frozen across attempts.
 	BillingModelName           string
 	PreConsumeQuotaBeforeGroup float64
-	FreeModel                  bool
-	ModelPrice                 float64
-	ModelRatio                 float64
-	CompletionRatio            float64
-	CacheRatio                 float64
-	CacheCreationRatio         float64
-	CacheCreation5mRatio       float64
-	CacheCreation1hRatio       float64
-	ImageRatio                 float64
-	AudioRatio                 float64
-	AudioCompletionRatio       float64
-	otherRatios                map[string]float64
-	UsePrice                   bool
-	Quota                      int // 按次计费的最终额度（MJ / Task）
-	QuotaToPreConsume          int // 按量计费的预消耗额度
-	GroupRatioInfo             GroupRatioInfo
+	// FreeModel means pre-consume can be skipped entirely, not merely that the
+	// computed quota is zero.
+	FreeModel            bool
+	ModelPrice           float64
+	ModelRatio           float64
+	CompletionRatio      float64
+	CacheRatio           float64
+	CacheCreationRatio   float64
+	CacheCreation5mRatio float64
+	CacheCreation1hRatio float64
+	ImageRatio           float64
+	AudioRatio           float64
+	AudioCompletionRatio float64
+	otherRatios          map[string]float64
+	UsePrice             bool
+	Quota                int // 按次计费的最终额度（MJ / Task）
+	QuotaToPreConsume    int // 按量计费的预消耗额度
+	GroupRatioInfo       GroupRatioInfo
 }
 
 func (p *PriceData) AddOtherRatio(key string, ratio float64) {

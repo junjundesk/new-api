@@ -37,6 +37,12 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 			types.ErrOptionWithSkipRetry(),
 		)
 	}
+	// A fully free activity-code grant must not be subject to balance,
+	// subscription or bonus checks. The price helpers already set FreeModel, but
+	// this guard keeps every caller safe.
+	if relayInfo != nil && relayInfo.PriceData.GroupRatioInfo.IsActivityFree() {
+		return nil
+	}
 	session, apiErr := NewBillingSession(c, relayInfo, preConsumedQuota)
 	if apiErr != nil {
 		return apiErr
@@ -58,7 +64,8 @@ func PrepareBillingForSelectedChannel(c *gin.Context, info *relaycommon.RelayInf
 	}
 	price.QuotaToPreConsume = quota
 	free := price.GroupRatioInfo.GroupRatio == 0 || (price.UsePrice && price.ModelPrice == 0) || (!price.UsePrice && price.ModelRatio == 0)
-	price.FreeModel = info.Billing == nil && free && !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume
+	activityFree := price.GroupRatioInfo.IsActivityFree()
+	price.FreeModel = info.Billing == nil && (activityFree || (free && !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume))
 	return ReserveBilling(c, quota, info)
 }
 

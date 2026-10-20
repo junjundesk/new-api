@@ -60,8 +60,8 @@ describe('model billing ratio display', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it.each(['channel_model', 'user_group', 'group'] as const)('shows the correct %s source', (source) => {
-    const labels = { channel_model: 'Model-specific', user_group: 'User group offer', group: 'Group default' }
+  it.each(['channel_model', 'activity', 'user_group', 'group'] as const)('shows the correct %s source', (source) => {
+    const labels = { channel_model: 'Model-specific', activity: 'Activity Code', user_group: 'User group offer', group: 'Group default' }
     renderUI(<ModelBillingRatio model={{ ...model, billing_ratios: { default: { min: 1, max: 1, source } } }} selectedGroup='default' />)
     expect(screen.getByRole('button', { name: `Billing ratio 1× · ${labels[source]}` })).toBeVisible()
   })
@@ -80,7 +80,9 @@ describe('model billing ratio display', () => {
     const dynamic = { ...model, billing_mode: 'tiered_expr', billing_expr: 'tier("standard", p * 4 + c * 12)' }
     renderUI(<ModelDetailsContent model={dynamic} selectedGroup='default' groupRatio={{ default: 2 }} usableGroup={{ default: { desc: 'Default', ratio: 2 } }} autoGroups={[]} endpointMap={{}} tokenUnit='M' priceRate={1} usdExchangeRate={1} />)
     expect(screen.getByRole('button', { name: 'Billing ratio 0.8–1.2× · Model-specific' })).toBeVisible()
-    const pricing = screen.getByText('Selected group price').closest('section')!
+    const pricingSection = screen.getByText('Selected group price').closest('section')
+    expect(pricingSection).not.toBeNull()
+    const pricing = pricingSection as HTMLElement
     expect(within(pricing).getAllByText((content) => content.startsWith('$9.6–$14.4')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('$9.6–$14.4').length).toBeGreaterThan(1)
   })

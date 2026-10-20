@@ -111,7 +111,9 @@ func GetRequestActivityView(c *gin.Context, userId int, group string) *ActivityV
 	return nil
 }
 
-// BillingRatioOverride 把该授权的倍率覆盖转换成计费解析所需形态；没有任何覆盖时返回 nil。
+// BillingRatioOverride 把该授权的倍率覆盖转换成计费解析所需形态。
+// 非 nil 的 view 始终返回非 nil 结构体：即使两个字段都为空（继承型授权），
+// 非 nil 也代表「活动授权有效」，计费解析器据此让活动授权保持最高优先级。
 // 名称不能是 RatioOverride：ActivityView 已有同名字段。
 func (view *ActivityView) BillingRatioOverride() *ratio_setting.ActivityRatioOverride {
 	if view == nil {
@@ -125,16 +127,15 @@ func (view *ActivityView) BillingRatioOverride() *ratio_setting.ActivityRatioOve
 	if len(view.ModelRatioOverrides) > 0 {
 		override.ModelRatios = view.ModelRatioOverrides
 	}
-	if override.GroupRatio == nil && len(override.ModelRatios) == 0 {
-		return nil
-	}
 	return override
 }
 
-// ActivityOverrides 是「分组 -> 倍率覆盖」，同时承载分组级 override 与指定模型倍率。
+// ActivityOverrides 是「分组 -> 倍率覆盖」，同时承载分组级 override 与指定模型倍率；
+// 继承型授权以空覆盖保留在映射中，表示该分组有有效活动授权。
 type ActivityOverrides map[string]ratio_setting.ActivityRatioOverride
 
-// GetActivityOverrides 把授权列表转换成「分组 -> 倍率覆盖」。
+// GetActivityOverrides 把有效授权列表转换成「分组 -> 倍率覆盖」。
+// 没有倍率覆盖的继承型授权也会保留为空覆盖，供计费解析器识别活动授权。
 func GetActivityOverrides(views []ActivityView) ActivityOverrides {
 	overrides := make(ActivityOverrides, len(views))
 	for i := range views {

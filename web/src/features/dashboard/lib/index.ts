@@ -34,6 +34,8 @@ export {
   summarizeBreakdownRows,
   buildBreakdownFilterOptions,
   filterBreakdownRows,
+  groupBreakdownRowsByUser,
+  isGroupedBreakdownRow,
   breakdownShare,
   type BreakdownFilterOption,
   type BreakdownFilterOptions,

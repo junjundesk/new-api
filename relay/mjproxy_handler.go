@@ -212,18 +212,20 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		}
 	}
 
-	userQuota, err := model.GetUserQuota(info.UserId, false)
-	if err != nil {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: err.Error(),
+	if !priceData.FreeModel {
+		userQuota, err := model.GetUserQuota(info.UserId, false)
+		if err != nil {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: err.Error(),
+			}
 		}
-	}
 
-	if userQuota-priceData.Quota < 0 {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: "quota_not_enough",
+		if userQuota-priceData.Quota < 0 {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: "quota_not_enough",
+			}
 		}
 	}
 	requestURL := getMjRequestPath(c.Request.URL.String())
@@ -527,18 +529,20 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		}
 	}
 
-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
-	if err != nil {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: err.Error(),
+	if consumeQuota && !priceData.FreeModel {
+		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+		if err != nil {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: err.Error(),
+			}
 		}
-	}
 
-	if consumeQuota && userQuota-priceData.Quota < 0 {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: "quota_not_enough",
+		if userQuota-priceData.Quota < 0 {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: "quota_not_enough",
+			}
 		}
 	}
 

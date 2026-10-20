@@ -18,15 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import type {
-  BreakdownFilters,
-  UserQuotaBreakdownRow,
-} from '../../types'
+import type { BreakdownFilters, UserQuotaBreakdownRow } from '../../types'
 import {
   BREAKDOWN_EMPTY_FILTER_VALUE,
   breakdownShare,
   buildBreakdownFilterOptions,
   filterBreakdownRows,
+  groupBreakdownRowsByUser,
   resolveBreakdownTimeRange,
   summarizeBreakdownRows,
 } from '../breakdown'
@@ -237,6 +235,97 @@ describe('filterBreakdownRows', () => {
     expect(
       filterBreakdownRows(rows, filters({ query: 'nobody' }))
     ).toHaveLength(0)
+  })
+})
+
+describe('groupBreakdownRowsByUser', () => {
+  test('sums one user across groups and models and orders details by cost', () => {
+    const grouped = groupBreakdownRowsByUser([
+      row({
+        user_id: 1,
+        username: 'alice',
+        use_group: 'vip',
+        model_name: 'gpt-a',
+        count: 2,
+        quota: 100,
+        token_used: 10,
+      }),
+      row({
+        user_id: 1,
+        username: 'alice',
+        use_group: 'default',
+        model_name: 'gpt-b',
+        count: 1,
+        quota: 50,
+        token_used: 5,
+      }),
+      row({
+        user_id: 2,
+        username: 'bob',
+        use_group: 'vip',
+        model_name: 'gpt-a',
+        count: 3,
+        quota: 75,
+        token_used: 7,
+      }),
+    ])
+
+    expect(grouped).toHaveLength(2)
+    expect(grouped[0]).toMatchObject({
+      key: 'id:1',
+      user_id: 1,
+      username: 'alice',
+      quota: 150,
+      count: 3,
+      token_used: 15,
+    })
+    expect(grouped[0].details.map((detail) => detail.use_group)).toEqual([
+      'vip',
+      'default',
+    ])
+    expect(grouped[1]).toMatchObject({
+      key: 'id:2',
+      username: 'bob',
+      quota: 75,
+      count: 3,
+      token_used: 7,
+    })
+  })
+
+  test('groups legacy rows without a user id by username', () => {
+    const grouped = groupBreakdownRowsByUser([
+      row({
+        user_id: 0,
+        username: 'legacy',
+        use_group: 'vip',
+        model_name: 'a',
+        quota: 10,
+      }),
+      row({
+        user_id: 0,
+        username: 'legacy',
+        use_group: 'default',
+        model_name: 'b',
+        quota: 20,
+      }),
+      row({
+        user_id: 0,
+        username: 'other',
+        use_group: 'vip',
+        model_name: 'a',
+        quota: 30,
+      }),
+    ])
+
+    expect(grouped).toHaveLength(2)
+    expect(grouped.find((entry) => entry.username === 'legacy')?.quota).toBe(30)
+    expect(
+      grouped.find((entry) => entry.username === 'legacy')?.details
+    ).toHaveLength(2)
+  })
+
+  test('returns an empty array when there are no rows', () => {
+    expect(groupBreakdownRowsByUser([])).toEqual([])
   })
 })
 

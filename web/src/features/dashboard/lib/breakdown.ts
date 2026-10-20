@@ -19,14 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import type {
   BreakdownFilters,
   BreakdownTimePreset,
+  UserQuotaBreakdownGroupedRow,
   UserQuotaBreakdownRow,
 } from '@/features/dashboard/types'
-
-import {
-  dateToUnixTimestamp,
-  getEndOfDay,
-  getStartOfDay,
-} from '@/lib/time'
+import { dateToUnixTimestamp, getEndOfDay, getStartOfDay } from '@/lib/time'
 
 const DAY_SECONDS = 24 * 60 * 60
 
@@ -199,6 +195,72 @@ export function filterBreakdownRows(
       .toLowerCase()
       .includes(query)
   })
+}
+
+export function isGroupedBreakdownRow(
+  row: UserQuotaBreakdownRow
+): row is UserQuotaBreakdownGroupedRow {
+  return 'details' in row
+}
+
+/**
+ * Collapse the per-user x group x model rows into one row per user for the
+ * admin view. Totals cover exactly the rows passed in, so callers must filter
+ * first; the attached details keep the original per-group/per-model numbers.
+ */
+export function groupBreakdownRowsByUser(
+  rows: UserQuotaBreakdownRow[]
+): UserQuotaBreakdownGroupedRow[] {
+  const grouped = new Map<string, UserQuotaBreakdownGroupedRow>()
+  for (const row of rows) {
+    const key = row.user_id > 0 ? `id:${row.user_id}` : `name:${row.username}`
+    let entry = grouped.get(key)
+    if (!entry) {
+      entry = {
+        key,
+        user_id: row.user_id,
+        username: row.username,
+        use_group: '',
+        model_name: '',
+        count: 0,
+        quota: 0,
+        token_used: 0,
+        details: [],
+      }
+      grouped.set(key, entry)
+    }
+    if (!entry.username && row.username) {
+      entry.username = row.username
+    }
+    entry.count += row.count || 0
+    entry.quota += row.quota || 0
+    entry.token_used += row.token_used || 0
+    entry.details.push(row)
+  }
+
+  const result = [...grouped.values()]
+  for (const entry of result) {
+    entry.details.sort((a, b) => {
+      const quotaDiff = (b.quota || 0) - (a.quota || 0)
+      if (quotaDiff !== 0) return quotaDiff
+      if (a.use_group !== b.use_group) {
+        return a.use_group < b.use_group ? -1 : 1
+      }
+      if (a.model_name !== b.model_name) {
+        return a.model_name < b.model_name ? -1 : 1
+      }
+      return 0
+    })
+  }
+  result.sort((a, b) => {
+    const quotaDiff = (b.quota || 0) - (a.quota || 0)
+    if (quotaDiff !== 0) return quotaDiff
+    if (a.username !== b.username) {
+      return a.username < b.username ? -1 : 1
+    }
+    return a.user_id - b.user_id
+  })
+  return result
 }
 
 /**

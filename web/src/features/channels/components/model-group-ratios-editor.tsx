@@ -47,7 +47,7 @@ export function ModelGroupRatiosEditor(props: Props) {
       <FieldLegend>{t('Model billing ratios')}</FieldLegend>
       <FieldDescription id={`${id}-help`}>
         {t(
-          'Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. Applies to every group on this channel.'
+          'Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. An active activity-code grant for the group takes precedence over this setting.'
         )}
       </FieldDescription>
       <FieldGroup className='gap-3'>

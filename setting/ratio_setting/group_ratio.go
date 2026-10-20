@@ -163,8 +163,9 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 
 // ActivityRatioOverride is an activity-code grant's ratio overrides for one group.
 // ModelRatios covers the named billing models and outranks GroupRatio, which covers
-// every other model in the group. Both empty means the grant overrides no ratio,
-// which is what an inherit-mode whole-group grant stores.
+// every other model in the group. Both empty means the grant inherits the group
+// pricing; the non-nil value still marks an active grant, which outranks a
+// channel-model override.
 type ActivityRatioOverride struct {
 	ModelRatios map[string]float64
 	GroupRatio  *float64
@@ -182,50 +183,73 @@ func validBillingRatio(ratio *float64) bool {
 // routing and authorization. modelName is the exact token-mapped, pre-channel-
 // mapping billing name. The returned override is copied to freeze its value.
 //
-// activity, when non-nil, carries the ratio overrides of an active activity-code
-// grant the user holds for usingGroup. A model listed in activity.ModelRatios is
-// more specific than the whole group and wins; activity.GroupRatio then outranks
-// the user-group matrix (a redeemed code is more specific than the user's own
-// group). Neither outranks a channel-model override.
+// An active activity-code grant is the highest priority: when activity is
+// non-nil, its model-specific ratio (or group-level ratio, or the group's own
+// ratio for an inherit-mode grant) is the charge, and a channel-model override
+// is ignored. Without a grant, a channel-model override outranks the user-group
+// matrix, which outranks the group default.
 func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides map[string]*float64, activity *ActivityRatioOverride) types.GroupRatioInfo {
 	info := types.GroupRatioInfo{GroupSpecialRatio: -1, Source: types.GroupRatioSourceGroup}
+
+	var channelRatio *float64
 	if ratio, ok := overrides[modelName]; ok && validBillingRatio(ratio) {
 		value := *ratio
-		info.GroupRatio = value
-		info.ChannelModelRatio = &value
-		info.Source = types.GroupRatioSourceChannelModel
-		return info
+		channelRatio = &value
 	}
+
+	var activityRatio *float64
 	if activity != nil {
-		var activityRatio *float64
 		if ratio, ok := activity.ModelRatios[modelName]; ok && validBillingRatio(&ratio) {
 			activityRatio = &ratio
 		} else if validBillingRatio(activity.GroupRatio) {
 			activityRatio = activity.GroupRatio
 		}
-		if activityRatio != nil {
-			value := *activityRatio
-			info.GroupRatio = value
-			info.GroupSpecialRatio = value
-			info.HasSpecialRatio = true
-			info.Source = types.GroupRatioSourceActivity
-			// Freeze the price the request would have had without the grant, so the
-			// consume log can show it struck through next to the discounted charge.
-			// Channel-model overrides already lost to the grant above, so they
-			// cannot apply to this fallback either.
-			original := ResolveModelGroupRatio(userGroup, usingGroup, modelName, nil, nil).GroupRatio
-			info.ActivityOriginalRatio = &original
-			return info
-		}
 	}
-	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {
-		info.GroupRatio = ratio
-		info.GroupSpecialRatio = ratio
-		info.HasSpecialRatio = true
-		info.Source = types.GroupRatioSourceUserGroup
+
+	if activity == nil && channelRatio != nil {
+		value := *channelRatio
+		info.GroupRatio = value
+		info.ChannelModelRatio = &value
+		info.Source = types.GroupRatioSourceChannelModel
 		return info
 	}
-	info.GroupRatio = GetGroupRatio(usingGroup)
+
+	var baseRatio float64
+	baseSpecial := false
+	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {
+		baseRatio = ratio
+		baseSpecial = true
+	} else {
+		baseRatio = GetGroupRatio(usingGroup)
+	}
+
+	if activity != nil {
+		value := baseRatio
+		if activityRatio != nil {
+			value = *activityRatio
+		}
+		info.GroupRatio = value
+		info.GroupSpecialRatio = value
+		info.HasSpecialRatio = true
+		info.Source = types.GroupRatioSourceActivity
+		// Freeze the price the request would have had without the grant, so the
+		// consume log can show it struck through next to the discounted charge.
+		if channelRatio != nil {
+			original := *channelRatio
+			info.ActivityOriginalRatio = &original
+		} else if activityRatio != nil {
+			original := baseRatio
+			info.ActivityOriginalRatio = &original
+		}
+		return info
+	}
+
+	info.GroupRatio = baseRatio
+	if baseSpecial {
+		info.GroupSpecialRatio = baseRatio
+		info.HasSpecialRatio = true
+		info.Source = types.GroupRatioSourceUserGroup
+	}
 	return info
 }
 

@@ -44,6 +44,13 @@ export interface UserQuotaBreakdownRow {
   token_used: number
 }
 
+// One row per user in the admin breakdown: totals across every group and model.
+// The detail rows stay attached so the table can expand in place.
+export interface UserQuotaBreakdownGroupedRow extends UserQuotaBreakdownRow {
+  key: string
+  details: UserQuotaBreakdownRow[]
+}
+
 export interface UserQuotaBreakdownData {
   rows: UserQuotaBreakdownRow[]
   // True when the server capped the row count, so the client must not claim

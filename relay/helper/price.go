@@ -57,8 +57,8 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	if relayInfo.PriceData.BillingModelName != "" {
 		modelName = relayInfo.PriceData.BillingModelName
 	}
-	// 活动码授权对该分组给出专属倍率（0 表示完全免费），优先于用户分组倍率矩阵；
-	// 指定模型倍率在授权内部优先于分组级倍率。
+	// 活动码授权对该分组最高优先：活动倍率（指定模型 > 分组级 > 继承分组倍率）
+	// 优先于渠道模型专属倍率；没有活动授权时才使用渠道专属倍率。
 	var activity *ratio_setting.ActivityRatioOverride
 	if activityView := service.GetRequestActivityView(ctx, relayInfo.UserId, relayInfo.UsingGroup); activityView != nil {
 		activity = activityView.BillingRatioOverride()
@@ -145,6 +145,14 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 				freeModel = true
 			}
 		}
+	}
+
+	// A fully free activity-code grant skips pre-consume regardless of the
+	// free-model pre-consume setting; otherwise balance and funding checks would
+	// still run against a request that cannot be charged.
+	if groupRatioInfo.IsActivityFree() {
+		preConsumedQuota = 0
+		freeModel = true
 	}
 
 	priceData := hosttypes.PriceData{
@@ -243,6 +251,11 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (hostt
 		}
 	}
 
+	if groupRatioInfo.IsActivityFree() {
+		quota = 0
+		freeModel = true
+	}
+
 	priceData := hosttypes.PriceData{
 		BillingModelName: info.OriginModelName,
 		FreeModel:        freeModel,
@@ -307,6 +320,11 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 			preConsumedQuota = 0
 			freeModel = true
 		}
+	}
+
+	if groupRatioInfo.IsActivityFree() {
+		preConsumedQuota = 0
+		freeModel = true
 	}
 
 	exprHash := billingexpr.ExprHashString(exprStr)

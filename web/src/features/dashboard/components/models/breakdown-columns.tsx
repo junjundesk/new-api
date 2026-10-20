@@ -17,12 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
+import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTableColumnHeader } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { breakdownShare } from '@/features/dashboard/lib'
+import { breakdownShare, isGroupedBreakdownRow } from '@/features/dashboard/lib'
 import type { UserQuotaBreakdownRow } from '@/features/dashboard/types'
 import {
   formatCompactNumber,
@@ -30,15 +31,21 @@ import {
   formatPercent,
   formatQuota,
 } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 const EMPTY_DIMENSION = '—'
 
 interface BreakdownColumnOptions {
+  // Admin view collapses each user into one row; non-admins keep the flat
+  // group x model table.
+  grouped: boolean
   // Non-admins only ever see their own rows, so the user column is redundant.
   showUsername: boolean
   // Denominator of the share column: the cost of the current filter selection.
   totalQuota: number
-  onSelectUsername: (username: string) => void
+  expandedRowKeys: ReadonlySet<string>
+  getDetailPanelId: (key: string) => string
+  onToggleRow: (key: string) => void
 }
 
 export function useBreakdownColumns(
@@ -54,53 +61,73 @@ export function useBreakdownColumns(
         <DataTableColumnHeader column={column} title={t('User')} />
       ),
       cell: ({ row }) => {
-        const username = row.original.username
-        if (!username) {
+        const original = row.original
+        if (!isGroupedBreakdownRow(original)) {
           return (
-            <span className='text-muted-foreground'>{EMPTY_DIMENSION}</span>
+            <span className='block max-w-40 truncate font-medium'>
+              {original.username || EMPTY_DIMENSION}
+            </span>
           )
         }
+
+        const expanded = options.expandedRowKeys.has(original.key)
         return (
           <Button
             type='button'
-            variant='link'
+            variant='ghost'
             size='sm'
-            className='h-auto max-w-40 justify-start truncate p-0 font-medium'
-            onClick={() => options.onSelectUsername(username)}
+            className='h-auto max-w-40 justify-start gap-1 p-0 font-medium'
+            aria-expanded={expanded}
+            aria-controls={options.getDetailPanelId(original.key)}
+            onClick={() => options.onToggleRow(original.key)}
           >
-            {username}
+            <ChevronRight
+              className={cn(
+                'size-3.5 shrink-0 transition-transform',
+                expanded && 'rotate-90'
+              )}
+              aria-hidden='true'
+            />
+            <span className='truncate'>
+              {original.username || EMPTY_DIMENSION}
+            </span>
           </Button>
         )
       },
-      size: 160,
+      size: options.grouped ? 200 : 160,
     })
   }
 
+  if (!options.grouped) {
+    columns.push(
+      {
+        accessorKey: 'use_group',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Group')} />
+        ),
+        cell: ({ row }) => (
+          <span className='font-mono text-xs'>
+            {row.original.use_group || EMPTY_DIMENSION}
+          </span>
+        ),
+        size: 140,
+      },
+      {
+        accessorKey: 'model_name',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Model')} />
+        ),
+        cell: ({ row }) => (
+          <span className='block max-w-60 truncate font-mono text-xs'>
+            {row.original.model_name || EMPTY_DIMENSION}
+          </span>
+        ),
+        size: 220,
+      }
+    )
+  }
+
   columns.push(
-    {
-      accessorKey: 'use_group',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Group')} />
-      ),
-      cell: ({ row }) => (
-        <span className='font-mono text-xs'>
-          {row.original.use_group || EMPTY_DIMENSION}
-        </span>
-      ),
-      size: 140,
-    },
-    {
-      accessorKey: 'model_name',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Model')} />
-      ),
-      cell: ({ row }) => (
-        <span className='block max-w-60 truncate font-mono text-xs'>
-          {row.original.model_name || EMPTY_DIMENSION}
-        </span>
-      ),
-      size: 220,
-    },
     {
       accessorKey: 'count',
       header: ({ column }) => (

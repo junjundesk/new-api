@@ -3669,7 +3669,7 @@
     "Override request parameters. Cannot override stream parameter.": "覆盖请求参数。无法覆盖 stream 参数。",
     "Override rule: when a vip user is billed as premium, the ratio is 0.3 instead of 0.5": "覆盖规则：vip 用户按 premium 计费时，倍率用 0.3 而不是 0.5",
     "Override Rules": "覆盖规则",
-    "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. Applies to every group on this channel.": "按本渠道对外发布的模型名（映射前）设置，替代有效分组倍率。留空沿用原计价；0 为免费，1 为明确的 1 倍。对本渠道所有分组生效。",
+    "Override the effective group ratio for this channel and published model, before model mapping. Blank inherits the original price; 0 is free and 1 is an explicit 1× ratio. An active activity-code grant for the group takes precedence over this setting.": "按本渠道对外发布的模型名（映射前）设置，替代有效分组倍率。留空沿用原计价；0 为免费，1 为明确的 1 倍。用户持有该分组的有效活动码授权时，以活动码为准。",
     "Override the endpoint used for testing. Leave empty to auto detect.": "覆盖用于测试的端点。留空以自动检测。",
     "overrides for matching model prefix.": "为匹配模型前缀的覆盖价。",
     "Overrode user quota from {{from}} to {{to}}": "覆盖用户额度，从 {{from}} 改为 {{to}}",

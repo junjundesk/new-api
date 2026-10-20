@@ -21,11 +21,13 @@ export function ModelBillingRatio(props: {
     !props.selectedGroup ||
     props.selectedGroup === FILTER_ALL ||
     !props.model.enable_groups.includes(props.selectedGroup)
-  )
+  ) {
     return null
+  }
   const ratio = getGroupBillingRatio(props.model, props.selectedGroup)
   const labels = {
     channel_model: t('Model-specific'),
+    activity: t('Activity Code'),
     user_group: t('User group offer'),
     group: t('Group default'),
     mixed: t('By channel'),
