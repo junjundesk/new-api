@@ -27,6 +27,7 @@ import type {
   UserFormData,
   ManageUserAction,
   ManageUserQuotaPayload,
+  BindUserInviterPayload,
   ApiResponse,
 } from './types'
 
@@ -135,6 +136,16 @@ export async function adjustUserQuota(
   payload: ManageUserQuotaPayload
 ): Promise<ApiResponse<Partial<User>>> {
   const res = await api.post('/api/user/manage', payload)
+  return res.data
+}
+
+/**
+ * Bind one inviter to several users at once (admin manual assignment)
+ */
+export async function bindUserInviter(
+  payload: BindUserInviterPayload
+): Promise<ApiResponse<{ updated: number }>> {
+  const res = await api.post('/api/user/inviter/bind', payload)
   return res.data
 }
 

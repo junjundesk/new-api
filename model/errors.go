@@ -16,6 +16,14 @@ var (
 	ErrEmailAmbiguous       = errors.New("email matches multiple users")
 )
 
+// Inviter binding errors
+var (
+	ErrInviterNotFound      = errors.New("inviter not found")
+	ErrInviterTargetMissing = errors.New("one or more target users not found")
+	ErrInviterSelf          = errors.New("a user cannot be their own inviter")
+	ErrInviterCycle         = errors.New("inviter chain would form a cycle")
+)
+
 // Token auth errors
 var (
 	ErrTokenNotProvided = errors.New("token not provided")

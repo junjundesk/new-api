@@ -147,6 +147,11 @@ export interface ManageUserQuotaPayload {
   value: number
 }
 
+export interface BindUserInviterPayload {
+  user_ids: number[]
+  inviter_id: number
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================

@@ -152,6 +152,10 @@ const (
 	MsgUserTelegramNotBound          = "user.telegram_not_bound"
 	MsgUserLinuxDOIdEmpty            = "user.linux_do_id_empty"
 	MsgUserQuotaChangeZero           = "user.quota_change_zero"
+	MsgUserInviterNotFound           = "user.inviter_not_found"
+	MsgUserInviterTargetMissing      = "user.inviter_target_missing"
+	MsgUserInviterSelf               = "user.inviter_self"
+	MsgUserInviterCycle              = "user.inviter_cycle"
 )
 
 // Quota related messages

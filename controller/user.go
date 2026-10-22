@@ -1154,6 +1154,83 @@ type ManageRequest struct {
 	Mode   string `json:"mode"`
 }
 
+type bindUserInviterRequest struct {
+	UserIds   []int `json:"user_ids"`
+	InviterId int   `json:"inviter_id"`
+}
+
+// BindUserInviter repoints the inviter of several users at once. It is an
+// administrative repair tool: it never grants invitation rewards, because those
+// were settled for the relationship that existed when each user registered or
+// topped up.
+func BindUserInviter(c *gin.Context) {
+	var req bindUserInviterRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if req.InviterId <= 0 || len(req.UserIds) == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if len(req.UserIds) > model.MaxInviterBindBatch {
+		common.ApiErrorI18n(c, i18n.MsgBatchTooMany, map[string]any{"Max": model.MaxInviterBindBatch})
+		return
+	}
+
+	inviter, err := model.GetUserById(req.InviterId, false)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorI18n(c, i18n.MsgUserInviterNotFound)
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+
+	targets, err := model.GetUsersByIds(req.UserIds)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(targets) == 0 {
+		common.ApiErrorI18n(c, i18n.MsgUserInviterTargetMissing)
+		return
+	}
+	myRole := c.GetInt("role")
+	for _, target := range targets {
+		if !canManageTargetRole(myRole, target.Role) {
+			common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			return
+		}
+	}
+
+	updated, err := model.BindInviterForUsers(req.UserIds, req.InviterId)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrInviterNotFound):
+			common.ApiErrorI18n(c, i18n.MsgUserInviterNotFound)
+		case errors.Is(err, model.ErrInviterTargetMissing):
+			common.ApiErrorI18n(c, i18n.MsgUserInviterTargetMissing)
+		case errors.Is(err, model.ErrInviterSelf):
+			common.ApiErrorI18n(c, i18n.MsgUserInviterSelf)
+		case errors.Is(err, model.ErrInviterCycle):
+			common.ApiErrorI18n(c, i18n.MsgUserInviterCycle)
+		default:
+			common.ApiError(c, err)
+		}
+		return
+	}
+
+	recordManageAuditFor(c, 0, "user.inviter_bind", map[string]interface{}{
+		"count":      updated,
+		"inviter":    inviter.Username,
+		"inviter_id": inviter.Id,
+		"user_ids":   req.UserIds,
+	})
+	common.ApiSuccess(c, gin.H{"updated": updated})
+}
+
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest

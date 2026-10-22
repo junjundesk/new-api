@@ -5936,6 +5936,14 @@
     "Remove {{username}}": "Remove {{username}}",
     "Search users to exclude": "Search users to exclude",
     "Searching...": "Searching...",
+    "Bind Inviter": "Bind Inviter",
+    "Bind inviter for selected users": "Bind inviter for selected users",
+    "Bound {{count}} user(s) to inviter {{username}}": "Bound {{count}} user(s) to inviter {{username}}",
+    "Failed to bind inviter": "Failed to bind inviter",
+    "Search by username, email or ID": "Search by username, email or ID",
+    "Search users": "Search users",
+    "Set inviter to {{inviter}} (ID: {{inviter_id}}) for {{count}} users": "Set inviter to {{inviter}} (ID: {{inviter_id}}) for {{count}} users",
+    "Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.": "Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.",
     "Zoom": "Zoom"
   }
 }

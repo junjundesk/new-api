@@ -474,6 +474,93 @@ func fillInviterUsernames(users []*User) {
 	}
 }
 
+// MaxInviterBindBatch bounds how many users one admin request may rebind.
+const MaxInviterBindBatch = 100
+
+// BindInviterForUsers points every given user at inviterId in one transaction.
+//
+// It only rewrites the referral relationship: signup rewards and top-up
+// commissions were settled for the relationship that existed at the time, so
+// they stay untouched and history remains auditable. Only top-ups after the
+// binding follow the new inviter.
+func BindInviterForUsers(userIds []int, inviterId int) (int, error) {
+	if inviterId <= 0 {
+		return 0, ErrInviterNotFound
+	}
+	ids := make([]int, 0, len(userIds))
+	seen := make(map[int]struct{}, len(userIds))
+	for _, id := range userIds {
+		if id <= 0 {
+			return 0, ErrInviterTargetMissing
+		}
+		if id == inviterId {
+			return 0, ErrInviterSelf
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return 0, ErrInviterTargetMissing
+	}
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// Lock the targets and inviter before checking the chain. Overlapping
+		// assignments must not both validate an old graph and then create a cycle.
+		lockIds := append(append([]int(nil), ids...), inviterId)
+		var users []User
+		if err := lockForUpdate(tx).Select("id", "inviter_id").Where("id IN ?", lockIds).Order("id").Find(&users).Error; err != nil {
+			return err
+		}
+		var inviter *User
+		for i := range users {
+			if users[i].Id == inviterId {
+				inviter = &users[i]
+				break
+			}
+		}
+		if inviter == nil {
+			return ErrInviterNotFound
+		}
+		if len(users) != len(lockIds) {
+			return ErrInviterTargetMissing
+		}
+
+		// Lock each ancestor until commit so another binding cannot change any
+		// link used to establish that this assignment is acyclic.
+		ancestorId := inviter.InviterId
+		visited := map[int]struct{}{inviterId: {}}
+		for ancestorId > 0 {
+			if _, ok := seen[ancestorId]; ok {
+				return ErrInviterCycle
+			}
+			if _, ok := visited[ancestorId]; ok {
+				return ErrInviterCycle
+			}
+			visited[ancestorId] = struct{}{}
+			var ancestor User
+			err := lockForUpdate(tx).Select("id", "inviter_id").Where("id = ?", ancestorId).First(&ancestor).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			ancestorId = ancestor.InviterId
+		}
+
+		// Existence was verified under locks above. MySQL counts only changed
+		// rows by default, so RowsAffected cannot detect missing selected users.
+		return tx.Model(&User{}).Where("id IN ?", ids).Update("inviter_id", inviterId).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
 	var users []*User
 	var total int64
@@ -557,6 +644,20 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
 	return &user, err
+}
+
+// GetUsersByIds loads the given users for batch admin operations that must
+// validate every target before writing. Soft-deleted users are not returned,
+// so a stale selection fails loudly instead of silently editing tombstones.
+func GetUsersByIds(ids []int) ([]*User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var users []*User
+	if err := DB.Omit("password", "access_token").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func GetUserIdByAffCode(affCode string) (int, error) {

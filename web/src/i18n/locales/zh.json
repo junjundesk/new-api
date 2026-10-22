@@ -5936,6 +5936,14 @@
     "Remove {{username}}": "移除 {{username}}",
     "Search users to exclude": "搜索要排除的用户",
     "Searching...": "搜索中...",
+    "Bind Inviter": "绑定邀请人",
+    "Bind inviter for selected users": "为选中用户绑定邀请人",
+    "Bound {{count}} user(s) to inviter {{username}}": "已将 {{count}} 个用户的邀请人绑定为 {{username}}",
+    "Failed to bind inviter": "绑定邀请人失败",
+    "Search by username, email or ID": "按用户名、邮箱或 ID 搜索",
+    "Search users": "搜索用户",
+    "Set inviter to {{inviter}} (ID: {{inviter_id}}) for {{count}} users": "将 {{count}} 个用户的邀请人设置为 {{inviter}}（ID: {{inviter_id}}）",
+    "Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.": "将选中的 {{count}} 个用户绑定到同一位邀请人。已有邀请关系会被覆盖，且不会补发邀请奖励。",
     "Zoom": "缩放"
   }
 }
