@@ -67,6 +67,77 @@ func TestApplySystemPromptIfNeededConcatenatesUserPromptWhenEnabled(t *testing.T
 	require.Equal(t, "channel rules\nuser rules", request.Messages[0].StringContent())
 }
 
+func TestApplySystemPromptIfNeededReplacesAllSystemMessages(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{
+		Model: "gpt-4o",
+		Messages: []dto.Message{
+			{Role: "user", Content: "before"},
+			{Role: "system", Content: "first user rules"},
+			{Role: "assistant", Content: "answer"},
+			{Role: "developer", Content: "second user rules"},
+			{Role: "user", Content: "after"},
+		},
+	}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelSetting: dto.ChannelSettings{SystemPrompt: "channel rules"},
+		},
+	}
+
+	applySystemPromptIfNeeded(newSystemPromptTestContext(), info, request)
+
+	require.Len(t, request.Messages, 4)
+	require.Equal(t, "user", request.Messages[0].Role)
+	require.Equal(t, "system", request.Messages[1].Role)
+	require.Equal(t, "channel rules", request.Messages[1].StringContent())
+	require.Equal(t, "assistant", request.Messages[2].Role)
+	require.Equal(t, "user", request.Messages[3].Role)
+	require.Equal(t, "after", request.Messages[3].StringContent())
+}
+
+func TestApplySystemPromptIfNeededReplacesAllSystemAndDeveloperMessages(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{
+		Model: "gpt-5",
+		Messages: []dto.Message{
+			{Role: "system", Content: "system user rules"},
+			{Role: "developer", Content: "developer user rules"},
+			{Role: "user", Content: "hello"},
+		},
+	}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelSetting: dto.ChannelSettings{SystemPrompt: "channel rules"},
+		},
+	}
+
+	applySystemPromptIfNeeded(newSystemPromptTestContext(), info, request)
+
+	require.Len(t, request.Messages, 2)
+	require.Equal(t, "developer", request.Messages[0].Role)
+	require.Equal(t, "channel rules", request.Messages[0].StringContent())
+	require.Equal(t, "user", request.Messages[1].Role)
+	require.Equal(t, "hello", request.Messages[1].StringContent())
+}
+
+func TestApplySystemPromptIfNeededPrependsWhenNoSystemMessage(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{
+		Model:    "gpt-4o",
+		Messages: []dto.Message{{Role: "user", Content: "hello"}},
+	}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelSetting: dto.ChannelSettings{SystemPrompt: "channel rules"},
+		},
+	}
+
+	applySystemPromptIfNeeded(newSystemPromptTestContext(), info, request)
+
+	require.Len(t, request.Messages, 2)
+	require.Equal(t, "system", request.Messages[0].Role)
+	require.Equal(t, "channel rules", request.Messages[0].StringContent())
+	require.Equal(t, "hello", request.Messages[1].StringContent())
+}
+
 func TestApplySystemPromptToResponsesRequestUsesSamePriority(t *testing.T) {
 	request := &dto.OpenAIResponsesRequest{}
 	encoded, err := rootcommon.Marshal("user rules")

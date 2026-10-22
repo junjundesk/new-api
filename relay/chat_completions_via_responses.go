@@ -29,6 +29,36 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 
 	systemRole := request.GetSystemRoleName()
 
+	// Without concatenation, the channel prompt completely replaces every
+	// system/developer message instead of only the first one.
+	if !info.ChannelSetting.SystemPromptOverride {
+		hadSystemPrompt := false
+		messages := make([]dto.Message, 0, len(request.Messages))
+		for _, message := range request.Messages {
+			if message.Role != "system" && message.Role != "developer" {
+				messages = append(messages, message)
+				continue
+			}
+			if !hadSystemPrompt {
+				messages = append(messages, dto.Message{
+					Role:    systemRole,
+					Content: info.ChannelSetting.SystemPrompt,
+				})
+				hadSystemPrompt = true
+			}
+		}
+		if !hadSystemPrompt {
+			messages = append([]dto.Message{{
+				Role:    systemRole,
+				Content: info.ChannelSetting.SystemPrompt,
+			}}, messages...)
+		} else {
+			common.SetContextKey(c, constant.ContextKeySystemPromptOverride, true)
+		}
+		request.Messages = messages
+		return
+	}
+
 	containSystemPrompt := false
 	for _, message := range request.Messages {
 		if message.Role == systemRole {
@@ -56,10 +86,6 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 				message.StringContent(),
 				info.ChannelSetting.SystemPromptOverride,
 			))
-			return
-		}
-		if !info.ChannelSetting.SystemPromptOverride {
-			request.Messages[i].SetStringContent(info.ChannelSetting.SystemPrompt)
 			return
 		}
 		contents := message.ParseContent()
