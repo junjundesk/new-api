@@ -280,6 +280,12 @@ export function Dashboard() {
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
+  // Shared by the breakdown panel; the chart cards read the same list through
+  // DashboardFilters, so every models-page aggregate applies it consistently.
+  const excludedUserIDs = useMemo(
+    () => (modelFilters.exclude_users ?? []).map((user) => user.id),
+    [modelFilters.exclude_users]
+  )
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
@@ -310,6 +316,7 @@ export function Dashboard() {
           currentFilters={modelFilters}
           onFilterChange={handleFilterChange}
           onReset={handleResetFilters}
+          showUserExclusion
         />
       </>
     ) : null
@@ -395,6 +402,7 @@ export function Dashboard() {
                   <LazyUserConsumptionBreakdown
                     filters={breakdownFilters}
                     onFiltersChange={handleBreakdownFiltersChange}
+                    excludedUserIDs={excludedUserIDs}
                   />
                 </Suspense>
               </FadeIn>

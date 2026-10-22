@@ -91,7 +91,17 @@ export const ACTIVITY_CODE_DIALOG_TYPES: ActivityCodesDialogType[] = [
   'update',
   'delete',
   'grants',
+  'grant',
 ]
+
+export const ACTIVITY_GRANT_SOURCE = {
+  REDEEM: 'redeem',
+  ADMIN: 'admin',
+} as const
+
+export function getActivityGrantSourceLabelKey(source?: string): string {
+  return source === ACTIVITY_GRANT_SOURCE.ADMIN ? 'Gifted' : 'Redeemed'
+}
 
 export const ERROR_MESSAGES = {
   LOAD_FAILED: 'Failed to load activity codes',
@@ -104,6 +114,7 @@ export const ERROR_MESSAGES = {
   GROUP_MODELS_FAILED: 'Failed to load group models',
   GRANTS_FAILED: 'Failed to load activity grants',
   REVOKE_FAILED: 'Failed to revoke activity grant',
+  GRANT_FAILED: 'Failed to grant activity code',
 } as const
 
 export const SUCCESS_MESSAGES = {
@@ -113,6 +124,8 @@ export const SUCCESS_MESSAGES = {
   DISABLED: 'Activity code disabled',
   ENABLED: 'Activity code enabled',
   GRANT_REVOKED: 'Activity grant revoked',
+  GRANTED: 'Activity code granted to {{count}} users',
+  GRANT_PARTIAL: '{{failed}} users were not granted: {{message}}',
 } as const
 
 // 活动码允许任意语言的字母/数字，以及下划线和连字符；不接受空格与其它符号。

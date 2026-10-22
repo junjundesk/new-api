@@ -476,3 +476,50 @@ func TestActivityModelRatioOverridesScanAndValue(t *testing.T) {
 		require.Error(t, overrides.Scan([]byte("{not json")))
 	})
 }
+
+func TestGrantActivityCodeByAdminDoesNotChargeOrConsumeQuota(t *testing.T) {
+	code := ActivityCode{Code: "hcmgift", Name: "赠送活动", DurationSeconds: 24 * 3600, PriceQuota: 500, TotalLimit: 1, PerUserLimit: 1}
+	user, created := setupActivityFixture(t, code, 1000)
+
+	result, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id, Remark: "运营赠送"})
+	require.NoError(t, err)
+	assert.Equal(t, activityTestGroup, result.GroupName)
+	require.Greater(t, result.ExpireTime, common.GetTimestamp())
+
+	assert.Equal(t, 1000, reloadUserQuota(t, user.Id), "赠送不扣余额")
+	assert.Equal(t, 0, reloadActivityCode(t, created.Id).UsedCount, "赠送不占兑换次数")
+
+	grant := &ActivityGrant{}
+	require.NoError(t, DB.First(grant, "id = ?", result.GrantId).Error)
+	assert.Equal(t, ActivityGrantSourceAdmin, grant.Source)
+	assert.Equal(t, 0, grant.PriceQuota)
+	assert.Equal(t, "运营赠送", grant.Remark)
+	assert.Equal(t, ActivityGrantStatusActive, grant.Status)
+
+	// 已占满每人上限与总量上限的活动码仍可继续赠送，说明管理员赠送不受兑换名额约束。
+	_, err = GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.NoError(t, err)
+	assert.Equal(t, 0, reloadActivityCode(t, created.Id).UsedCount)
+	require.Greater(t, result.ExpireTime, int64(0))
+}
+
+func TestGrantActivityCodeExtendsExistingGrantAndRejectsDisabledCode(t *testing.T) {
+	code := ActivityCode{Code: "hcmgift2", Name: "赠送活动", DurationSeconds: 3600}
+	user, created := setupActivityFixture(t, code, 0)
+
+	first, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.NoError(t, err)
+	second, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.NoError(t, err)
+	// 第二次赠送在原授权到期时间上再叠加 1 小时；两次计算之间最多相差几秒。
+	assert.GreaterOrEqual(t, second.ExpireTime, first.ExpireTime+3600, "重复赠送按续期叠加")
+	assert.Less(t, second.ExpireTime, first.ExpireTime+3600+5)
+
+	require.NoError(t, UpdateActivityCodeStatus(created.Id, ActivityCodeStatusDisabled))
+	_, err = GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.ErrorIs(t, err, ErrActivityCodeDisabled)
+
+	var grantCount int64
+	require.NoError(t, DB.Model(&ActivityGrant{}).Where("user_id = ?", user.Id).Count(&grantCount).Error)
+	assert.Equal(t, int64(2), grantCount, "停用后不再新增授权")
+}

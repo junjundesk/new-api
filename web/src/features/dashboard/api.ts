@@ -41,6 +41,7 @@ export async function getUserQuotaDates(
     end_timestamp: number
     default_time?: string
     username?: string
+    exclude_user_ids?: string
   },
   isAdmin = false
 ) {
@@ -69,20 +70,25 @@ export async function getUserQuotaDataByUsers(params: {
 
 // Get per-user, per-group and per-model consumption for a time range.
 // Admin users see every user's rows; everyone else is scoped server-side to
-// their own account.
+// their own account. excludedUserIDs are dropped from the admin aggregates.
 export async function getUserQuotaBreakdown(
   params: {
     start_timestamp: number
     end_timestamp: number
   },
-  isAdmin = false
+  isAdmin = false,
+  excludedUserIDs: number[] = []
 ) {
   const endpoint = isAdmin
     ? '/api/data/user-breakdown'
     : '/api/data/user-breakdown/self'
+  const excludeParam =
+    isAdmin && excludedUserIDs.length > 0
+      ? { exclude_user_ids: excludedUserIDs.join(',') }
+      : {}
   const res = await api.get<{ success: boolean; data: UserQuotaBreakdownData }>(
     endpoint,
-    { params }
+    { params: { ...params, ...excludeParam } }
   )
   return res.data
 }

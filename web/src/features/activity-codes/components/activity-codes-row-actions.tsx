@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Row } from '@tanstack/react-table'
-import { Edit, Power, PowerOff, Ticket, Trash2 } from 'lucide-react'
+import { Edit, Gift, Power, PowerOff, Ticket, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -62,9 +62,7 @@ export function DataTableRowActions<TData>({
     const result = await updateActivityCodeStatus(activityCode.id, nextStatus)
     if (result.success) {
       toast.success(
-        isEnabled
-          ? t(SUCCESS_MESSAGES.DISABLED)
-          : t(SUCCESS_MESSAGES.ENABLED)
+        isEnabled ? t(SUCCESS_MESSAGES.DISABLED) : t(SUCCESS_MESSAGES.ENABLED)
       )
       triggerRefresh()
       return
@@ -112,6 +110,17 @@ export function DataTableRowActions<TData>({
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            setCurrentRow(activityCode)
+            setOpen('grant')
+          }}
+        >
+          {t('Grant to Users')}
+          <DropdownMenuShortcut>
+            <Gift size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
             setCurrentRow(activityCode)

@@ -23,6 +23,9 @@ import (
 // 活动码：管理端维护「码 → 目标分组」的限时授权，用户端用真余额兑换。
 const activityCodeMaxDurationHours = 87600 // 10 年
 
+// activityGrantMaxBatch 限制一次管理员赠送的用户数量，避免单请求无界放大。
+const activityGrantMaxBatch = 100
+
 // ---------------------------------------------------------------------------
 // 管理端
 // ---------------------------------------------------------------------------
@@ -349,6 +352,112 @@ func RevokeActivityGrant(c *gin.Context) {
 	}
 	recordManageAudit(c, "activity.revoke", map[string]interface{}{"grant_id": id, "remark": req.Remark})
 	common.ApiSuccess(c, nil)
+}
+
+// GrantActivityCode 管理员主动把活动码赠送给若干用户（无需用户确认、不扣余额）。
+func GrantActivityCode(c *gin.Context) {
+	codeId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || codeId <= 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidId)
+		return
+	}
+	var req struct {
+		UserIds []int  `json:"user_ids"`
+		Remark  string `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	userIds := make([]int, 0, len(req.UserIds))
+	seen := make(map[int]struct{}, len(req.UserIds))
+	for _, userId := range req.UserIds {
+		if userId <= 0 {
+			continue
+		}
+		if _, exists := seen[userId]; exists {
+			continue
+		}
+		seen[userId] = struct{}{}
+		userIds = append(userIds, userId)
+	}
+	if len(userIds) == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if len(userIds) > activityGrantMaxBatch {
+		common.ApiErrorI18n(c, i18n.MsgBatchTooMany, map[string]any{"Max": activityGrantMaxBatch})
+		return
+	}
+
+	activityCode, err := model.GetActivityCodeById(codeId)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeNotFound)
+		return
+	}
+	myRole := c.GetInt("role")
+	remark := strings.TrimSpace(req.Remark)
+
+	type grantResult struct {
+		UserId     int    `json:"user_id"`
+		Success    bool   `json:"success"`
+		GrantId    int    `json:"grant_id,omitempty"`
+		ExpireTime int64  `json:"expire_time,omitempty"`
+		GroupName  string `json:"group_name,omitempty"`
+		Message    string `json:"message,omitempty"`
+	}
+	results := make([]grantResult, 0, len(userIds))
+	granted := 0
+	for _, userId := range userIds {
+		result := grantResult{UserId: userId, GroupName: activityCode.GroupName}
+		user, userErr := model.GetUserById(userId, false)
+		if userErr != nil {
+			result.Message = i18n.T(c, i18n.MsgUserNotExists)
+			results = append(results, result)
+			continue
+		}
+		if !canManageTargetRole(myRole, user.Role) {
+			result.Message = i18n.T(c, i18n.MsgUserNoPermissionSameLevel)
+			results = append(results, result)
+			continue
+		}
+		grant, grantErr := model.GrantActivityCode(model.GrantActivityCodeRequest{
+			CodeId: codeId,
+			UserId: userId,
+			Remark: remark,
+		})
+		if grantErr != nil {
+			messageKey := activityRedeemErrorKey(grantErr)
+			if messageKey == "" {
+				common.SysError("activity grant failed: " + grantErr.Error())
+				messageKey = i18n.MsgOperationFailed
+			}
+			result.Message = i18n.T(c, messageKey)
+			results = append(results, result)
+			continue
+		}
+		result.Success = true
+		result.GrantId = grant.GrantId
+		result.ExpireTime = grant.ExpireTime
+		results = append(results, result)
+		granted++
+	}
+
+	recordManageAudit(c, "activity.grant", map[string]interface{}{
+		"activity_code_id": codeId,
+		"code":             activityCode.Code,
+		"group":            activityCode.GroupName,
+		"granted":          granted,
+		"requested":        len(userIds),
+		"remark":           remark,
+	})
+	common.ApiSuccess(c, gin.H{
+		"granted": granted,
+		"failed":  len(userIds) - granted,
+		"total":   len(userIds),
+		"results": results,
+	})
 }
 
 // ---------------------------------------------------------------------------

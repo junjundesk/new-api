@@ -27,9 +27,9 @@ type UserQuotaBreakdownResult struct {
 // GetUserQuotaBreakdown groups quota_data by user, group and model.
 // A start or end timestamp <= 0 leaves that side unbounded, which is how the
 // dashboard serves its "all time" range.
-// Admins (role >= RoleAdminUser) see every user and may narrow by username;
-// everyone else is always scoped to their own user id.
-func GetUserQuotaBreakdown(startTime int64, endTime int64, username string, userID int, role int) (*UserQuotaBreakdownResult, error) {
+// Admins (role >= RoleAdminUser) see every user and may narrow by username or
+// exclude specific user ids; everyone else is always scoped to their own user id.
+func GetUserQuotaBreakdown(startTime int64, endTime int64, username string, userID int, role int, excludeUserIDs []int) (*UserQuotaBreakdownResult, error) {
 	rows := make([]*UserQuotaBreakdownRow, 0)
 	query := DB.Table("quota_data").
 		Select("user_id, username, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
@@ -37,6 +37,7 @@ func GetUserQuotaBreakdown(startTime int64, endTime int64, username string, user
 		if username != "" {
 			query = query.Where("username = ?", username)
 		}
+		query = applyExcludeUserIDs(query, excludeUserIDs)
 	} else {
 		query = query.Where("user_id = ?", userID)
 	}

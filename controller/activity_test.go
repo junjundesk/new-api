@@ -294,3 +294,94 @@ func TestActivityCodeModelsScopeAcceptsUnknownModelAndTrimsNames(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, map[string]float64{"not-enabled-yet": 0.25}, map[string]float64(stored.ModelRatioOverrides))
 }
+
+func newActivityGrantRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	adminContext := func(c *gin.Context) {
+		c.Set("id", 7)
+		c.Set("role", common.RoleRootUser)
+	}
+	router.POST("/api/activity/:id/grants", adminContext, GrantActivityCode)
+	return router
+}
+
+func TestGrantActivityCodeGrantsEveryUserWithoutCharging(t *testing.T) {
+	db := setupActivityControllerTest(t)
+	router := newActivityGrantRouter()
+
+	code := &model.ActivityCode{
+		Code:            "hcmgrant",
+		Name:            "Grant activity",
+		GroupName:       "activity-test-group",
+		DurationSeconds: 3600,
+		Status:          model.ActivityCodeStatusEnabled,
+		RatioMode:       model.ActivityRatioModeInherit,
+		PerUserLimit:    1,
+	}
+	require.NoError(t, db.Create(code).Error)
+
+	first := &model.User{Username: "grant-one", Password: "password", Status: common.UserStatusEnabled, Quota: 100, AffCode: "gr01"}
+	second := &model.User{Username: "grant-two", Password: "password", Status: common.UserStatusEnabled, Quota: 100, AffCode: "gr02"}
+	require.NoError(t, db.Create(first).Error)
+	require.NoError(t, db.Create(second).Error)
+
+	payload, err := common.Marshal(map[string]interface{}{
+		"user_ids": []int{first.Id, second.Id, first.Id},
+		"remark":   "campaign",
+	})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/activity/%d/grants", code.Id), bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	response := struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Granted int `json:"granted"`
+			Failed  int `json:"failed"`
+			Total   int `json:"total"`
+		} `json:"data"`
+	}{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	assert.Equal(t, 2, response.Data.Granted, "重复用户 ID 去重后按两人赠送")
+	assert.Equal(t, 0, response.Data.Failed)
+	assert.Equal(t, 2, response.Data.Total)
+
+	var grants []model.ActivityGrant
+	require.NoError(t, db.Where("code_id = ?", code.Id).Find(&grants).Error)
+	require.Len(t, grants, 2)
+	for _, grant := range grants {
+		assert.Equal(t, model.ActivityGrantSourceAdmin, grant.Source)
+		assert.Equal(t, 0, grant.PriceQuota, "赠送不扣余额")
+		assert.Equal(t, "campaign", grant.Remark)
+	}
+	var stored model.ActivityCode
+	require.NoError(t, db.First(&stored, "id = ?", code.Id).Error)
+	assert.Equal(t, 0, stored.UsedCount, "赠送不占兑换次数")
+
+	for _, id := range []int{first.Id, second.Id} {
+		var user model.User
+		require.NoError(t, db.First(&user, "id = ?", id).Error)
+		assert.Equal(t, 100, user.Quota, "赠送后余额不变")
+	}
+}
+
+func TestGrantActivityCodeRejectsEmptyUserList(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityGrantRouter()
+
+	payload, err := common.Marshal(map[string]interface{}{"user_ids": []int{}})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/activity/1/grants", bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+
+	response := activityAPIResponse{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.False(t, response.Success)
+}

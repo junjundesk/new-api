@@ -455,6 +455,14 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'redemption.update': 'Updated a redemption code',
   'redemption.delete': 'Deleted a redemption code',
   'redemption.delete_invalid': 'Deleted invalid redemption codes',
+  // Activity codes
+  'activity.create': 'Created activity code {{code}} for group {{group}}',
+  'activity.update': 'Updated activity code {{code}}',
+  'activity.status': 'Updated activity code status (ID: {{id}})',
+  'activity.delete': 'Deleted activity code (ID: {{id}})',
+  'activity.revoke': 'Revoked activity grant (ID: {{grant_id}})',
+  'activity.grant':
+    'Granted activity code {{code}} to {{granted}}/{{requested}} users',
   // Prefill groups
   'prefill_group.create': 'Created a prefill group',
   'prefill_group.update': 'Updated a prefill group',

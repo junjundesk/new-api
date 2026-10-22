@@ -324,9 +324,15 @@ export function FlowCharts(props: FlowChartsProps) {
       props.filters?.time_granularity,
     ]
   )
+  // User exclusion is a model-analytics concern; the flow view keeps showing
+  // every user even when the shared filter state carries an exclusion list.
   const flowQueryParams = useMemo(
-    () => buildQueryParams(timeRange, props.filters),
-    [props.filters, timeRange]
+    () =>
+      buildQueryParams(timeRange, {
+        time_granularity: props.filters?.time_granularity,
+        username: props.filters?.username,
+      }),
+    [props.filters?.time_granularity, props.filters?.username, timeRange]
   )
 
   const {

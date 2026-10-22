@@ -75,7 +75,7 @@ interface BreakdownRequest {
 interface BreakdownMock {
   mockReset: () => void
   mockResolvedValue: (value: unknown) => void
-  mock: { calls: Array<[BreakdownRequest, boolean | undefined]> }
+  mock: { calls: Array<[BreakdownRequest, boolean | undefined, number[]]> }
 }
 
 const mockedFetch = getUserQuotaBreakdown as unknown as BreakdownMock
@@ -129,7 +129,11 @@ function Harness() {
     DEFAULT_BREAKDOWN_FILTERS
   )
   return (
-    <UserConsumptionBreakdown filters={filters} onFiltersChange={setFilters} />
+    <UserConsumptionBreakdown
+      filters={filters}
+      onFiltersChange={setFilters}
+      excludedUserIDs={[10]}
+    />
   )
 }
 
@@ -161,7 +165,7 @@ describe('UserConsumptionBreakdown', () => {
     renderPanel()
 
     await waitFor(() => expect(mockedFetch.mock.calls.length).toBe(1))
-    const [params, isAdmin] = mockedFetch.mock.calls[0]
+    const [params, isAdmin, excludedUserIDs] = mockedFetch.mock.calls[0]
     expect(params.start_timestamp).toBe(
       dateToUnixTimestamp(getStartOfDay(new Date()))
     )
@@ -169,6 +173,7 @@ describe('UserConsumptionBreakdown', () => {
       Math.abs(params.end_timestamp - Math.floor(Date.now() / 1000))
     ).toBeLessThanOrEqual(5)
     expect(isAdmin).toBe(true)
+    expect(excludedUserIDs).toEqual([10])
   })
 
   test('switching to Yesterday refetches the previous local day', async () => {

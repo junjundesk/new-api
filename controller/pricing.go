@@ -18,13 +18,15 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
-	activityOverrides := service.GetActivityOverrides(service.GetActiveActivityViews(userId))
-	usableGroup := service.GetUserUsableGroupsWithActivity(userId, group)
-	pricing := model.GetPricingForUser(group, usableGroup, activityOverrides)
+	// The model square advertises standard group pricing only. Activity-code
+	// grants are personal billing discounts, so they must not leak into either
+	// the visible group list or the displayed prices here.
+	usableGroup := service.GetUserUsableGroups(group)
+	pricing := model.GetPricingForUser(group, usableGroup)
 	groupRatio := make(map[string]float64)
 	for usingGroup := range ratio_setting.GetGroupRatioCopy() {
 		if _, visible := usableGroup[usingGroup]; visible {
-			groupRatio[usingGroup] = service.GetUserGroupRatioWithActivity(group, usingGroup, activityOverrides)
+			groupRatio[usingGroup] = service.GetUserGroupRatio(group, usingGroup)
 		}
 	}
 

@@ -45,10 +45,13 @@ import {
 import type {
   DashboardChartPreferences,
   DashboardFilters,
+  ExcludedUser,
 } from '@/features/dashboard/types'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
+
+import { ExcludedUsersPicker } from './excluded-users-picker'
 
 interface ModelsFilterProps {
   preferences: DashboardChartPreferences
@@ -59,6 +62,9 @@ interface ModelsFilterProps {
   onReset: () => void
   titleKey?: string
   descriptionKey?: string
+  // The model analytics page can drop specific accounts from its aggregates;
+  // the flow view shares this dialog but not that capability.
+  showUserExclusion?: boolean
 }
 
 // Quick-range presets imply a sensible granularity (matching the app's
@@ -147,11 +153,12 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
   const handleChange = (
     field: keyof DashboardFilters,
-    value: Date | string | undefined
+    value: Date | string | ExcludedUser[] | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
-    if (field === 'start_timestamp' || field === 'end_timestamp')
+    if (field === 'start_timestamp' || field === 'end_timestamp') {
       setSelectedRange(null)
+    }
   }
 
   const handleQuickRange = (days: number) => {
@@ -257,12 +264,10 @@ export function ModelsFilter(props: ModelsFilterProps) {
           <div className='grid gap-2'>
             <Label htmlFor='time_granularity'>{t('Time Granularity')}</Label>
             <Select
-              items={[
-                ...TIME_GRANULARITY_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(option.label),
-                })),
-              ]}
+              items={TIME_GRANULARITY_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.label),
+              }))}
               value={filters.time_granularity}
               onValueChange={(value) =>
                 handleChange('time_granularity', value as TimeGranularity)
@@ -297,6 +302,21 @@ export function ModelsFilter(props: ModelsFilterProps) {
                   onChange={(e) => handleChange('username', e.target.value)}
                 />
               </div>
+
+              {props.showUserExclusion && (
+                <div className='grid gap-2'>
+                  <Label>{t('Excluded Users')}</Label>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'Excluded users are left out of the totals, charts and consumption details.'
+                    )}
+                  </p>
+                  <ExcludedUsersPicker
+                    selected={filters.exclude_users ?? []}
+                    onChange={(users) => handleChange('exclude_users', users)}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

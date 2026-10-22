@@ -36,6 +36,7 @@ import {
   ACTIVITY_GRANT_STATUS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
+  getActivityGrantSourceLabelKey,
   getActivityGrantStatusLabelKey,
 } from '../constants'
 import { useActivityCodes } from './activity-codes-provider'
@@ -78,7 +79,10 @@ export function ActivityGrantsDialog() {
 
   let expireText = t('Permanent')
   return (
-    <Dialog open={open === 'grants'} onOpenChange={(nextOpen) => !nextOpen && setOpen(null)}>
+    <Dialog
+      open={open === 'grants'}
+      onOpenChange={(nextOpen) => !nextOpen && setOpen(null)}
+    >
       <DialogContent className='sm:max-w-[640px]'>
         <DialogHeader>
           <DialogTitle>
@@ -122,6 +126,11 @@ export function ActivityGrantsDialog() {
                           ? 'success'
                           : 'neutral'
                       }
+                      copyable={false}
+                    />
+                    <StatusBadge
+                      label={t(getActivityGrantSourceLabelKey(grant.source))}
+                      variant='info'
                       copyable={false}
                     />
                   </div>

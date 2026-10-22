@@ -38,6 +38,8 @@ const (
 	ActivityRatioScopeModels = "models"
 
 	ActivityGrantSourceRedeem = "redeem"
+	// ActivityGrantSourceAdmin 表示管理员主动赠送，不扣余额、不占兑换次数。
+	ActivityGrantSourceAdmin = "admin"
 
 	// ActivityCodeMaxLength 是活动码的字符数上限（按 rune 计，中文等宽字符按 1 个算）。
 	ActivityCodeMaxLength = 64
@@ -671,5 +673,112 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 	}
 	RecordLog(req.UserId, LogTypeSystem, fmt.Sprintf("通过活动码 %s 兑换分组 %s，消耗 %s，%s",
 		result.Code, result.GroupName, logger.LogQuota(result.PriceQuota), expireText))
+	return result, nil
+}
+
+// ---------------------------------------------------------------------------
+// 管理员赠送
+// ---------------------------------------------------------------------------
+
+type GrantActivityCodeRequest struct {
+	CodeId int
+	UserId int
+	Remark string
+}
+
+type GrantActivityCodeResult struct {
+	GrantId    int    `json:"grant_id"`
+	CodeId     int    `json:"code_id"`
+	Code       string `json:"code"`
+	CodeName   string `json:"code_name"`
+	GroupName  string `json:"group_name"`
+	ExpireTime int64  `json:"expire_time"`
+}
+
+// GrantActivityCode 由管理员主动把活动码授权赠送给用户，无需用户确认。
+//
+// 与兑换的区别：
+//   - 不扣用户余额（PriceQuota 记为 0），也不要求支付合规确认；
+//   - 不占 used_count，不校验总量与每人上限——管理员赠送是运营动作，
+//     不受面向用户兑换的名额约束；
+//   - 授权来源记为 admin，便于与用户自行兑换区分。
+//
+// 仍然要求活动码存在、启用、处于可赠送时间窗口内，且目标分组仍然可用；
+// 同一活动码重复赠送按续期处理，到期时间在现存活授权之后叠加。
+func GrantActivityCode(req GrantActivityCodeRequest) (*GrantActivityCodeResult, error) {
+	if req.UserId <= 0 {
+		return nil, ErrActivityCodeInvalid
+	}
+	if req.CodeId <= 0 {
+		return nil, ErrActivityCodeInvalid
+	}
+	now := common.GetTimestamp()
+	result := &GrantActivityCodeResult{}
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		activityCode := &ActivityCode{}
+		if err := lockForUpdate(tx).First(activityCode, "id = ?", req.CodeId).Error; err != nil {
+			return err
+		}
+		if activityCode.Status != ActivityCodeStatusEnabled {
+			return ErrActivityCodeDisabled
+		}
+		if activityCode.StartTime != 0 && now < activityCode.StartTime {
+			return ErrActivityCodeNotStarted
+		}
+		if activityCode.WindowClosed(now) {
+			return ErrActivityCodeEnded
+		}
+		if !ratio_setting.ContainsGroupRatio(activityCode.GroupName) {
+			return ErrActivityCodeGroupUnavailable
+		}
+
+		expireTime, expireErr := resolveActivityGrantExpireTime(tx, req.UserId, activityCode, now)
+		if expireErr != nil {
+			return expireErr
+		}
+		grant := &ActivityGrant{
+			UserId:    req.UserId,
+			CodeId:    activityCode.Id,
+			Code:      activityCode.Code,
+			CodeName:  activityCode.Name,
+			GroupName: activityCode.GroupName,
+			RatioMode: activityCode.RatioMode,
+			// 与兑换一致：授权必须快照条款，后续修改活动码不影响已发放的授权。
+			RatioOverride:       activityCode.RatioOverride,
+			RatioScope:          activityCode.RatioScope,
+			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
+			RpmLimit:            activityCode.RpmLimit,
+			PriceQuota:          0,
+			StartTime:           now,
+			ExpireTime:          expireTime,
+			Status:              ActivityGrantStatusActive,
+			Source:              ActivityGrantSourceAdmin,
+			Remark:              req.Remark,
+		}
+		if err := tx.Create(grant).Error; err != nil {
+			return err
+		}
+		result.GrantId = grant.Id
+		result.CodeId = activityCode.Id
+		result.Code = activityCode.Code
+		result.CodeName = activityCode.Name
+		result.GroupName = activityCode.GroupName
+		result.ExpireTime = grant.ExpireTime
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := InvalidateActivityGrantCache(req.UserId); err != nil {
+		common.SysError("failed to invalidate activity grant cache: " + err.Error())
+	}
+	expireText := "永久有效"
+	if result.ExpireTime > 0 {
+		expireText = "有效期至 " + time.Unix(result.ExpireTime, 0).Format("2006-01-02 15:04:05")
+	}
+	RecordLog(req.UserId, LogTypeSystem, fmt.Sprintf("管理员赠送活动码 %s 的分组 %s，%s",
+		result.Code, result.GroupName, expireText))
 	return result, nil
 }

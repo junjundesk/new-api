@@ -167,6 +167,30 @@ const NEW_KEYS = {
     en: "{{count}} users were skipped because they turned off operational notifications",
     zh: "{{count}} 位用户已关闭运营通知，未发送邮件",
   },
+  "Excluded Users": {
+    en: "Excluded Users",
+    zh: "排除用户",
+  },
+  "Search users to exclude": {
+    en: "Search users to exclude",
+    zh: "搜索要排除的用户",
+  },
+  "Excluded users are left out of the totals, charts and consumption details.": {
+    en: "Excluded users are left out of the totals, charts and consumption details.",
+    zh: "被排除的用户不会计入统计数字、图表和消费明细。",
+  },
+  "No users found": {
+    en: "No users found",
+    zh: "未找到用户",
+  },
+  "Searching...": {
+    en: "Searching...",
+    zh: "搜索中...",
+  },
+  "Remove {{username}}": {
+    en: "Remove {{username}}",
+    zh: "移除 {{username}}",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.

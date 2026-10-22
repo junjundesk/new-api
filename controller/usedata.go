@@ -3,12 +3,49 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-gonic/gin"
 )
+
+// maxExcludedUserIDs bounds the dashboard's user-exclusion filter so a single
+// request cannot turn into an unbounded NOT IN list.
+const maxExcludedUserIDs = 100
+
+// parseExcludeUserIDs reads the optional comma-separated exclude_user_ids
+// query parameter. Empty means "exclude nobody".
+func parseExcludeUserIDs(c *gin.Context) ([]int, bool) {
+	raw := strings.TrimSpace(c.Query("exclude_user_ids"))
+	if raw == "" {
+		return nil, true
+	}
+	seen := make(map[int]struct{})
+	ids := make([]int, 0)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.Atoi(part)
+		if err != nil || id <= 0 {
+			common.ApiErrorMsg(c, "invalid exclude_user_ids")
+			return nil, false
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+		if len(ids) > maxExcludedUserIDs {
+			common.ApiErrorMsg(c, "too many exclude_user_ids")
+			return nil, false
+		}
+	}
+	return ids, true
+}
 
 func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 	startTimestamp, err := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -31,8 +68,12 @@ func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 func GetAllQuotaDates(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	excludeUserIDs, ok := parseExcludeUserIDs(c)
+	if !ok {
+		return
+	}
 	username := c.Query("username")
-	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username)
+	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username, excludeUserIDs)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -160,7 +201,11 @@ func GetUserQuotaBreakdown(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, c.Query("username"), 0, c.GetInt("role"))
+	excludeUserIDs, ok := parseExcludeUserIDs(c)
+	if !ok {
+		return
+	}
+	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, c.Query("username"), 0, c.GetInt("role"), excludeUserIDs)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -182,7 +227,7 @@ func GetUserQuotaBreakdownSelf(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, "", c.GetInt("id"), common.RoleCommonUser)
+	result, err := model.GetUserQuotaBreakdown(startTimestamp, endTimestamp, "", c.GetInt("id"), common.RoleCommonUser, nil)
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ActivityCodesDeleteDialog } from './activity-codes-delete-dialog'
 import { ActivityCodesMutateDrawer } from './activity-codes-mutate-drawer'
-import { ActivityGrantsDialog } from './activity-grants-dialog'
 import { useActivityCodes } from './activity-codes-provider'
+import { ActivityGrantDialog } from './activity-grant-dialog'
+import { ActivityGrantsDialog } from './activity-grants-dialog'
 
 export function ActivityCodesDialogs() {
   const { open, setOpen, currentRow } = useActivityCodes()
@@ -34,6 +35,7 @@ export function ActivityCodesDialogs() {
       />
       <ActivityCodesDeleteDialog />
       <ActivityGrantsDialog />
+      <ActivityGrantDialog />
     </>
   )
 }

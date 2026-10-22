@@ -68,6 +68,9 @@ import { UserBreakdownDetails } from './user-breakdown-details'
 interface UserConsumptionBreakdownProps {
   filters: BreakdownFilters
   onFiltersChange: (filters: BreakdownFilters) => void
+  // User ids the models page excludes from its aggregates. The panel asks the
+  // server to drop them too so its totals match the cards and charts.
+  excludedUserIDs?: number[]
 }
 
 interface BreakdownNoticeProps {
@@ -96,9 +99,16 @@ export function UserConsumptionBreakdown(props: UserConsumptionBreakdownProps) {
     [filters.preset]
   )
 
+  const excludedUserIDs = props.excludedUserIDs ?? []
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard', 'user-breakdown', timeRange, isAdmin],
-    queryFn: () => getUserQuotaBreakdown(timeRange, isAdmin),
+    queryKey: [
+      'dashboard',
+      'user-breakdown',
+      timeRange,
+      isAdmin,
+      excludedUserIDs,
+    ],
+    queryFn: () => getUserQuotaBreakdown(timeRange, isAdmin, excludedUserIDs),
     select: (res) => (res.success ? res.data : null),
     staleTime: 60_000,
   })

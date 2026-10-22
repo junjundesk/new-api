@@ -65,6 +65,7 @@ export const activityGrantSchema = z.object({
   start_time: z.number(),
   expire_time: z.number(),
   status: z.string(),
+  source: z.string().optional(),
   remark: z.string(),
   created_time: z.number(),
 })
@@ -132,8 +133,35 @@ export interface GroupModelMember {
   group_description?: string
 }
 
+// 管理员赠送活动码（POST /api/activity/:id/grants）。
+export interface GrantActivityCodePayload {
+  user_ids: number[]
+  remark?: string
+}
+
+export interface GrantActivityCodeItem {
+  user_id: number
+  success: boolean
+  grant_id?: number
+  expire_time?: number
+  group_name?: string
+  message?: string
+}
+
+export interface GrantActivityCodeResult {
+  granted: number
+  failed: number
+  total: number
+  results: GrantActivityCodeItem[]
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================
 
-export type ActivityCodesDialogType = 'create' | 'update' | 'delete' | 'grants'
+export type ActivityCodesDialogType =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'grants'
+  | 'grant'

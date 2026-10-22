@@ -34,6 +34,7 @@ import type {
   ConsumptionDistributionChartType,
   DashboardChartPreferences,
   DashboardFilters,
+  ExcludedUser,
   ModelAnalyticsChartTab,
 } from '@/features/dashboard/types'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
@@ -75,6 +76,7 @@ export function cleanFilters<T extends Record<string, unknown>>(
       if (trimmed) cleaned[key as keyof T] = trimmed as T[keyof T]
       continue
     }
+    if (Array.isArray(value) && value.length === 0) continue
     cleaned[key as keyof T] = value as T[keyof T]
   }
   return cleaned
@@ -199,16 +201,27 @@ export function buildDefaultDashboardFilters(
 
 export function buildQueryParams(
   timeRange: { start_timestamp: number; end_timestamp: number },
-  filters?: { time_granularity?: TimeGranularity; username?: string }
+  filters?: {
+    time_granularity?: TimeGranularity
+    username?: string
+    exclude_users?: ExcludedUser[]
+  }
 ): {
   start_timestamp: number
   end_timestamp: number
   default_time: string
   username?: string
+  exclude_user_ids?: string
 } {
+  const excludeUserIDs = (filters?.exclude_users ?? [])
+    .map((user) => user.id)
+    .filter((id) => Number.isInteger(id) && id > 0)
   return {
     ...timeRange,
     default_time: getSavedGranularity(filters?.time_granularity),
     ...(filters?.username && { username: filters.username }),
+    ...(excludeUserIDs.length > 0 && {
+      exclude_user_ids: excludeUserIDs.join(','),
+    }),
   }
 }

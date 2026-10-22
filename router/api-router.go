@@ -332,6 +332,7 @@ func SetApiRouter(router *gin.Engine) {
 			activityCodeRoute.PUT("/:id/status", controller.UpdateActivityCodeStatus)
 			activityCodeRoute.DELETE("/:id", controller.DeleteActivityCode)
 			activityCodeRoute.GET("/:id/grants", controller.GetActivityCodeGrants)
+			activityCodeRoute.POST("/:id/grants", controller.GrantActivityCode)
 			activityCodeRoute.POST("/grants/:grant_id/revoke", controller.RevokeActivityGrant)
 		}
 		logRoute := apiRouter.Group("/log")

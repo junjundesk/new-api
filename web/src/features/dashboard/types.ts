@@ -213,11 +213,19 @@ export interface UptimeGroupResult {
 // Dashboard Filter Types
 // ============================================================================
 
+// A user the admin wants to leave out of the model analytics aggregates.
+export interface ExcludedUser {
+  id: number
+  username: string
+}
+
 export interface DashboardFilters {
   start_timestamp?: Date
   end_timestamp?: Date
   time_granularity?: TimeGranularity
   username?: string
+  // Applied server-side so totals, charts and the breakdown all agree.
+  exclude_users?: ExcludedUser[]
 }
 
 export type BreakdownTimePreset =

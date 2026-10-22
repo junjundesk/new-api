@@ -24,6 +24,8 @@ import type {
   ActivityCodeFormData,
   ApiResponse,
   GetActivityCodesParams,
+  GrantActivityCodePayload,
+  GrantActivityCodeResult,
   GroupModelMember,
   PagedActivityCodes,
   PagedActivityGrants,
@@ -107,6 +109,15 @@ export async function revokeActivityGrant(
   const res = await api.post(`/api/activity/grants/${grantId}/revoke`, {
     remark,
   })
+  return res.data
+}
+
+// 管理员主动赠送：无需用户确认、不扣余额，也不占用用户的兑换次数。
+export async function grantActivityCode(
+  codeId: number,
+  payload: GrantActivityCodePayload
+): Promise<ApiResponse<GrantActivityCodeResult>> {
+  const res = await api.post(`/api/activity/${codeId}/grants`, payload)
   return res.data
 }
 
