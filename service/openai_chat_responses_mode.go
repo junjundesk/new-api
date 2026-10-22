@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 )
 
@@ -38,11 +39,42 @@ func matchAnyModelPattern(patterns []string, model string) bool {
 	return false
 }
 
+// FixedUpstreamRelayFormat 返回渠道固定使用的上游线上格式。
+// 固定格式渠道忽略客户端格式：与固定格式不一致的请求一律先转换再发上游。
+func FixedUpstreamRelayFormat(channelType int) (types.RelayFormat, bool) {
+	switch channelType {
+	case constant.ChannelTypeOpenAIChat:
+		return types.RelayFormatOpenAI, true
+	case constant.ChannelTypeOpenAIResponses:
+		return types.RelayFormatOpenAIResponses, true
+	default:
+		return "", false
+	}
+}
+
+// FixedFormatRequiresConversion 判断客户端格式与渠道固定格式是否不一致。
+// responses/compact 属于 responses 家族，与固定 responses 渠道视为一致，
+// 否则 compact 会被误判为需要转换，从而丢掉原生透传能力。
+func FixedFormatRequiresConversion(channelType int, clientFormat types.RelayFormat) bool {
+	fixedFormat, ok := FixedUpstreamRelayFormat(channelType)
+	if !ok {
+		return false
+	}
+	if clientFormat == types.RelayFormatOpenAIResponsesCompaction {
+		clientFormat = types.RelayFormatOpenAIResponses
+	}
+	return fixedFormat != clientFormat
+}
+
 func ShouldChatCompletionsUseResponsesPolicy(policy model_setting.ChatCompletionsToResponsesPolicy, channelID int, channelType int, model string) bool {
-	// 固定 responses 格式的渠道：chat / claude 客户端请求一律先转换为
-	// responses 再发送上游（responses 客户端在 responses 流程原生透传）。
-	if channelType == constant.ChannelTypeOpenAIResponses {
+	// 固定格式渠道优先于全局策略：固定 responses 渠道的 chat / claude 客户端
+	// 请求一律先转换为 responses 再发送上游（responses 客户端原生透传）；
+	// 固定 chat 渠道永远不升级为 responses，否则会与渠道固定格式冲突。
+	switch channelType {
+	case constant.ChannelTypeOpenAIResponses:
 		return true
+	case constant.ChannelTypeOpenAIChat:
+		return false
 	}
 	if !policy.IsChannelEnabled(channelID, channelType) {
 		return false

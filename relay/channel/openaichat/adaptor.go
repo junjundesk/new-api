@@ -19,9 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 package openaichat
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -50,6 +54,15 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 // ConvertOpenAIResponsesRequest responses 客户端请求 → chat 上游请求。
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	// 上游固定 chat completions，没有服务端会话状态：忽略有状态字段并按当前
+	// input 继续，而不是直接 400；被忽略的内容记录到日志便于排查。
+	if dropped := ignoreStatefulResponsesFields(&request); len(dropped) > 0 {
+		logger.LogWarn(c, fmt.Sprintf("fixed chat channel %d ignores stateful responses fields: %s", info.ChannelId, strings.Join(dropped, ", ")))
+	}
+	if droppedTools := droppedBuiltInToolTypes(request.Tools); len(droppedTools) > 0 {
+		logger.LogWarn(c, fmt.Sprintf("fixed chat channel %d drops built-in tools unsupported by chat completions: %s", info.ChannelId, strings.Join(droppedTools, ", ")))
+	}
+
 	result, err := service.ConvertRequest(c, info, types.RelayFormatOpenAI, &request)
 	if err != nil {
 		return nil, err
@@ -58,7 +71,60 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 	if !ok {
 		return nil, fmt.Errorf("expected OpenAI chat completions request, got %T", result.Value)
 	}
+	if len(chatRequest.Messages) == 0 {
+		return nil, fmt.Errorf("responses request has no input after ignoring stateful fields")
+	}
 	return a.Adaptor.ConvertOpenAIRequest(c, info, chatRequest)
+}
+
+// ignoreStatefulResponsesFields 清空固定 chat 渠道无法表达的有状态字段，并返回被丢弃的字段名。
+func ignoreStatefulResponsesFields(request *dto.OpenAIResponsesRequest) []string {
+	if request == nil {
+		return nil
+	}
+	dropped := make([]string, 0, 4)
+	if hasRawJSONValue(request.Conversation) {
+		dropped = append(dropped, "conversation")
+		request.Conversation = nil
+	}
+	if request.PreviousResponseID != "" {
+		dropped = append(dropped, "previous_response_id")
+		request.PreviousResponseID = ""
+	}
+	if hasRawJSONValue(request.Prompt) {
+		dropped = append(dropped, "prompt")
+		request.Prompt = nil
+	}
+	if hasRawJSONValue(request.ContextManagement) {
+		dropped = append(dropped, "context_management")
+		request.ContextManagement = nil
+	}
+	return dropped
+}
+
+// hasRawJSONValue 判断 RawMessage 字段是否真的有值（显式 null 视为没有）。
+func hasRawJSONValue(raw json.RawMessage) bool {
+	return len(raw) > 0 && common.GetJsonType(raw) != "null"
+}
+
+// droppedBuiltInToolTypes 返回请求里 chat completions 无法表达、会被转换器丢弃的工具类型。
+func droppedBuiltInToolTypes(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var tools []map[string]any
+	if err := common.Unmarshal(raw, &tools); err != nil {
+		return nil
+	}
+	dropped := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		toolType := strings.TrimSpace(common.Interface2String(tool["type"]))
+		if toolType == "function" || toolType == dto.CustomType {
+			continue
+		}
+		dropped = append(dropped, toolType)
+	}
+	return dropped
 }
 
 // DoResponse 上游永远返回 chat 格式：responses 客户端需要把 chat 响应

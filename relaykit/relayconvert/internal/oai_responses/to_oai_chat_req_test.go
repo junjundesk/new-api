@@ -350,6 +350,102 @@ func TestResponsesRequestToChatCompletionsRequestRejectsMalformedPenalty(t *test
 	assert.Contains(t, err.Error(), "frequency_penalty")
 }
 
+func TestResponsesRequestToChatCompletionsRequestDropsBuiltInTools(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, "hello"),
+		Tools: mustRawMessage(t, []map[string]any{
+			{
+				"type":       "function",
+				"name":       "lookup",
+				"parameters": map[string]any{"type": "object"},
+			},
+			{"type": "web_search_preview"},
+			{"type": "file_search"},
+			{"type": "mcp", "server_label": "docs"},
+			{"type": "local_shell"},
+		}),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, got.Tools, 1)
+	assert.Equal(t, "function", got.Tools[0].Type)
+	assert.Equal(t, "lookup", got.Tools[0].Function.Name)
+}
+
+func TestResponsesRequestToChatCompletionsRequestDropsBuiltInToolChoice(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, "hello"),
+		Tools: mustRawMessage(t, []map[string]any{
+			{"type": "function", "name": "lookup"},
+		}),
+		ToolChoice: mustRawMessage(t, map[string]any{"type": "web_search_preview"}),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, got.Tools, 1)
+	assert.Nil(t, got.ToolChoice)
+}
+
+func TestResponsesRequestToChatCompletionsRequestDropsToolChoiceWithoutTools(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, "hello"),
+		Tools: mustRawMessage(t, []map[string]any{
+			{"type": "web_search_preview"},
+		}),
+		ToolChoice: mustRawMessage(t, "required"),
+	})
+	require.NoError(t, err)
+
+	assert.Empty(t, got.Tools)
+	assert.Nil(t, got.ToolChoice)
+}
+
+func TestResponsesRequestToChatCompletionsRequestSkipsBuiltInCallItems(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, []map[string]any{
+			{"type": "reasoning", "summary": []any{}},
+			{"type": "web_search_call", "id": "ws_1", "status": "completed"},
+			{"role": "user", "content": "hello"},
+			{"type": "file_search_call", "id": "fs_1"},
+		}),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, got.Messages, 1)
+	assert.Equal(t, "user", got.Messages[0].Role)
+	assert.Equal(t, "hello", got.Messages[0].Content)
+}
+
+func TestResponsesRequestToChatCompletionsRequestPairsCustomToolOutput(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, []map[string]any{
+			{
+				"type":    "custom_tool_call",
+				"call_id": "call_custom",
+				"name":    "apply_patch",
+				"input":   "patch body",
+			},
+			{
+				"type":    "custom_tool_call_output",
+				"call_id": "call_custom",
+				"output":  "done",
+			},
+		}),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, got.Messages, 2)
+	assert.Equal(t, "assistant", got.Messages[0].Role)
+	assert.Equal(t, "tool", got.Messages[1].Role)
+	assert.Equal(t, "call_custom", got.Messages[1].ToolCallId)
+	assert.Equal(t, "done", got.Messages[1].Content)
+}
+
 func mustRawMessage(t *testing.T, value any) []byte {
 	t.Helper()
 	raw, err := kitutil.Marshal(value)

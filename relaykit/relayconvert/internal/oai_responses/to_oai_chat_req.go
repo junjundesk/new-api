@@ -49,6 +49,11 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 	if err != nil {
 		return nil, err
 	}
+	// chat completions 没有内置工具概念，内置工具定义已在转换时丢弃；
+	// 工具为空时不能再保留 tool_choice，否则上游会拒绝该请求。
+	if len(tools) == 0 {
+		toolChoice = nil
+	}
 
 	responseFormat, err := responsesRequestTextToChatResponseFormat(req.Text)
 	if err != nil {
@@ -188,13 +193,18 @@ func responsesInputItemToChatMessages(item map[string]any, messages []dto.Messag
 			return nil, err
 		}
 		return appendToolCallToLastAssistant(messages, toolCall), nil
-	case responsesInputTypeFunctionCallOutput:
+	case responsesInputTypeFunctionCallOutput, responsesInputTypeCustomToolOutput:
 		callID := strings.TrimSpace(kitutil.Interface2String(item["call_id"]))
 		content := responseToolOutputToChatContent(item["output"])
 		return append(messages, dto.Message{Role: "tool", ToolCallId: callID, Content: content}), nil
 	}
 
 	role := strings.TrimSpace(kitutil.Interface2String(item["role"]))
+	if role == "" && itemType != "" && itemType != "message" {
+		// reasoning / web_search_call / file_search_call 等内置调用条目无法用
+		// chat completions 表达，跳过而不是生成一条空的 user 消息。
+		return messages, nil
+	}
 	if role == "" {
 		role = "user"
 	}
@@ -341,7 +351,8 @@ func responsesRequestToolsToChat(raw json.RawMessage) ([]dto.ToolCallRequest, er
 	out := make([]dto.ToolCallRequest, 0, len(tools))
 	for _, tool := range tools {
 		toolType := strings.TrimSpace(kitutil.Interface2String(tool["type"]))
-		if toolType == "function" {
+		switch toolType {
+		case "function":
 			out = append(out, dto.ToolCallRequest{
 				Type: "function",
 				Function: dto.FunctionRequest{
@@ -350,6 +361,12 @@ func responsesRequestToolsToChat(raw json.RawMessage) ([]dto.ToolCallRequest, er
 					Parameters:  tool["parameters"],
 				},
 			})
+			continue
+		case dto.CustomType:
+			// 自定义工具沿用"保留原始形状"的既有契约，交给下游自行处理。
+		default:
+			// 内置工具（web_search / file_search / mcp / computer_use ...）以及未知
+			// 类型在 chat completions 中没有对应形状，直接丢弃，避免发出非法工具。
 			continue
 		}
 
@@ -392,7 +409,8 @@ func responsesRequestToolChoiceToChat(raw json.RawMessage) (any, error) {
 			}, nil
 		}
 	}
-	return choice, nil
+	// 指向内置/自定义工具的选择在 chat completions 中没有对应形状，丢弃并按默认策略继续。
+	return nil, nil
 }
 
 func RequestToolChoiceToChat(raw json.RawMessage) (any, error) {

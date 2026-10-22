@@ -245,7 +245,12 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
-	if info.ChannelType != constant.ChannelTypeOpenAI && info.ChannelType != constant.ChannelTypeAzure {
+	// 固定上游格式的渠道同样声明支持 stream_options（见 streamSupportedChannels），
+	// 不能在这里清空，否则流式请求拿不到上游 usage，只能退化为估算。
+	switch info.ChannelType {
+	case constant.ChannelTypeOpenAI, constant.ChannelTypeAzure,
+		constant.ChannelTypeOpenAIChat, constant.ChannelTypeOpenAIResponses:
+	default:
 		request.StreamOptions = nil
 	}
 	if info.ChannelType == constant.ChannelTypeOpenRouter {
