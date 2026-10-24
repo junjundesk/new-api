@@ -59,6 +59,7 @@ import {
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
+import { LogCacheRateBadge } from '../log-cache-rate-badge'
 import { LogClientBadge } from '../log-client-badge'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
@@ -722,10 +723,13 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs font-medium tabular-nums'>
-              {promptTokens.toLocaleString()} /{' '}
-              {completionTokens.toLocaleString()}
-            </span>
+            <div className='flex flex-wrap items-center gap-1.5'>
+              <LogCacheRateBadge log={log} />
+              <span className='font-mono text-xs font-medium whitespace-nowrap tabular-nums'>
+                {promptTokens.toLocaleString()} /{' '}
+                {completionTokens.toLocaleString()}
+              </span>
+            </div>
             {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
               <div className='flex items-center gap-1 text-[11px]'>
                 {cacheReadTokens > 0 && (

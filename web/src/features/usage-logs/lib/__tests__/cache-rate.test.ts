@@ -20,7 +20,12 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
 import type { UsageLog } from '../../data/schema'
-import { getPageCacheRate } from '../cache-rate'
+import {
+  formatCacheHitRate,
+  getCacheHitRateLevel,
+  getLogCacheUsage,
+  getPageCacheRate,
+} from '../cache-rate'
 
 function makeLog(overrides: Partial<UsageLog> = {}): UsageLog {
   return {
@@ -141,5 +146,136 @@ describe('page cache rate', () => {
     ]
 
     assert.equal(getPageCacheRate(logs), 100)
+  })
+})
+
+describe('log cache usage', () => {
+  test('rebuilds the complete input volume for a Claude row', () => {
+    const log = makeLog({
+      prompt_tokens: 17176,
+      other: withOther({ claude: true, cache_tokens: 274623 }),
+    })
+
+    const usage = getLogCacheUsage(log)
+    assert.ok(usage !== null)
+    assert.equal(usage.inputTokens, 291799)
+    assert.equal(usage.cachedTokens, 274623)
+    assert.equal(usage.rate.toFixed(2), '94.11')
+  })
+
+  test('treats prompt tokens as the whole input for a non-Claude row', () => {
+    const log = makeLog({
+      prompt_tokens: 1000,
+      other: withOther({ cache_tokens: 500 }),
+    })
+
+    const usage = getLogCacheUsage(log)
+    assert.ok(usage !== null)
+    assert.equal(usage.inputTokens, 1000)
+    assert.equal(usage.cachedTokens, 500)
+    assert.equal(usage.rate, 50)
+  })
+
+  test('counts cache writes in the input volume without counting them as hits', () => {
+    const log = makeLog({
+      prompt_tokens: 100,
+      other: withOther({
+        claude: true,
+        cache_tokens: 900,
+        cache_creation_tokens_5m: 200,
+        cache_creation_tokens_1h: 300,
+      }),
+    })
+
+    const usage = getLogCacheUsage(log)
+    assert.ok(usage !== null)
+    assert.equal(usage.inputTokens, 1500)
+    assert.equal(usage.cachedTokens, 900)
+    assert.equal(usage.rate, 60)
+  })
+
+  test('returns null when the row carries no input tokens', () => {
+    assert.equal(getLogCacheUsage(makeLog()), null)
+    assert.equal(
+      getLogCacheUsage(
+        makeLog({ prompt_tokens: 0, other: withOther({ cache_tokens: 10 }) })
+      ),
+      null
+    )
+  })
+
+  test('returns null when cache reads exceed the input volume', () => {
+    const log = makeLog({
+      prompt_tokens: 100,
+      other: withOther({ cache_tokens: 150 }),
+    })
+
+    assert.equal(getLogCacheUsage(log), null)
+  })
+
+  test('returns null for unusable counts', () => {
+    assert.equal(
+      getLogCacheUsage(
+        makeLog({
+          prompt_tokens: 100,
+          other: withOther({ cache_tokens: 10.5 }),
+        })
+      ),
+      null
+    )
+    assert.equal(
+      getLogCacheUsage(
+        makeLog({
+          prompt_tokens: 2000000000,
+          other: withOther({ cache_tokens: 10 }),
+        })
+      ),
+      null
+    )
+    assert.equal(
+      getLogCacheUsage(
+        makeLog({ prompt_tokens: 100, other: withOther({ cache_tokens: -10 }) })
+      )?.cachedTokens,
+      0
+    )
+  })
+})
+
+describe('cache hit rate tone', () => {
+  test('greens above 90 percent', () => {
+    assert.equal(getCacheHitRateLevel(90.01), 'success-subtle')
+    assert.equal(getCacheHitRateLevel(100), 'success-subtle')
+  })
+
+  test('yellows from 50 to 90 percent', () => {
+    assert.equal(getCacheHitRateLevel(90), 'warning-subtle')
+    assert.equal(getCacheHitRateLevel(50), 'warning-subtle')
+  })
+
+  test('reds below 50 percent', () => {
+    assert.equal(getCacheHitRateLevel(49.99), 'danger-subtle')
+    assert.equal(getCacheHitRateLevel(0), 'danger-subtle')
+  })
+})
+
+describe('cache hit rate formatting', () => {
+  test('prints one decimal', () => {
+    const usage = { cachedTokens: 274623, inputTokens: 291799, rate: 94.1394 }
+    assert.equal(formatCacheHitRate(usage, 'en'), '94.1%')
+  })
+
+  test('prints a below-floor rate as less than 0.1 percent', () => {
+    const usage = { cachedTokens: 1, inputTokens: 100000, rate: 0.001 }
+    assert.equal(formatCacheHitRate(usage, 'en'), '<0.1%')
+  })
+
+  test('prints a rate above a floored 90 percent as greater than 90.0 percent', () => {
+    const usage = { cachedTokens: 90040, inputTokens: 100000, rate: 90.04 }
+    assert.equal(formatCacheHitRate(usage, 'en'), '>90.0%')
+  })
+
+  test('keeps an exact 90 percent rate unqualified', () => {
+    const usage = { cachedTokens: 900, inputTokens: 1000, rate: 90 }
+    assert.equal(formatCacheHitRate(usage, 'en'), '90.0%')
   })
 })
