@@ -138,7 +138,7 @@ export function getCacheHitRateLevel(rate: number): CacheHitRateLevel {
  */
 export function formatCacheHitRate(
   usage: LogCacheUsage,
-  locale: string
+  locale?: string
 ): string {
   const perMille = Math.floor((1000 * usage.cachedTokens) / usage.inputTokens)
   const percent = (Math.max(perMille, 1) / 10).toLocaleString(locale, {

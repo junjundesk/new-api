@@ -24,7 +24,11 @@ import type { UsageLog } from '../../data/schema'
 import { LogCacheRateBadge } from '../log-cache-rate-badge'
 
 // bun test runs without the app i18n bootstrap; stub useTranslation with an
-// identity translator that still interpolates {{name}} placeholders.
+// identity translator that still interpolates {{name}} placeholders. The
+// language stays mutable so a test can cover the project's non-BCP-47 `zhCN`
+// interface code, which `Intl` rejects as an invalid locale.
+var i18nState = { language: 'en' }
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
@@ -36,11 +40,16 @@ vi.mock('react-i18next', () => ({
       }
       return text
     },
-    i18n: { language: 'en' },
+    i18n: {
+      get language() {
+        return i18nState.language
+      },
+    },
   }),
 }))
 
 afterEach(() => {
+  i18nState.language = 'en'
   document.body.innerHTML = ''
 })
 
@@ -150,5 +159,14 @@ describe('LogCacheRateBadge', () => {
         'Cache rate = total cached input tokens ÷ total input tokens. Cache writes count as input, not cache hits; output tokens are excluded.'
       )
     ).not.toBeNull()
+  })
+
+  it('when the interface language is the non-BCP-47 zhCN code then still renders the rate', () => {
+    i18nState.language = 'zhCN'
+
+    const badge = badgeFor(claudeCacheLog)
+
+    expect(badge.getAttribute('aria-label')).toBe('Cache hit rate: 94.1%')
+    expect(badge.textContent).toBe('94.1%')
   })
 })

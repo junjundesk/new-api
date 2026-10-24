@@ -25,6 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 
 import { LOG_TYPE_ENUM } from '../constants'
 import type { UsageLog } from '../data/schema'
@@ -47,7 +48,8 @@ export function LogCacheRateBadge(props: { log: UsageLog }) {
   const usage = getLogCacheUsage(props.log)
   if (!usage || usage.cachedTokens <= 0) return null
 
-  const rateText = formatCacheHitRate(usage, i18n.language)
+  const locale = toIntlLocale(i18n.language)
+  const rateText = formatCacheHitRate(usage, locale)
   const title = t('Cache hit rate: {{rate}}', { rate: rateText })
 
   return (
@@ -71,8 +73,8 @@ export function LogCacheRateBadge(props: { log: UsageLog }) {
             <p className='font-medium'>{title}</p>
             <p>
               {t('Cache reads {{cached}} / total input {{input}} tokens', {
-                cached: usage.cachedTokens.toLocaleString(i18n.language),
-                input: usage.inputTokens.toLocaleString(i18n.language),
+                cached: usage.cachedTokens.toLocaleString(locale),
+                input: usage.inputTokens.toLocaleString(locale),
               })}
             </p>
             <p>
