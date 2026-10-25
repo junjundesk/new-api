@@ -83,6 +83,8 @@ await i18n.use(initReactI18next).init({
         'Search...': 'Search...',
         'No group found.': 'No group found.',
         'Select a group': 'Select a group',
+        Exclusive: 'Excl.',
+        'Model-specific billing ratio': 'Model-specific billing ratio',
       },
     },
   },
@@ -102,6 +104,13 @@ const options = [
   },
   { value: 'default', label: 'default', desc: 'User group', ratio: 1 },
   { value: 'vip', label: 'vip', desc: 'Priority group', ratio: 3 },
+  {
+    value: 'exclusive-group',
+    label: 'exclusive-group',
+    desc: 'Exclusive pricing group',
+    ratio: 2,
+    hasModelSpecificRatio: true,
+  },
 ]
 
 function Harness(props: { initialValue: string }) {
@@ -260,6 +269,29 @@ describe('API key group combobox Auto effect', () => {
     assert.equal(trigger.getAttribute('aria-expanded'), 'false')
     assert.equal(trigger.hasAttribute('data-auto-group-effect'), false)
     assert.equal(trigger.querySelector('[data-auto-group-flow-border]'), null)
+
+    await act(async () => root.unmount())
+    container.remove()
+  })
+
+  test('marks groups with model-specific ratios and leaves normal groups unmarked', async () => {
+    setReducedMotion(false)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () =>
+      root.render(<Harness initialValue='exclusive-group' />)
+    )
+
+    const trigger = getTrigger(container)
+    assert.equal(trigger.textContent?.includes('(Excl.)'), true)
+
+    await act(async () => trigger.click())
+    const flagged = getCommandItem('Exclusive pricing group')
+    assert.equal(flagged.textContent?.includes('(Excl.)'), true)
+    const normal = getCommandItem('User group')
+    assert.equal(normal.textContent?.includes('(Excl.)'), false)
 
     await act(async () => root.unmount())
     container.remove()

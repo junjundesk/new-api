@@ -245,3 +245,30 @@ func TestPricingPublicCopyDoesNotMutateCache(t *testing.T) {
 	copy[0].ModelName = "corrupted"
 	assert.Equal(t, original, GetPricing())
 }
+
+func TestGroupsWithModelSpecificRatio(t *testing.T) {
+	setupPricingBillingTest(t)
+
+	insertPricingBillingChannel(t, "flag-zero", "default", `{"model_group_ratios":{"flag-zero":0}}`, common.ChannelStatusEnabled, true, 10)
+	insertPricingBillingChannel(t, "plain", "vip", "", common.ChannelStatusEnabled, true, 10)
+	insertPricingBillingChannel(t, "disabled-channel", "disabled-channel-group", `{"model_group_ratios":{"disabled-channel":1}}`, common.ChannelStatusManuallyDisabled, true, 10)
+	insertPricingBillingChannel(t, "disabled-ability", "disabled-ability-group", `{"model_group_ratios":{"disabled-ability":1}}`, common.ChannelStatusEnabled, false, 10)
+	insertPricingBillingChannel(t, "invalid-ratio", "invalid-ratio-group", `{"model_group_ratios":{"invalid-ratio":-1}}`, common.ChannelStatusEnabled, true, 10)
+	insertPricingBillingChannel(t, "disabled-model", "disabled-model-group", `{"model_group_ratios":{"disabled-model":1}}`, common.ChannelStatusEnabled, true, 10)
+	require.NoError(t, DB.Create(&Model{ModelName: "disabled-model", Status: 2, NameRule: NameRuleExact}).Error)
+
+	multiGroupChannel := insertPricingBillingChannel(t, "multi-group", "multi-a", `{"model_group_ratios":{"multi-group":1}}`, common.ChannelStatusEnabled, true, 10)
+	require.NoError(t, DB.Create(&Ability{Group: "multi-b", Model: "multi-group", ChannelId: multiGroupChannel.Id, Enabled: true, Priority: multiGroupChannel.Priority}).Error)
+
+	RefreshPricing()
+
+	groups := GetGroupsWithModelSpecificRatio()
+	assert.True(t, groups["default"])
+	assert.True(t, groups["multi-a"])
+	assert.True(t, groups["multi-b"])
+	assert.False(t, groups["vip"])
+	assert.False(t, groups["disabled-channel-group"])
+	assert.False(t, groups["disabled-ability-group"])
+	assert.False(t, groups["invalid-ratio-group"])
+	assert.False(t, groups["disabled-model-group"])
+}

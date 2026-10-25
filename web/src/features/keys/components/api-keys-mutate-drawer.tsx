@@ -176,6 +176,7 @@ export function ApiKeysMutateDrawer({
           ? (info.chain_groups || []).join(' -> ')
           : info.desc || key,
         ratio: info.ratio,
+        hasModelSpecificRatio: info.has_model_specific_ratio === true,
       })),
     [groupsData]
   )

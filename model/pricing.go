@@ -68,6 +68,9 @@ var (
 	modelEnableGroups     = make(map[string][]string)
 	modelQuotaTypeMap     = make(map[string]int)
 	modelEnableGroupsLock = sync.RWMutex{}
+
+	// 分组是否至少有一个模型配置了渠道模型专属倍率，随定价缓存一起重建。
+	groupsWithModelSpecificRatio = make(map[string]bool)
 )
 
 var (
@@ -102,6 +105,17 @@ func GetPricing() []Pricing {
 		pricing = append(pricing, item.clone())
 	}
 	return pricing
+}
+
+// GetGroupsWithModelSpecificRatio reports which groups contain at least one
+// model with a valid channel model-specific ratio. The result is derived from
+// the immutable pricing snapshot and never exposes channel identities or ratio
+// values.
+func GetGroupsWithModelSpecificRatio() map[string]bool {
+	getPricingSnapshot()
+	updatePricingLock.RLock()
+	defer updatePricingLock.RUnlock()
+	return maps.Clone(groupsWithModelSpecificRatio)
 }
 
 func InvalidatePricingCache() {
@@ -470,6 +484,21 @@ func updatePricing() {
 		modelQuotaTypeMap[p.ModelName] = p.QuotaType
 	}
 	modelEnableGroupsLock.Unlock()
+
+	groupsWithModelSpecificRatio = make(map[string]bool)
+	for _, p := range pricingMap {
+		for group, candidates := range p.billingCandidates {
+			if groupsWithModelSpecificRatio[group] {
+				continue
+			}
+			for _, ratio := range candidates {
+				if ratio_setting.IsValidModelGroupRatio(ratio) {
+					groupsWithModelSpecificRatio[group] = true
+					break
+				}
+			}
+		}
+	}
 
 	lastGetPricingTime = time.Now()
 }

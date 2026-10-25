@@ -33,19 +33,22 @@ func GetUserGroups(c *gin.Context) {
 	userGroup, _ = model.GetUserGroup(userId, false)
 	activityOverrides := service.GetActivityOverrides(service.GetActiveActivityViews(userId))
 	userUsableGroups := service.GetUserUsableGroupsWithActivity(userId, userGroup)
+	modelSpecificGroups := model.GetGroupsWithModelSpecificRatio()
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]interface{}{
-				"ratio": service.GetUserGroupRatioWithActivity(userGroup, groupName, activityOverrides),
-				"desc":  desc,
+				"ratio":                    service.GetUserGroupRatioWithActivity(userGroup, groupName, activityOverrides),
+				"desc":                     desc,
+				"has_model_specific_ratio": modelSpecificGroups[groupName],
 			}
 		}
 	}
 	if _, ok := userUsableGroups["auto"]; ok {
 		usableGroups["auto"] = map[string]interface{}{
-			"ratio": "自动",
-			"desc":  setting.GetUsableGroupDescription("auto"),
+			"ratio":                    "自动",
+			"desc":                     setting.GetUsableGroupDescription("auto"),
+			"has_model_specific_ratio": false,
 		}
 	}
 	chains, err := model.GetUserChannelChains(userId)
@@ -54,11 +57,20 @@ func GetUserGroups(c *gin.Context) {
 		return
 	}
 	for _, chain := range chains {
+		chainGroups := chain.GetGroupList()
+		hasModelSpecificRatio := false
+		for _, groupName := range chainGroups {
+			if modelSpecificGroups[groupName] {
+				hasModelSpecificRatio = true
+				break
+			}
+		}
 		usableGroups["chain:"+chain.ChainId] = map[string]interface{}{
-			"custom_chain": true,
-			"chain_groups": chain.GetGroupList(),
-			"desc":         chain.Name,
-			"ratio":        "自动",
+			"custom_chain":             true,
+			"chain_groups":             chainGroups,
+			"desc":                     chain.Name,
+			"ratio":                    "自动",
+			"has_model_specific_ratio": hasModelSpecificRatio,
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{

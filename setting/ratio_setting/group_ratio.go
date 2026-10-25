@@ -171,10 +171,11 @@ type ActivityRatioOverride struct {
 	GroupRatio  *float64
 }
 
-// validBillingRatio reports whether a billing multiplier is usable: a finite
-// number inside [0, MaxChannelModelGroupRatio]. Values loaded from a hand-edited
-// row are ignored instead of poisoning the charge.
-func validBillingRatio(ratio *float64) bool {
+// IsValidModelGroupRatio reports whether a channel model-specific billing
+// multiplier is usable: a finite number inside [0, MaxChannelModelGroupRatio].
+// Values loaded from a hand-edited row are ignored instead of poisoning the
+// charge.
+func IsValidModelGroupRatio(ratio *float64) bool {
 	return ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) &&
 		*ratio >= 0 && *ratio <= dto.MaxChannelModelGroupRatio
 }
@@ -192,16 +193,16 @@ func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides m
 	info := types.GroupRatioInfo{GroupSpecialRatio: -1, Source: types.GroupRatioSourceGroup}
 
 	var channelRatio *float64
-	if ratio, ok := overrides[modelName]; ok && validBillingRatio(ratio) {
+	if ratio, ok := overrides[modelName]; ok && IsValidModelGroupRatio(ratio) {
 		value := *ratio
 		channelRatio = &value
 	}
 
 	var activityRatio *float64
 	if activity != nil {
-		if ratio, ok := activity.ModelRatios[modelName]; ok && validBillingRatio(&ratio) {
+		if ratio, ok := activity.ModelRatios[modelName]; ok && IsValidModelGroupRatio(&ratio) {
 			activityRatio = &ratio
-		} else if validBillingRatio(activity.GroupRatio) {
+		} else if IsValidModelGroupRatio(activity.GroupRatio) {
 			activityRatio = activity.GroupRatio
 		}
 	}

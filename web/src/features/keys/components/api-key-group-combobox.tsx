@@ -20,6 +20,7 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -48,6 +49,22 @@ export type ApiKeyGroupOption = {
   label: string
   desc?: string
   ratio?: number | string
+  hasModelSpecificRatio?: boolean
+}
+
+function ModelSpecificRatioBadge() {
+  const { t } = useTranslation()
+
+  return (
+    <Badge
+      variant='outline'
+      title={t('Model-specific billing ratio')}
+      aria-label={t('Model-specific billing ratio')}
+      className='h-[18px] shrink-0 border-violet-300 bg-violet-50 px-1.5 text-[10px] leading-none font-semibold text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-300'
+    >
+      ({t('Exclusive')})
+    </Badge>
+  )
 }
 
 type ApiKeyGroupComboboxProps = {
@@ -120,8 +137,13 @@ export function ApiKeyGroupCombobox({
         )}
         <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
           <span className='min-w-0'>
-            <span className='block truncate font-medium'>
-              {selectedOption?.label || placeholder || t('Select a group')}
+            <span className='flex min-w-0 items-center gap-1.5'>
+              <span className='block min-w-0 truncate font-medium'>
+                {selectedOption?.label || placeholder || t('Select a group')}
+              </span>
+              {selectedOption?.hasModelSpecificRatio && (
+                <ModelSpecificRatioBadge />
+              )}
             </span>
             {selectedOption?.desc && (
               <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
@@ -188,8 +210,13 @@ export function ApiKeyGroupCombobox({
                       )}
                     />
                     <span className='min-w-0 flex-1'>
-                      <span className='block truncate font-medium'>
-                        {option.label}
+                      <span className='flex min-w-0 items-center gap-1.5'>
+                        <span className='block min-w-0 truncate font-medium'>
+                          {option.label}
+                        </span>
+                        {option.hasModelSpecificRatio && (
+                          <ModelSpecificRatioBadge />
+                        )}
                       </span>
                       {option.desc && (
                         <span className='text-muted-foreground block truncate text-xs'>

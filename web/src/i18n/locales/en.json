@@ -5949,6 +5949,7 @@
     "Search users": "Search users",
     "Set inviter to {{inviter}} (ID: {{inviter_id}}) for {{count}} users": "Set inviter to {{inviter}} (ID: {{inviter_id}}) for {{count}} users",
     "Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.": "Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Exclusive": "Excl."
   }
 }
