@@ -112,7 +112,27 @@ export interface ToolSurchargeItem {
   price: number
 }
 
+export interface FallbackLogInfo {
+  from_model?: string
+  from_group?: string
+  to_model?: string
+  to_group?: string
+  attempt?: number
+  failed?: boolean
+  attempts?: number
+}
+
+export interface FallbackAttemptInfo {
+  index?: number
+  group?: string
+  model?: string
+  channel_id?: number
+  status_code?: number
+  error?: string
+}
+
 export interface LogOtherData {
+  fallback?: FallbackLogInfo
   admin_info?: {
     request_ip?: string
     is_multi_key?: boolean
@@ -133,6 +153,7 @@ export interface LogOtherData {
     admin_id?: number | string
     admin_role?: number
     auth_method?: 'session' | 'access_token' | string
+    fallback_attempts?: FallbackAttemptInfo[]
     // Quota saturation marker: set when a quota conversion clamped at the
     // int32 bound (overflow/underflow) or hit a NaN fallback while computing
     // this request's charge. Admin-only (nested under admin_info).

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,9 +12,11 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,8 +37,9 @@ func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 
 type tokenRequest struct {
 	model.Token
-	AutoGroups    tokenAutoGroupsInput         `json:"auto_groups"`
-	ModelMappings *[]setting.TokenModelMapping `json:"model_mappings"`
+	AutoGroups     tokenAutoGroupsInput          `json:"auto_groups"`
+	ModelMappings  *[]setting.TokenModelMapping  `json:"model_mappings"`
+	FallbackModels *[]setting.TokenFallbackModel `json:"fallback_models"`
 }
 
 // respondTokenValidationError maps the sentinel errors returned by the shared
@@ -66,9 +70,10 @@ func respondTokenValidationError(c *gin.Context, err error) {
 
 type tokenResponse struct {
 	*model.Token
-	AutoGroups     []string                    `json:"auto_groups"`
-	ModelMappings  []setting.TokenModelMapping `json:"model_mappings"`
-	TodayUsedQuota int64                       `json:"today_used_quota"`
+	AutoGroups     []string                     `json:"auto_groups"`
+	ModelMappings  []setting.TokenModelMapping  `json:"model_mappings"`
+	FallbackModels []setting.TokenFallbackModel `json:"fallback_models"`
+	TodayUsedQuota int64                        `json:"today_used_quota"`
 }
 
 func buildMaskedTokenResponseWithUsage(token *model.Token, todayUsedQuota int64) *tokenResponse {
@@ -92,10 +97,18 @@ func buildMaskedTokenResponseWithUsage(token *model.Token, todayUsedQuota int64)
 	if modelMappings == nil {
 		modelMappings = []setting.TokenModelMapping{}
 	}
+	fallbackModels, err := token.GetFallbackModels()
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to parse fallback models for token %d: %v", token.Id, err))
+	}
+	if fallbackModels == nil {
+		fallbackModels = []setting.TokenFallbackModel{}
+	}
 	return &tokenResponse{
 		Token:          &maskedToken,
 		AutoGroups:     autoGroups,
 		ModelMappings:  modelMappings,
+		FallbackModels: fallbackModels,
 		TodayUsedQuota: todayUsedQuota,
 	}
 }
@@ -285,6 +298,100 @@ func setTokenModelMappings(c *gin.Context, token *model.Token, mappings []settin
 		return false
 	}
 	return true
+}
+
+// tokenAllowsModel applies the key's model limits, including wildcard
+// matching, the same way channel selection does.
+func tokenAllowsModel(token *model.Token, modelName string) bool {
+	if token == nil || !token.ModelLimitsEnabled {
+		return true
+	}
+	limits := token.GetModelLimitsMap()
+	return limits[modelName] || limits[ratio_setting.FormatMatchingModelName(modelName)]
+}
+
+// tokenFallbackModelBillable mirrors the pricing visibility rules of ListModels:
+// a fallback target without a billing configuration would always fail at request
+// time, so it must not be offered or saved.
+func tokenFallbackModelBillable(c *gin.Context, modelName string) bool {
+	if operation_setting.SelfUseModeEnabled {
+		return true
+	}
+	if setting, err := model.GetUserSetting(c.GetInt("id"), false); err == nil && setting.AcceptUnsetRatioModel {
+		return true
+	}
+	return helper.HasModelBillingConfig(modelName)
+}
+
+func setTokenFallbackModels(c *gin.Context, token *model.Token, items []setting.TokenFallbackModel) bool {
+	normalized, err := setting.NormalizeTokenFallbackModels(items)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	if len(normalized) > 0 {
+		userGroup, err := getTokenRequestUserGroup(c)
+		if err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		autoGroups, _ := token.GetAutoGroups()
+		keyModels, err := getTokenGroupModels(c, token.Group, autoGroups)
+		if err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		keyModelSet := make(map[string]struct{}, len(keyModels))
+		for _, name := range keyModels {
+			keyModelSet[name] = struct{}{}
+		}
+		for i, item := range normalized {
+			if item.SourceModel != "" {
+				if _, ok := keyModelSet[item.SourceModel]; !ok {
+					common.ApiError(c, fmt.Errorf("fallback %d: source model %s is unavailable in this key", i+1, item.SourceModel))
+					return false
+				}
+			}
+			if item.Group == "auto" || strings.HasPrefix(item.Group, "chain:") || !service.GroupInUserUsableGroups(userGroup, item.Group) {
+				common.ApiError(c, fmt.Errorf("fallback %d: group %s is not available", i+1, item.Group))
+				return false
+			}
+			if !slices.Contains(service.GetGroupsEnabledModels([]string{item.Group}), item.Model) {
+				common.ApiError(c, fmt.Errorf("fallback %d: model %s is unavailable in group %s", i+1, item.Model, item.Group))
+				return false
+			}
+			if !tokenAllowsModel(token, item.Model) {
+				common.ApiError(c, fmt.Errorf("fallback %d: model %s is not allowed by this key", i+1, item.Model))
+				return false
+			}
+			if !tokenFallbackModelBillable(c, item.Model) {
+				common.ApiError(c, fmt.Errorf("fallback %d: model %s has no billing configuration", i+1, item.Model))
+				return false
+			}
+		}
+	}
+	if err := token.SetFallbackModels(normalized); err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	return true
+}
+
+func GetTokenFallbackOptions(c *gin.Context) {
+	group := strings.TrimSpace(c.Query("group"))
+	userGroup, err := getTokenRequestUserGroup(c)
+	if err != nil || group == "" || group == "auto" || strings.HasPrefix(group, "chain:") || !service.GroupInUserUsableGroups(userGroup, group) {
+		common.ApiError(c, fmt.Errorf("group is not available"))
+		return
+	}
+	models := slices.DeleteFunc(service.GetGroupsEnabledModels([]string{group}), func(modelName string) bool {
+		return !tokenFallbackModelBillable(c, modelName)
+	})
+	slices.Sort(models)
+	common.ApiSuccess(c, gin.H{
+		"models":    models,
+		"max_count": setting.MaxTokenFallbackModels,
+	})
 }
 
 func GetTokenModelMappingOptions(c *gin.Context) {
@@ -511,9 +618,15 @@ func AddToken(c *gin.Context) {
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
+		FallbackEnabled:    token.FallbackEnabled,
 	}
 	if request.ModelMappings != nil {
 		if !setTokenModelMappings(c, &cleanToken, *request.ModelMappings) {
+			return
+		}
+	}
+	if request.FallbackModels != nil {
+		if !setTokenFallbackModels(c, &cleanToken, *request.FallbackModels) {
 			return
 		}
 	}
@@ -618,6 +731,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.FallbackEnabled = token.FallbackEnabled
 		if token.Group != "auto" && !strings.HasPrefix(token.Group, "chain:") {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
@@ -632,6 +746,11 @@ func UpdateToken(c *gin.Context) {
 		}
 		if request.ModelMappings != nil {
 			if !setTokenModelMappings(c, cleanToken, *request.ModelMappings) {
+				return
+			}
+		}
+		if request.FallbackModels != nil {
+			if !setTokenFallbackModels(c, cleanToken, *request.FallbackModels) {
 				return
 			}
 		}

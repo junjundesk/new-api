@@ -86,6 +86,20 @@ export async function getTokenModelMappingOptions(
   return res.data.data
 }
 
+// Get the models a fallback group can use. The group must be a concrete group
+// the current user can access; auto and chain groups are rejected by the API.
+export async function getFallbackModelOptions(
+  group: string
+): Promise<{ models: string[]; max_count: number }> {
+  const res = await api.get('/api/token/fallback/options', {
+    params: { group },
+  })
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.message || 'Failed to load fallback models')
+  }
+  return res.data.data
+}
+
 // Get the current user's channel chains.
 export async function getChannelChains(): Promise<
   ApiResponse<ChannelChainsResponse>

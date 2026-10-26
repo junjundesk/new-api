@@ -109,6 +109,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	}
 
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
+	AppendFallbackInfo(other, adminInfo, relayInfo.Fallback)
 
 	other["admin_info"] = adminInfo
 	appendGroupRatioSource(other, relayInfo.PriceData.GroupRatioInfo, relayInfo.ChannelId, relayInfo.PriceData.BillingModelName)
@@ -383,4 +384,45 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
 	}
+}
+
+// AppendFallbackInfo writes the user-visible fallback summary and the
+// admin-only per-attempt audit trail. A request that never reached a fallback
+// target leaves both maps untouched.
+func AppendFallbackInfo(other map[string]interface{}, adminInfo map[string]interface{}, state *relaycommon.FallbackState) {
+	if other == nil || state == nil || (state.Used == nil && len(state.Attempts) == 0) {
+		return
+	}
+	fallback := map[string]interface{}{
+		"from_model": state.OriginalModel,
+		"from_group": state.OriginalGroup,
+	}
+	if state.Used != nil {
+		fallback["to_model"] = state.Used.Model
+		fallback["to_group"] = state.Used.Group
+		fallback["attempt"] = state.Used.Index
+	} else {
+		fallback["failed"] = true
+		fallback["attempts"] = len(state.Attempts)
+	}
+	other["fallback"] = fallback
+
+	if adminInfo == nil || len(state.Attempts) == 0 {
+		return
+	}
+	attempts := make([]map[string]interface{}, 0, len(state.Attempts))
+	for _, attempt := range state.Attempts {
+		item := map[string]interface{}{
+			"index":       attempt.Index,
+			"group":       attempt.Group,
+			"model":       attempt.Model,
+			"channel_id":  attempt.ChannelId,
+			"status_code": attempt.StatusCode,
+		}
+		if attempt.Error != "" {
+			item["error"] = attempt.Error
+		}
+		attempts = append(attempts, item)
+	}
+	adminInfo["fallback_attempts"] = attempts
 }

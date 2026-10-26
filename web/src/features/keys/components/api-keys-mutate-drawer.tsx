@@ -23,6 +23,7 @@ import {
   ChevronDown,
   KeyRound,
   Settings2,
+  ShieldCheck,
   WalletCards,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -93,6 +94,7 @@ import {
   getModelMappingIssues,
 } from '../lib/model-mapping'
 import type { ApiKey } from '../types'
+import { ApiKeyFallbackSection } from './api-key-fallback-section'
 import { ApiKeyModelMappingSection } from './api-key-model-mapping-section'
 import {
   ApiKeyGroupCombobox,
@@ -181,6 +183,13 @@ export function ApiKeysMutateDrawer({
     [groupsData]
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')
+  const fallbackGroupOptions = useMemo(
+    () =>
+      groups.filter(
+        (group) => group.value !== 'auto' && !group.value.startsWith('chain:')
+      ),
+    [groups]
+  )
   const availableAutoGroupNames = useMemo(
     () => groups.filter((group) => group.value !== 'auto').map((g) => g.value),
     [groups]
@@ -668,6 +677,41 @@ export function ApiKeysMutateDrawer({
                       onRetry={() => {
                         void mappingOptionsQuery.refetch()
                       }}
+                      disabled={isSubmitting}
+                      showValidation={form.formState.submitCount > 0}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SideDrawerSection>
+
+            <SideDrawerSection>
+              <SideDrawerSectionHeader
+                title={t('Fallback models')}
+                description={t(
+                  'Switch to another group model when the original model is unavailable'
+                )}
+                icon={<ShieldCheck className='size-4' />}
+                iconTone='warning'
+              />
+              <FormField
+                control={form.control}
+                name='fallback_models'
+                render={({ field }) => (
+                  <FormItem>
+                    <ApiKeyFallbackSection
+                      enabled={!!form.watch('fallback_enabled')}
+                      onEnabledChange={(enabled) =>
+                        form.setValue('fallback_enabled', enabled, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      value={field.value}
+                      onChange={field.onChange}
+                      groupOptions={fallbackGroupOptions}
+                      sourceModels={mappingOptionsQuery.data?.models ?? []}
                       disabled={isSubmitting}
                       showValidation={form.formState.submitCount > 0}
                     />

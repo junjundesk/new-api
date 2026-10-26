@@ -25,6 +25,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	hosttypes "github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
@@ -66,6 +67,75 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 		err = relay.GeminiHelper(c, info)
 	}
 	return err
+}
+
+type relayAttemptOptions struct {
+	reprice bool
+	tokens  int
+	meta    *types.TokenCountMeta
+}
+
+type relayAttemptResult struct {
+	channel *model.Channel
+	err     *types.NewAPIError
+	// channelFailure marks an error returned by the upstream handler. Billing
+	// and body-read errors also return a channel, but they are not channel
+	// failures and must not disable or blame that channel.
+	channelFailure bool
+}
+
+// runRelayAttempt executes one channel attempt: select channel, optionally
+// reprice for the new model/group, prepare billing, then dispatch the relay.
+func runRelayAttempt(c *gin.Context, relayFormat types.RelayFormat, relayInfo *relaycommon.RelayInfo,
+	retryParam *service.RetryParam, opts relayAttemptOptions) relayAttemptResult {
+	channel, channelErr := getChannel(c, relayInfo, retryParam)
+	if channelErr != nil {
+		return relayAttemptResult{err: channelErr}
+	}
+	addUsedChannel(c, channel.Id)
+
+	if opts.reprice {
+		// A fallback target can live in another group and use another model.
+		// Channel settings must already describe the selected channel here,
+		// otherwise group and channel-specific ratios would come from the
+		// previous attempt.
+		relayInfo.PriceData = hosttypes.PriceData{}
+		relayInfo.TieredBillingSnapshot = nil
+		relayInfo.BillingRequestInput = nil
+		if _, priceErr := helper.ModelPriceHelper(c, relayInfo, opts.tokens, opts.meta); priceErr != nil {
+			return relayAttemptResult{
+				channel: channel,
+				err:     types.NewError(priceErr, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest), types.ErrOptionWithSkipRetry()),
+			}
+		}
+	}
+
+	if billingErr := service.PrepareBillingForSelectedChannel(c, relayInfo); billingErr != nil {
+		return relayAttemptResult{channel: channel, err: billingErr}
+	}
+
+	bodyStorage, bodyErr := common.GetBodyStorage(c)
+	if bodyErr != nil {
+		// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
+		if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
+			return relayAttemptResult{channel: channel, err: types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())}
+		}
+		return relayAttemptResult{channel: channel, err: types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())}
+	}
+	c.Request.Body = io.NopCloser(bodyStorage)
+
+	var relayErr *types.NewAPIError
+	switch relayFormat {
+	case types.RelayFormatOpenAIRealtime:
+		relayErr = relay.WssHelper(c, relayInfo)
+	case types.RelayFormatClaude:
+		relayErr = relay.ClaudeHelper(c, relayInfo)
+	case types.RelayFormatGemini:
+		relayErr = geminiRelayHandler(c, relayInfo)
+	default:
+		relayErr = relayHandler(c, relayInfo)
+	}
+	return relayAttemptResult{channel: channel, err: relayErr, channelFailure: relayErr != nil}
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
@@ -125,6 +195,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+
+	relayInfo.Fallback = helper.BuildFallbackState(c, relayInfo)
+	c.Set("fallback_state", relayInfo.Fallback)
 
 	if !relayInfo.IsStream {
 		billingGroup := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
@@ -210,45 +283,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	for ; retryParam.GetRetry() <= relayRetryLimit(c); retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
-		channel, channelErr := getChannel(c, relayInfo, retryParam)
-		if channelErr != nil {
-			logger.LogError(c, channelErr.Error())
-			newAPIError = channelErr
-			break
-		}
-		addUsedChannel(c, channel.Id)
-		if billingErr := service.PrepareBillingForSelectedChannel(c, relayInfo); billingErr != nil {
-			newAPIError = billingErr
-			break
-		}
-
-		bodyStorage, bodyErr := common.GetBodyStorage(c)
-		if bodyErr != nil {
-			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
-			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
-				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
-			} else {
-				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-			}
-			break
-		}
-		c.Request.Body = io.NopCloser(bodyStorage)
-
-		switch relayFormat {
-		case types.RelayFormatOpenAIRealtime:
-			newAPIError = relay.WssHelper(c, relayInfo)
-		case types.RelayFormatClaude:
-			newAPIError = relay.ClaudeHelper(c, relayInfo)
-		case types.RelayFormatGemini:
-			newAPIError = geminiRelayHandler(c, relayInfo)
-		default:
-			newAPIError = relayHandler(c, relayInfo)
-		}
-
-		if newAPIError == nil {
+		result := runRelayAttempt(c, relayFormat, relayInfo, retryParam, relayAttemptOptions{})
+		if result.err == nil {
 			relayInfo.LastError = nil
 			return
 		}
+		newAPIError = result.err
+		if result.channel == nil {
+			logger.LogError(c, newAPIError.Error())
+			break
+		}
+		if !result.channelFailure {
+			break
+		}
+		channel := result.channel
 
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
@@ -276,6 +324,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if !continueAfterThisAttempt {
 			break
+		}
+	}
+
+	if newAPIError != nil && helper.ShouldTryFallback(c, relayInfo, newAPIError) {
+		lastErr, used := runFallbackAttempts(c, relayFormat, relayInfo, tokens, meta)
+		if used {
+			// 成功的兜底请求必须清掉错误，否则外层 defer 会退款。
+			newAPIError = nil
+			relayInfo.LastError = nil
+			return
+		}
+		if lastErr != nil {
+			newAPIError = lastErr
+			relayInfo.LastError = lastErr
 		}
 	}
 
@@ -447,6 +509,11 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			adminInfo["multi_key_index"] = common.GetContextKeyInt(c, constant.ContextKeyChannelMultiKeyIndex)
 		}
 		service.AppendChannelAffinityAdminInfo(c, adminInfo)
+		if value, exists := c.Get("fallback_state"); exists {
+			if state, ok := value.(*relaycommon.FallbackState); ok {
+				service.AppendFallbackInfo(other, adminInfo, state)
+			}
+		}
 		other["admin_info"] = adminInfo
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 		if startTime.IsZero() {

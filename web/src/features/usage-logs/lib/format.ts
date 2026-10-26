@@ -25,7 +25,7 @@ import {
 } from '@/features/pricing/lib/billing-expr'
 
 import type { UsageLog } from '../data/schema'
-import type { LogOtherData } from '../types'
+import type { FallbackLogInfo, LogOtherData } from '../types'
 
 export { normalizeTierLabel }
 
@@ -237,12 +237,14 @@ export function formatModelName(
   name: string
   isMapped: boolean
   actualModel?: string
+  fallback?: FallbackLogInfo
 } {
+  const other = parseLogOther(log.other)
+  const fallback = other?.fallback
   if (!isAdmin) {
-    return { name: log.model_name, isMapped: false }
+    return { name: log.model_name, isMapped: false, fallback }
   }
 
-  const other = parseLogOther(log.other)
   const isMappedFlag =
     other?.admin_info?.is_model_mapped || other?.is_model_mapped
   const upstreamModelName =
@@ -253,6 +255,7 @@ export function formatModelName(
     name: log.model_name,
     isMapped,
     actualModel: isMapped ? upstreamModelName : undefined,
+    fallback,
   }
 }
 

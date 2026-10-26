@@ -590,6 +590,14 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 			common.SetContextKey(c, constant.ContextKeyTokenModelMappings, mappings)
 		}
 	}
+	if token.FallbackEnabled && token.FallbackModels != "" {
+		fallbacks, err := token.GetFallbackModels()
+		if err != nil {
+			common.SysError(fmt.Sprintf("failed to parse fallback models for token %d: %v", token.Id, err))
+		} else if len(fallbacks) > 0 {
+			common.SetContextKey(c, constant.ContextKeyTokenFallbackModels, fallbacks)
+		}
+	}
 	if tokenGroup == "auto" && token.AutoGroups != "" {
 		autoGroups, err := token.GetAutoGroups()
 		if err != nil {

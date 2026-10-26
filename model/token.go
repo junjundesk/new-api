@@ -32,6 +32,8 @@ type Token struct {
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
 	ModelMappings      string         `json:"-" gorm:"type:text"`
+	FallbackEnabled    bool           `json:"fallback_enabled"`
+	FallbackModels     string         `json:"-" gorm:"type:text"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -88,6 +90,30 @@ func GetTokenTodayUsedQuota(userId int, tokenIds []int) (map[int]int64, error) {
 		usage[row.TokenId] = row.Quota
 	}
 	return usage, nil
+}
+
+func (token *Token) GetFallbackModels() ([]setting.TokenFallbackModel, error) {
+	if token.FallbackModels == "" {
+		return nil, nil
+	}
+	var fallbacks []setting.TokenFallbackModel
+	if err := common.UnmarshalJsonStr(token.FallbackModels, &fallbacks); err != nil {
+		return nil, err
+	}
+	return fallbacks, nil
+}
+
+func (token *Token) SetFallbackModels(fallbacks []setting.TokenFallbackModel) error {
+	if len(fallbacks) == 0 {
+		token.FallbackModels = ""
+		return nil
+	}
+	data, err := common.Marshal(fallbacks)
+	if err != nil {
+		return err
+	}
+	token.FallbackModels = string(data)
+	return nil
 }
 
 func (token *Token) GetAutoGroups() ([]string, error) {
@@ -389,7 +415,7 @@ func (token *Token) Insert() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() (err error) {
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups", "model_mappings").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups", "model_mappings", "fallback_enabled", "fallback_models").Updates(token).Error
 	if shouldUpdateRedis(true, err) {
 		if cacheErr := cacheSetToken(*token); cacheErr != nil {
 			common.SysLog("failed to update token cache: " + cacheErr.Error())

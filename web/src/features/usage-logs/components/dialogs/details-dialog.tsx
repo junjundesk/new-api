@@ -290,15 +290,16 @@ function BillingBreakdown(props: {
     userGR != null &&
     Number.isFinite(userGR) &&
     userGR !== -1
-  const effectiveGR = other.billing_ratio_source
-    ? other.group_ratio
-    : isUserGR
-      ? userGR
-      : other.group_ratio
+  let effectiveGR = other.group_ratio
+  if (isUserGR && !other.billing_ratio_source) {
+    effectiveGR = userGR
+  }
   let ratioLabel = t('Group Ratio')
-  if (isChannelModel) ratioLabel = t('Model-specific billing ratio')
-  else if (isUserGR || other.billing_ratio_source === 'user_group')
+  if (isChannelModel) {
+    ratioLabel = t('Model-specific billing ratio')
+  } else if (isUserGR || other.billing_ratio_source === 'user_group') {
     ratioLabel = t('User Exclusive Ratio')
+  }
   if (effectiveGR != null && Number.isFinite(effectiveGR)) {
     rows.push({
       label: ratioLabel,
@@ -522,6 +523,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
     props.isAdmin &&
     !!(adminInfo?.is_model_mapped || other?.is_model_mapped) &&
     !!mappedUpstreamModelName
+  const fallback = other?.fallback
+  const fallbackAttempts = props.isAdmin ? adminInfo?.fallback_attempts : undefined
   const requestIp = getRequestIpForDisplay(
     props.log.ip,
     adminInfo,
@@ -1070,6 +1073,59 @@ export function DetailsDialog(props: DetailsDialogProps) {
               />
             }
           />
+        )}
+
+        {fallback && (
+          <DetailSection
+            label={t('Fallback Model')}
+            badge={
+              <StatusBadge
+                label={t('Fallback')}
+                variant='warning'
+                size='sm'
+                copyable={false}
+              />
+            }
+          >
+            <DetailRow
+              label={t('Original model')}
+              value={
+                fallback.from_group
+                  ? `${fallback.from_model ?? '-'} · ${fallback.from_group}`
+                  : (fallback.from_model ?? '-')
+              }
+              mono
+            />
+            <DetailRow
+              label={t('Fallback model')}
+              value={
+                fallback.to_group
+                  ? `${fallback.to_model ?? '-'} · ${fallback.to_group}`
+                  : (fallback.to_model ?? '-')
+              }
+              mono
+            />
+            {fallback.attempt != null && (
+              <DetailRow
+                label={t('Attempt')}
+                value={t('Attempt {{n}}', { n: fallback.attempt })}
+              />
+            )}
+            {fallbackAttempts?.map((attempt) => (
+              <DetailRow
+                key={`${attempt.index}-${attempt.group}-${attempt.model}`}
+                label={t('Attempt {{n}}', { n: attempt.index ?? 0 })}
+                value={
+                  <span className='font-mono text-xs'>
+                    {attempt.group}/{attempt.model}
+                    {attempt.channel_id ? ` · #${attempt.channel_id}` : ''}
+                    {attempt.status_code ? ` · ${attempt.status_code}` : ''}
+                    {attempt.error ? ` · ${attempt.error}` : ''}
+                  </span>
+                }
+              />
+            ))}
+          </DetailSection>
         )}
 
         {/* Model mapping (channel configuration detail, admin only) */}

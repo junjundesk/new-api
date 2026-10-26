@@ -55,6 +55,8 @@ const baseApiKey: ApiKey = {
   model_limits: '',
   allow_ips: '',
   model_mappings: [],
+  fallback_enabled: false,
+  fallback_models: [],
 }
 
 describe('API key Auto group form mapping', () => {

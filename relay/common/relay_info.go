@@ -87,6 +87,34 @@ type ModelCandidateState struct {
 	Candidates []string
 }
 
+// FallbackTarget is an ordered key-level fallback candidate. SourceModel is
+// empty for generic fallbacks that apply to every requested model.
+type FallbackTarget struct {
+	SourceModel string
+	Group       string
+	Model       string
+}
+
+// FallbackAttempt records one fallback attempt for logs and billing audit.
+type FallbackAttempt struct {
+	Index      int
+	Group      string
+	Model      string
+	ChannelId  int
+	StatusCode int
+	Error      string
+}
+
+// FallbackState tracks the key-level fallback plan for one request. It lives
+// on RelayInfo so it survives every internal retry and channel rebuild.
+type FallbackState struct {
+	Configured    []FallbackTarget
+	OriginalModel string
+	OriginalGroup string
+	Attempts      []FallbackAttempt
+	Used          *FallbackAttempt
+}
+
 type TokenCountMeta struct {
 	//promptTokens int
 	estimatePromptTokens int
@@ -190,6 +218,10 @@ type RelayInfo struct {
 	// channel model mapping, and how far through them this request has
 	// progressed. Nil when the channel has no usable mapping.
 	ModelCandidate *ModelCandidateState
+
+	// Fallback holds the key-level fallback plan and attempt history. Nil when
+	// the token has no fallback configuration or none matched this model.
+	Fallback *FallbackState
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].

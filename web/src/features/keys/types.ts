@@ -47,6 +47,16 @@ export interface TokenModelMappingOptions {
   presets: TokenModelMappingPreset[]
 }
 
+export const tokenFallbackModelSchema = z.object({
+  // Form-local row identity; stripped before sending the API payload.
+  id: z.string().optional(),
+  source_model: z.string().optional().default(''),
+  group: z.string(),
+  model: z.string(),
+})
+
+export type TokenFallbackModel = z.infer<typeof tokenFallbackModelSchema>
+
 // ============================================================================
 // API Key Schema & Types
 // ============================================================================
@@ -77,6 +87,8 @@ export const apiKeySchema = z.object({
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
   model_mappings: z.array(tokenModelMappingSchema).nullish().default([]),
+  fallback_enabled: z.boolean().optional().default(false),
+  fallback_models: z.array(tokenFallbackModelSchema).nullish().default([]),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
@@ -126,6 +138,8 @@ export interface ApiKeyFormData {
   auto_groups: string[]
   cross_group_retry: boolean
   model_mappings: TokenModelMapping[]
+  fallback_enabled: boolean
+  fallback_models: TokenFallbackModel[]
 }
 
 export interface TokenAutoGroupsConfig {

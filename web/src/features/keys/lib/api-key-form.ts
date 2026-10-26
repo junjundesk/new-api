@@ -23,9 +23,15 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
 import { DEFAULT_GROUP } from '../constants'
 import type { ApiKey, ApiKeyFormData } from '../types'
+import {
+  createFallbackModel,
+  fallbackModelFormSchema,
+  getFallbackModelsSchema,
+  normalizeFallbackModels,
+} from './fallback'
 import { getModelMappingsSchema, normalizeModelMappings } from './model-mapping'
 
-const KEY_NAME_PATTERN = /^[\p{L}\p{N} _\-\.\(\)\[\]@#+]+$/u
+const KEY_NAME_PATTERN = /^[\p{L}\p{N} _\-.()[\]@#+]+$/u
 
 // ============================================================================
 // Form Schema
@@ -48,6 +54,8 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       unlimited_quota: z.boolean(),
       model_limits: z.array(z.string()),
       model_mappings: getModelMappingsSchema(t),
+      fallback_enabled: z.boolean(),
+      fallback_models: z.array(fallbackModelFormSchema),
       allow_ips: z.string().optional(),
       group: z.string().optional(),
       auto_groups_mode: z.enum(['inherit', 'custom']),
@@ -89,6 +97,23 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
         }
       }
 
+      if (data.fallback_enabled) {
+        const result = getFallbackModelsSchema(t).safeParse(
+          data.fallback_models
+        )
+        if (!result.success) {
+          for (const issue of result.error.issues) {
+            ctx.addIssue({
+              code: 'custom',
+              // The nested schema reports paths relative to the list, but this
+              // issue is attached to the form root.
+              path: ['fallback_models', ...issue.path],
+              message: issue.message,
+            })
+          }
+        }
+      }
+
       if (data.unlimited_quota) {
         return
       }
@@ -119,6 +144,8 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   unlimited_quota: true,
   model_limits: [],
   model_mappings: [],
+  fallback_enabled: false,
+  fallback_models: [],
   allow_ips: '',
   group: DEFAULT_GROUP,
   auto_groups_mode: 'inherit',
@@ -136,6 +163,8 @@ export function getApiKeyFormDefaultValues(
     auto_groups_mode: 'inherit',
     auto_groups: [],
     cross_group_retry: defaultUseAutoGroup,
+    fallback_enabled: false,
+    fallback_models: [],
   }
 }
 
@@ -162,6 +191,8 @@ export function transformFormDataToPayload(
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     model_mappings: normalizeModelMappings(data.model_mappings),
+    fallback_enabled: data.fallback_enabled,
+    fallback_models: normalizeFallbackModels(data.fallback_models),
     allow_ips: data.allow_ips || '',
     group: data.group || '',
     auto_groups:
@@ -203,6 +234,10 @@ export function transformApiKeyToFormDefaults(
     model_mappings: (apiKey.model_mappings ?? []).map((mapping) => ({
       ...mapping,
     })),
+    fallback_enabled: !!apiKey.fallback_enabled,
+    fallback_models: (apiKey.fallback_models ?? []).map((fallback) =>
+      createFallbackModel(fallback)
+    ),
     allow_ips: apiKey.allow_ips || '',
     group: apiKey.group || DEFAULT_GROUP,
     auto_groups_mode: autoGroupsMode,

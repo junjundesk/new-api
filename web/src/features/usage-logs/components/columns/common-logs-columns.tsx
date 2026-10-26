@@ -61,6 +61,7 @@ import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { LogCacheRateBadge } from '../log-cache-rate-badge'
 import { LogClientBadge } from '../log-client-badge'
+import { LogFallbackBadge } from '../log-fallback-badge'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
@@ -84,8 +85,9 @@ function getGroupRatio(other: LogOtherData | null): number | null {
     other?.billing_ratio_source &&
     other.group_ratio != null &&
     Number.isFinite(other.group_ratio)
-  )
+  ) {
     return other.group_ratio
+  }
   const userGroupRatio = other?.user_group_ratio
   if (
     userGroupRatio != null &&
@@ -269,16 +271,16 @@ function buildTypeDetailSegments(
         userGroupRatio != null &&
         Number.isFinite(userGroupRatio) &&
         userGroupRatio !== -1
-      const effectiveRatio = other.billing_ratio_source
-        ? groupRatio
-        : isUserGroup
-          ? userGroupRatio
-          : groupRatio
+      let effectiveRatio = groupRatio
+      if (isUserGroup && !other.billing_ratio_source) {
+        effectiveRatio = userGroupRatio
+      }
       let ratioLabel = t('Group Ratio')
-      if (other.billing_ratio_source === 'channel_model')
+      if (other.billing_ratio_source === 'channel_model') {
         ratioLabel = t('Model-specific billing ratio')
-      else if (isUserGroup || other.billing_ratio_source === 'user_group')
+      } else if (isUserGroup || other.billing_ratio_source === 'user_group') {
         ratioLabel = t('User Exclusive Ratio')
+      }
 
       if (effectiveRatio != null && Number.isFinite(effectiveRatio)) {
         segments.push({
@@ -662,13 +664,21 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (!isDisplayableLogType(log.type)) return null
 
         const modelInfo = formatModelName(log, isAdmin)
+        const other = parseLogOther(log.other)
 
         return (
-          <div className='flex w-fit flex-col gap-0.5'>
-            <ModelBadge
-              modelName={modelInfo.name}
-              actualModel={modelInfo.actualModel}
-            />
+          <div className='flex w-fit min-w-0 flex-col gap-0.5'>
+            <div className='flex min-w-0 items-center gap-1.5'>
+              <LogFallbackBadge
+                fallback={modelInfo.fallback}
+                adminAttempts={other?.admin_info?.fallback_attempts}
+                isAdmin={isAdmin}
+              />
+              <ModelBadge
+                modelName={modelInfo.name}
+                actualModel={modelInfo.actualModel}
+              />
+            </div>
           </div>
         )
       },
