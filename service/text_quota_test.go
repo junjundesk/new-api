@@ -2,12 +2,14 @@ package service
 
 import (
 	"math"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -1146,4 +1148,114 @@ func TestAppendToolSurchargeLogInfoWritesOnlyStructuredFields(t *testing.T) {
 	assert.NotContains(t, other, "file_search")
 	assert.NotContains(t, other, "image_generation_call")
 	assert.NotContains(t, other, "image_generation_call_price")
+}
+
+// stubBillingSettler records the settlement target without touching user funds.
+type stubBillingSettler struct {
+	preConsumed int
+	settled     int
+	settledFlag bool
+}
+
+func (s *stubBillingSettler) Settle(actualQuota int) error {
+	s.settled = actualQuota
+	s.settledFlag = true
+	return nil
+}
+
+func (s *stubBillingSettler) Refund(*gin.Context) {}
+
+func (s *stubBillingSettler) NeedsRefund() bool { return false }
+
+func (s *stubBillingSettler) GetPreConsumedQuota() int { return s.preConsumed }
+
+func (s *stubBillingSettler) Reserve(int) error { return nil }
+
+func TestZeroOutputWaivedQuota(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name        string
+		relayFormat types.RelayFormat
+		prompt      int
+		completion  int
+		surcharge   decimal.Decimal
+		wantQuota   int
+		wantOK      bool
+	}{
+		{"responses stream cut before output", types.RelayFormatOpenAIResponses, 11200, 0, decimal.Zero, 0, true},
+		{"claude messages without output", types.RelayFormatClaude, 100, 0, decimal.Zero, 0, true},
+		{"chat completions without output", types.RelayFormatOpenAI, 500, 0, decimal.Zero, 0, true},
+		{"keeps tool call surcharge", types.RelayFormatOpenAI, 11200, 0, decimal.NewFromInt(225), 225, true},
+		{"billed when output exists", types.RelayFormatOpenAI, 11200, 500, decimal.Zero, 0, false},
+		{"embeddings stay billable", types.RelayFormatEmbedding, 800, 0, decimal.Zero, 0, false},
+		{"rerank stays billable", types.RelayFormatRerank, 800, 0, decimal.Zero, 0, false},
+		{"audio stays billable", types.RelayFormatOpenAIAudio, 800, 0, decimal.Zero, 0, false},
+		{"image stays billable", types.RelayFormatOpenAIImage, 800, 0, decimal.Zero, 0, false},
+		{"alpha search stays billable", types.RelayFormatOpenAIAlphaSearch, 0, 0, decimal.NewFromInt(150), 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := &relaycommon.RelayInfo{RelayFormat: tt.relayFormat}
+			summary := textQuotaSummary{
+				PromptTokens:           tt.prompt,
+				CompletionTokens:       tt.completion,
+				TotalTokens:            tt.prompt + tt.completion,
+				ToolCallSurchargeQuota: tt.surcharge,
+			}
+			quota, ok := zeroOutputWaivedQuota(info, summary)
+			assert.Equal(t, tt.wantOK, ok)
+			assert.Equal(t, tt.wantQuota, quota)
+		})
+	}
+}
+
+func TestZeroOutputWaivedQuotaNeedsRelayInfo(t *testing.T) {
+	quota, ok := zeroOutputWaivedQuota(nil, textQuotaSummary{PromptTokens: 100})
+	assert.False(t, ok)
+	assert.Zero(t, quota)
+}
+
+func TestPostTextConsumeQuotaWaivesZeroOutputTextRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	truncate(t)
+
+	const userID = 9901
+	seedUser(t, userID, 1_000_000)
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	billing := &stubBillingSettler{preConsumed: 2000}
+	info := &relaycommon.RelayInfo{
+		UserId:            userID,
+		RelayFormat:       types.RelayFormatOpenAIResponses,
+		RelayMode:         relayconstant.RelayModeResponses,
+		OriginModelName:   "deepseek-flash",
+		IsStream:          true,
+		StartTime:         time.Now(),
+		FirstResponseTime: time.Now(),
+		Billing:           billing,
+		ChannelMeta:       &relaycommon.ChannelMeta{ChannelId: 0},
+		PriceData: hosttypes.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 4,
+			GroupRatioInfo:  hosttypes.GroupRatioInfo{GroupRatio: 0.15},
+		},
+	}
+	usage := &dto.Usage{PromptTokens: 11200, CompletionTokens: 0, TotalTokens: 11200}
+
+	PostTextConsumeQuota(ctx, info, usage, nil)
+
+	require.True(t, billing.settledFlag, "billing must be settled")
+	assert.Equal(t, 0, billing.settled, "zero-output request must settle at zero quota")
+
+	var consumeLog model.Log
+	require.NoError(t, model.LOG_DB.Where("user_id = ?", userID).First(&consumeLog).Error)
+	assert.Equal(t, 0, consumeLog.Quota)
+	assert.Equal(t, 11200, consumeLog.PromptTokens)
+	assert.Equal(t, 0, consumeLog.CompletionTokens)
+	assert.Contains(t, consumeLog.Content, "不计费")
+	assert.Contains(t, consumeLog.Other, `"zero_output_no_charge":true`)
 }

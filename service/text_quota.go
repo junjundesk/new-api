@@ -76,6 +76,26 @@ func (s *textQuotaSummary) hasBillableUsage() bool {
 	return s.TotalTokens > 0 || !s.ToolCallSurchargeQuota.IsZero()
 }
 
+// zeroOutputWaivedQuota reports the charge for a text-generation request that
+// delivered no output tokens: input tokens are waived, but billable tool calls
+// (web search, image generation) still cost money. ok is false when the waiver
+// does not apply, i.e. the request is not a text generation call or it did
+// produce output tokens.
+func zeroOutputWaivedQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaSummary) (quota int, ok bool) {
+	if relayInfo == nil || summary.TotalTokens <= 0 || summary.CompletionTokens != 0 {
+		return 0, false
+	}
+	switch relayInfo.RelayFormat {
+	case types.RelayFormatOpenAI, types.RelayFormatClaude, types.RelayFormatGemini,
+		types.RelayFormatOpenAIResponses, types.RelayFormatOpenAIResponsesCompaction:
+	default:
+		return 0, false
+	}
+	quota, clamp := common.QuotaFromDecimalChecked(summary.ToolCallSurchargeQuota)
+	noteQuotaClamp(relayInfo, clamp)
+	return quota, true
+}
+
 func cacheWriteTokensTotal(summary textQuotaSummary) int {
 	if summary.CacheCreationTokens5m > 0 || summary.CacheCreationTokens1h > 0 {
 		splitCacheWriteTokens := summary.CacheCreationTokens5m + summary.CacheCreationTokens1h
@@ -433,10 +453,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
 	summary := calculateTextQuotaSummary(ctx, relayInfo, billingUsage)
 	legacyClaudeDerived := isLegacyClaudeDerivedOpenAIUsage(relayInfo, billingUsage)
+	waivedQuota, zeroOutput := zeroOutputWaivedQuota(relayInfo, summary)
 
 	var tieredResult *billingexpr.TieredResult
 	tieredBillingApplied := false
-	if originUsage != nil {
+	if originUsage != nil && !zeroOutput {
 		var tieredUsedVars map[string]bool
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
@@ -447,6 +468,13 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			tieredResult = tieredRes
 			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
 		}
+	}
+	if zeroOutput {
+		// No output tokens were delivered, so the input tokens are free and only
+		// real tool calls remain billable. SettleBilling below refunds the whole
+		// pre-consumed quota when the final charge is zero.
+		summary.Quota = waivedQuota
+		extraContent = append(extraContent, fmt.Sprintf("无输出 token（输入 %d），不计费", summary.TotalTokens))
 	}
 
 	for _, item := range summary.ToolSurchargeItems {
@@ -504,6 +532,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other = GenerateTextOtherInfo(ctx, relayInfo, summary.ModelRatio, summary.GroupRatio, summary.CompletionRatio, summary.CacheTokens, summary.CacheRatio, summary.ModelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
 	appendUsageBillingPathForLog(other, common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens), originUsage)
+	if zeroOutput {
+		other["zero_output_no_charge"] = true
+	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
 	}
@@ -547,7 +578,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if tieredBillingApplied {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
-	if originalQuota, ok := originalTextQuotaWithoutActivity(ctx, relayInfo, billingUsage, tieredResult); ok {
+	if originalQuota, ok := originalTextQuotaWithoutActivity(ctx, relayInfo, billingUsage, tieredResult); ok && !zeroOutput {
 		appendActivityDiscountInfo(other, relayInfo.PriceData.GroupRatioInfo, summary.Quota, originalQuota)
 	}
 
