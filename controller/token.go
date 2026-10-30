@@ -611,20 +611,35 @@ func GetTokenUsage(c *gin.Context) {
 		unlimitedQuota = false
 	}
 
+	data := gin.H{
+		"object":                "token_usage",
+		"name":                  token.Name,
+		"currency":              operation_setting.GetQuotaDisplayType(),
+		"currency_symbol":       operation_setting.GetCurrencySymbol(),
+		"total_granted_quota":   totalGranted,
+		"total_used_quota":      totalUsed,
+		"total_available_quota": totalAvailable,
+		"unlimited_quota":       unlimitedQuota,
+		"model_limits":          token.GetModelLimitsMap(),
+		"model_limits_enabled":  token.ModelLimitsEnabled,
+		"expires_at":            expiredAt,
+	}
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
+		// TOKENS 展示模式下 total_* 直接返回 tokens 数值。
+		data["total_granted"] = totalGranted
+		data["total_used"] = totalUsed
+		data["total_available"] = totalAvailable
+	} else {
+		// 货币展示模式下 total_* 返回站点货币金额，原始额度保留在 *_quota 字段。
+		data["total_granted"] = roundDisplayAmount(quotaToDisplayAmount(totalGranted))
+		data["total_used"] = roundDisplayAmount(quotaToDisplayAmount(totalUsed))
+		data["total_available"] = roundDisplayAmount(quotaToDisplayAmount(totalAvailable))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    true,
 		"message": "ok",
-		"data": gin.H{
-			"object":               "token_usage",
-			"name":                 token.Name,
-			"total_granted":        totalGranted,
-			"total_used":           totalUsed,
-			"total_available":      totalAvailable,
-			"unlimited_quota":      unlimitedQuota,
-			"model_limits":         token.GetModelLimitsMap(),
-			"model_limits_enabled": token.ModelLimitsEnabled,
-			"expires_at":           expiredAt,
-		},
+		"data":    data,
 	})
 }
 

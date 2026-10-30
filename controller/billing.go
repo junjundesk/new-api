@@ -1,12 +1,42 @@
 package controller
 
 import (
+	"math"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
+
+// quotaToDisplayAmount 把内部 quota 换算为站点展示单位（货币金额或 tokens），
+// 与前端 currency.ts 的口径保持一致：USD 除以 QuotaPerUnit；CNY / CUSTOM
+// 再乘各自汇率；TOKENS 直接使用 tokens 数值。
+func quotaToDisplayAmount(quota int) float64 {
+	amount := float64(quota) / common.QuotaPerUnit
+	switch operation_setting.GetQuotaDisplayType() {
+	case operation_setting.QuotaDisplayTypeCNY:
+		amount *= operation_setting.USDExchangeRate
+	case operation_setting.QuotaDisplayTypeCustom:
+		if rate := operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate; rate > 0 {
+			amount *= rate
+		}
+	case operation_setting.QuotaDisplayTypeTokens:
+		// TOKENS 模式保持 tokens 数值
+	}
+	return amount
+}
+
+// roundDisplayAmount 按前端展示精度取整：金额 >= 1 保留 2 位小数，< 1 保留 4 位。
+func roundDisplayAmount(amount float64) float64 {
+	digits := 4.0
+	if math.Abs(amount) >= 1 {
+		digits = 2
+	}
+	scale := math.Pow(10, digits)
+	return math.Round(amount*scale) / scale
+}
 
 // billingStatToken 返回计费面板接口应当按密钥自身额度统计的令牌。
 // 全局关闭“显示令牌统计”或该密钥开启 display_wallet_quota 时返回 nil，
@@ -62,21 +92,8 @@ func GetSubscription(c *gin.Context) {
 	if expiredTime <= 0 {
 		expiredTime = 0
 	}
-	quota := remainQuota + usedQuota
-	amount := float64(quota)
-	// OpenAI 兼容接口中的 *_USD 字段含义保持“额度单位”对应值：
-	// 我们将其解释为以“站点展示类型”为准：
-	// - USD: 直接除以 QuotaPerUnit
-	// - CNY: 先转 USD 再乘汇率
-	// - TOKENS: 直接使用 tokens 数量
-	switch operation_setting.GetQuotaDisplayType() {
-	case operation_setting.QuotaDisplayTypeCNY:
-		amount = amount / common.QuotaPerUnit * operation_setting.USDExchangeRate
-	case operation_setting.QuotaDisplayTypeTokens:
-		// amount 保持 tokens 数值
-	default:
-		amount = amount / common.QuotaPerUnit
-	}
+	// OpenAI 兼容接口中的 *_USD 字段按站点展示类型换算，与前端展示口径一致。
+	amount := quotaToDisplayAmount(remainQuota + usedQuota)
 	if token != nil && token.UnlimitedQuota {
 		amount = 100000000
 	}
@@ -118,15 +135,7 @@ func GetUsage(c *gin.Context) {
 			return
 		}
 	}
-	amount := float64(quota)
-	switch operation_setting.GetQuotaDisplayType() {
-	case operation_setting.QuotaDisplayTypeCNY:
-		amount = amount / common.QuotaPerUnit * operation_setting.USDExchangeRate
-	case operation_setting.QuotaDisplayTypeTokens:
-		// tokens 保持原值
-	default:
-		amount = amount / common.QuotaPerUnit
-	}
+	amount := quotaToDisplayAmount(quota)
 	usage := OpenAIUsageResponse{
 		Object:     "list",
 		TotalUsage: amount * 100,
