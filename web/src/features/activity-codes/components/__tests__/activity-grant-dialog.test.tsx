@@ -83,23 +83,25 @@ const activityCode: ActivityCode = {
   used_count: 0,
   per_user_limit: 1,
   public_visible: 0,
+  type: 'ratio',
+  benefits: null,
   created_by: 1,
   created_time: 0,
   updated_time: 0,
 }
 
-function DialogHarness() {
+function DialogHarness(props: { code: ActivityCode }) {
   const { setOpen, setCurrentRow } = useActivityCodes()
 
   useEffect(() => {
-    setCurrentRow(activityCode)
+    setCurrentRow(props.code)
     setOpen('grant')
-  }, [setCurrentRow, setOpen])
+  }, [props.code, setCurrentRow, setOpen])
 
   return <ActivityGrantDialog />
 }
 
-function renderDialog() {
+function renderDialog(code: ActivityCode = activityCode) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -107,7 +109,7 @@ function renderDialog() {
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <ActivityCodesProvider>
-          <DialogHarness />
+          <DialogHarness code={code} />
         </ActivityCodesProvider>
       </I18nextProvider>
     </QueryClientProvider>
@@ -163,7 +165,41 @@ afterEach(() => {
   }
 })
 
+const benefitCode: ActivityCode = {
+  ...activityCode,
+  type: 'benefit',
+  benefits: [
+    {
+      key: 'benefit-1',
+      group_name: 'vip',
+      scope: 'group',
+      model_name: '',
+      rpm_limit: 0,
+      token_total: 0,
+    },
+    {
+      key: 'benefit-2',
+      group_name: 'default',
+      scope: 'model',
+      model_name: 'gpt-5',
+      rpm_limit: 60,
+      token_total: 2_000_000,
+    },
+  ],
+}
+
 describe('activity grant dialog', () => {
+  it('lists every benefit group and token package for a benefit code', async () => {
+    renderDialog(benefitCode)
+
+    expect(await screen.findByText(/vip, default/)).toBeVisible()
+    expect(screen.getByText('vip · Whole group · Unlimited tokens')).toBeVisible()
+    expect(
+      screen.getByText(/default · gpt-5 · 2M tokens/)
+    ).toBeVisible()
+    expect(screen.getByText(/default · gpt-5 · 2M tokens · RPM: 60/)).toBeVisible()
+  })
+
   it('keeps the grant action disabled until at least one user is selected', async () => {
     renderDialog()
 

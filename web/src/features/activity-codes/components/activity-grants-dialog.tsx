@@ -33,16 +33,21 @@ import { formatQuota, formatTimestampToDate } from '@/lib/format'
 
 import { getActivityCodeGrants, revokeActivityGrant } from '../api'
 import {
+  ACTIVITY_CODE_TYPE,
   ACTIVITY_GRANT_STATUS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   getActivityGrantSourceLabelKey,
   getActivityGrantStatusLabelKey,
 } from '../constants'
+import {
+  formatActivityBenefitUsage,
+  getActivityBenefitScopeLabel,
+} from '../lib/activity-benefit'
 import { useActivityCodes } from './activity-codes-provider'
 
 export function ActivityGrantsDialog() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { open, setOpen, currentRow } = useActivityCodes()
   const activityCodeId = currentRow?.id ?? 0
@@ -77,7 +82,23 @@ export function ActivityGrantsDialog() {
     })
   }
 
-  let expireText = t('Permanent')
+  const benefitByKey = new Map(
+    (currentRow?.benefits ?? []).map((benefit) => [benefit.key, benefit])
+  )
+  const isBenefitCode = currentRow?.type === ACTIVITY_CODE_TYPE.BENEFIT
+  // 同一次兑换的多条权益共享 redeem_batch：已支付金额只在批次首行展示一次。
+  const seenBatches = new Set<string>()
+  const renderedGrants = grants.map((grant) => {
+    const batchKey =
+      grant.redeem_batch ? grant.redeem_batch : `grant:${grant.id}`
+    const showPaid = !seenBatches.has(batchKey)
+    seenBatches.add(batchKey)
+    const benefit = grant.benefit_key
+      ? benefitByKey.get(grant.benefit_key)
+      : undefined
+    return { grant, benefit, showPaid }
+  })
+
   return (
     <Dialog
       open={open === 'grants'}
@@ -104,11 +125,20 @@ export function ActivityGrantsDialog() {
               {t('No grants yet.')}
             </p>
           )}
-          {grants.map((grant) => {
-            expireText =
+          {renderedGrants.map(({ grant, benefit, showPaid }) => {
+            const expireText =
               grant.expire_time > 0
                 ? formatTimestampToDate(grant.expire_time)
                 : t('Permanent')
+            let groupLabel = grant.group_name
+            if (benefit) {
+              groupLabel =
+                `${benefit.group_name} · ${getActivityBenefitScopeLabel(
+                  t,
+                  benefit.scope,
+                  benefit.model_name
+                )}`
+            }
             return (
               <div
                 key={grant.id}
@@ -135,9 +165,21 @@ export function ActivityGrantsDialog() {
                     />
                   </div>
                   <p className='text-muted-foreground text-xs'>
-                    {grant.group_name} · {t('Expires at')}: {expireText} ·{' '}
-                    {t('Paid')}: {formatQuota(grant.price_quota)}
+                    {groupLabel} · {t('Expires at')}: {expireText}
+                    {showPaid
+                      ? ` · ${t('Paid')}: ${formatQuota(grant.price_quota)}`
+                      : ''}
                   </p>
+                  {isBenefitCode && (
+                    <p className='text-muted-foreground text-xs'>
+                      {formatActivityBenefitUsage(
+                        t,
+                        grant.token_used ?? 0,
+                        grant.token_total ?? 0,
+                        i18n.language
+                      )}
+                    </p>
+                  )}
                 </div>
                 <Button
                   size='sm'

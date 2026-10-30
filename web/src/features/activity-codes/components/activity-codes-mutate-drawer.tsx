@@ -74,10 +74,12 @@ import {
   updateActivityCode,
 } from '../api'
 import {
+  ACTIVITY_CODE_TYPE,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_RATIO_SCOPE,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
+  getActivityCodeTypeOptions,
   getActivityRatioModeOptions,
   getActivityRatioScopeOptions,
 } from '../constants'
@@ -89,6 +91,7 @@ import {
   transformFormValuesToPayload,
 } from '../lib/activity-form'
 import type { ActivityCode } from '../types'
+import { ActivityBenefitsEditor } from './activity-benefits-editor'
 import { ActivityModelRatiosEditor } from './activity-model-ratios-editor'
 import { useActivityCodes } from './activity-codes-provider'
 
@@ -205,6 +208,8 @@ export function ActivityCodesMutateDrawer({
     void form.handleSubmit(onSubmit)(event)
   }
 
+  const activityType = form.watch('type')
+  const isBenefit = activityType === ACTIVITY_CODE_TYPE.BENEFIT
   const ratioMode = form.watch('ratio_mode')
   const ratioScope = form.watch('ratio_scope')
   const groupName = form.watch('group_name')
@@ -244,7 +249,7 @@ export function ActivityCodesMutateDrawer({
           </SheetTitle>
           <SheetDescription>
             {t(
-              'An activity code grants its target group to the user for a limited time, with a ratio for the whole group or only for selected models. The group must already exist in group ratios.'
+              'An activity code grants a ratio discount or a list of free benefits to users for a limited time. Target groups must already exist in group ratios.'
             )}
           </SheetDescription>
         </SheetHeader>
@@ -256,11 +261,64 @@ export function ActivityCodesMutateDrawer({
             aria-busy={isLoading}
           >
             <fieldset disabled={isSubmitting || isLoading} className='contents'>
+              {isUpdate && (
+                <p
+                  role='note'
+                  className='bg-muted/40 text-muted-foreground rounded-lg border p-3 text-sm'
+                >
+                  {t(
+                    'Saving immediately syncs active grants. Used tokens, expiry time and paid price stay unchanged; validity changes only affect new redemptions.'
+                  )}
+                </p>
+              )}
               <SideDrawerSection>
                 <SideDrawerSectionHeader
                   title={t('Details')}
                   icon={<Tag />}
                   iconTone='info'
+                />
+                <FormField
+                  control={form.control}
+                  name='type'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Activity type')}</FormLabel>
+                      <Select
+                        items={getActivityCodeTypeOptions(t)}
+                        value={field.value}
+                        disabled={isUpdate}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className='w-full'>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {getActivityCodeTypeOptions(t).map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {isUpdate
+                          ? t(
+                              'The activity type cannot be changed after creation.'
+                            )
+                          : t(
+                              'Ratio codes discount usage; free benefit codes grant free usage of chosen groups or models.'
+                            )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
                 <FormField
                   control={form.control}
@@ -310,49 +368,51 @@ export function ActivityCodesMutateDrawer({
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name='group_name'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Target Group')}</FormLabel>
-                      <Select
-                        items={groupNames.map((group) => ({
-                          value: group,
-                          label: group,
-                        }))}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
-                        <FormControl>
-                          <SelectTrigger className='w-full'>
-                            <SelectValue placeholder={t('Select a group')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        {/* 触发框占满表单宽度；弹层按内容自适应（至少与触发框同宽），
-                            过高时按可用高度滚动，避免长分组名或长列表被截断。 */}
-                        <SelectContent
-                          alignItemWithTrigger={false}
-                          className='max-h-[min(22rem,var(--available-height))] w-max min-w-(--anchor-width) max-w-[min(32rem,var(--available-width))]'
+                {!isBenefit && (
+                  <FormField
+                    control={form.control}
+                    name='group_name'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Target Group')}</FormLabel>
+                        <Select
+                          items={groupNames.map((group) => ({
+                            value: group,
+                            label: group,
+                          }))}
+                          value={field.value}
+                          onValueChange={field.onChange}
                         >
-                          <SelectGroup>
-                            {groupNames.map((group) => (
-                              <SelectItem key={group} value={group}>
-                                {group}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {t(
-                          'Users with an active grant can switch their token group to it.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          <FormControl>
+                            <SelectTrigger className='w-full'>
+                              <SelectValue placeholder={t('Select a group')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          {/* 触发框占满表单宽度；弹层按内容自适应（至少与触发框同宽），
+                              过高时按可用高度滚动，避免长分组名或长列表被截断。 */}
+                          <SelectContent
+                            alignItemWithTrigger={false}
+                            className='max-h-[min(22rem,var(--available-height))] w-max min-w-(--anchor-width) max-w-[min(32rem,var(--available-width))]'
+                          >
+                            <SelectGroup>
+                              {groupNames.map((group) => (
+                                <SelectItem key={group} value={group}>
+                                  {group}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {t(
+                            'Users with an active grant can switch their token group to it.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </SideDrawerSection>
 
               <SideDrawerSection>
@@ -361,41 +421,46 @@ export function ActivityCodesMutateDrawer({
                   icon={<Layers3 />}
                   iconTone='success'
                 />
-                <FormField
-                  control={form.control}
-                  name='ratio_scope'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Ratio scope')}</FormLabel>
-                      <Select
-                        items={getActivityRatioScopeOptions(t)}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {getActivityRatioScopeOptions(t).map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {t(
-                          'Charge every model in the group, or only the models listed below.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {!isBenefit && (
+                  <FormField
+                    control={form.control}
+                    name='ratio_scope'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Ratio scope')}</FormLabel>
+                        <Select
+                          items={getActivityRatioScopeOptions(t)}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              {getActivityRatioScopeOptions(t).map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {t(
+                            'Charge every model in the group, or only the models listed below.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                   <FormField
                     control={form.control}
@@ -423,32 +488,34 @@ export function ActivityCodesMutateDrawer({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name='rpm_limit'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('RPM limit')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type='number'
-                            min={0}
-                            step={1}
-                            value={field.value}
-                            onChange={(event) =>
-                              field.onChange(
-                                numberFieldValue(event.target.valueAsNumber)
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t('Requests per minute. 0 means unlimited.')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {!isBenefit && (
+                    <FormField
+                      control={form.control}
+                      name='rpm_limit'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('RPM limit')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              min={0}
+                              step={1}
+                              value={field.value}
+                              onChange={(event) =>
+                                field.onChange(
+                                  numberFieldValue(event.target.valueAsNumber)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t('Requests per minute. 0 means unlimited.')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name='price_dollars'
@@ -479,7 +546,7 @@ export function ActivityCodesMutateDrawer({
                       </FormItem>
                     )}
                   />
-                  {ratioScope === ACTIVITY_RATIO_SCOPE.GROUP && (
+                  {!isBenefit && ratioScope === ACTIVITY_RATIO_SCOPE.GROUP && (
                     <FormField
                       control={form.control}
                       name='ratio_mode'
@@ -515,13 +582,22 @@ export function ActivityCodesMutateDrawer({
                     />
                   )}
                 </div>
-                {ratioScope === ACTIVITY_RATIO_SCOPE.MODELS ? (
+                {isBenefit && (
+                  <ActivityBenefitsEditor
+                    form={form}
+                    groupNames={groupNames}
+                    disabled={isSubmitting || isLoading}
+                  />
+                )}
+                {!isBenefit && ratioScope === ACTIVITY_RATIO_SCOPE.MODELS && (
                   <ActivityModelRatiosEditor
                     form={form}
                     models={groupModels}
                     disabled={isSubmitting || isLoading}
                   />
-                ) : (
+                )}
+                {!isBenefit &&
+                  ratioScope === ACTIVITY_RATIO_SCOPE.GROUP &&
                   ratioMode === ACTIVITY_RATIO_MODE.OVERRIDE && (
                     <FormField
                       control={form.control}
@@ -549,8 +625,7 @@ export function ActivityCodesMutateDrawer({
                         </FormItem>
                       )}
                     />
-                  )
-                )}
+                  )}
                 <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                   <FormField
                     control={form.control}

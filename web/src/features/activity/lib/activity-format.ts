@@ -19,6 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import { formatModelRatioOverrides, formatRatioMultiplier } from '@/lib/format'
+import { formatTokenAmount } from '@/lib/token-amount'
+
+import type { ActivityBenefit } from '../types'
 
 // ============================================================================
 // Activity display helpers
@@ -60,10 +63,65 @@ export function describeActivityModelScope(
   return listed
 }
 
-export function describeExpireTime(
-  t: TFunction,
-  expireTime: number
-): string {
+export function describeExpireTime(t: TFunction, expireTime: number): string {
   if (expireTime <= 0) return t('Permanent')
   return new Date(expireTime * 1000).toLocaleString()
+}
+
+// 单条活动权益：「分组 · 整组/单模型 · Token 总量/不限量」。
+// token_total 为 0 表示不限量免费。
+export function describeActivityBenefit(
+  t: TFunction,
+  benefit: ActivityBenefit,
+  language?: string
+): string {
+  const group = benefit.group_desc || benefit.group_name
+  const scope =
+    benefit.scope === 'model'
+      ? t('Model {{model}}', { model: benefit.model_name })
+      : t('Whole group')
+  const tokens =
+    benefit.token_total > 0
+      ? t('{{amount}} tokens', {
+          amount: formatTokenAmount(benefit.token_total, language),
+        })
+      : t('Unlimited tokens')
+  return `${group} · ${scope} · ${tokens}`
+}
+
+// 多权益活动逐条描述，每条权益一行；旧接口没有 benefits 时返回空串。
+export function describeActivityBenefits(
+  t: TFunction,
+  benefits: ActivityBenefit[] | null | undefined,
+  language?: string
+): string {
+  return (benefits ?? [])
+    .map((benefit) => describeActivityBenefit(t, benefit, language))
+    .join('\n')
+}
+
+// Token 套餐用量：已用/总量 + 剩余；用尽后提示回退原价计费。
+// total <= 0 表示不限量免费，此时不显示剩余。
+export function describeTokenUsage(
+  t: TFunction,
+  used: number,
+  total: number,
+  language?: string
+): string {
+  if (total <= 0) {
+    return t('Used {{used}} / {{total}}', {
+      used: formatTokenAmount(used, language),
+      total: t('Unlimited'),
+    })
+  }
+  const usage = t('Used {{used}} / {{total}}', {
+    used: formatTokenAmount(used, language),
+    total: formatTokenAmount(total, language),
+  })
+  if (used >= total) {
+    return `${usage} · ${t('Token quota used up (billed at the original price)')}`
+  }
+  return `${usage} · ${t('Remaining {{amount}}', {
+    amount: formatTokenAmount(total - used, language),
+  })}`
 }

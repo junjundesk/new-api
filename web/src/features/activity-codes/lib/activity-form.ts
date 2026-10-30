@@ -22,13 +22,26 @@ import { z } from 'zod'
 import { parseQuotaFromDollars, quotaUnitsToEditableAmount } from '@/lib/format'
 
 import {
+  ACTIVITY_BENEFIT_SCOPE,
   ACTIVITY_CODE_FORMAT_MESSAGE,
   ACTIVITY_CODE_PATTERN,
+  ACTIVITY_CODE_TYPE,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_RATIO_SCOPE,
   ACTIVITY_VALIDATION,
 } from '../constants'
-import type { ActivityCode, ActivityCodeFormData } from '../types'
+import type {
+  ActivityCode,
+  ActivityCodeFormData,
+  ActivityCodeType,
+} from '../types'
+import {
+  type ActivityBenefitRow,
+  getActivityBenefitCombination,
+  getActivityBenefitRowSchema,
+  transformBenefitRowsToPayload,
+  transformBenefitsToRows,
+} from './activity-benefit'
 
 export type ActivityModelRatioRow = {
   model: string
@@ -59,7 +72,11 @@ export function getActivityCodeFormSchema(t: TFunction) {
           t('Name must be 1-64 characters')
         ),
       description: z.string(),
-      group_name: z.string().min(1, t('Please select a group')),
+      type: z.enum([ACTIVITY_CODE_TYPE.RATIO, ACTIVITY_CODE_TYPE.BENEFIT]),
+      // 行内校验只在 benefit 类型下执行（ratio 类型忽略遗留权益行），
+      // 因此这里先接受任意行数据，由 superRefine 逐行套用行 schema。
+      benefits: z.array(z.any()),
+      group_name: z.string(),
       duration_hours: z
         .number()
         .min(0, t('Validity must be between 0 and 87600 hours'))
@@ -109,7 +126,67 @@ export function getActivityCodeFormSchema(t: TFunction) {
       public_visible: z.boolean(),
     })
     .superRefine((values, ctx) => {
-      // 「指定模型」类型下每一行都必须给出模型与倍率，整个分组类型则忽略这些行。
+      if (values.type === ACTIVITY_CODE_TYPE.BENEFIT) {
+        if (values.benefits.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['benefits'],
+            message: t('Add at least one benefit'),
+          })
+          return
+        }
+        if (values.benefits.length > ACTIVITY_VALIDATION.BENEFIT_MAX_ENTRIES) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['benefits'],
+            message: t('At most {{count}} benefits can be added', {
+              count: ACTIVITY_VALIDATION.BENEFIT_MAX_ENTRIES,
+            }),
+          })
+          return
+        }
+        // 逐行套用行 schema（必填、RPM、Token 上限），再检查跨行的组合重复。
+        const benefitRowSchema = getActivityBenefitRowSchema(t)
+        const seenCombinations = new Set<string>()
+        values.benefits.forEach((row, index) => {
+          const parsedRow = benefitRowSchema.safeParse(row)
+          if (!parsedRow.success) {
+            for (const issue of parsedRow.error.issues) {
+              ctx.addIssue({
+                ...issue,
+                path: ['benefits', index, ...(issue.path ?? [])],
+              })
+            }
+            return
+          }
+          const combination = getActivityBenefitCombination(row)
+          if (seenCombinations.has(combination)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [
+                'benefits',
+                index,
+                row.scope === ACTIVITY_BENEFIT_SCOPE.MODEL
+                  ? 'model_name'
+                  : 'group_name',
+              ],
+              message: t('This benefit is already configured'),
+            })
+            return
+          }
+          seenCombinations.add(combination)
+        })
+        return
+      }
+
+      // ratio 类型：分组必填，「指定模型」下每一行都必须给出模型与倍率。
+      if (!values.group_name.trim()) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['group_name'],
+          message: t('Please select a group'),
+        })
+      }
       if (values.ratio_scope !== ACTIVITY_RATIO_SCOPE.MODELS) return
       const rows = values.model_ratio_overrides
       if (rows.length === 0) {
@@ -189,6 +266,8 @@ export type ActivityCodeFormValues = {
   total_limit: number
   per_user_limit: number
   public_visible: boolean
+  type: ActivityCodeType
+  benefits: ActivityBenefitRow[]
 }
 
 export const ACTIVITY_CODE_FORM_DEFAULT_VALUES: ActivityCodeFormValues = {
@@ -208,6 +287,8 @@ export const ACTIVITY_CODE_FORM_DEFAULT_VALUES: ActivityCodeFormValues = {
   total_limit: 0,
   per_user_limit: 1,
   public_visible: false,
+  type: ACTIVITY_CODE_TYPE.RATIO,
+  benefits: [],
 }
 
 function toEpochSeconds(value?: Date): number {
@@ -217,6 +298,40 @@ function toEpochSeconds(value?: Date): number {
 export function transformFormValuesToPayload(
   values: ActivityCodeFormValues
 ): ActivityCodeFormData {
+  const basePayload: ActivityCodeFormData = {
+    code: values.code.trim().toLowerCase(),
+    name: values.name.trim(),
+    description: values.description.trim(),
+    group_name: values.group_name,
+    duration_hours: values.duration_hours,
+    rpm_limit: values.rpm_limit,
+    price_quota: parseQuotaFromDollars(values.price_dollars),
+    ratio_mode: ACTIVITY_RATIO_MODE.INHERIT,
+    ratio_override: 0,
+    ratio_scope: ACTIVITY_RATIO_SCOPE.GROUP,
+    model_ratio_overrides: {},
+    start_time: toEpochSeconds(values.start_time),
+    end_time: toEpochSeconds(values.end_time),
+    total_limit: values.total_limit,
+    per_user_limit: values.per_user_limit,
+    public_visible: values.public_visible ? 1 : 0,
+    type: ACTIVITY_CODE_TYPE.RATIO,
+    benefits: [],
+  }
+
+  // benefit 类型以权益为准：顶层分组取第一条权益分组（兼容旧字段），
+  // 倍率与活动码级 RPM 不再有意义，统一归一为默认值。
+  if (values.type === ACTIVITY_CODE_TYPE.BENEFIT) {
+    const benefits = transformBenefitRowsToPayload(values.benefits)
+    return {
+      ...basePayload,
+      type: ACTIVITY_CODE_TYPE.BENEFIT,
+      benefits,
+      group_name: benefits[0]?.group_name ?? values.group_name.trim(),
+      rpm_limit: 0,
+    }
+  }
+
   // 指定模型类型只按模型倍率改价，分组级倍率固定为继承；切回整个分组时清空模型列表。
   const isModelScope = values.ratio_scope === ACTIVITY_RATIO_SCOPE.MODELS
   const modelRatioOverrides: Record<string, number> = {}
@@ -234,22 +349,13 @@ export function transformFormValuesToPayload(
   }
 
   return {
-    code: values.code.trim().toLowerCase(),
-    name: values.name.trim(),
-    description: values.description.trim(),
+    ...basePayload,
     group_name: values.group_name,
-    duration_hours: values.duration_hours,
     rpm_limit: values.rpm_limit,
-    price_quota: parseQuotaFromDollars(values.price_dollars),
     ratio_mode: isModelScope ? ACTIVITY_RATIO_MODE.INHERIT : values.ratio_mode,
     ratio_override: ratioOverride,
     ratio_scope: values.ratio_scope,
     model_ratio_overrides: modelRatioOverrides,
-    start_time: toEpochSeconds(values.start_time),
-    end_time: toEpochSeconds(values.end_time),
-    total_limit: values.total_limit,
-    per_user_limit: values.per_user_limit,
-    public_visible: values.public_visible ? 1 : 0,
   }
 }
 
@@ -266,6 +372,10 @@ export function transformActivityCodeToFormValues(
   )
     .map(([model, ratio]) => ({ model, ratio: String(ratio) }))
     .sort((left, right) => left.model.localeCompare(right.model))
+  const type =
+    activityCode.type === ACTIVITY_CODE_TYPE.BENEFIT
+      ? ACTIVITY_CODE_TYPE.BENEFIT
+      : ACTIVITY_CODE_TYPE.RATIO
 
   return {
     code: activityCode.code,
@@ -293,5 +403,7 @@ export function transformActivityCodeToFormValues(
     total_limit: activityCode.total_limit,
     per_user_limit: activityCode.per_user_limit,
     public_visible: activityCode.public_visible === 1,
+    type,
+    benefits: transformBenefitsToRows(activityCode.benefits),
   }
 }

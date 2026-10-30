@@ -25,9 +25,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+
 import { getActivityOffers } from '../api'
 import { useActivity } from '../hooks/use-activity'
-import type { ActivityPreview } from '../types'
+import type { ActivityPreview, RedeemActivityResult } from '../types'
 import { ActivityOfferCards } from './activity-offer-cards'
 import { ActivityRedeemConfirmDialog } from './dialogs/activity-redeem-confirm-dialog'
 
@@ -35,7 +36,16 @@ type ActivityRedeemPanelProps = {
   showOffers?: boolean
 }
 
-export function ActivityRedeemPanel({ showOffers = false }: ActivityRedeemPanelProps) {
+// 一次兑换可能覆盖多个分组：优先拼接后端返回的 group_names，旧接口回退 group_name。
+function redeemedGroupLabel(result: RedeemActivityResult): string {
+  const names = (result.group_names ?? []).filter((name) => name.trim() !== '')
+  if (names.length > 0) return names.join(', ')
+  return result.group_name
+}
+
+export function ActivityRedeemPanel({
+  showOffers = false,
+}: ActivityRedeemPanelProps) {
   const { t } = useTranslation()
   const { verifying, redeeming, verify, redeem } = useActivity()
   const [code, setCode] = useState('')
@@ -64,7 +74,9 @@ export function ActivityRedeemPanel({ showOffers = false }: ActivityRedeemPanelP
         return
       }
       if (!verified.redeemable) {
-        toast.error(verified.message || t('This activity code is not redeemable now'))
+        toast.error(
+          verified.message || t('This activity code is not redeemable now')
+        )
         return
       }
       if (!verified.need_confirm) {
@@ -75,9 +87,12 @@ export function ActivityRedeemPanel({ showOffers = false }: ActivityRedeemPanelP
         })
         if (outcome.ok) {
           toast.success(
-            t('Redeemed {{group}}. Switch your token group to start using it.', {
-              group: outcome.data.group_name,
-            })
+            t(
+              'Redeemed {{group}}. Switch your token group to start using it.',
+              {
+                group: redeemedGroupLabel(outcome.data),
+              }
+            )
           )
           setCode('')
           return
@@ -101,7 +116,7 @@ export function ActivityRedeemPanel({ showOffers = false }: ActivityRedeemPanelP
     if (outcome.ok) {
       toast.success(
         t('Redeemed {{group}}. Switch your token group to start using it.', {
-          group: outcome.data.group_name,
+          group: redeemedGroupLabel(outcome.data),
         })
       )
       setConfirmOpen(false)

@@ -33,7 +33,12 @@ import { searchUsers } from '@/features/users/api'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { grantActivityCode } from '../api'
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  ACTIVITY_CODE_TYPE,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants'
+import { describeActivityBenefit } from '../lib/activity-benefit'
 import { useActivityCodes } from './activity-codes-provider'
 
 type SelectedUser = {
@@ -45,7 +50,7 @@ type SelectedUser = {
 
 // 管理员主动赠送活动码：搜索用户、批量勾选、一次提交，无需用户确认且不扣余额。
 export function ActivityGrantDialog() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { open, setOpen, currentRow, triggerRefresh } = useActivityCodes()
   const [keyword, setKeyword] = useState('')
@@ -56,6 +61,16 @@ export function ActivityGrantDialog() {
   const [submitting, setSubmitting] = useState(false)
 
   const activityCode = currentRow
+  const benefits = activityCode?.benefits ?? []
+  // 权益类型一次赠送会覆盖多条权益、可能横跨多个分组；ratio 类型仍只有单个分组。
+  let targetGroups: string[] = []
+  if (activityCode) {
+    const isBenefit =
+      activityCode.type === ACTIVITY_CODE_TYPE.BENEFIT && benefits.length > 0
+    targetGroups = isBenefit
+      ? [...new Set(benefits.map((benefit) => benefit.group_name))]
+      : [activityCode.group_name]
+  }
   const selectedIds = new Set(selected.map((user) => user.id))
 
   const reset = () => {
@@ -198,7 +213,7 @@ export function ActivityGrantDialog() {
         <div className='bg-muted/40 space-y-1 rounded-lg border p-3 text-sm'>
           <p className='font-medium'>{activityCode.name}</p>
           <p className='text-muted-foreground text-xs'>
-            {activityCode.group_name} · {t('Validity')}: {expireText}
+            {targetGroups.join(', ')} · {t('Validity')}: {expireText}
             {activityCode.start_time > 0
               ? ` · ${t('From')} ${formatTimestampToDate(activityCode.start_time)}`
               : ''}
@@ -206,6 +221,25 @@ export function ActivityGrantDialog() {
               ? ` · ${t('Until')} ${formatTimestampToDate(activityCode.end_time)}`
               : ''}
           </p>
+          {activityCode.type === ACTIVITY_CODE_TYPE.BENEFIT &&
+            benefits.length > 0 && (
+              <ul className='space-y-0.5'>
+                {benefits.map((benefit) => (
+                  <li
+                    key={
+                      benefit.key ||
+                      benefit.group_name + benefit.scope + benefit.model_name
+                    }
+                    className='text-muted-foreground text-xs'
+                  >
+                    {describeActivityBenefit(t, benefit, i18n.language)}
+                    {benefit.rpm_limit > 0
+                      ? ` · ${t('RPM')}: ${benefit.rpm_limit}`
+                      : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
         </div>
       )}
 

@@ -21,8 +21,18 @@ import { describe, test } from 'node:test'
 
 import type { TFunction } from 'i18next'
 
-import { ACTIVITY_RATIO_MODE, ACTIVITY_RATIO_SCOPE } from '../../constants'
+import {
+  ACTIVITY_BENEFIT_SCOPE,
+  ACTIVITY_BENEFIT_TOKEN_MODE,
+  ACTIVITY_CODE_TYPE,
+  ACTIVITY_RATIO_MODE,
+  ACTIVITY_RATIO_SCOPE,
+} from '../../constants'
 import type { ActivityCode } from '../../types'
+import {
+  type ActivityBenefitRow,
+  createActivityBenefitRow,
+} from '../activity-benefit'
 import {
   type ActivityCodeFormValues,
   getActivityCodeFormSchema,
@@ -53,6 +63,8 @@ function validValues(
     total_limit: 0,
     per_user_limit: 1,
     public_visible: false,
+    type: ACTIVITY_CODE_TYPE.RATIO,
+    benefits: [],
     ...overrides,
   }
 }
@@ -93,8 +105,44 @@ function activityCode(overrides: Partial<ActivityCode> = {}): ActivityCode {
     created_by: 1,
     created_time: 0,
     updated_time: 0,
+    type: ACTIVITY_CODE_TYPE.RATIO,
+    benefits: null,
     ...overrides,
   } as ActivityCode
+}
+
+function benefitRow(
+  overrides: Partial<ActivityBenefitRow> = {}
+): ActivityBenefitRow {
+  return createActivityBenefitRow({ group_name: 'vip', ...overrides })
+}
+
+function benefitValues(
+  rows: ActivityBenefitRow[],
+  overrides: Partial<ActivityCodeFormValues> = {}
+): ActivityCodeFormValues {
+  return validValues({
+    type: ACTIVITY_CODE_TYPE.BENEFIT,
+    benefits: rows,
+    ...overrides,
+  })
+}
+
+function benefitActivityCode(overrides: Partial<ActivityCode> = {}): ActivityCode {
+  return activityCode({
+    type: ACTIVITY_CODE_TYPE.BENEFIT,
+    benefits: [
+      {
+        key: 'benefit-1',
+        group_name: 'vip',
+        scope: 'model',
+        model_name: 'gpt-5',
+        rpm_limit: 60,
+        token_total: 1_000_000,
+      },
+    ],
+    ...overrides,
+  })
 }
 
 describe('activity code form validation', () => {
@@ -257,5 +305,259 @@ describe('activity code to form values', () => {
     )
     assert.equal(values.ratio_scope, ACTIVITY_RATIO_SCOPE.GROUP)
     assert.deepEqual(values.model_ratio_overrides, [])
+  })
+})
+describe('activity benefit form validation', () => {
+  test('accepts a whole-group benefit with a token package', () => {
+    const parsed = schema.safeParse(
+      benefitValues([
+        benefitRow({
+          token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
+          token_total_input: '10万',
+        }),
+      ])
+    )
+    assert.equal(parsed.success, true)
+  })
+
+  test('accepts an unlimited benefit with an empty token input', () => {
+    assert.equal(schema.safeParse(benefitValues([benefitRow()])).success, true)
+  })
+
+  test('requires at least one benefit', () => {
+    const parsed = schema.safeParse(benefitValues([]))
+    assert.equal(parsed.success, false)
+    if (!parsed.success) {
+      assert.equal(
+        parsed.error.issues.some(
+          (issue) => issue.message === 'Add at least one benefit'
+        ),
+        true
+      )
+    }
+  })
+
+  test('requires a group on every benefit', () => {
+    assert.equal(
+      schema.safeParse(benefitValues([benefitRow({ group_name: '  ' })]))
+        .success,
+      false
+    )
+  })
+
+  test('requires a model name for a single-model benefit', () => {
+    assert.equal(
+      schema.safeParse(
+        benefitValues([benefitRow({ scope: ACTIVITY_BENEFIT_SCOPE.MODEL })])
+      ).success,
+      false
+    )
+    assert.equal(
+      schema.safeParse(
+        benefitValues([
+          benefitRow({
+            scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+            model_name: 'gpt-5',
+          }),
+        ])
+      ).success,
+      true
+    )
+  })
+
+  test('rejects the same group, scope and model combination twice', () => {
+    assert.equal(
+      schema.safeParse(benefitValues([benefitRow(), benefitRow()])).success,
+      false
+    )
+    assert.equal(
+      schema.safeParse(
+        benefitValues([
+          benefitRow({
+            scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+            model_name: 'gpt-5',
+          }),
+          benefitRow({
+            scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+            model_name: 'o3',
+          }),
+        ])
+      ).success,
+      true
+    )
+  })
+
+  test('rejects RPM limits outside 0-100000 or fractional limits', () => {
+    for (const rpmLimit of [-1, 100_001, 1.5]) {
+      assert.equal(
+        schema.safeParse(benefitValues([benefitRow({ rpm_limit: rpmLimit })]))
+          .success,
+        false,
+        `${rpmLimit} must be rejected`
+      )
+    }
+    assert.equal(
+      schema.safeParse(benefitValues([benefitRow({ rpm_limit: 100_000 })]))
+        .success,
+      true
+    )
+  })
+
+  test('rejects an invalid token package input', () => {
+    for (const input of ['', 'abc', '0', '1000000000000001']) {
+      assert.equal(
+        schema.safeParse(
+          benefitValues([
+            benefitRow({
+              token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
+              token_total_input: input,
+            }),
+          ])
+        ).success,
+        false,
+        `${JSON.stringify(input)} must be rejected`
+      )
+    }
+    assert.equal(
+      schema.safeParse(
+        benefitValues([
+          benefitRow({
+            token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
+            token_total_input: '1.5M',
+          }),
+        ])
+      ).success,
+      true
+    )
+  })
+
+  test('ignores benefit rows for the ratio type', () => {
+    const parsed = schema.safeParse(
+      validValues({ benefits: [benefitRow({ group_name: '' })] })
+    )
+    assert.equal(parsed.success, true)
+  })
+
+  test('rejects more than 20 benefits', () => {
+    const rows = Array.from({ length: 21 }, () => benefitRow())
+    assert.equal(schema.safeParse(benefitValues(rows)).success, false)
+  })
+})
+
+describe('activity benefit form payload', () => {
+  test('keeps existing benefit keys and sends an empty key for new rows', () => {
+    const payload = transformFormValuesToPayload(
+      benefitValues([
+        benefitRow({
+          key: 'benefit-1',
+          group_name: 'vip',
+          rpm_limit: 60,
+          token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
+          token_total_input: '10万',
+        }),
+        benefitRow({
+          group_name: 'default',
+          scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+          model_name: ' gpt-5 ',
+        }),
+      ])
+    )
+    assert.equal(payload.type, ACTIVITY_CODE_TYPE.BENEFIT)
+    assert.deepEqual(payload.benefits, [
+      {
+        key: 'benefit-1',
+        group_name: 'vip',
+        scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
+        model_name: '',
+        rpm_limit: 60,
+        token_total: 100_000,
+      },
+      {
+        key: '',
+        group_name: 'default',
+        scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+        model_name: 'gpt-5',
+        rpm_limit: 0,
+        token_total: 0,
+      },
+    ])
+  })
+
+  test('derives the top-level group from the first benefit and drops ratio fields', () => {
+    const payload = transformFormValuesToPayload(
+      benefitValues([benefitRow({ group_name: 'default' })], {
+        group_name: 'vip',
+        rpm_limit: 30,
+        ratio_mode: ACTIVITY_RATIO_MODE.OVERRIDE,
+        ratio_override: 0.5,
+      })
+    )
+    assert.equal(payload.group_name, 'default')
+    assert.equal(payload.rpm_limit, 0)
+    assert.equal(payload.ratio_mode, ACTIVITY_RATIO_MODE.INHERIT)
+    assert.equal(payload.ratio_override, 0)
+    assert.deepEqual(payload.model_ratio_overrides, {})
+  })
+
+  test('sends an empty benefit list for the ratio type', () => {
+    const payload = transformFormValuesToPayload(
+      validValues({ benefits: [benefitRow()] })
+    )
+    assert.equal(payload.type, ACTIVITY_CODE_TYPE.RATIO)
+    assert.deepEqual(payload.benefits, [])
+  })
+})
+
+describe('activity code benefits to form values', () => {
+  test('backfills keys and raw integer token totals', () => {
+    const values = transformActivityCodeToFormValues(benefitActivityCode())
+    assert.equal(values.type, ACTIVITY_CODE_TYPE.BENEFIT)
+    assert.deepEqual(values.benefits, [
+      {
+        key: 'benefit-1',
+        group_name: 'vip',
+        scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
+        model_name: 'gpt-5',
+        rpm_limit: 60,
+        token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
+        token_total_input: '1000000',
+      },
+    ])
+  })
+
+  test('treats a zero token total as unlimited with an empty input', () => {
+    const values = transformActivityCodeToFormValues(
+      benefitActivityCode({
+        benefits: [
+          {
+            key: 'benefit-2',
+            group_name: 'default',
+            scope: 'group',
+            model_name: '',
+            rpm_limit: 0,
+            token_total: 0,
+          },
+        ],
+      })
+    )
+    assert.deepEqual(values.benefits, [
+      {
+        key: 'benefit-2',
+        group_name: 'default',
+        scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
+        model_name: '',
+        rpm_limit: 0,
+        token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.UNLIMITED,
+        token_total_input: '',
+      },
+    ])
+  })
+
+  test('falls back to the ratio type and no benefits for old data', () => {
+    const values = transformActivityCodeToFormValues(
+      activityCode({ type: undefined, benefits: null })
+    )
+    assert.equal(values.type, ACTIVITY_CODE_TYPE.RATIO)
+    assert.deepEqual(values.benefits, [])
   })
 })

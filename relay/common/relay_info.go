@@ -200,6 +200,10 @@ type RelayInfo struct {
 	ParamOverrideAudit        []string
 
 	PriceData hosttypes.PriceData
+	// AllowActivityTokenPackages 表示当前计费路径会返回 token 用量、可以消费
+	// 活动码 Token 套餐。按次/任务计费路径必须为 false，避免没有 token 扣减
+	// 的请求被套餐变成免费；不限量免费权益不受该开关影响。
+	AllowActivityTokenPackages bool
 
 	// QuotaClamp is set (non-nil) when a quota conversion saturated at the
 	// int32 bound (or NaN fallback) while computing this request's charge.

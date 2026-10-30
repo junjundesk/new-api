@@ -16,51 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
+import '@testing-library/jest-dom/vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createInstance } from 'i18next'
+import { I18nextProvider } from 'react-i18next'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { Window } from 'happy-dom'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
-import type { ActivityOffer } from '../../types'
+import type { ActivityBenefit, ActivityOffer } from '../../types'
+import { ActivityOfferCards } from '../activity-offer-cards'
 
-// Use Bun's runner at runtime while reusing the Node test types installed here.
-const bunTestModule = 'bun:test'
-const { afterEach, test } = (await import(bunTestModule)) as {
-  afterEach: typeof import('node:test').afterEach
-  test: typeof import('node:test').test
-}
-
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLButtonElement',
-  'Node',
-  'Element',
-  'Event',
-  'MutationObserver',
-  'ResizeObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
-
-const { act } = await import('react')
-const { createRoot } = await import('react-dom/client')
-const i18n = (await import('i18next')).default
-const { I18nextProvider, initReactI18next } = await import('react-i18next')
-const storeModule = await import('@/stores/system-config-store')
-const { ActivityOfferCards } = await import('../activity-offer-cards')
-
-await i18n.use(initReactI18next).init({
+const i18n = createInstance()
+await i18n.init({
   lng: 'en',
   resources: {
     en: {
@@ -86,19 +58,16 @@ await i18n.use(initReactI18next).init({
         'All models in the group': 'All models in the group',
         'Free of charge': 'Free of charge',
         '{{ratio}}x ratio': '{{ratio}}x ratio',
+        Benefits: 'Benefits',
+        'Whole group': 'Whole group',
+        'Model {{model}}': 'Model {{model}}',
+        '{{amount}} tokens': '{{amount}} tokens',
+        'Unlimited tokens': 'Unlimited tokens',
       },
     },
   },
+  interpolation: { escapeValue: false },
 })
-
-const reactTestGlobals = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean
-}
-reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
-
-let renderedHost: HTMLDivElement | null = null
-let renderedRoot: ReturnType<typeof createRoot> | null = null
-const redeemed: ActivityOffer[] = []
 
 function offerFixture(overrides: Partial<ActivityOffer> = {}): ActivityOffer {
   return {
@@ -118,209 +87,207 @@ function offerFixture(overrides: Partial<ActivityOffer> = {}): ActivityOffer {
   }
 }
 
-async function renderCards(
-  offers: ActivityOffer[],
-  disabled = false
-): Promise<void> {
-  const host = document.createElement('div')
-  document.body.append(host)
-  renderedHost = host
-  const root = createRoot(host)
-  renderedRoot = root
-  await act(async () =>
-    root.render(
-      <I18nextProvider i18n={i18n}>
-        <ActivityOfferCards
-          offers={offers}
-          disabled={disabled}
-          onRedeem={(offer) => redeemed.push(offer)}
-        />
-      </I18nextProvider>
+function benefitFixture(
+  overrides: Partial<ActivityBenefit> = {}
+): ActivityBenefit {
+  return {
+    key: 'benefit-1',
+    group_name: 'hdfree',
+    group_desc: 'Free Group',
+    scope: 'group',
+    model_name: '',
+    rpm_limit: 0,
+    token_total: 10_000_000,
+    ...overrides,
+  }
+}
+
+function renderCards(offers: ActivityOffer[], disabled = false) {
+  const onRedeem = vi.fn()
+  const view = render(
+    <I18nextProvider i18n={i18n}>
+      <ActivityOfferCards
+        offers={offers}
+        disabled={disabled}
+        onRedeem={onRedeem}
+      />
+    </I18nextProvider>
+  )
+  return { container: view.container, onRedeem }
+}
+
+function renderedCards(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>('[data-slot="card"]')]
+}
+
+beforeEach(() => {
+  useSystemConfigStore.getState().setConfig({
+    currency: { ...DEFAULT_CURRENCY_CONFIG },
+  })
+})
+
+afterEach(cleanup)
+
+describe('activity offer cards', () => {
+  it('renders one card per offer with price, group, validity, ratio, rpm and remaining', () => {
+    const { container } = renderCards([
+      // 8 小时渲染为小时文案（≥24h 会转成天数），断言更直白。
+      offerFixture({
+        code_id: 1,
+        name: 'Free Group',
+        group_desc: '免费分组',
+        duration_seconds: 8 * 3600,
+      }),
+      offerFixture({
+        code_id: 2,
+        code: 'paid-24h',
+        name: 'Paid Group',
+        group_desc: '付费分组',
+        duration_seconds: 24 * 3600,
+        rpm_limit: 5,
+        ratio_mode: 'inherit',
+        price_quota: 500000,
+        remaining_total: 3,
+      }),
+    ])
+
+    const cards = renderedCards(container)
+    expect(cards).toHaveLength(2)
+
+    const freeCard = cards[0] as HTMLElement
+    expect(freeCard).toHaveTextContent('Free Group')
+    expect(freeCard).toHaveTextContent('免费分组')
+    expect(freeCard).toHaveTextContent('Free')
+    expect(freeCard).toHaveTextContent('8 hours')
+    expect(freeCard).toHaveTextContent('Fully free')
+    expect(freeCard).toHaveTextContent('Remaining: Unlimited')
+
+    const paidCard = cards[1] as HTMLElement
+    expect(paidCard).toHaveTextContent('Paid Group')
+    expect(paidCard).toHaveTextContent('$1')
+    expect(paidCard).not.toHaveTextContent('Free')
+    expect(paidCard).toHaveTextContent('5')
+    expect(paidCard).toHaveTextContent('Group default ratio')
+    expect(paidCard).toHaveTextContent('Remaining: 3')
+
+    // 回归：付费金额必须与兑换按钮放在一起（页脚），而不是缩在标题右上角。
+    const freeFooter = freeCard.querySelector('[data-slot="card-footer"]')
+    const paidFooter = paidCard.querySelector('[data-slot="card-footer"]')
+    const paidHeader = paidCard.querySelector('[data-slot="card-header"]')
+    expect(freeFooter).not.toBeNull()
+    expect(paidFooter).not.toBeNull()
+    expect(freeFooter).toHaveTextContent('Free')
+    expect(paidFooter).toHaveTextContent('$1')
+    expect(
+      paidFooter?.querySelector('button[aria-label="Redeem Paid Group"]')
+    ).not.toBeNull()
+    expect(paidHeader).not.toHaveTextContent('$1')
+  })
+
+  // 回归：指定模型的活动码必须展示具体模型 ID 与倍率，而不是只给「N 个模型」。
+  it('lists the concrete model ids of a selected-models activity code', () => {
+    renderCards([
+      offerFixture({
+        code_id: 31,
+        name: 'Models Group',
+        group_desc: '指定模型分组',
+        ratio_mode: 'inherit',
+        model_ratio_overrides: { 'gpt-5': 0, o3: 0.5 },
+      }),
+    ])
+
+    expect(screen.getByText('Models (ratio)')).toBeVisible()
+    expect(
+      screen.getByText(/gpt-5: Free of charge, o3: 0\.5x ratio/)
+    ).toBeVisible()
+    expect(screen.queryByText(/specified models/)).not.toBeInTheDocument()
+  })
+
+  // 回归：benefit 类型活动码要逐条展示权益，而不是只显示 ratio 行。
+  it('lists every benefit of a benefit offer with its group, scope and token total', () => {
+    renderCards([
+      offerFixture({
+        code_id: 41,
+        name: 'Benefit Pack',
+        type: 'benefit',
+        benefits: [
+          benefitFixture(),
+          benefitFixture({
+            key: 'benefit-2',
+            group_name: 'hdpro',
+            group_desc: 'Pro Group',
+            scope: 'model',
+            model_name: 'gpt-5',
+            token_total: 0,
+          }),
+        ],
+      }),
+    ])
+
+    expect(
+      screen.getByText('Free Group · Whole group · 10M tokens')
+    ).toBeVisible()
+    expect(
+      screen.getByText('Pro Group · Model gpt-5 · Unlimited tokens')
+    ).toBeVisible()
+    expect(screen.getByText('Benefits')).toBeVisible()
+    expect(screen.queryByText('Ratio')).not.toBeInTheDocument()
+    expect(screen.queryByText('Models (ratio)')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the ratio layout when a benefit offer has no benefits from an old API', () => {
+    renderCards([
+      offerFixture({ code_id: 42, name: 'Legacy Benefit', type: 'benefit' }),
+    ])
+
+    expect(screen.getByText('Fully free')).toBeVisible()
+    expect(screen.queryByText('Benefits')).not.toBeInTheDocument()
+  })
+
+  it('lays the offers out as a single column grid that switches to two columns from the sm breakpoint', () => {
+    const { container } = renderCards([
+      offerFixture({ code_id: 1 }),
+      offerFixture({ code_id: 2 }),
+    ])
+
+    const grid = container.querySelector('[data-slot="activity-offer-cards"]')
+    expect(grid).not.toBeNull()
+    expect(grid).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2')
+  })
+
+  it('renders no card when the site has no redeemable offer', () => {
+    const { container } = renderCards([])
+
+    expect(
+      container.querySelector('[data-slot="activity-offer-cards"]')
+    ).toBeNull()
+    expect(renderedCards(container)).toHaveLength(0)
+  })
+
+  it('redeems only the offer whose card button was pressed', async () => {
+    const user = userEvent.setup()
+    const { onRedeem } = renderCards([
+      offerFixture({ code_id: 11, name: 'Free Group' }),
+      offerFixture({ code_id: 22, name: 'Paid Group', price_quota: 500000 }),
+    ])
+
+    await user.click(screen.getByRole('button', { name: 'Redeem Paid Group' }))
+
+    expect(onRedeem).toHaveBeenCalledTimes(1)
+    expect(onRedeem.mock.calls[0]?.[0]).toMatchObject({ code_id: 22 })
+  })
+
+  it('disables every redeem button while a redemption is already running', async () => {
+    const user = userEvent.setup()
+    const { onRedeem } = renderCards(
+      [offerFixture({ code_id: 11, name: 'Free Group' })],
+      true
     )
-  )
-}
 
-function renderedCards(): Element[] {
-  return [...document.querySelectorAll('[data-slot="card"]')]
-}
+    const button = screen.getByRole('button', { name: 'Redeem Free Group' })
+    expect(button).toBeDisabled()
 
-function redeemButton(accessibleName: string): HTMLButtonElement | undefined {
-  return [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.getAttribute('aria-label') === accessibleName
-  )
-}
-
-afterEach(async () => {
-  await act(async () => renderedRoot?.unmount())
-  renderedHost?.remove()
-  renderedHost = null
-  renderedRoot = null
-  redeemed.length = 0
-})
-
-test('renders one card per offer showing price, group, validity, ratio, rpm and remaining redemptions', async () => {
-  storeModule.useSystemConfigStore.getState().setConfig({
-    currency: { ...storeModule.DEFAULT_CURRENCY_CONFIG },
+    await user.click(button)
+    expect(onRedeem).not.toHaveBeenCalled()
   })
-  await renderCards([
-    // 8 小时渲染为小时文案（≥24h 会转成天数），断言更直白。
-    offerFixture({
-      code_id: 1,
-      name: 'Free Group',
-      group_desc: '免费分组',
-      duration_seconds: 8 * 3600,
-    }),
-    offerFixture({
-      code_id: 2,
-      code: 'paid-24h',
-      name: 'Paid Group',
-      group_desc: '付费分组',
-      duration_seconds: 24 * 3600,
-      rpm_limit: 5,
-      ratio_mode: 'inherit',
-      price_quota: 500000,
-      remaining_total: 3,
-    }),
-  ])
-
-  const cards = renderedCards()
-  assert.equal(cards.length, 2)
-
-  const freeText = cards[0]?.textContent ?? ''
-  assert.ok(freeText.includes('Free Group'), 'free offer name must render')
-  assert.ok(freeText.includes('免费分组'), 'free offer group must render')
-  assert.ok(freeText.includes('Free'), 'free offer must show the Free badge')
-  assert.ok(freeText.includes('8 hours'), 'free offer validity must render')
-  assert.ok(freeText.includes('Fully free'), 'zero ratio must render as free')
-  assert.ok(
-    freeText.includes('Remaining: Unlimited'),
-    'unlimited remaining redemptions must render'
-  )
-
-  const paidText = cards[1]?.textContent ?? ''
-  assert.ok(paidText.includes('Paid Group'), 'paid offer name must render')
-  assert.ok(
-    paidText.includes('$1'),
-    'paid offer must show its price in wallet units'
-  )
-  assert.ok(
-    !paidText.includes('Free'),
-    'paid offer must not render the Free badge'
-  )
-  assert.ok(paidText.includes('5'), 'paid offer rpm limit must render')
-  assert.ok(
-    paidText.includes('Group default ratio'),
-    'inherited ratio must render as the group default'
-  )
-  assert.ok(
-    paidText.includes('Remaining: 3'),
-    'limited remaining redemptions must render'
-  )
-
-  // 回归：付费金额必须与兑换按钮放在一起（页脚），而不是缩在标题右上角。
-  const freeFooter = cards[0]?.querySelector('[data-slot="card-footer"]')
-  const paidFooter = cards[1]?.querySelector('[data-slot="card-footer"]')
-  const paidHeader = cards[1]?.querySelector('[data-slot="card-header"]')
-  assert.ok(freeFooter, 'offer card footer must render')
-  assert.ok(paidFooter, 'paid offer card footer must render')
-  assert.ok(
-    freeFooter.textContent?.includes('Free'),
-    'the free label must sit in the footer next to the redeem action'
-  )
-  assert.ok(
-    paidFooter.textContent?.includes('$1'),
-    'the paid amount must sit in the footer next to the redeem action'
-  )
-  assert.ok(
-    paidFooter.querySelector('button[aria-label="Redeem Paid Group"]'),
-    'the price and the redeem button must share the footer'
-  )
-  assert.ok(
-    !paidHeader?.textContent?.includes('$1'),
-    'the paid amount must not stay in the card header corner'
-  )
-})
-
-// 回归：指定模型的活动码必须展示具体模型 ID 与倍率，而不是只给「N 个模型」。
-test('lists the concrete model ids of a selected-models activity code', async () => {
-  storeModule.useSystemConfigStore.getState().setConfig({
-    currency: { ...storeModule.DEFAULT_CURRENCY_CONFIG },
-  })
-  await renderCards([
-    offerFixture({
-      code_id: 31,
-      name: 'Models Group',
-      group_desc: '指定模型分组',
-      ratio_mode: 'inherit',
-      model_ratio_overrides: { 'gpt-5': 0, o3: 0.5 },
-    }),
-  ])
-
-  const text = renderedCards()[0]?.textContent ?? ''
-  assert.ok(text.includes('Models (ratio)'), 'the model scope label must render')
-  assert.ok(
-    text.includes('gpt-5: Free of charge'),
-    'a zero ratio must read as free instead of 0x'
-  )
-  assert.ok(
-    text.includes('o3: 0.5x ratio'),
-    'a non-zero ratio must render as the multiplier with its unit'
-  )
-  assert.ok(
-    !text.includes('specified models'),
-    'the count-only copy must not be the model scope anymore'
-  )
-})
-
-test('lays the offers out as a single column grid that switches to two columns from the sm breakpoint', async () => {
-  await renderCards([offerFixture({ code_id: 1 }), offerFixture({ code_id: 2 })])
-
-  const grid = document.querySelector('[data-slot="activity-offer-cards"]')
-  assert.ok(grid, 'offer grid must render')
-  assert.ok(grid.classList.contains('grid'), 'offers must use a grid container')
-  assert.ok(
-    grid.classList.contains('grid-cols-1'),
-    'offers must stack in one column on small screens'
-  )
-  assert.ok(
-    grid.classList.contains('sm:grid-cols-2'),
-    'offers must use two columns from the sm breakpoint'
-  )
-})
-
-test('renders no card when the site has no redeemable offer', async () => {
-  await renderCards([])
-
-  assert.equal(
-    document.querySelector('[data-slot="activity-offer-cards"]'),
-    null
-  )
-  assert.equal(renderedCards().length, 0)
-})
-
-test('redeems only the offer whose card button was pressed', async () => {
-  await renderCards([
-    offerFixture({ code_id: 11, name: 'Free Group' }),
-    offerFixture({ code_id: 22, name: 'Paid Group', price_quota: 500000 }),
-  ])
-
-  const button = redeemButton('Redeem Paid Group')
-  assert.ok(button, 'each card must expose a distinguishable redeem button')
-  await act(async () => button.click())
-
-  assert.deepEqual(
-    redeemed.map((offer) => offer.code_id),
-    [22]
-  )
-})
-
-test('disables every redeem button while a redemption is already running', async () => {
-  await renderCards([offerFixture({ code_id: 11, name: 'Free Group' })], true)
-
-  const button = redeemButton('Redeem Free Group')
-  assert.ok(button, 'redeem button must render')
-  assert.equal(button.disabled, true)
-
-  await act(async () => button.click())
-  assert.deepEqual(redeemed, [])
 })

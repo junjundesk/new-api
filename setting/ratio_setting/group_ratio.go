@@ -169,6 +169,10 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 type ActivityRatioOverride struct {
 	ModelRatios map[string]float64
 	GroupRatio  *float64
+	// Token 套餐：免费价来自需要计量的授权时，记录本次请求应扣减的授权 id。
+	// 不限量免费权益不设置这两个字段，因此不会扣减任何套餐。
+	GroupTokenGrantId  int
+	ModelTokenGrantIds map[string]int
 }
 
 // IsValidModelGroupRatio reports whether a channel model-specific billing
@@ -199,9 +203,11 @@ func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides m
 	}
 
 	var activityRatio *float64
+	activityModelRatio := false
 	if activity != nil {
 		if ratio, ok := activity.ModelRatios[modelName]; ok && IsValidModelGroupRatio(&ratio) {
 			activityRatio = &ratio
+			activityModelRatio = true
 		} else if IsValidModelGroupRatio(activity.GroupRatio) {
 			activityRatio = activity.GroupRatio
 		}
@@ -233,6 +239,14 @@ func ResolveModelGroupRatio(userGroup, usingGroup, modelName string, overrides m
 		info.GroupSpecialRatio = value
 		info.HasSpecialRatio = true
 		info.Source = types.GroupRatioSourceActivity
+		// Token 套餐：记录本次请求应扣减的授权，结算时按实际 token 累加。
+		if activityModelRatio {
+			if grantId, ok := activity.ModelTokenGrantIds[modelName]; ok {
+				info.ActivityGrantId = grantId
+			}
+		} else if activity.GroupTokenGrantId != 0 {
+			info.ActivityGrantId = activity.GroupTokenGrantId
+		}
 		// Freeze the price the request would have had without the grant, so the
 		// consume log can show it struck through next to the discounted charge.
 		if channelRatio != nil {

@@ -28,6 +28,9 @@ type GroupRatioInfo struct {
 	// activity; the consume log shows the charge at this ratio struck through so
 	// the discount stays visible.
 	ActivityOriginalRatio *float64
+	// ActivityGrantId > 0 means the free price came from a token-limited activity
+	// grant; settlement adds this request's token usage to that grant.
+	ActivityGrantId int
 }
 
 // IsActivityFree reports whether an active activity-code grant made the request

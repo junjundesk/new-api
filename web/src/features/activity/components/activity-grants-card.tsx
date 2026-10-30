@@ -29,12 +29,81 @@ import { getActivityGrants } from '../api'
 import {
   describeActivityRatio,
   describeExpireTime,
+  describeTokenUsage,
 } from '../lib/activity-format'
+import type { ActivityGrant } from '../types'
 
 function grantStatusLabelKey(status: string): string {
   if (status === 'active') return 'Active'
   if (status === 'revoked') return 'Revoked'
   return 'Expired'
+}
+
+type ActivityGrantRowProps = {
+  grant: ActivityGrant
+  // 同一次兑换（redeem_batch）包含多条权益时，已支付金额只展示一次。
+  showPaid: boolean
+}
+
+function ActivityGrantRow(props: ActivityGrantRowProps) {
+  const { t, i18n } = useTranslation()
+  const grant = props.grant
+  // ratio 授权的 benefit_key 为空；benefit 授权即使不限量（token_total=0）
+  // 也带 benefit_key，因此可以据此区分两类授权，兼容旧接口缺失新字段的情况。
+  const isBenefit =
+    grant.type === 'benefit' ||
+    Boolean(grant.benefit_key) ||
+    (grant.token_total ?? 0) > 0 ||
+    (grant.token_used ?? 0) > 0
+
+  const parts: string[] = [grant.code_name || grant.code]
+  if (isBenefit) {
+    const modelNames = Object.keys(grant.model_ratio_overrides ?? {})
+    // benefit 授权快照：整组免费 ratio_scope=group；单模型免费 ratio_scope=models
+    // 且 model_ratio_overrides 只含该模型，据此展示权益范围。
+    if (grant.ratio_scope === 'models' && modelNames.length > 0) {
+      parts.push(t('Model {{model}}', { model: modelNames.join(', ') }))
+    } else {
+      parts.push(t('Whole group'))
+    }
+    parts.push(
+      describeTokenUsage(
+        t,
+        grant.token_used ?? 0,
+        grant.token_total ?? 0,
+        i18n.language
+      )
+    )
+  } else {
+    parts.push(describeActivityRatio(t, grant.ratio_mode, grant.ratio_override))
+    const listedModels = formatModelRatioOverrides(
+      t,
+      grant.model_ratio_overrides
+    )
+    if (listedModels) parts.push(`${t('Models (ratio)')}: ${listedModels}`)
+  }
+  parts.push(`${t('Expires at')}: ${describeExpireTime(t, grant.expire_time)}`)
+  if (props.showPaid && grant.price_quota > 0) {
+    parts.push(`${t('Paid')}: ${formatQuota(grant.price_quota)}`)
+  }
+
+  return (
+    <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
+      <div className='min-w-0 space-y-1'>
+        <div className='flex items-center gap-2'>
+          <span className='text-sm font-medium'>{grant.group_name}</span>
+          <StatusBadge
+            label={t(grantStatusLabelKey(grant.status))}
+            variant={grant.status === 'active' ? 'success' : 'neutral'}
+            copyable={false}
+          />
+        </div>
+        <p className='text-muted-foreground text-xs break-all'>
+          {parts.join(' · ')}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export function ActivityGrantsCard() {
@@ -51,6 +120,14 @@ export function ActivityGrantsCard() {
   })
 
   const grants = data?.grants ?? []
+  // 同一兑换批次的多条权益共享一笔支付金额，只在第一条授权上展示。
+  const seenBatches = new Set<string>()
+  const rows = grants.map((grant) => {
+    const batch = grant.redeem_batch
+    const showPaid = !batch || !seenBatches.has(batch)
+    if (batch) seenBatches.add(batch)
+    return { grant, showPaid }
+  })
 
   return (
     <Card>
@@ -78,47 +155,13 @@ export function ActivityGrantsCard() {
             {t('No activity grants yet.')}
           </p>
         )}
-        {grants.map((grant) => {
-          // 指定模型时直接列出具体模型 ID 与倍率；未指定模型则不加多余信息。
-          const listedModels = formatModelRatioOverrides(
-            t,
-            grant.model_ratio_overrides
-          )
-          const summary = [
-            grant.code_name || grant.code,
-            describeActivityRatio(t, grant.ratio_mode, grant.ratio_override),
-            listedModels ? `${t('Models (ratio)')}: ${listedModels}` : '',
-            `${t('Expires at')}: ${describeExpireTime(t, grant.expire_time)}`,
-            grant.price_quota > 0
-              ? `${t('Paid')}: ${formatQuota(grant.price_quota)}`
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' · ')
-
-          return (
-            <div
-              key={grant.id}
-              className='flex items-center justify-between gap-3 rounded-lg border p-3'
-            >
-              <div className='min-w-0 space-y-1'>
-                <div className='flex items-center gap-2'>
-                  <span className='text-sm font-medium'>
-                    {grant.group_name}
-                  </span>
-                  <StatusBadge
-                    label={t(grantStatusLabelKey(grant.status))}
-                    variant={grant.status === 'active' ? 'success' : 'neutral'}
-                    copyable={false}
-                  />
-                </div>
-                <p className='text-muted-foreground text-xs break-all'>
-                  {summary}
-                </p>
-              </div>
-            </div>
-          )
-        })}
+        {rows.map((row) => (
+          <ActivityGrantRow
+            key={row.grant.id}
+            grant={row.grant}
+            showPaid={row.showPaid}
+          />
+        ))}
       </CardContent>
     </Card>
   )

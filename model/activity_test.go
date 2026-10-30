@@ -376,8 +376,9 @@ func TestRedeemActivityCodeInvalidCodeDoesNotLeakExistence(t *testing.T) {
 	require.ErrorIs(t, errEmpty, ErrActivityCodeInvalid)
 }
 
-// 「指定模型」类型：兑换时把模型倍率快照进授权，之后改活动码不影响已发放的授权。
-func TestRedeemActivityCodeSnapshotsModelRatioOverrides(t *testing.T) {
+// 「指定模型」类型：兑换时写入授权；之后编辑活动码会实时同步到有效授权，
+// 但已用 Token、到期时间与已支付价格保持不变。
+func TestUpdateActivityCodeSyncsIssuedModelRatioOverrides(t *testing.T) {
 	code := ActivityCode{
 		Code:                "act-models",
 		Name:                "指定模型活动",
@@ -394,14 +395,17 @@ func TestRedeemActivityCodeSnapshotsModelRatioOverrides(t *testing.T) {
 	require.NoError(t, DB.First(grant, "id = ?", result.GrantId).Error)
 	assert.Equal(t, ActivityRatioScopeModels, grant.RatioScope)
 	assert.Equal(t, map[string]float64{"gpt-5": 0, "o3": 0.5}, map[string]float64(grant.ModelRatioOverrides))
+	originalExpireTime := grant.ExpireTime
 
 	created.ModelRatioOverrides = ActivityModelRatioOverrides{"gpt-5": 0.9}
 	require.NoError(t, created.Update())
 
 	reloaded := &ActivityGrant{}
 	require.NoError(t, DB.First(reloaded, "id = ?", result.GrantId).Error)
-	assert.Equal(t, float64(0), reloaded.ModelRatioOverrides["gpt-5"], "已发放的授权是快照，不随后续修改变化")
-	assert.Equal(t, 0.5, reloaded.ModelRatioOverrides["o3"])
+	assert.Equal(t, 0.9, reloaded.ModelRatioOverrides["gpt-5"], "编辑活动码后有效授权实时同步")
+	assert.NotContains(t, reloaded.ModelRatioOverrides, "o3", "被移除的模型倍率同步删除")
+	assert.Equal(t, originalExpireTime, reloaded.ExpireTime, "到期时间不因编辑活动码而变化")
+	assert.Equal(t, 0, reloaded.PriceQuota, "已支付价格不因编辑活动码而变化")
 }
 
 func TestActivityCodeUpdatePersistsRatioScopeAndModelRatios(t *testing.T) {
@@ -522,4 +526,176 @@ func TestGrantActivityCodeExtendsExistingGrantAndRejectsDisabledCode(t *testing.
 	var grantCount int64
 	require.NoError(t, DB.Model(&ActivityGrant{}).Where("user_id = ?", user.Id).Count(&grantCount).Error)
 	assert.Equal(t, int64(2), grantCount, "停用后不再新增授权")
+}
+
+func TestRedeemBenefitActivityCreatesGrantPerBenefit(t *testing.T) {
+	code := ActivityCode{
+		Code:            "act-benefit",
+		Name:            "多分组权益",
+		Type:            ActivityCodeTypeBenefit,
+		DurationSeconds: 3600,
+		PerUserLimit:    1,
+		Benefits: ActivityBenefits{
+			{Key: "key-a", GroupName: "benefit-a", Scope: ActivityBenefitScopeGroup, RpmLimit: 10, TokenTotal: 1000},
+			{Key: "key-b", GroupName: "benefit-b", Scope: ActivityBenefitScopeModel, ModelName: "gpt-5", RpmLimit: 20},
+		},
+	}
+	user, created := setupActivityFixture(t, code, 0)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"activity-test-group":1,"benefit-a":1,"benefit-b":1}`))
+
+	result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-benefit", UserId: user.Id})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"benefit-a", "benefit-b"}, result.GroupNames)
+	assert.Equal(t, "benefit-a", result.GroupName)
+	assert.Equal(t, 0, result.PriceQuota)
+
+	grants := make([]ActivityGrant, 0)
+	require.NoError(t, DB.Where("code_id = ?", created.Id).Order("id asc").Find(&grants).Error)
+	require.Len(t, grants, 2)
+	assert.NotEmpty(t, grants[0].RedeemBatch)
+	assert.Equal(t, grants[0].RedeemBatch, grants[1].RedeemBatch, "同一次兑换的多条权益共享批次")
+	assert.Equal(t, grants[0].ExpireTime, grants[1].ExpireTime)
+	assert.Equal(t, "key-a", grants[0].BenefitKey)
+	assert.Equal(t, 1000, int(grants[0].TokenTotal))
+	assert.Equal(t, 10, grants[0].RpmLimit)
+	assert.Equal(t, ActivityRatioModeOverride, grants[0].RatioMode)
+	assert.Equal(t, float64(0), grants[0].RatioOverride)
+	assert.Equal(t, "key-b", grants[1].BenefitKey)
+	assert.Equal(t, ActivityRatioScopeModels, grants[1].RatioScope)
+	assert.Equal(t, map[string]float64{"gpt-5": 0}, map[string]float64(grants[1].ModelRatioOverrides))
+	assert.Equal(t, 0, int(grants[1].TokenTotal))
+	assert.Equal(t, 1, reloadActivityCode(t, created.Id).UsedCount)
+
+	// 一次兑换生成两条授权，但每人上限只应算一次。
+	_, err = RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-benefit", UserId: user.Id})
+	require.ErrorIs(t, err, ErrActivityCodeUserLimitReached)
+}
+
+func findGrantByBenefitKey(t *testing.T, codeId int, key string) *ActivityGrant {
+	t.Helper()
+	grant := &ActivityGrant{}
+	require.NoError(t, DB.First(grant, "code_id = ? AND benefit_key = ?", codeId, key).Error)
+	return grant
+}
+
+func TestUpdateBenefitActivitySyncsIssuedGrants(t *testing.T) {
+	code := ActivityCode{
+		Code:            "act-benefit-sync",
+		Name:            "同步权益",
+		Type:            ActivityCodeTypeBenefit,
+		DurationSeconds: 3600,
+		PerUserLimit:    1,
+		Benefits: ActivityBenefits{
+			{Key: "key-a", GroupName: "benefit-a", Scope: ActivityBenefitScopeGroup, TokenTotal: 1000},
+			{Key: "key-b", GroupName: "benefit-b", Scope: ActivityBenefitScopeModel, ModelName: "gpt-5"},
+		},
+	}
+	user, created := setupActivityFixture(t, code, 0)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"activity-test-group":1,"benefit-a":1,"benefit-b":1,"benefit-c":1}`))
+	_, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-benefit-sync", UserId: user.Id})
+	require.NoError(t, err)
+
+	grantA := findGrantByBenefitKey(t, created.Id, "key-a")
+	grantB := findGrantByBenefitKey(t, created.Id, "key-b")
+	require.NoError(t, AddActivityGrantTokenUsage(grantA.Id, 123))
+	grantA = findGrantByBenefitKey(t, created.Id, "key-a")
+	assert.Equal(t, int64(123), grantA.TokenUsed)
+
+	created.Name = "同步权益 v2"
+	created.Benefits = ActivityBenefits{
+		{Key: "key-a", GroupName: "benefit-a", Scope: ActivityBenefitScopeGroup, RpmLimit: 60, TokenTotal: 500},
+		{Key: "key-c", GroupName: "benefit-c", Scope: ActivityBenefitScopeGroup},
+	}
+	require.NoError(t, created.Update())
+
+	grantA = findGrantByBenefitKey(t, created.Id, "key-a")
+	assert.Equal(t, int64(500), grantA.TokenTotal, "Token 总量同步")
+	assert.Equal(t, int64(123), grantA.TokenUsed, "已用 Token 不因编辑而清零")
+	assert.Equal(t, 60, grantA.RpmLimit)
+	assert.Equal(t, "同步权益 v2", grantA.CodeName)
+	assert.Equal(t, ActivityGrantStatusActive, grantA.Status)
+
+	grantB = findGrantByBenefitKey(t, created.Id, "key-b")
+	assert.Equal(t, ActivityGrantStatusRevoked, grantB.Status, "被删除的权益授权撤销")
+
+	grantC := findGrantByBenefitKey(t, created.Id, "key-c")
+	assert.Equal(t, ActivityGrantStatusActive, grantC.Status, "新增权益为有效批次补建授权")
+	assert.Equal(t, grantA.RedeemBatch, grantC.RedeemBatch)
+	assert.Equal(t, grantA.ExpireTime, grantC.ExpireTime, "补建授权沿用批次到期时间")
+	assert.Equal(t, grantA.StartTime, grantC.StartTime)
+	assert.Equal(t, int64(0), grantC.TokenUsed)
+
+	// 管理员手动撤销的权益，之后再次编辑活动码不应被补回来。
+	require.NoError(t, RevokeActivityGrant(grantC.Id, "手动撤销"))
+	require.NoError(t, created.Update())
+	grantC = findGrantByBenefitKey(t, created.Id, "key-c")
+	assert.Equal(t, ActivityGrantStatusRevoked, grantC.Status)
+	var grantCount int64
+	require.NoError(t, DB.Model(&ActivityGrant{}).Where("code_id = ?", created.Id).Count(&grantCount).Error)
+	assert.Equal(t, int64(3), grantCount, "不应重复补建已手动撤销的权益")
+}
+
+func TestAddActivityGrantTokenUsage(t *testing.T) {
+	code := ActivityCode{Code: "act-token-usage", Name: "Token 用量", DurationSeconds: 3600}
+	user, created := setupActivityFixture(t, code, 0)
+	packageGrant := ActivityGrant{
+		UserId: user.Id, CodeId: created.Id, Code: created.Code, GroupName: activityTestGroup,
+		Status: ActivityGrantStatusActive, TokenTotal: 100, TokenUsed: 0,
+	}
+	require.NoError(t, DB.Create(&packageGrant).Error)
+	require.NoError(t, AddActivityGrantTokenUsage(packageGrant.Id, 30))
+	require.NoError(t, AddActivityGrantTokenUsage(packageGrant.Id, 0))
+	require.NoError(t, AddActivityGrantTokenUsage(packageGrant.Id, -5))
+	reloaded := &ActivityGrant{}
+	require.NoError(t, DB.First(reloaded, "id = ?", packageGrant.Id).Error)
+	assert.Equal(t, int64(30), reloaded.TokenUsed)
+
+	nonPackageGrant := ActivityGrant{
+		UserId: user.Id, CodeId: created.Id, Code: created.Code, GroupName: activityTestGroup,
+		Status: ActivityGrantStatusActive,
+	}
+	require.NoError(t, DB.Create(&nonPackageGrant).Error)
+	require.NoError(t, AddActivityGrantTokenUsage(nonPackageGrant.Id, 10))
+	reloaded = &ActivityGrant{}
+	require.NoError(t, DB.First(reloaded, "id = ?", nonPackageGrant.Id).Error)
+	assert.Equal(t, int64(0), reloaded.TokenUsed, "非 Token 套餐授权不累加用量")
+}
+
+func TestCountActivityRedemptionsGroupsByBatch(t *testing.T) {
+	grants := []ActivityGrant{
+		{Id: 1, RedeemBatch: "batch-1"},
+		{Id: 2, RedeemBatch: "batch-1"},
+		{Id: 3, RedeemBatch: "batch-2"},
+		{Id: 4},
+		{Id: 5},
+	}
+	assert.Equal(t, 4, CountActivityRedemptions(grants))
+	assert.Equal(t, 1, CountActivityRedemptions(grants[:2]))
+	assert.Equal(t, 0, CountActivityRedemptions(nil))
+}
+
+func TestActivityBenefitsScanAndValue(t *testing.T) {
+	var empty ActivityBenefits
+	value, err := empty.Value()
+	require.NoError(t, err)
+	assert.Nil(t, value)
+
+	value, err = ActivityBenefits{{Key: "a", GroupName: "vip", Scope: ActivityBenefitScopeGroup, TokenTotal: 100}}.Value()
+	require.NoError(t, err)
+	raw, ok := value.([]byte)
+	require.True(t, ok)
+	assert.JSONEq(t, `[{"key":"a","group_name":"vip","scope":"group","rpm_limit":0,"token_total":100}]`, string(raw))
+
+	for _, stored := range []interface{}{nil, []byte(nil), "", []byte(""), []byte("null")} {
+		benefits := ActivityBenefits{{Key: "stale"}}
+		require.NoError(t, benefits.Scan(stored))
+		assert.Empty(t, benefits, "存量空值必须读成空列表: %v", stored)
+	}
+	fromString := ActivityBenefits{}
+	require.NoError(t, fromString.Scan(`[{"key":"a","group_name":"vip","scope":"group"}]`))
+	require.Len(t, fromString, 1)
+	assert.Equal(t, "a", fromString[0].Key)
+
+	invalid := ActivityBenefits{}
+	require.Error(t, invalid.Scan([]byte("{not json")))
 }

@@ -29,7 +29,12 @@ import {
   formatTimestampToDate,
 } from '@/lib/format'
 
-import { ACTIVITY_CODE_STATUS, ACTIVITY_RATIO_MODE } from '../constants'
+import {
+  ACTIVITY_CODE_STATUS,
+  ACTIVITY_CODE_TYPE,
+  ACTIVITY_RATIO_MODE,
+} from '../constants'
+import { describeActivityBenefit } from '../lib/activity-benefit'
 import type { ActivityCode } from '../types'
 import { DataTableRowActions } from './activity-codes-row-actions'
 
@@ -42,7 +47,7 @@ function formatDuration(t: TFunction, seconds: number): string {
 }
 
 export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return [
     {
       id: 'select',
@@ -87,14 +92,42 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
     {
       accessorKey: 'group_name',
       header: t('Group'),
-      cell: ({ row }) => (
-        <StatusBadge
-          label={row.original.group_name}
-          variant='info'
-          copyable={false}
-          className='-ml-1.5'
-        />
-      ),
+      cell: ({ row }) => {
+        const benefits = row.original.benefits ?? []
+        const isBenefit = row.original.type === ACTIVITY_CODE_TYPE.BENEFIT
+        if (!isBenefit || benefits.length === 0) {
+          return (
+            <StatusBadge
+              label={row.original.group_name}
+              variant='info'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          )
+        }
+        // 权益类型可能覆盖多个分组：展示首分组，其余用 +N 折叠，title 给出全部。
+        const groups = [
+          ...new Set(benefits.map((benefit) => benefit.group_name)),
+        ]
+        return (
+          <span
+            className='inline-flex items-center gap-1'
+            title={groups.join(', ')}
+          >
+            <StatusBadge
+              label={groups[0]}
+              variant='info'
+              copyable={false}
+              className='-ml-1.5'
+            />
+            {groups.length > 1 && (
+              <span className='text-muted-foreground text-xs'>
+                +{groups.length - 1}
+              </span>
+            )}
+          </span>
+        )
+      },
       size: 140,
     },
     {
@@ -125,6 +158,24 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
       id: 'ratio',
       header: t('Ratio'),
       cell: ({ row }) => {
+        // 权益类型展示每条权益的「分组 · 范围 · Token 总量」摘要。
+        if (row.original.type === ACTIVITY_CODE_TYPE.BENEFIT) {
+          const benefits = row.original.benefits ?? []
+          const summary = benefits
+            .map((benefit) => describeActivityBenefit(t, benefit, i18n.language))
+            .join('; ')
+          if (!summary) {
+            return <span className='text-muted-foreground'>-</span>
+          }
+          return (
+            <span
+              className='block max-w-[18rem] truncate text-xs'
+              title={summary}
+            >
+              {summary}
+            </span>
+          )
+        }
         // 「指定模型」类型直接展示模型 ID 与倍率（如 gpt-5: 0.1x、o3: 免费）；
         // 超出列宽时截断，完整内容放 title。
         const listedOverrides = formatModelRatioOverrides(

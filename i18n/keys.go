@@ -103,6 +103,17 @@ const (
 	MsgActivityCodeModelNameInvalid    = "activity.model_name_invalid"
 	MsgActivityCodeWindowInvalid       = "activity.window_invalid"
 	MsgActivityCodeLimitInvalid        = "activity.limit_invalid"
+
+	MsgActivityCodeTypeInvalid         = "activity.type_invalid"
+	MsgActivityCodeTypeImmutable       = "activity.type_immutable"
+	MsgActivityCodeBenefitRequired     = "activity.benefit_required"
+	MsgActivityCodeBenefitLimit        = "activity.benefit_limit"
+	MsgActivityCodeBenefitScopeInvalid = "activity.benefit_scope_invalid"
+	MsgActivityCodeBenefitModelInvalid = "activity.benefit_model_invalid"
+	MsgActivityCodeBenefitDuplicate    = "activity.benefit_duplicate"
+	MsgActivityCodeBenefitKeyInvalid   = "activity.benefit_key_invalid"
+	MsgActivityCodeBenefitRpmInvalid   = "activity.benefit_rpm_invalid"
+	MsgActivityCodeBenefitTokenInvalid = "activity.benefit_token_invalid"
 )
 
 // User related messages

@@ -26,6 +26,22 @@ export interface ApiResponse<T = unknown> {
   data?: T
 }
 
+export type ActivityCodeType = 'ratio' | 'benefit'
+
+export type ActivityBenefitScope = 'group' | 'model'
+
+// 一条活动权益：某个分组（整组或单个模型）的免费额度。
+// token_total 为 0 表示不限量免费；旧接口不会返回 benefits。
+export interface ActivityBenefit {
+  key: string
+  group_name: string
+  group_desc: string
+  scope: ActivityBenefitScope
+  model_name: string
+  rpm_limit: number
+  token_total: number
+}
+
 export interface ActivityOffer {
   code_id: number
   code: string
@@ -41,6 +57,9 @@ export interface ActivityOffer {
   model_ratio_overrides?: Record<string, number> | null
   price_quota: number
   remaining_total: number
+  // 旧接口没有 type/benefits：缺失时按 ratio 类型展示。
+  type?: ActivityCodeType
+  benefits?: ActivityBenefit[] | null
 }
 
 export interface ActivityOffersResponse {
@@ -66,6 +85,12 @@ export interface ActivityGrant {
   status: string
   remark: string
   created_time: number
+  // benefit 授权：benefit_key 非空，token_total 为 0 表示不限量免费。
+  type?: ActivityCodeType
+  benefit_key?: string
+  redeem_batch?: string
+  token_total?: number
+  token_used?: number
 }
 
 export interface ActivityActiveView {
@@ -79,6 +104,11 @@ export interface ActivityActiveView {
   model_ratio_overrides?: Record<string, number> | null
   rpm_limit: number
   expire_time: number
+  type?: ActivityCodeType
+  benefit_key?: string
+  redeem_batch?: string
+  token_total?: number
+  token_used?: number
 }
 
 export interface ActivityGrantsResponse {
@@ -110,6 +140,8 @@ export interface ActivityPreview {
   redeemable: boolean
   blocked_reason: string
   message: string
+  type?: ActivityCodeType
+  benefits?: ActivityBenefit[] | null
 }
 
 export interface RedeemActivityResult {
@@ -121,6 +153,8 @@ export interface RedeemActivityResult {
   expire_time: number
   price_quota: number
   balance_after: number
+  // benefit 类型一次兑换可能覆盖多个分组；旧接口缺失时回退 group_name。
+  group_names?: string[]
 }
 
 export type RedeemOutcome =

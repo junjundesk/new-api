@@ -30,12 +30,22 @@ const activityGrantMaxBatch = 100
 // 管理端
 // ---------------------------------------------------------------------------
 
+type activityBenefitRequest struct {
+	Key        string `json:"key"`
+	GroupName  string `json:"group_name"`
+	Scope      string `json:"scope"`
+	ModelName  string `json:"model_name"`
+	RpmLimit   int    `json:"rpm_limit"`
+	TokenTotal int64  `json:"token_total"`
+}
+
 type activityCodeRequest struct {
 	Id            int     `json:"id"`
 	Code          string  `json:"code"`
 	Name          string  `json:"name"`
 	Description   string  `json:"description"`
 	Status        *int    `json:"status"`
+	Type          string  `json:"type"`
 	GroupName     string  `json:"group_name"`
 	DurationHours float64 `json:"duration_hours"`
 	RpmLimit      int     `json:"rpm_limit"`
@@ -44,18 +54,136 @@ type activityCodeRequest struct {
 	RatioOverride float64 `json:"ratio_override"`
 	// RatioScope 为 models 时只使用 ModelRatioOverrides 改价（可无视原分组定价），
 	// 为空或 group 时沿用 RatioMode/RatioOverride 作用于整个分组。
-	RatioScope          string              `json:"ratio_scope"`
-	ModelRatioOverrides map[string]*float64 `json:"model_ratio_overrides"`
-	StartTime           int64               `json:"start_time"`
-	EndTime             int64               `json:"end_time"`
-	TotalLimit          int                 `json:"total_limit"`
-	PerUserLimit        *int                `json:"per_user_limit"`
-	PublicVisible       *int                `json:"public_visible"`
+	RatioScope          string                   `json:"ratio_scope"`
+	ModelRatioOverrides map[string]*float64      `json:"model_ratio_overrides"`
+	Benefits            []activityBenefitRequest `json:"benefits"`
+	StartTime           int64                    `json:"start_time"`
+	EndTime             int64                    `json:"end_time"`
+	TotalLimit          int                      `json:"total_limit"`
+	PerUserLimit        *int                     `json:"per_user_limit"`
+	PublicVisible       *int                     `json:"public_visible"`
+}
+
+// resolveActivityCodeType 解析并校验活动码类型。类型创建后不可修改。
+func resolveActivityCodeType(c *gin.Context, req *activityCodeRequest, existing *model.ActivityCode) (string, bool) {
+	current := model.ActivityCodeTypeRatio
+	if existing != nil {
+		current = model.NormalizeActivityCodeType(existing.Type)
+		if strings.TrimSpace(req.Type) != "" {
+			requested := model.NormalizeActivityCodeType(req.Type)
+			if requested == "" {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeTypeInvalid)
+				return "", false
+			}
+			if requested != current {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeTypeImmutable)
+				return "", false
+			}
+		}
+		return current, true
+	}
+	if strings.TrimSpace(req.Type) == "" {
+		return model.ActivityCodeTypeRatio, true
+	}
+	requested := model.NormalizeActivityCodeType(req.Type)
+	if requested == "" {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeTypeInvalid)
+		return "", false
+	}
+	return requested, true
+}
+
+// buildActivityBenefits 校验并组装免费权益列表；已有权益的 key 会原样保留，
+// 新权益生成稳定 key，供之后把编辑同步到已发放授权。
+func buildActivityBenefits(c *gin.Context, req []activityBenefitRequest, existing *model.ActivityCode) (model.ActivityBenefits, bool) {
+	if len(req) == 0 {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitRequired)
+		return nil, false
+	}
+	if len(req) > model.ActivityCodeMaxBenefits {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitLimit, map[string]any{"Max": model.ActivityCodeMaxBenefits})
+		return nil, false
+	}
+	existingKeys := make(map[string]struct{})
+	if existing != nil {
+		for _, benefit := range existing.Benefits {
+			existingKeys[benefit.Key] = struct{}{}
+		}
+	}
+	groupRatios := ratio_setting.GetGroupRatioCopy()
+	usedKeys := make(map[string]struct{}, len(req))
+	seenScopes := make(map[string]struct{}, len(req))
+	benefits := make(model.ActivityBenefits, 0, len(req))
+	for _, item := range req {
+		groupName := strings.TrimSpace(item.GroupName)
+		if _, exists := groupRatios[groupName]; !exists {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeGroupNotConfigured, map[string]any{"Group": groupName})
+			return nil, false
+		}
+		scope := strings.ToLower(strings.TrimSpace(item.Scope))
+		if scope != model.ActivityBenefitScopeGroup && scope != model.ActivityBenefitScopeModel {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitScopeInvalid)
+			return nil, false
+		}
+		modelName := strings.TrimSpace(item.ModelName)
+		if scope == model.ActivityBenefitScopeModel {
+			if modelName == "" || len(modelName) > model.ActivityModelNameMaxLength {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitModelInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+				return nil, false
+			}
+		} else {
+			modelName = ""
+		}
+		if item.RpmLimit < 0 || item.RpmLimit > model.ActivityCodeMaxRpm {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitRpmInvalid, map[string]any{"Max": model.ActivityCodeMaxRpm})
+			return nil, false
+		}
+		if item.TokenTotal < 0 || item.TokenTotal > model.ActivityCodeMaxTokenTotal {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitTokenInvalid, map[string]any{"Max": model.ActivityCodeMaxTokenTotal})
+			return nil, false
+		}
+		scopeKey := scope + "\x00" + groupName + "\x00" + modelName
+		if _, exists := seenScopes[scopeKey]; exists {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitDuplicate)
+			return nil, false
+		}
+		seenScopes[scopeKey] = struct{}{}
+
+		key := strings.ToLower(strings.TrimSpace(item.Key))
+		if key != "" {
+			if !model.IsValidActivityBenefitKey(key) {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitKeyInvalid)
+				return nil, false
+			}
+			if _, used := usedKeys[key]; used {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitKeyInvalid)
+				return nil, false
+			}
+			if _, exists := existingKeys[key]; exists {
+				usedKeys[key] = struct{}{}
+			} else {
+				key = model.NewActivityBenefitKey()
+				usedKeys[key] = struct{}{}
+			}
+		} else {
+			key = model.NewActivityBenefitKey()
+			usedKeys[key] = struct{}{}
+		}
+		benefits = append(benefits, model.ActivityBenefit{
+			Key:        key,
+			GroupName:  groupName,
+			Scope:      scope,
+			ModelName:  modelName,
+			RpmLimit:   item.RpmLimit,
+			TokenTotal: item.TokenTotal,
+		})
+	}
+	return benefits, true
 }
 
 // buildActivityCode 校验并组装活动码。请求体由调用方解析一次后传入：
 // c.ShouldBindJSON 会消费请求体，函数内部再次绑定只会读到 EOF。
-// existing 非空表示更新（活动码字符串不可修改）。
+// existing 非空表示更新（活动码字符串与类型不可修改）。
 func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model.ActivityCode) (*model.ActivityCode, bool) {
 	activityCode := &model.ActivityCode{}
 	if existing != nil {
@@ -69,13 +197,14 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		activityCode.Code = code
 	}
 
+	codeType, ok := resolveActivityCodeType(c, req, existing)
+	if !ok {
+		return nil, false
+	}
+
 	name := strings.TrimSpace(req.Name)
 	if utf8.RuneCountInString(name) == 0 || utf8.RuneCountInString(name) > 64 {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeNameLength)
-		return nil, false
-	}
-	if _, ok := ratio_setting.GetGroupRatioCopy()[req.GroupName]; !ok {
-		common.ApiErrorI18n(c, i18n.MsgActivityCodeGroupNotConfigured, map[string]any{"Group": req.GroupName})
 		return nil, false
 	}
 	if req.DurationHours < 0 || req.DurationHours > activityCodeMaxDurationHours {
@@ -90,55 +219,83 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		common.ApiErrorI18n(c, i18n.MsgActivityCodePriceInvalid, map[string]any{"Max": model.ActivityCodeMaxPriceQuota})
 		return nil, false
 	}
-	if req.RatioMode != model.ActivityRatioModeInherit && req.RatioMode != model.ActivityRatioModeOverride {
-		common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioModeInvalid)
-		return nil, false
-	}
-	if req.RatioMode == model.ActivityRatioModeOverride &&
-		(req.RatioOverride < 0 || req.RatioOverride > dto.MaxChannelModelGroupRatio) {
-		common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
-		return nil, false
-	}
-	ratioScope := req.RatioScope
-	if ratioScope == "" {
-		// 存量客户端不带该字段，等价于「整个分组」。
-		ratioScope = model.ActivityRatioScopeGroup
-	}
-	if ratioScope != model.ActivityRatioScopeGroup && ratioScope != model.ActivityRatioScopeModels {
-		common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioScopeInvalid)
-		return nil, false
-	}
-	var modelRatioOverrides model.ActivityModelRatioOverrides
-	if ratioScope == model.ActivityRatioScopeModels {
-		// 指定模型类型必须给出明确的模型倍率：空列表或非法条目一律拒绝，
-		// 避免出现「看起来有优惠、实际不生效」的活动码。
-		if len(req.ModelRatioOverrides) == 0 {
-			common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioRequired)
+
+	var (
+		benefits            model.ActivityBenefits
+		groupName           string
+		ratioMode           string
+		ratioOverride       float64
+		ratioScope          string
+		modelRatioOverrides model.ActivityModelRatioOverrides
+	)
+	if codeType == model.ActivityCodeTypeBenefit {
+		benefits, ok = buildActivityBenefits(c, req.Benefits, existing)
+		if !ok {
 			return nil, false
 		}
-		if len(req.ModelRatioOverrides) > model.ActivityCodeMaxModelRatioOverrides {
-			common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioLimit, map[string]any{"Max": model.ActivityCodeMaxModelRatioOverrides})
+	} else {
+		groupName = strings.TrimSpace(req.GroupName)
+		if _, exists := ratio_setting.GetGroupRatioCopy()[groupName]; !exists {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeGroupNotConfigured, map[string]any{"Group": groupName})
 			return nil, false
 		}
-		modelRatioOverrides = make(model.ActivityModelRatioOverrides, len(req.ModelRatioOverrides))
-		for modelName, ratio := range req.ModelRatioOverrides {
-			trimmed := strings.TrimSpace(modelName)
-			if trimmed == "" || len(trimmed) > model.ActivityModelNameMaxLength {
-				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+		if req.RatioMode != model.ActivityRatioModeInherit && req.RatioMode != model.ActivityRatioModeOverride {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioModeInvalid)
+			return nil, false
+		}
+		if req.RatioMode == model.ActivityRatioModeOverride &&
+			(req.RatioOverride < 0 || req.RatioOverride > dto.MaxChannelModelGroupRatio) {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
+			return nil, false
+		}
+		ratioScope = req.RatioScope
+		if ratioScope == "" {
+			// 存量客户端不带该字段，等价于「整个分组」。
+			ratioScope = model.ActivityRatioScopeGroup
+		}
+		if ratioScope != model.ActivityRatioScopeGroup && ratioScope != model.ActivityRatioScopeModels {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioScopeInvalid)
+			return nil, false
+		}
+		if ratioScope == model.ActivityRatioScopeModels {
+			// 指定模型类型必须给出明确的模型倍率：空列表或非法条目一律拒绝，
+			// 避免出现「看起来有优惠、实际不生效」的活动码。
+			if len(req.ModelRatioOverrides) == 0 {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioRequired)
 				return nil, false
 			}
-			if _, exists := modelRatioOverrides[trimmed]; exists {
-				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+			if len(req.ModelRatioOverrides) > model.ActivityCodeMaxModelRatioOverrides {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeModelRatioLimit, map[string]any{"Max": model.ActivityCodeMaxModelRatioOverrides})
 				return nil, false
 			}
-			if ratio == nil || math.IsNaN(*ratio) || math.IsInf(*ratio, 0) ||
-				*ratio < 0 || *ratio > dto.MaxChannelModelGroupRatio {
-				common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
-				return nil, false
+			modelRatioOverrides = make(model.ActivityModelRatioOverrides, len(req.ModelRatioOverrides))
+			for modelName, ratio := range req.ModelRatioOverrides {
+				trimmed := strings.TrimSpace(modelName)
+				if trimmed == "" || len(trimmed) > model.ActivityModelNameMaxLength {
+					common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+					return nil, false
+				}
+				if _, exists := modelRatioOverrides[trimmed]; exists {
+					common.ApiErrorI18n(c, i18n.MsgActivityCodeModelNameInvalid, map[string]any{"Max": model.ActivityModelNameMaxLength})
+					return nil, false
+				}
+				if ratio == nil || math.IsNaN(*ratio) || math.IsInf(*ratio, 0) ||
+					*ratio < 0 || *ratio > dto.MaxChannelModelGroupRatio {
+					common.ApiErrorI18n(c, i18n.MsgActivityCodeRatioInvalid, map[string]any{"Max": dto.MaxChannelModelGroupRatio})
+					return nil, false
+				}
+				modelRatioOverrides[trimmed] = *ratio
 			}
-			modelRatioOverrides[trimmed] = *ratio
+		}
+		// 指定模型类型只按模型倍率改价，分组级倍率保持「继承」语义。
+		ratioMode = req.RatioMode
+		ratioOverride = req.RatioOverride
+		if ratioScope == model.ActivityRatioScopeModels {
+			ratioMode = model.ActivityRatioModeInherit
+			ratioOverride = 0
 		}
 	}
+
 	now := common.GetTimestamp()
 	if req.StartTime < 0 || req.EndTime < 0 {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeWindowInvalid)
@@ -164,26 +321,32 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 
 	activityCode.Name = name
 	activityCode.Description = strings.TrimSpace(req.Description)
-	activityCode.GroupName = req.GroupName
 	activityCode.DurationSeconds = int64(req.DurationHours * 3600)
-	activityCode.RpmLimit = req.RpmLimit
 	activityCode.PriceQuota = req.PriceQuota
-	// 指定模型类型只按模型倍率改价，分组级倍率保持「继承」语义，避免两条规则打架。
-	// 切回「整个分组」时 modelRatioOverrides 为空，该列随之清空。
-	if ratioScope == model.ActivityRatioScopeModels {
-		activityCode.RatioMode = model.ActivityRatioModeInherit
-		activityCode.RatioOverride = 0
-	} else {
-		activityCode.RatioMode = req.RatioMode
-		activityCode.RatioOverride = req.RatioOverride
-	}
-	activityCode.RatioScope = ratioScope
-	activityCode.ModelRatioOverrides = modelRatioOverrides
 	activityCode.StartTime = req.StartTime
 	activityCode.EndTime = req.EndTime
 	activityCode.TotalLimit = req.TotalLimit
 	activityCode.PerUserLimit = perUserLimit
 	activityCode.PublicVisible = publicVisible
+	if codeType == model.ActivityCodeTypeBenefit {
+		activityCode.Type = model.ActivityCodeTypeBenefit
+		activityCode.Benefits = benefits
+		activityCode.GroupName = benefits[0].GroupName
+		activityCode.RatioMode = model.ActivityRatioModeInherit
+		activityCode.RatioOverride = 0
+		activityCode.RatioScope = model.ActivityRatioScopeGroup
+		activityCode.ModelRatioOverrides = nil
+		activityCode.RpmLimit = 0
+	} else {
+		activityCode.Type = model.ActivityCodeTypeRatio
+		activityCode.Benefits = nil
+		activityCode.GroupName = groupName
+		activityCode.RpmLimit = req.RpmLimit
+		activityCode.RatioMode = ratioMode
+		activityCode.RatioOverride = ratioOverride
+		activityCode.RatioScope = ratioScope
+		activityCode.ModelRatioOverrides = modelRatioOverrides
+	}
 	if existing == nil {
 		activityCode.Status = model.ActivityCodeStatusEnabled
 		if req.Status != nil && *req.Status == model.ActivityCodeStatusDisabled {
@@ -245,7 +408,8 @@ func AddActivityCode(c *gin.Context) {
 	}
 	recordManageAudit(c, "activity.create", map[string]interface{}{
 		"code":        activityCode.Code,
-		"group":       activityCode.GroupName,
+		"type":        model.NormalizeActivityCodeType(activityCode.Type),
+		"groups":      activityCode.TargetGroups(),
 		"price_quota": activityCode.PriceQuota,
 	})
 	common.ApiSuccess(c, activityCode)
@@ -274,8 +438,9 @@ func UpdateActivityCode(c *gin.Context) {
 		return
 	}
 	recordManageAudit(c, "activity.update", map[string]interface{}{
-		"code":  activityCode.Code,
-		"group": activityCode.GroupName,
+		"code":   activityCode.Code,
+		"type":   model.NormalizeActivityCodeType(activityCode.Type),
+		"groups": activityCode.TargetGroups(),
 	})
 	common.ApiSuccess(c, activityCode)
 }
@@ -400,12 +565,13 @@ func GrantActivityCode(c *gin.Context) {
 	remark := strings.TrimSpace(req.Remark)
 
 	type grantResult struct {
-		UserId     int    `json:"user_id"`
-		Success    bool   `json:"success"`
-		GrantId    int    `json:"grant_id,omitempty"`
-		ExpireTime int64  `json:"expire_time,omitempty"`
-		GroupName  string `json:"group_name,omitempty"`
-		Message    string `json:"message,omitempty"`
+		UserId     int      `json:"user_id"`
+		Success    bool     `json:"success"`
+		GrantId    int      `json:"grant_id,omitempty"`
+		ExpireTime int64    `json:"expire_time,omitempty"`
+		GroupName  string   `json:"group_name,omitempty"`
+		GroupNames []string `json:"group_names,omitempty"`
+		Message    string   `json:"message,omitempty"`
 	}
 	results := make([]grantResult, 0, len(userIds))
 	granted := 0
@@ -440,6 +606,8 @@ func GrantActivityCode(c *gin.Context) {
 		result.Success = true
 		result.GrantId = grant.GrantId
 		result.ExpireTime = grant.ExpireTime
+		result.GroupName = grant.GroupName
+		result.GroupNames = grant.GroupNames
 		results = append(results, result)
 		granted++
 	}
@@ -447,7 +615,7 @@ func GrantActivityCode(c *gin.Context) {
 	recordManageAudit(c, "activity.grant", map[string]interface{}{
 		"activity_code_id": codeId,
 		"code":             activityCode.Code,
-		"group":            activityCode.GroupName,
+		"group":            strings.Join(activityCode.TargetGroups(), ", "),
 		"granted":          granted,
 		"requested":        len(userIds),
 		"remark":           remark,
@@ -483,10 +651,12 @@ func GetActivityOffers(c *gin.Context) {
 		if activityCode.WindowClosed(now) {
 			continue
 		}
-		if !ratio_setting.ContainsGroupRatio(activityCode.GroupName) {
+		if !activityCode.AllGroupsAvailable() {
 			continue
 		}
 		offers = append(offers, gin.H{
+			"type":                  model.NormalizeActivityCodeType(activityCode.Type),
+			"benefits":              activityBenefitViews(activityCode),
 			"code_id":               activityCode.Id,
 			"code":                  activityCode.Code,
 			"name":                  activityCode.Name,
@@ -647,6 +817,27 @@ const (
 	activityBlockedInsufficientBalance = "insufficient_balance"
 )
 
+// activityBenefitViews 把 benefit 类型的权益转换成用户端响应结构；
+// ratio 类型返回空数组，前端继续使用原有的倍率字段。
+func activityBenefitViews(activityCode *model.ActivityCode) []gin.H {
+	if !activityCode.IsBenefitType() {
+		return []gin.H{}
+	}
+	benefits := make([]gin.H, 0, len(activityCode.Benefits))
+	for _, benefit := range activityCode.Benefits {
+		benefits = append(benefits, gin.H{
+			"key":         benefit.Key,
+			"group_name":  benefit.GroupName,
+			"group_desc":  setting.GetUsableGroupDescription(benefit.GroupName),
+			"scope":       benefit.Scope,
+			"model_name":  benefit.ModelName,
+			"rpm_limit":   benefit.RpmLimit,
+			"token_total": benefit.TokenTotal,
+		})
+	}
+	return benefits
+}
+
 // buildActivityCodePreview 组装用户看到的活动码预览与可兑换状态。
 // 只有活动码确实存在时才会调用，因此这里的细节不会泄露活动码是否存在。
 func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.ActivityCode) gin.H {
@@ -664,14 +855,17 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 	if err != nil {
 		common.SysError("failed to list activity grants for preview: " + err.Error())
 	}
-	usedByUser := 0
+	codeGrants := make([]model.ActivityGrant, 0, len(grants))
+	for _, grant := range grants {
+		if grant.CodeId == activityCode.Id {
+			codeGrants = append(codeGrants, grant)
+		}
+	}
+	// 每人上限按兑换批次计数：一次兑换生成的多条权益授权只算一次。
+	usedByUser := model.CountActivityRedemptions(codeGrants)
 	hasActive := false
 	var activeExpireTime int64
-	for _, grant := range grants {
-		if grant.CodeId != activityCode.Id {
-			continue
-		}
-		usedByUser++
+	for _, grant := range codeGrants {
 		if grant.Status != model.ActivityGrantStatusActive {
 			continue
 		}
@@ -702,7 +896,7 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 		blockedReason = activityBlockedSoldOut
 	case activityCode.PerUserLimit > 0 && usedByUser >= activityCode.PerUserLimit:
 		blockedReason = activityBlockedUserLimit
-	case !ratio_setting.ContainsGroupRatio(activityCode.GroupName):
+	case !activityCode.AllGroupsAvailable():
 		blockedReason = activityBlockedGroupUnavailable
 	case activityCode.PriceQuota > 0 && balanceQuota < activityCode.PriceQuota:
 		blockedReason = activityBlockedInsufficientBalance
@@ -714,6 +908,8 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 	}
 
 	return gin.H{
+		"type":                  model.NormalizeActivityCodeType(activityCode.Type),
+		"benefits":              activityBenefitViews(activityCode),
 		"code_id":               activityCode.Id,
 		"code":                  activityCode.Code,
 		"name":                  activityCode.Name,

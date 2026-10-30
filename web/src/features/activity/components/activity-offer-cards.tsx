@@ -31,6 +31,7 @@ import {
 import { formatQuota } from '@/lib/format'
 
 import {
+  describeActivityBenefit,
   describeActivityDuration,
   describeActivityModelScope,
   describeActivityRatio,
@@ -45,7 +46,7 @@ type ActivityOfferCardsProps = {
 
 // 活动套餐以卡片网格展示：窄屏单列、≥sm 双列，卡片等高，长文案截断。
 export function ActivityOfferCards(props: ActivityOfferCardsProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   if (props.offers.length === 0) return null
 
   return (
@@ -54,6 +55,9 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
       className='grid grid-cols-1 gap-3 sm:grid-cols-2'
     >
       {props.offers.map((offer) => {
+        const benefits = offer.benefits ?? []
+        // 旧接口没有 type/benefits：按 ratio 卡片展示，保持原行为。
+        const isBenefit = offer.type === 'benefit' && benefits.length > 0
         const modelScope = describeActivityModelScope(
           t,
           offer.model_ratio_overrides
@@ -93,24 +97,60 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                   t('Limited-time group access granted by an activity code')}
               </CardDescription>
             </CardHeader>
-            <CardContent className='grid grid-cols-2 gap-x-3 gap-y-2'>
-              {details.map((detail) => (
-                <div key={detail.label} className='min-w-0'>
-                  <p className='text-muted-foreground text-xs'>{detail.label}</p>
-                  <p className='truncate text-xs font-medium'>{detail.value}</p>
+            {isBenefit ? (
+              <CardContent className='space-y-2'>
+                <div className='min-w-0'>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Validity')}
+                  </p>
+                  <p className='text-xs font-medium'>
+                    {describeActivityDuration(t, offer.duration_seconds)}
+                  </p>
                 </div>
-              ))}
-              {/* 指定模型时直接列出具体模型 ID 与倍率：整行展示且允许换行，
-                  不用 truncate 截断模型名。 */}
-              <div className='col-span-2 min-w-0'>
-                <p className='text-muted-foreground text-xs'>
-                  {t('Models (ratio)')}
-                </p>
-                <p className='text-xs font-medium break-all' title={modelScope}>
-                  {modelScope}
-                </p>
-              </div>
-            </CardContent>
+                {/* 一个活动码可以有多条权益，逐条列出分组、范围与 Token 总量。 */}
+                <div className='min-w-0'>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Benefits')}
+                  </p>
+                  <ul className='space-y-1'>
+                    {benefits.map((benefit) => (
+                      <li
+                        key={`${benefit.key}:${benefit.group_name}:${benefit.model_name}`}
+                        className='text-xs font-medium break-all'
+                      >
+                        {describeActivityBenefit(t, benefit, i18n.language)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </CardContent>
+            ) : (
+              <CardContent className='grid grid-cols-2 gap-x-3 gap-y-2'>
+                {details.map((detail) => (
+                  <div key={detail.label} className='min-w-0'>
+                    <p className='text-muted-foreground text-xs'>
+                      {detail.label}
+                    </p>
+                    <p className='truncate text-xs font-medium'>
+                      {detail.value}
+                    </p>
+                  </div>
+                ))}
+                {/* 指定模型时直接列出具体模型 ID 与倍率：整行展示且允许换行，
+                    不用 truncate 截断模型名。 */}
+                <div className='col-span-2 min-w-0'>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Models (ratio)')}
+                  </p>
+                  <p
+                    className='text-xs font-medium break-all'
+                    title={modelScope}
+                  >
+                    {modelScope}
+                  </p>
+                </div>
+              </CardContent>
+            )}
             {/* 价格紧贴兑换按钮：放在卡片右上角太容易被忽略，付费码需要在下单前看到金额。 */}
             <CardFooter className='mt-auto justify-between gap-2'>
               <span className='text-muted-foreground text-xs'>

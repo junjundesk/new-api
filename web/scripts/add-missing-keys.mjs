@@ -191,6 +191,162 @@ const NEW_KEYS = {
     en: "Remove {{username}}",
     zh: "移除 {{username}}",
   },
+  "Activity type": {
+    en: "Activity type",
+    zh: "活动类型",
+  },
+  "Add at least one benefit": {
+    en: "Add at least one benefit",
+    zh: "请至少添加一条权益",
+  },
+  "Add benefit": {
+    en: "Add benefit",
+    zh: "添加权益",
+  },
+  "An activity code grants a ratio discount or a list of free benefits to users for a limited time. Target groups must already exist in group ratios.": {
+    en: "An activity code grants a ratio discount or a list of free benefits to users for a limited time. Target groups must already exist in group ratios.",
+    zh: "活动码会在限定时间内给用户提供倍率优惠或一组免费权益。目标分组必须已在分组倍率中配置。",
+  },
+  "At most {{count}} benefits": {
+    en: "At most {{count}} benefits",
+    zh: "最多 {{count}} 条权益",
+  },
+  "At most {{count}} benefits can be added": {
+    en: "At most {{count}} benefits can be added",
+    zh: "最多只能添加 {{count}} 条权益",
+  },
+  "Benefits": {
+    en: "Benefits",
+    zh: "权益",
+  },
+  "Each benefit makes a whole group or a single model free. A token package caps the free usage, and usage beyond it falls back to normal pricing.": {
+    en: "Each benefit makes a whole group or a single model free. A token package caps the free usage, and usage beyond it falls back to normal pricing.",
+    zh: "每条权益可让整个分组或单个模型免费；Token 套餐会限制免费用量，超出后按原价计费。",
+  },
+  "Enter a valid token amount, for example 1000000, 1M or 100万": {
+    en: "Enter a valid token amount, for example 1000000, 1M or 100万",
+    zh: "请输入有效的 Token 数量，例如 1000000、1M 或 100万",
+  },
+  "For example: 1000000, 1M, 100万": {
+    en: "For example: 1000000, 1M, 100万",
+    zh: "例如：1000000、1M、100万",
+  },
+  "Free benefits": {
+    en: "Free benefits",
+    zh: "免费权益",
+  },
+  "Group for benefit {{index}}": {
+    en: "Group for benefit {{index}}",
+    zh: "第 {{index}} 条权益的分组",
+  },
+  "Model for benefit {{index}}": {
+    en: "Model for benefit {{index}}",
+    zh: "第 {{index}} 条权益的模型",
+  },
+  "No benefits yet.": {
+    en: "No benefits yet.",
+    zh: "暂无权益。",
+  },
+  "Normalized amount: {{amount}}": {
+    en: "Normalized amount: {{amount}}",
+    zh: "规范化数量：{{amount}}",
+  },
+  "Please enter a token amount": {
+    en: "Please enter a token amount",
+    zh: "请输入 Token 数量",
+  },
+  "Please select a model": {
+    en: "Please select a model",
+    zh: "请选择模型",
+  },
+  "Quota mode for benefit {{index}}": {
+    en: "Quota mode for benefit {{index}}",
+    zh: "第 {{index}} 条权益的额度模式",
+  },
+  "Ratio codes discount usage; free benefit codes grant free usage of chosen groups or models.": {
+    en: "Ratio codes discount usage; free benefit codes grant free usage of chosen groups or models.",
+    zh: "倍率活动码对用量打折；免费权益活动码让所选分组或模型免费使用。",
+  },
+  "Ratio discount": {
+    en: "Ratio discount",
+    zh: "倍率优惠",
+  },
+  "Redeem a code to unlock group access or a token package for a limited time.": {
+    en: "Redeem a code to unlock group access or a token package for a limited time.",
+    zh: "兑换活动码，限时解锁分组权限或 Token 套餐。",
+  },
+  "Remaining {{amount}}": {
+    en: "Remaining {{amount}}",
+    zh: "剩余 {{amount}}",
+  },
+  "Remove benefit {{index}}": {
+    en: "Remove benefit {{index}}",
+    zh: "移除第 {{index}} 条权益",
+  },
+  "RPM for benefit {{index}}": {
+    en: "RPM for benefit {{index}}",
+    zh: "第 {{index}} 条权益的 RPM",
+  },
+  "RPM limit must be a whole number": {
+    en: "RPM limit must be a whole number",
+    zh: "RPM 限制必须是整数",
+  },
+  "Saving immediately syncs active grants. Used tokens, expiry time and paid price stay unchanged; validity changes only affect new redemptions.": {
+    en: "Saving immediately syncs active grants. Used tokens, expiry time and paid price stay unchanged; validity changes only affect new redemptions.",
+    zh: "保存后会立即同步到有效授权。已用 Token、到期时间和已支付价格不变；有效期修改只影响之后的新兑换。",
+  },
+  "Scope for benefit {{index}}": {
+    en: "Scope for benefit {{index}}",
+    zh: "第 {{index}} 条权益的范围",
+  },
+  "Single model": {
+    en: "Single model",
+    zh: "单个模型",
+  },
+  "The activity type cannot be changed after creation.": {
+    en: "The activity type cannot be changed after creation.",
+    zh: "活动码类型创建后不可修改。",
+  },
+  "This benefit is already configured": {
+    en: "This benefit is already configured",
+    zh: "该权益已配置",
+  },
+  "Token amount for benefit {{index}}": {
+    en: "Token amount for benefit {{index}}",
+    zh: "第 {{index}} 条权益的 Token 数量",
+  },
+  "Token amount must be greater than 0": {
+    en: "Token amount must be greater than 0",
+    zh: "Token 数量必须大于 0",
+  },
+  "Token package": {
+    en: "Token package",
+    zh: "Token 套餐",
+  },
+  "Token quota used up (billed at the original price)": {
+    en: "Token quota used up (billed at the original price)",
+    zh: "Token 额度已用完（按原价计费）",
+  },
+  "Unlimited tokens": {
+    en: "Unlimited tokens",
+    zh: "不限量 Token",
+  },
+  "Used {{used}} / {{total}}": {
+    en: "Used {{used}} / {{total}}",
+    zh: "已用 {{used}} / {{total}}",
+  },
+  "Used {{used}} / {{total}} tokens": {
+    en: "Used {{used}} / {{total}} tokens",
+    zh: "已用 {{used}} / {{total}} Token",
+  },
+  "Used {{used}} tokens · Unlimited": {
+    en: "Used {{used}} tokens · Unlimited",
+    zh: "已用 {{used}} Token · 不限量",
+  },
+  "{{amount}} tokens": {
+    en: "{{amount}} tokens",
+    zh: "{{amount}} Token",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.

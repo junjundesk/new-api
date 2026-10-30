@@ -385,3 +385,149 @@ func TestGrantActivityCodeRejectsEmptyUserList(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.False(t, response.Success)
 }
+
+func activityBenefitRequestPayload() map[string]interface{} {
+	payload := activityRequestPayload()
+	payload["type"] = "benefit"
+	payload["code"] = "hdmbenefit"
+	return payload
+}
+
+func benefitItems(items ...map[string]interface{}) []map[string]interface{} {
+	return items
+}
+
+func TestActivityCodeBenefitCreateAndUpdate(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	payload := activityBenefitRequestPayload()
+	payload["benefits"] = benefitItems(
+		map[string]interface{}{"key": "", "group_name": "activity-test-group", "scope": "group", "rpm_limit": 10, "token_total": 10000000},
+		map[string]interface{}{"key": "", "group_name": "default", "scope": "model", "model_name": "gpt-5", "rpm_limit": 0, "token_total": 0},
+	)
+	created := callActivityAdmin(t, router, http.MethodPost, payload)
+	require.True(t, created.Success, created.Message)
+	codeIdValue, ok := created.Data["id"].(float64)
+	require.True(t, ok)
+	codeId := int(codeIdValue)
+
+	stored, err := model.GetActivityCodeById(codeId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityCodeTypeBenefit, stored.Type)
+	require.Len(t, stored.Benefits, 2)
+	assert.NotEmpty(t, stored.Benefits[0].Key)
+	assert.NotEmpty(t, stored.Benefits[1].Key)
+	assert.Equal(t, "activity-test-group", stored.GroupName)
+	assert.Equal(t, int64(10000000), stored.Benefits[0].TokenTotal)
+
+	update := activityBenefitRequestPayload()
+	update["id"] = codeId
+	update["benefits"] = benefitItems(
+		map[string]interface{}{"key": stored.Benefits[0].Key, "group_name": "activity-test-group", "scope": "group", "rpm_limit": 20, "token_total": 500},
+		map[string]interface{}{"key": "", "group_name": "default", "scope": "group", "rpm_limit": 0, "token_total": 0},
+	)
+	updated := callActivityAdmin(t, router, http.MethodPut, update)
+	require.True(t, updated.Success, updated.Message)
+
+	stored, err = model.GetActivityCodeById(codeId)
+	require.NoError(t, err)
+	require.Len(t, stored.Benefits, 2)
+	assert.Equal(t, update["benefits"].([]map[string]interface{})[0]["key"], stored.Benefits[0].Key, "已有权益 key 保留")
+	assert.Equal(t, 20, stored.Benefits[0].RpmLimit)
+	assert.Equal(t, int64(500), stored.Benefits[0].TokenTotal)
+	assert.NotEqual(t, stored.Benefits[0].Key, stored.Benefits[1].Key)
+}
+
+func TestActivityCodeRejectsBenefitTypeChange(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	payload := activityBenefitRequestPayload()
+	payload["benefits"] = benefitItems(
+		map[string]interface{}{"group_name": "activity-test-group", "scope": "group"},
+	)
+	created := callActivityAdmin(t, router, http.MethodPost, payload)
+	require.True(t, created.Success, created.Message)
+	codeIdValue := created.Data["id"].(float64)
+
+	update := activityBenefitRequestPayload()
+	update["id"] = int(codeIdValue)
+	update["type"] = "ratio"
+	update["benefits"] = benefitItems()
+	rejected := callActivityAdmin(t, router, http.MethodPut, update)
+	assert.False(t, rejected.Success, "活动码类型创建后不可修改")
+}
+
+func TestActivityCodeBenefitRejectsInvalidPayloads(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	validBenefit := func() map[string]interface{} {
+		return map[string]interface{}{"group_name": "activity-test-group", "scope": "group"}
+	}
+	tooMany := make([]map[string]interface{}, model.ActivityCodeMaxBenefits+1)
+	for i := range tooMany {
+		tooMany[i] = map[string]interface{}{"group_name": "activity-test-group", "scope": "group"}
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(payload map[string]interface{})
+	}{
+		{name: "empty benefits", mutate: func(payload map[string]interface{}) {
+			payload["benefits"] = benefitItems()
+		}},
+		{name: "duplicate group scope model", mutate: func(payload map[string]interface{}) {
+			payload["benefits"] = benefitItems(validBenefit(), validBenefit())
+		}},
+		{name: "invalid scope", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["scope"] = "both"
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "model scope without model", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["scope"] = "model"
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "group not configured", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["group_name"] = "missing-benefit-group"
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "rpm above max", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["rpm_limit"] = model.ActivityCodeMaxRpm + 1
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "negative token total", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["token_total"] = -1
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "token total above max", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["token_total"] = model.ActivityCodeMaxTokenTotal + 1
+			payload["benefits"] = benefitItems(item)
+		}},
+		{name: "too many benefits", mutate: func(payload map[string]interface{}) {
+			payload["benefits"] = tooMany
+		}},
+		{name: "invalid key", mutate: func(payload map[string]interface{}) {
+			item := validBenefit()
+			item["key"] = "BAD KEY"
+			payload["benefits"] = benefitItems(item)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := activityBenefitRequestPayload()
+			payload["code"] = "hdmbenefit-" + strings.ReplaceAll(tt.name, " ", "-")
+			payload["benefits"] = benefitItems(validBenefit())
+			tt.mutate(payload)
+			response := callActivityAdmin(t, router, http.MethodPost, payload)
+			assert.False(t, response.Success, "非法权益配置必须被拒绝")
+		})
+	}
+}

@@ -16,64 +16,44 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
+import '@testing-library/jest-dom/vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createInstance } from 'i18next'
+import { I18nextProvider } from 'react-i18next'
+import { toast, Toaster } from 'sonner'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { Window } from 'happy-dom'
+import type { ActivityBenefit, ActivityPreview } from '../../types'
+import { ActivityRedeemPanel } from '../activity-redeem-panel'
 
-import type { ActivityPreview } from '../../types'
+vi.mock('../../api', () => ({
+  getActivityOffers: vi.fn(),
+  verifyActivityCode: vi.fn(),
+  redeemActivityCode: vi.fn(),
+}))
 
-// Use Bun's runner at runtime while reusing the Node test types installed here.
-const bunTestModule = 'bun:test'
-const { afterAll, afterEach, test } = (await import(bunTestModule)) as {
-  afterAll: typeof import('node:test').after
-  afterEach: typeof import('node:test').afterEach
-  test: typeof import('node:test').test
+vi.mock('@/lib/api', () => ({
+  getSelf: vi.fn(),
+  handleServerError: vi.fn(),
+}))
+
+interface AsyncMock {
+  mockReset: () => void
+  mockResolvedValue: (value: unknown) => void
+  mock: { calls: unknown[][] }
 }
 
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLButtonElement',
-  'HTMLInputElement',
-  'HTMLFormElement',
-  'HTMLLabelElement',
-  'HTMLFieldSetElement',
-  'SVGElement',
-  'Node',
-  'Element',
-  'Event',
-  'KeyboardEvent',
-  'PointerEvent',
-  'MouseEvent',
-  'FocusEvent',
-  'CustomEvent',
-  'MutationObserver',
-  'ResizeObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
+const activityApi = await import('../../api')
+const libApi = await import('@/lib/api')
+const getOffersMock = activityApi.getActivityOffers as unknown as AsyncMock
+const verifyMock = activityApi.verifyActivityCode as unknown as AsyncMock
+const redeemMock = activityApi.redeemActivityCode as unknown as AsyncMock
+const getSelfMock = libApi.getSelf as unknown as AsyncMock
 
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
-
-const { act } = await import('react')
-const { createRoot } = await import('react-dom/client')
-const i18n = (await import('i18next')).default
-const { I18nextProvider, initReactI18next } = await import('react-i18next')
-const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query')
-const { Toaster, toast } = await import('sonner')
-const { api } = await import('@/lib/api')
-const { ActivityRedeemPanel } = await import('../activity-redeem-panel')
-
-await i18n.use(initReactI18next).init({
+const i18n = createInstance()
+await i18n.init({
   lng: 'en',
   resources: {
     en: {
@@ -89,14 +69,14 @@ await i18n.use(initReactI18next).init({
           'Bonus credit cannot be used for redemption.',
         'Spend {{quota}} of your wallet balance to redeem {{group}}?':
           'Spend {{quota}} balance to redeem {{group}}?',
-        'Group': 'Group',
-        'Validity': 'Validity',
-        'Ratio': 'Ratio',
+        Group: 'Group',
+        Validity: 'Validity',
+        Ratio: 'Ratio',
         'RPM limit': 'RPM limit',
-        'Unlimited': 'Unlimited',
+        Unlimited: 'Unlimited',
         'Group default ratio': 'Group default ratio',
         'Fully free': 'Fully free',
-        'Permanent': 'Permanent',
+        Permanent: 'Permanent',
         '{{count}} hours': '{{count}} hours',
         '{{count}} days': '{{count}} days',
         '{{count}} minutes': '{{count}} minutes',
@@ -107,35 +87,22 @@ await i18n.use(initReactI18next).init({
           'Redeemed {{group}}. Switch your token group to start using it.',
         'This activity code is not redeemable now':
           'This activity code is not redeemable now',
+        Benefits: 'Benefits',
+        'Whole group': 'Whole group',
+        'Model {{model}}': 'Model {{model}}',
+        '{{amount}} tokens': '{{amount}} tokens',
+        'Unlimited tokens': 'Unlimited tokens',
+        'Models (ratio)': 'Models (ratio)',
+        'All models in the group': 'All models in the group',
       },
     },
   },
+  interpolation: { escapeValue: false },
 })
 
-const reactTestGlobals = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean
-}
-reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
-
-type ApiMethod = (url: string, data?: unknown) => Promise<{ data: unknown }>
-type MockableApi = {
-  get: ApiMethod
-  post: ApiMethod
-}
-type RedeemCall = {
-  code: string
-  confirm: boolean
-  expected_price_quota: number
-}
-
-const apiClient = api as unknown as MockableApi
-const originalGet = apiClient.get
-const originalPost = apiClient.post
-let renderedHost: HTMLDivElement | null = null
-let renderedRoot: ReturnType<typeof createRoot> | null = null
-let queryClient: InstanceType<typeof QueryClient> | null = null
-
-function previewFixture(overrides: Partial<ActivityPreview> = {}): ActivityPreview {
+function previewFixture(
+  overrides: Partial<ActivityPreview> = {}
+): ActivityPreview {
   return {
     code_id: 1,
     code: 'hdmfree',
@@ -162,242 +129,224 @@ function previewFixture(overrides: Partial<ActivityPreview> = {}): ActivityPrevi
   }
 }
 
-async function waitForCondition(
-  condition: () => boolean,
-  failureMessage: string
-): Promise<void> {
-  if (condition()) return
-
-  await new Promise<void>((resolve, reject) => {
-    const observer = new MutationObserver(() => {
-      if (!condition()) return
-      clearTimeout(timeoutId)
-      observer.disconnect()
-      resolve()
-    })
-    const timeoutId = setTimeout(() => {
-      observer.disconnect()
-      reject(new Error(`${failureMessage}: ${document.body.textContent}`))
-    }, 2000)
-
-    observer.observe(document, {
-      attributes: true,
-      childList: true,
-      characterData: true,
-      subtree: true,
-    })
-  })
+function benefitFixture(
+  overrides: Partial<ActivityBenefit> = {}
+): ActivityBenefit {
+  return {
+    key: 'benefit-1',
+    group_name: 'hdfree',
+    group_desc: 'Free Group',
+    scope: 'group',
+    model_name: '',
+    rpm_limit: 0,
+    token_total: 10_000_000,
+    ...overrides,
+  }
 }
-
-function findButton(label: string): HTMLButtonElement | undefined {
-  return [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.textContent?.trim() === label
-  )
-}
-
-async function renderPanel(): Promise<void> {
-  const host = document.createElement('div')
-  document.body.append(host)
-  renderedHost = host
-  queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
-  renderedRoot = createRoot(host)
-  const client = queryClient
-  await act(async () =>
-    renderedRoot?.render(
-      <QueryClientProvider client={client}>
-        <I18nextProvider i18n={i18n}>
-          <ActivityRedeemPanel />
-        </I18nextProvider>
-        <Toaster duration={60_000} />
-      </QueryClientProvider>
-    )
-  )
-}
-
-async function typeCode(code: string): Promise<void> {
-  const input = document.querySelector<HTMLInputElement>('#activity-code')
-  assert.ok(input, 'activity code input must render')
-  await act(async () => {
-    const valueSetter = Object.getOwnPropertyDescriptor(
-      domWindow.HTMLInputElement.prototype,
-      'value'
-    )?.set
-    assert.ok(valueSetter)
-    valueSetter.call(input, code)
-    input.dispatchEvent(
-      new domWindow.Event('input', { bubbles: true }) as unknown as Event
-    )
-  })
-}
-
-async function clickVerify(): Promise<void> {
-  const button = findButton('Verify')
-  assert.ok(button, 'verify button must render')
-  await act(async () => button.click())
-}
-
-function redeemCalls(): RedeemCall[] {
-  return capturedRedeems
-}
-
-let capturedRedeems: RedeemCall[] = []
 
 function mockActivityApi(
   verifyResult: ActivityPreview | { failure: string },
-  redeemResult: { grantId: number } | { failure: string }
+  redeemResult: { grantId: number; groupNames?: string[] } | { failure: string }
 ): void {
-  apiClient.get = async (url: string) => {
-    if (url.startsWith('/api/user/activity/offers')) {
-      return { data: { success: true, data: { enabled: true, offers: [] } } }
-    }
-    return { data: { success: true, data: {} } }
+  if ('failure' in verifyResult) {
+    verifyMock.mockResolvedValue({
+      success: false,
+      message: verifyResult.failure,
+    })
+  } else {
+    verifyMock.mockResolvedValue({ success: true, data: verifyResult })
   }
-  apiClient.post = async (url: string, data?: unknown) => {
-    if (url === '/api/user/activity/verify') {
-      if ('failure' in verifyResult) {
-        return { data: { success: false, message: verifyResult.failure } }
-      }
-      return { data: { success: true, data: verifyResult } }
-    }
-    if (url === '/api/user/activity/redeem') {
-      capturedRedeems.push(data as RedeemCall)
-      if ('failure' in redeemResult) {
-        return { data: { success: false, message: redeemResult.failure } }
-      }
-      return {
-        data: {
-          success: true,
-          data: {
-            grant_id: redeemResult.grantId,
-            code_id: 1,
-            code: 'hdmfree',
-            code_name: 'Activity',
-            group_name: 'hdfree',
-            expire_time: 0,
-            price_quota: 0,
-            balance_after: 0,
-          },
-        },
-      }
-    }
-    return { data: { success: true } }
+  if ('failure' in redeemResult) {
+    redeemMock.mockResolvedValue({
+      success: false,
+      message: redeemResult.failure,
+    })
+    return
   }
+  redeemMock.mockResolvedValue({
+    success: true,
+    data: {
+      grant_id: redeemResult.grantId,
+      code_id: 1,
+      code: 'hdmfree',
+      code_name: 'Activity',
+      group_name: 'hdfree',
+      group_names: redeemResult.groupNames,
+      expire_time: 0,
+      price_quota: 0,
+      balance_after: 0,
+    },
+  })
 }
 
-afterEach(async () => {
-  apiClient.get = originalGet
-  apiClient.post = originalPost
-  capturedRedeems = []
+function renderPanel(): void {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <I18nextProvider i18n={i18n}>
+        <ActivityRedeemPanel />
+      </I18nextProvider>
+      <Toaster duration={60_000} />
+    </QueryClientProvider>
+  )
+}
+
+async function submitCode(
+  user: ReturnType<typeof userEvent.setup>,
+  code: string
+): Promise<void> {
+  await user.type(screen.getByPlaceholderText('Enter your activity code'), code)
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  getOffersMock.mockResolvedValue({
+    success: true,
+    data: { enabled: true, offers: [] },
+  })
+  getSelfMock.mockResolvedValue({ success: true })
+})
+
+afterEach(() => {
+  cleanup()
   toast.dismiss()
-  if (renderedRoot) {
-    const root = renderedRoot
-    await act(async () => root.unmount())
-  }
-  renderedRoot = null
-  queryClient?.clear()
-  queryClient = null
-  renderedHost?.remove()
-  renderedHost = null
-  document.body.replaceChildren()
 })
 
-afterAll(() => {
-  domWindow.close()
-})
+describe('activity redeem panel', () => {
+  it('redeems free activity codes without a confirmation dialog', async () => {
+    mockActivityApi(previewFixture({ price_quota: 0, need_confirm: false }), {
+      grantId: 11,
+    })
 
-test('free activity codes are redeemed without a confirmation dialog', async () => {
-  mockActivityApi(previewFixture({ price_quota: 0, need_confirm: false }), {
-    grantId: 11,
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdmfree')
+
+    await waitFor(() =>
+      expect(redeemMock).toHaveBeenCalledWith({
+        code: 'hdmfree',
+        confirm: false,
+        expectedPriceQuota: 0,
+      })
+    )
+    expect(screen.queryByText('Confirm Redemption')).not.toBeInTheDocument()
   })
 
-  await renderPanel()
-  await typeCode('hdmfree')
-  await clickVerify()
-  await act(async () =>
-    waitForCondition(
-      () => redeemCalls().length === 1,
-      'free code must be redeemed directly'
-    )
-  )
+  it('paid activity codes ask for confirmation before charging the wallet', async () => {
+    mockActivityApi(previewFixture({ price_quota: 500, need_confirm: true }), {
+      grantId: 12,
+    })
 
-  assert.deepEqual(redeemCalls()[0], {
-    code: 'hdmfree',
-    confirm: false,
-    expected_price_quota: 0,
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdmpaid')
+
+    const confirmButton = await screen.findByRole('button', {
+      name: 'Confirm and Redeem',
+    })
+    expect(redeemMock).not.toHaveBeenCalled()
+    // 回归：ratio 类型的确认弹窗仍要展示倍率相关行。
+    expect(screen.getByText('Ratio')).toBeVisible()
+
+    await user.click(confirmButton)
+    await waitFor(() =>
+      expect(redeemMock).toHaveBeenCalledWith({
+        code: 'hdmfree',
+        confirm: true,
+        expectedPriceQuota: 500,
+      })
+    )
   })
-  assert.equal(
-    document.body.textContent?.includes('Confirm Redemption'),
-    false,
-    'free codes must not open the confirmation dialog'
-  )
-})
 
-test('paid activity codes ask for confirmation before charging the wallet', async () => {
-  mockActivityApi(
-    previewFixture({ price_quota: 500, need_confirm: true }),
-    { grantId: 12 }
-  )
-
-  await renderPanel()
-  await typeCode('hdmpaid')
-  await clickVerify()
-  await act(async () =>
-    waitForCondition(
-      () =>
-        document.body.textContent?.includes('Confirm Redemption') === true,
-      'paid code must open the confirmation dialog'
+  it('a paid benefit code lists every benefit and hides the ratio rows', async () => {
+    mockActivityApi(
+      previewFixture({
+        price_quota: 500,
+        need_confirm: true,
+        type: 'benefit',
+        benefits: [
+          benefitFixture(),
+          benefitFixture({
+            key: 'benefit-2',
+            group_name: 'hdpro',
+            group_desc: 'Pro Group',
+            scope: 'model',
+            model_name: 'gpt-5',
+            token_total: 0,
+          }),
+        ],
+      }),
+      { grantId: 14 }
     )
-  )
-  assert.equal(redeemCalls().length, 0, 'no charge before confirmation')
 
-  const confirmButton = findButton('Confirm and Redeem')
-  assert.ok(confirmButton, 'confirmation button must render')
-  await act(async () => confirmButton.click())
-  await act(async () =>
-    waitForCondition(
-      () => redeemCalls().length === 1,
-      'confirmed redemption must call the redeem endpoint'
-    )
-  )
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdfree')
 
-  assert.deepEqual(redeemCalls()[0], {
-    code: 'hdmfree',
-    confirm: true,
-    expected_price_quota: 500,
+    expect(
+      await screen.findByText('Free Group · Whole group · 10M tokens')
+    ).toBeVisible()
+    expect(
+      screen.getByText('Pro Group · Model gpt-5 · Unlimited tokens')
+    ).toBeVisible()
+    expect(screen.getByText('Benefits')).toBeVisible()
+    expect(screen.queryByText('Ratio')).not.toBeInTheDocument()
+    expect(screen.queryByText('RPM limit')).not.toBeInTheDocument()
   })
-})
 
-test('insufficient balance disables the confirmation button', async () => {
-  mockActivityApi(
-    previewFixture({
-      price_quota: 900000,
-      balance_quota: 1000,
-      can_afford: false,
-      need_confirm: true,
-    }),
-    { grantId: 13 }
-  )
-
-  await renderPanel()
-  await typeCode('hdmpaid')
-  await clickVerify()
-  await act(async () =>
-    waitForCondition(
-      () =>
-        document.body.textContent?.includes('Bonus credit cannot be used') ===
-        true,
-      'confirmation dialog must explain that bonus credit cannot be used'
+  it('insufficient balance disables the confirmation button', async () => {
+    mockActivityApi(
+      previewFixture({
+        price_quota: 900000,
+        balance_quota: 1000,
+        can_afford: false,
+        need_confirm: true,
+      }),
+      { grantId: 13 }
     )
-  )
 
-  const confirmButton = findButton('Confirm and Redeem')
-  assert.ok(confirmButton, 'confirmation button must render')
-  assert.equal(
-    confirmButton.disabled,
-    true,
-    'confirmation must be blocked when the wallet balance is too low'
-  )
-  assert.equal(redeemCalls().length, 0)
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdmpaid')
+
+    expect(
+      await screen.findByText('Bonus credit cannot be used for redemption.')
+    ).toBeVisible()
+    expect(
+      await screen.findByRole('button', { name: 'Confirm and Redeem' })
+    ).toBeDisabled()
+    expect(redeemMock).not.toHaveBeenCalled()
+  })
+
+  it('the success toast joins every redeemed group from group_names', async () => {
+    mockActivityApi(previewFixture({ price_quota: 0, need_confirm: false }), {
+      grantId: 21,
+      groupNames: ['hdfree', 'hdpro'],
+    })
+
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdmfree')
+
+    await waitFor(() =>
+      expect(document.body).toHaveTextContent('Redeemed hdfree, hdpro.')
+    )
+  })
+
+  it('the success toast falls back to group_name for old redeem responses', async () => {
+    mockActivityApi(previewFixture({ price_quota: 0, need_confirm: false }), {
+      grantId: 22,
+    })
+
+    const user = userEvent.setup()
+    renderPanel()
+    await submitCode(user, 'hdmfree')
+
+    await waitFor(() =>
+      expect(document.body).toHaveTextContent('Redeemed hdfree.')
+    )
+  })
 })

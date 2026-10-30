@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -19,7 +20,8 @@ import (
 )
 
 // 活动码：管理员创建，用户在有效期与限额内用它把「目标分组」加入自己的可用分组。
-// 授权（ActivityGrant）在兑换时快照活动码的条款，之后修改活动码不影响已发放的授权。
+// 授权（ActivityGrant）在兑换时写入条款；管理员编辑活动码时会把最新条款同步到有效的
+// 已发放授权（类型不可改，已用 Token、到期时间与已支付价格保持不变）。
 const (
 	ActivityCodeStatusEnabled  = 1
 	ActivityCodeStatusDisabled = 2
@@ -40,6 +42,20 @@ const (
 	ActivityGrantSourceRedeem = "redeem"
 	// ActivityGrantSourceAdmin 表示管理员主动赠送，不扣余额、不占兑换次数。
 	ActivityGrantSourceAdmin = "admin"
+
+	// ActivityCodeTypeRatio 是现有的倍率优惠类型。
+	ActivityCodeTypeRatio = "ratio"
+	// ActivityCodeTypeBenefit 是免费权益列表类型：多分组、整组/单模型免费、可选 Token 总量。
+	ActivityCodeTypeBenefit = "benefit"
+
+	// ActivityBenefitScopeGroup 表示整组免费；ActivityBenefitScopeModel 表示只对单个模型免费。
+	ActivityBenefitScopeGroup = "group"
+	ActivityBenefitScopeModel = "model"
+
+	// ActivityCodeMaxBenefits 限制一条活动码的权益条数，避免超大 JSON 落库。
+	ActivityCodeMaxBenefits = 20
+	// ActivityCodeMaxTokenTotal 与前端 Number 安全整数上限保持一致，避免精度丢失。
+	ActivityCodeMaxTokenTotal = int64(1_000_000_000_000_000)
 
 	// ActivityCodeMaxLength 是活动码的字符数上限（按 rune 计，中文等宽字符按 1 个算）。
 	ActivityCodeMaxLength = 64
@@ -98,6 +114,63 @@ func (m ActivityModelRatioOverrides) Value() (driver.Value, error) {
 	return common.Marshal(map[string]float64(m))
 }
 
+// ActivityBenefit 是「免费权益列表」类型中的一条权益：
+// 目标分组 + 整组/单模型范围 + 独立 RPM + 可选 Token 总量（0 表示不限量免费）。
+type ActivityBenefit struct {
+	Key        string `json:"key"`
+	GroupName  string `json:"group_name"`
+	Scope      string `json:"scope"`
+	ModelName  string `json:"model_name,omitempty"`
+	RpmLimit   int    `json:"rpm_limit"`
+	TokenTotal int64  `json:"token_total"`
+}
+
+// ActivityBenefits 是权益列表，落库为 JSON 数组；空列表写 NULL。
+type ActivityBenefits []ActivityBenefit
+
+// Scan 实现 sql.Scanner，兼容存量行的 NULL/空值。
+func (b *ActivityBenefits) Scan(value interface{}) error {
+	var raw []byte
+	switch v := value.(type) {
+	case nil:
+		*b = nil
+		return nil
+	case []byte:
+		if len(v) == 0 {
+			*b = nil
+			return nil
+		}
+		raw = v
+	case string:
+		if len(v) == 0 {
+			*b = nil
+			return nil
+		}
+		raw = []byte(v)
+	default:
+		*b = nil
+		return nil
+	}
+	benefits := make(ActivityBenefits, 0)
+	if err := common.Unmarshal(raw, &benefits); err != nil {
+		return err
+	}
+	if len(benefits) == 0 {
+		*b = nil
+		return nil
+	}
+	*b = benefits
+	return nil
+}
+
+// Value 实现 driver.Valuer：空列表写 NULL。
+func (b ActivityBenefits) Value() (driver.Value, error) {
+	if len(b) == 0 {
+		return nil, nil
+	}
+	return common.Marshal([]ActivityBenefit(b))
+}
+
 // 兑换失败原因，由 controller 映射为 i18n 文案。
 var (
 	ErrActivityCodeInvalid          = errors.New("activity code invalid")
@@ -116,11 +189,13 @@ var (
 // RatioMode 为 inherit 时使用目标分组自身的倍率；为 override 时使用 RatioOverride
 // （RatioOverride 为 0 表示该分组完全免费）。
 type ActivityCode struct {
-	Id              int     `json:"id"`
-	Code            string  `json:"code" gorm:"type:varchar(64);uniqueIndex"`
-	Name            string  `json:"name" gorm:"type:varchar(64);index"`
-	Description     string  `json:"description" gorm:"type:text"`
-	Status          int     `json:"status" gorm:"default:1"`
+	Id          int    `json:"id"`
+	Code        string `json:"code" gorm:"type:varchar(64);uniqueIndex"`
+	Name        string `json:"name" gorm:"type:varchar(64);index"`
+	Description string `json:"description" gorm:"type:text"`
+	Status      int    `json:"status" gorm:"default:1"`
+	// Type 为空或 ratio 时是现有倍率类型；benefit 时使用 Benefits 列表。
+	Type            string  `json:"type" gorm:"type:varchar(16);default:'ratio'"`
 	GroupName       string  `json:"group_name" gorm:"type:varchar(64);index"`
 	DurationSeconds int64   `json:"duration_seconds" gorm:"bigint;default:0"`
 	RpmLimit        int     `json:"rpm_limit" gorm:"default:0"`
@@ -131,16 +206,18 @@ type ActivityCode struct {
 	// ModelRatioOverrides 命中的模型；存量行该列为空，按 group 处理。
 	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
 	ModelRatioOverrides ActivityModelRatioOverrides `json:"model_ratio_overrides" gorm:"type:json"`
-	StartTime           int64                       `json:"start_time" gorm:"bigint;default:0"`
-	EndTime             int64                       `json:"end_time" gorm:"bigint;default:0"`
-	TotalLimit          int                         `json:"total_limit" gorm:"default:0"`
-	UsedCount           int                         `json:"used_count" gorm:"default:0"`
-	PerUserLimit        int                         `json:"per_user_limit" gorm:"default:1"`
-	PublicVisible       int                         `json:"public_visible" gorm:"default:0"`
-	CreatedBy           int                         `json:"created_by"`
-	CreatedTime         int64                       `json:"created_time" gorm:"bigint"`
-	UpdatedTime         int64                       `json:"updated_time" gorm:"bigint"`
-	DeletedAt           gorm.DeletedAt              `gorm:"index"`
+	// Benefits 仅 benefit 类型使用；ratio 类型为空。
+	Benefits      ActivityBenefits `json:"benefits" gorm:"type:json"`
+	StartTime     int64            `json:"start_time" gorm:"bigint;default:0"`
+	EndTime       int64            `json:"end_time" gorm:"bigint;default:0"`
+	TotalLimit    int              `json:"total_limit" gorm:"default:0"`
+	UsedCount     int              `json:"used_count" gorm:"default:0"`
+	PerUserLimit  int              `json:"per_user_limit" gorm:"default:1"`
+	PublicVisible int              `json:"public_visible" gorm:"default:0"`
+	CreatedBy     int              `json:"created_by"`
+	CreatedTime   int64            `json:"created_time" gorm:"bigint"`
+	UpdatedTime   int64            `json:"updated_time" gorm:"bigint"`
+	DeletedAt     gorm.DeletedAt   `gorm:"index"`
 }
 
 // ActivityGrant 是某个用户的一次活动授权。Status 与 ExpireTime 由本表维护，
@@ -154,18 +231,25 @@ type ActivityGrant struct {
 	GroupName     string  `json:"group_name" gorm:"type:varchar(64);index"`
 	RatioMode     string  `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
 	RatioOverride float64 `json:"ratio_override"`
-	// RatioScope 与 ModelRatioOverrides 是兑换时对活动码条款的快照。
+	// RatioScope 与 ModelRatioOverrides 是当前生效的活动条款；编辑活动码时同步更新。
 	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
 	ModelRatioOverrides ActivityModelRatioOverrides `json:"model_ratio_overrides" gorm:"type:json"`
 	RpmLimit            int                         `json:"rpm_limit" gorm:"default:0"`
 	PriceQuota          int                         `json:"price_quota" gorm:"default:0"`
-	StartTime           int64                       `json:"start_time" gorm:"bigint"`
-	ExpireTime          int64                       `json:"expire_time" gorm:"bigint;index"`
-	Status              string                      `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
-	Source              string                      `json:"source" gorm:"type:varchar(32);default:'redeem'"`
-	Remark              string                      `json:"remark" gorm:"type:varchar(255);default:''"`
-	CreatedTime         int64                       `json:"created_time" gorm:"bigint"`
-	UpdatedTime         int64                       `json:"updated_time" gorm:"bigint"`
+	// RedeemBatch 把同一次兑换生成的多条权益授权归为一组；存量为空字符串。
+	RedeemBatch string `json:"redeem_batch" gorm:"type:varchar(64);index"`
+	// BenefitKey 对应活动码权益的稳定 key；ratio 类型授权为空。
+	BenefitKey string `json:"benefit_key" gorm:"type:varchar(32);index"`
+	// TokenTotal/TokenUsed 仅 Token 套餐权益使用；0 表示不限量免费。
+	TokenTotal  int64  `json:"token_total" gorm:"bigint;default:0"`
+	TokenUsed   int64  `json:"token_used" gorm:"bigint;default:0"`
+	StartTime   int64  `json:"start_time" gorm:"bigint"`
+	ExpireTime  int64  `json:"expire_time" gorm:"bigint;index"`
+	Status      string `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
+	Source      string `json:"source" gorm:"type:varchar(32);default:'redeem'"`
+	Remark      string `json:"remark" gorm:"type:varchar(255);default:''"`
+	CreatedTime int64  `json:"created_time" gorm:"bigint"`
+	UpdatedTime int64  `json:"updated_time" gorm:"bigint"`
 }
 
 func (activityCode *ActivityCode) BeforeCreate(tx *gorm.DB) error {
@@ -211,6 +295,165 @@ func IsValidActivityCode(code string) bool {
 		return false
 	}
 	return true
+}
+
+// NormalizeActivityCodeType 归一化活动码类型：空值按 ratio 兼容存量数据；非法值返回空串。
+func NormalizeActivityCodeType(codeType string) string {
+	switch strings.ToLower(strings.TrimSpace(codeType)) {
+	case "", ActivityCodeTypeRatio:
+		return ActivityCodeTypeRatio
+	case ActivityCodeTypeBenefit:
+		return ActivityCodeTypeBenefit
+	default:
+		return ""
+	}
+}
+
+// NewActivityBenefitKey 生成权益的稳定 key，用于编辑时把新权益同步到已发放授权。
+func NewActivityBenefitKey() string {
+	return strings.ReplaceAll(common.GetUUID(), "-", "")
+}
+
+// IsValidActivityBenefitKey 校验权益 key 的格式（1-32 位小写字母/数字）。
+func IsValidActivityBenefitKey(key string) bool {
+	if key == "" || len(key) > 32 {
+		return false
+	}
+	for _, r := range key {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// IsBenefitType 判断活动码是否为免费权益列表类型。
+func (activityCode *ActivityCode) IsBenefitType() bool {
+	return NormalizeActivityCodeType(activityCode.Type) == ActivityCodeTypeBenefit
+}
+
+// TargetGroups 返回活动码覆盖的分组（去重，保持顺序）。
+func (activityCode *ActivityCode) TargetGroups() []string {
+	if !activityCode.IsBenefitType() {
+		if activityCode.GroupName == "" {
+			return nil
+		}
+		return []string{activityCode.GroupName}
+	}
+	groups := make([]string, 0, len(activityCode.Benefits))
+	seen := make(map[string]struct{}, len(activityCode.Benefits))
+	for _, benefit := range activityCode.Benefits {
+		if _, exists := seen[benefit.GroupName]; exists {
+			continue
+		}
+		seen[benefit.GroupName] = struct{}{}
+		groups = append(groups, benefit.GroupName)
+	}
+	return groups
+}
+
+// AllGroupsAvailable 判断活动码的所有目标分组当前是否仍配置在分组倍率中。
+func (activityCode *ActivityCode) AllGroupsAvailable() bool {
+	for _, group := range activityCode.TargetGroups() {
+		if !ratio_setting.ContainsGroupRatio(group) {
+			return false
+		}
+	}
+	return true
+}
+
+// activityGrantSpec 是把活动码权益展开成单条授权所需的配置。
+type activityGrantSpec struct {
+	GroupName           string
+	RatioMode           string
+	RatioOverride       float64
+	RatioScope          string
+	ModelRatioOverrides ActivityModelRatioOverrides
+	RpmLimit            int
+	TokenTotal          int64
+	BenefitKey          string
+}
+
+func activityGrantSpecForBenefit(benefit ActivityBenefit) activityGrantSpec {
+	spec := activityGrantSpec{
+		GroupName:  benefit.GroupName,
+		RatioMode:  ActivityRatioModeInherit,
+		RatioScope: ActivityRatioScopeGroup,
+		RpmLimit:   benefit.RpmLimit,
+		TokenTotal: benefit.TokenTotal,
+		BenefitKey: benefit.Key,
+	}
+	if benefit.Scope == ActivityBenefitScopeModel {
+		spec.RatioScope = ActivityRatioScopeModels
+		spec.ModelRatioOverrides = ActivityModelRatioOverrides{benefit.ModelName: 0}
+		return spec
+	}
+	spec.RatioMode = ActivityRatioModeOverride
+	spec.RatioOverride = 0
+	return spec
+}
+
+// grantSpecs 把活动码展开成一条或多条授权规格。
+func (activityCode *ActivityCode) grantSpecs() []activityGrantSpec {
+	if !activityCode.IsBenefitType() {
+		return []activityGrantSpec{{
+			GroupName:           activityCode.GroupName,
+			RatioMode:           activityCode.RatioMode,
+			RatioOverride:       activityCode.RatioOverride,
+			RatioScope:          activityCode.RatioScope,
+			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
+			RpmLimit:            activityCode.RpmLimit,
+		}}
+	}
+	specs := make([]activityGrantSpec, 0, len(activityCode.Benefits))
+	for _, benefit := range activityCode.Benefits {
+		specs = append(specs, activityGrantSpecForBenefit(benefit))
+	}
+	return specs
+}
+
+func (spec activityGrantSpec) buildGrant(userId int, activityCode *ActivityCode, redeemBatch string) ActivityGrant {
+	return ActivityGrant{
+		UserId:              userId,
+		CodeId:              activityCode.Id,
+		Code:                activityCode.Code,
+		CodeName:            activityCode.Name,
+		GroupName:           spec.GroupName,
+		RatioMode:           spec.RatioMode,
+		RatioOverride:       spec.RatioOverride,
+		RatioScope:          spec.RatioScope,
+		ModelRatioOverrides: maps.Clone(spec.ModelRatioOverrides),
+		RpmLimit:            spec.RpmLimit,
+		TokenTotal:          spec.TokenTotal,
+		BenefitKey:          spec.BenefitKey,
+		RedeemBatch:         redeemBatch,
+		Status:              ActivityGrantStatusActive,
+	}
+}
+
+// CountActivityRedemptions 按兑换批次统计次数：同一次兑换生成的多条权益授权只算一次；
+// 历史授权没有 redeem_batch，每条算一次。
+func CountActivityRedemptions(grants []ActivityGrant) int {
+	batches := make(map[string]struct{}, len(grants))
+	legacy := 0
+	for _, grant := range grants {
+		if grant.RedeemBatch == "" {
+			legacy++
+			continue
+		}
+		batches[grant.RedeemBatch] = struct{}{}
+	}
+	return len(batches) + legacy
+}
+
+func sortedUserIds(users map[int]struct{}) []int {
+	ids := make([]int, 0, len(users))
+	for userId := range users {
+		ids = append(ids, userId)
+	}
+	sort.Ints(ids)
+	return ids
 }
 
 // WindowClosed 判断活动码的可兑换窗口是否已经结束。
@@ -297,14 +540,209 @@ func (activityCode *ActivityCode) Insert() error {
 	return DB.Create(activityCode).Error
 }
 
-// Update 只写活动码的可编辑字段。used_count 由兑换流程的 CAS 维护，
-// code 一经创建不可修改（需要换码请新建）。
+// Update 只写活动码的可编辑字段，并把最新条款同步到有效的已发放授权。
+// used_count 由兑换流程的 CAS 维护，code 一经创建不可修改（需要换码请新建）。
 func (activityCode *ActivityCode) Update() error {
-	return DB.Model(activityCode).
-		Select("name", "description", "status", "group_name", "duration_seconds", "rpm_limit",
-			"price_quota", "ratio_mode", "ratio_override", "ratio_scope", "model_ratio_overrides",
-			"start_time", "end_time", "total_limit", "per_user_limit", "public_visible", "updated_time").
-		Updates(activityCode).Error
+	affectedUserIds := make([]int, 0)
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 与并发兑换/赠送串行化：写授权前先锁活动码行。
+		locked := &ActivityCode{}
+		if err := lockForUpdate(tx).First(locked, "id = ?", activityCode.Id).Error; err != nil {
+			return err
+		}
+		activityCode.UpdatedTime = common.GetTimestamp()
+		if err := tx.Model(activityCode).
+			Select("name", "description", "status", "group_name", "duration_seconds", "rpm_limit",
+				"price_quota", "ratio_mode", "ratio_override", "ratio_scope", "model_ratio_overrides",
+				"type", "benefits", "start_time", "end_time", "total_limit", "per_user_limit",
+				"public_visible", "updated_time").
+			Updates(activityCode).Error; err != nil {
+			return err
+		}
+		ids, syncErr := syncActivityGrantsTx(tx, activityCode)
+		if syncErr != nil {
+			return syncErr
+		}
+		affectedUserIds = ids
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, userId := range affectedUserIds {
+		if cacheErr := InvalidateActivityGrantCache(userId); cacheErr != nil {
+			common.SysError("failed to invalidate activity grant cache after sync: " + cacheErr.Error())
+		}
+	}
+	return nil
+}
+
+// syncActivityGrantsTx 把活动码的最新条款同步到有效（active 且未过期）的授权。
+// 已过期/已撤销授权不动；已用 Token、到期时间与已支付价格保持不变。
+func syncActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int, error) {
+	if NormalizeActivityCodeType(activityCode.Type) != ActivityCodeTypeBenefit {
+		return syncRatioActivityGrantsTx(tx, activityCode)
+	}
+	return syncBenefitActivityGrantsTx(tx, activityCode)
+}
+
+func loadActiveActivityGrantsForCode(tx *gorm.DB, codeId int, now int64) ([]ActivityGrant, error) {
+	grants := make([]ActivityGrant, 0)
+	err := tx.Where("code_id = ? AND status = ? AND (expire_time = 0 OR expire_time > ?)",
+		codeId, ActivityGrantStatusActive, now).
+		Order("id asc").
+		Find(&grants).Error
+	return grants, err
+}
+
+func syncRatioActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int, error) {
+	now := common.GetTimestamp()
+	grants, err := loadActiveActivityGrantsForCode(tx, activityCode.Id, now)
+	if err != nil {
+		return nil, err
+	}
+	if len(grants) == 0 {
+		return nil, nil
+	}
+	affected := make(map[int]struct{}, len(grants))
+	for i := range grants {
+		grant := &grants[i]
+		affected[grant.UserId] = struct{}{}
+		result := tx.Model(&ActivityGrant{}).Where("id = ?", grant.Id).
+			Updates(map[string]interface{}{
+				"code_name":             activityCode.Name,
+				"group_name":            activityCode.GroupName,
+				"ratio_mode":            activityCode.RatioMode,
+				"ratio_override":        activityCode.RatioOverride,
+				"ratio_scope":           activityCode.RatioScope,
+				"model_ratio_overrides": activityCode.ModelRatioOverrides,
+				"rpm_limit":             activityCode.RpmLimit,
+				"updated_time":          now,
+			})
+		if result.Error != nil {
+			return nil, result.Error
+		}
+	}
+	return sortedUserIds(affected), nil
+}
+
+type activityRedeemBatchKey struct {
+	UserId int
+	Batch  string
+}
+
+type activityRedeemBatchTemplate struct {
+	Grant         ActivityGrant
+	MaxExpireTime int64
+	HasPermanent  bool
+}
+
+func syncBenefitActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int, error) {
+	now := common.GetTimestamp()
+	activeGrants, err := loadActiveActivityGrantsForCode(tx, activityCode.Id, now)
+	if err != nil {
+		return nil, err
+	}
+	if len(activeGrants) == 0 {
+		return nil, nil
+	}
+
+	benefitByKey := make(map[string]ActivityBenefit, len(activityCode.Benefits))
+	for _, benefit := range activityCode.Benefits {
+		benefitByKey[benefit.Key] = benefit
+	}
+
+	// 记录每个兑换批次曾经发放过的权益 key（含已撤销/已过期），
+	// 避免管理员手动撤销的权益在下次编辑时被补回来。
+	issuedKeys := make(map[activityRedeemBatchKey]map[string]struct{})
+	allGrants := make([]ActivityGrant, 0)
+	if err := tx.Where("code_id = ?", activityCode.Id).Find(&allGrants).Error; err != nil {
+		return nil, err
+	}
+	for i := range allGrants {
+		grant := &allGrants[i]
+		if grant.RedeemBatch == "" || grant.BenefitKey == "" {
+			continue
+		}
+		key := activityRedeemBatchKey{UserId: grant.UserId, Batch: grant.RedeemBatch}
+		if issuedKeys[key] == nil {
+			issuedKeys[key] = make(map[string]struct{})
+		}
+		issuedKeys[key][grant.BenefitKey] = struct{}{}
+	}
+
+	affected := make(map[int]struct{}, len(activeGrants))
+	templates := make(map[activityRedeemBatchKey]*activityRedeemBatchTemplate)
+	for i := range activeGrants {
+		grant := &activeGrants[i]
+		affected[grant.UserId] = struct{}{}
+		if grant.RedeemBatch == "" || grant.BenefitKey == "" {
+			// benefit 类型正常不会出现空批次/key；保留原样，避免误删历史数据。
+			continue
+		}
+		batchKey := activityRedeemBatchKey{UserId: grant.UserId, Batch: grant.RedeemBatch}
+		template := templates[batchKey]
+		if template == nil {
+			template = &activityRedeemBatchTemplate{Grant: *grant}
+			templates[batchKey] = template
+		}
+		if grant.ExpireTime == 0 {
+			template.HasPermanent = true
+		} else if grant.ExpireTime > template.MaxExpireTime {
+			template.MaxExpireTime = grant.ExpireTime
+		}
+
+		benefit, exists := benefitByKey[grant.BenefitKey]
+		if !exists {
+			if result := tx.Model(&ActivityGrant{}).Where("id = ?", grant.Id).
+				Updates(map[string]interface{}{
+					"status":       ActivityGrantStatusRevoked,
+					"updated_time": now,
+				}); result.Error != nil {
+				return nil, result.Error
+			}
+			continue
+		}
+		spec := activityGrantSpecForBenefit(benefit)
+		if result := tx.Model(&ActivityGrant{}).Where("id = ?", grant.Id).
+			Updates(map[string]interface{}{
+				"code_name":             activityCode.Name,
+				"group_name":            spec.GroupName,
+				"ratio_mode":            spec.RatioMode,
+				"ratio_override":        spec.RatioOverride,
+				"ratio_scope":           spec.RatioScope,
+				"model_ratio_overrides": spec.ModelRatioOverrides,
+				"rpm_limit":             spec.RpmLimit,
+				"token_total":           spec.TokenTotal,
+				"updated_time":          now,
+			}); result.Error != nil {
+			return nil, result.Error
+		}
+	}
+
+	// 新增权益：为每个仍有有效授权的兑换批次补一条授权。
+	for batchKey, template := range templates {
+		expireTime := template.MaxExpireTime
+		if template.HasPermanent {
+			expireTime = 0
+		}
+		issued := issuedKeys[batchKey]
+		for _, benefit := range activityCode.Benefits {
+			if _, exists := issued[benefit.Key]; exists {
+				continue
+			}
+			grant := activityGrantSpecForBenefit(benefit).buildGrant(batchKey.UserId, activityCode, batchKey.Batch)
+			grant.StartTime = template.Grant.StartTime
+			grant.ExpireTime = expireTime
+			grant.Source = template.Grant.Source
+			grant.PriceQuota = template.Grant.PriceQuota
+			grant.Remark = template.Grant.Remark
+			if createErr := tx.Create(&grant).Error; createErr != nil {
+				return nil, createErr
+			}
+		}
+	}
+	return sortedUserIds(affected), nil
 }
 
 func (activityCode *ActivityCode) Delete() error {
@@ -372,8 +810,44 @@ func queryActiveActivityGrants(tx *gorm.DB, userId int) ([]ActivityGrant, error)
 	return grants, nil
 }
 
+// refreshActivityGrantTokenUsage 从数据库刷新 Token 套餐授权的已用量。
+// 授权定义可以缓存，但 token_used 必须接近实时，否则同一缓存窗口内会重复免费。
+func refreshActivityGrantTokenUsage(userId int, grants []ActivityGrant) []ActivityGrant {
+	hasTokenPackage := false
+	for i := range grants {
+		if grants[i].TokenTotal > 0 {
+			hasTokenPackage = true
+			break
+		}
+	}
+	if !hasTokenPackage {
+		return grants
+	}
+	type tokenUsageRow struct {
+		Id        int
+		TokenUsed int64
+	}
+	rows := make([]tokenUsageRow, 0, len(grants))
+	// 按 user_id 查询而不是拼 IN 列表，避免授权数量很多时触发 SQL 参数上限。
+	if err := DB.Model(&ActivityGrant{}).Select("id", "token_used").
+		Where("user_id = ? AND token_total > 0", userId).Find(&rows).Error; err != nil {
+		common.SysError("failed to refresh activity grant token usage: " + err.Error())
+		return grants
+	}
+	usageByGrantId := make(map[int]int64, len(rows))
+	for _, row := range rows {
+		usageByGrantId[row.Id] = row.TokenUsed
+	}
+	for i := range grants {
+		if used, exists := usageByGrantId[grants[i].Id]; exists {
+			grants[i].TokenUsed = used
+		}
+	}
+	return grants
+}
+
 // GetActiveActivityGrants 返回用户当前有效的活动授权，结果带 Redis 缓存
-// （缓存只加速，到期判定始终以读时过滤为准）。
+// （缓存只加速，到期判定始终以读时过滤为准；Token 已用量每次从数据库刷新）。
 func GetActiveActivityGrants(userId int) ([]ActivityGrant, error) {
 	if userId <= 0 {
 		return []ActivityGrant{}, nil
@@ -388,7 +862,7 @@ func GetActiveActivityGrants(userId int) ([]ActivityGrant, error) {
 			if unmarshalErr := common.Unmarshal([]byte(cached), &grants); unmarshalErr != nil {
 				common.SysLog("failed to unmarshal activity grants cache: " + unmarshalErr.Error())
 			} else {
-				return filterActiveActivityGrants(grants), nil
+				return filterActiveActivityGrants(refreshActivityGrantTokenUsage(userId, grants)), nil
 			}
 		}
 	}
@@ -396,6 +870,7 @@ func GetActiveActivityGrants(userId int) ([]ActivityGrant, error) {
 	if err != nil {
 		return nil, err
 	}
+	grants = refreshActivityGrantTokenUsage(userId, grants)
 	if common.RedisEnabled {
 		if payload, marshalErr := common.Marshal(grants); marshalErr == nil {
 			ttl := common.RedisKeyCacheSeconds()
@@ -439,10 +914,32 @@ func ListActivityGrantsByUser(userId int) ([]ActivityGrant, error) {
 	return grants, err
 }
 
-func countActivityGrantsForUserCode(tx *gorm.DB, userId int, codeId int) (int64, error) {
-	var count int64
-	err := tx.Model(&ActivityGrant{}).Where("user_id = ? AND code_id = ?", userId, codeId).Count(&count).Error
-	return count, err
+func countActivityRedemptionsForUserCode(tx *gorm.DB, userId int, codeId int) (int64, error) {
+	grants := make([]ActivityGrant, 0)
+	err := tx.Model(&ActivityGrant{}).Select("id", "redeem_batch").
+		Where("user_id = ? AND code_id = ?", userId, codeId).
+		Find(&grants).Error
+	if err != nil {
+		return 0, err
+	}
+	return int64(CountActivityRedemptions(grants)), nil
+}
+
+// AddActivityGrantTokenUsage 原子累加一次请求消耗的 token 到对应 Token 套餐授权。
+// 非套餐授权（token_total=0）或已删除授权的更新会被忽略。
+func AddActivityGrantTokenUsage(grantId int, tokens int64) error {
+	if grantId <= 0 || tokens <= 0 {
+		return nil
+	}
+	if tokens > ActivityCodeMaxTokenTotal {
+		tokens = ActivityCodeMaxTokenTotal
+	}
+	result := DB.Model(&ActivityGrant{}).Where("id = ? AND token_total > 0", grantId).
+		Updates(map[string]interface{}{
+			"token_used":   gorm.Expr("token_used + ?", tokens),
+			"updated_time": common.GetTimestamp(),
+		})
+	return result.Error
 }
 
 // RevokeActivityGrant 撤销一张授权，撤销后清缓存，下一次请求即不可用。
@@ -494,14 +991,16 @@ type RedeemActivityCodeRequest struct {
 }
 
 type RedeemActivityCodeResult struct {
-	GrantId      int    `json:"grant_id"`
-	CodeId       int    `json:"code_id"`
-	Code         string `json:"code"`
-	CodeName     string `json:"code_name"`
-	GroupName    string `json:"group_name"`
-	ExpireTime   int64  `json:"expire_time"`
-	PriceQuota   int    `json:"price_quota"`
-	BalanceAfter int    `json:"balance_after"`
+	GrantId    int      `json:"grant_id"`
+	CodeId     int      `json:"code_id"`
+	Code       string   `json:"code"`
+	CodeName   string   `json:"code_name"`
+	GroupName  string   `json:"group_name"`
+	GroupNames []string `json:"group_names"`
+	ExpireTime int64    `json:"expire_time"`
+	// PriceQuota 是本次兑换实扣的余额（所有权益共用一次扣费）。
+	PriceQuota   int `json:"price_quota"`
+	BalanceAfter int `json:"balance_after"`
 }
 
 // resolveActivityGrantExpireTime 计算新授权的到期时间：在现存活授权的最晚到期时间上叠加
@@ -568,7 +1067,7 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 		if activityCode.WindowClosed(now) {
 			return ErrActivityCodeEnded
 		}
-		if !ratio_setting.ContainsGroupRatio(activityCode.GroupName) {
+		if !activityCode.AllGroupsAvailable() {
 			return ErrActivityCodeGroupUnavailable
 		}
 		if activityCode.PriceQuota > 0 {
@@ -580,7 +1079,7 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 			}
 		}
 		if activityCode.PerUserLimit > 0 {
-			count, countErr := countActivityGrantsForUserCode(tx, req.UserId, activityCode.Id)
+			count, countErr := countActivityRedemptionsForUserCode(tx, req.UserId, activityCode.Id)
 			if countErr != nil {
 				return countErr
 			}
@@ -621,33 +1120,37 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 		if expireErr != nil {
 			return expireErr
 		}
-		grant := &ActivityGrant{
-			UserId:    req.UserId,
-			CodeId:    activityCode.Id,
-			Code:      activityCode.Code,
-			CodeName:  activityCode.Name,
-			GroupName: activityCode.GroupName,
-			RatioMode: activityCode.RatioMode,
-			// 快照必须独立于活动码：后续修改活动码不能影响已发放的授权。
-			RatioOverride:       activityCode.RatioOverride,
-			RatioScope:          activityCode.RatioScope,
-			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
-			RpmLimit:            activityCode.RpmLimit,
-			PriceQuota:          chargedQuota,
-			StartTime:           now,
-			ExpireTime:          expireTime,
-			Status:              ActivityGrantStatusActive,
-			Source:              ActivityGrantSourceRedeem,
+		specs := activityCode.grantSpecs()
+		if len(specs) == 0 {
+			return ErrActivityCodeGroupUnavailable
 		}
-		if err := tx.Create(grant).Error; err != nil {
-			return err
+		redeemBatch := common.GetUUID()
+		groupNames := make([]string, 0, len(specs))
+		seenGroups := make(map[string]struct{}, len(specs))
+		for _, spec := range specs {
+			grant := spec.buildGrant(req.UserId, activityCode, redeemBatch)
+			grant.PriceQuota = chargedQuota
+			grant.StartTime = now
+			grant.ExpireTime = expireTime
+			grant.Source = ActivityGrantSourceRedeem
+			if err := tx.Create(&grant).Error; err != nil {
+				return err
+			}
+			if result.GrantId == 0 {
+				result.GrantId = grant.Id
+			}
+			if _, exists := seenGroups[spec.GroupName]; exists {
+				continue
+			}
+			seenGroups[spec.GroupName] = struct{}{}
+			groupNames = append(groupNames, spec.GroupName)
 		}
-		result.GrantId = grant.Id
 		result.CodeId = activityCode.Id
 		result.Code = activityCode.Code
 		result.CodeName = activityCode.Name
-		result.GroupName = activityCode.GroupName
-		result.ExpireTime = grant.ExpireTime
+		result.GroupNames = groupNames
+		result.GroupName = groupNames[0]
+		result.ExpireTime = expireTime
 		result.PriceQuota = chargedQuota
 		return nil
 	})
@@ -672,7 +1175,7 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 		expireText = "有效期至 " + time.Unix(result.ExpireTime, 0).Format("2006-01-02 15:04:05")
 	}
 	RecordLog(req.UserId, LogTypeSystem, fmt.Sprintf("通过活动码 %s 兑换分组 %s，消耗 %s，%s",
-		result.Code, result.GroupName, logger.LogQuota(result.PriceQuota), expireText))
+		result.Code, strings.Join(result.GroupNames, "、"), logger.LogQuota(result.PriceQuota), expireText))
 	return result, nil
 }
 
@@ -687,12 +1190,13 @@ type GrantActivityCodeRequest struct {
 }
 
 type GrantActivityCodeResult struct {
-	GrantId    int    `json:"grant_id"`
-	CodeId     int    `json:"code_id"`
-	Code       string `json:"code"`
-	CodeName   string `json:"code_name"`
-	GroupName  string `json:"group_name"`
-	ExpireTime int64  `json:"expire_time"`
+	GrantId    int      `json:"grant_id"`
+	CodeId     int      `json:"code_id"`
+	Code       string   `json:"code"`
+	CodeName   string   `json:"code_name"`
+	GroupName  string   `json:"group_name"`
+	GroupNames []string `json:"group_names"`
+	ExpireTime int64    `json:"expire_time"`
 }
 
 // GrantActivityCode 由管理员主动把活动码授权赠送给用户，无需用户确认。
@@ -729,7 +1233,7 @@ func GrantActivityCode(req GrantActivityCodeRequest) (*GrantActivityCodeResult, 
 		if activityCode.WindowClosed(now) {
 			return ErrActivityCodeEnded
 		}
-		if !ratio_setting.ContainsGroupRatio(activityCode.GroupName) {
+		if !activityCode.AllGroupsAvailable() {
 			return ErrActivityCodeGroupUnavailable
 		}
 
@@ -737,34 +1241,37 @@ func GrantActivityCode(req GrantActivityCodeRequest) (*GrantActivityCodeResult, 
 		if expireErr != nil {
 			return expireErr
 		}
-		grant := &ActivityGrant{
-			UserId:    req.UserId,
-			CodeId:    activityCode.Id,
-			Code:      activityCode.Code,
-			CodeName:  activityCode.Name,
-			GroupName: activityCode.GroupName,
-			RatioMode: activityCode.RatioMode,
-			// 与兑换一致：授权必须快照条款，后续修改活动码不影响已发放的授权。
-			RatioOverride:       activityCode.RatioOverride,
-			RatioScope:          activityCode.RatioScope,
-			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
-			RpmLimit:            activityCode.RpmLimit,
-			PriceQuota:          0,
-			StartTime:           now,
-			ExpireTime:          expireTime,
-			Status:              ActivityGrantStatusActive,
-			Source:              ActivityGrantSourceAdmin,
-			Remark:              req.Remark,
+		specs := activityCode.grantSpecs()
+		if len(specs) == 0 {
+			return ErrActivityCodeGroupUnavailable
 		}
-		if err := tx.Create(grant).Error; err != nil {
-			return err
+		redeemBatch := common.GetUUID()
+		groupNames := make([]string, 0, len(specs))
+		seenGroups := make(map[string]struct{}, len(specs))
+		for _, spec := range specs {
+			grant := spec.buildGrant(req.UserId, activityCode, redeemBatch)
+			grant.StartTime = now
+			grant.ExpireTime = expireTime
+			grant.Source = ActivityGrantSourceAdmin
+			grant.Remark = req.Remark
+			if err := tx.Create(&grant).Error; err != nil {
+				return err
+			}
+			if result.GrantId == 0 {
+				result.GrantId = grant.Id
+			}
+			if _, exists := seenGroups[spec.GroupName]; exists {
+				continue
+			}
+			seenGroups[spec.GroupName] = struct{}{}
+			groupNames = append(groupNames, spec.GroupName)
 		}
-		result.GrantId = grant.Id
 		result.CodeId = activityCode.Id
 		result.Code = activityCode.Code
 		result.CodeName = activityCode.Name
-		result.GroupName = activityCode.GroupName
-		result.ExpireTime = grant.ExpireTime
+		result.GroupNames = groupNames
+		result.GroupName = groupNames[0]
+		result.ExpireTime = expireTime
 		return nil
 	})
 	if err != nil {
@@ -779,6 +1286,6 @@ func GrantActivityCode(req GrantActivityCodeRequest) (*GrantActivityCodeResult, 
 		expireText = "有效期至 " + time.Unix(result.ExpireTime, 0).Format("2006-01-02 15:04:05")
 	}
 	RecordLog(req.UserId, LogTypeSystem, fmt.Sprintf("管理员赠送活动码 %s 的分组 %s，%s",
-		result.Code, result.GroupName, expireText))
+		result.Code, strings.Join(result.GroupNames, "、"), expireText))
 	return result, nil
 }

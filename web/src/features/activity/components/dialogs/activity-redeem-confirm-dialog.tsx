@@ -30,6 +30,7 @@ import {
 import { formatQuota } from '@/lib/format'
 
 import {
+  describeActivityBenefit,
   describeActivityDuration,
   describeActivityModelScope,
   describeActivityRatio,
@@ -44,57 +45,102 @@ type ActivityRedeemConfirmDialogProps = {
   onConfirm: () => void
 }
 
-export function ActivityRedeemConfirmDialog({
-  open,
-  onOpenChange,
-  preview,
-  redeeming,
-  onConfirm,
-}: ActivityRedeemConfirmDialogProps) {
-  const { t } = useTranslation()
-  if (!preview) return null
+export function ActivityRedeemConfirmDialog(
+  props: ActivityRedeemConfirmDialogProps
+) {
+  const { t, i18n } = useTranslation()
+  if (!props.preview) return null
 
-  const rows: { label: string; value: string }[] = [
-    { label: t('Group'), value: preview.group_desc || preview.group_name },
-    {
-      label: t('Validity'),
-      value: describeActivityDuration(t, preview.duration_seconds),
-    },
-    {
-      label: t('Ratio'),
-      value: describeActivityRatio(t, preview.ratio_mode, preview.ratio_override),
-    },
-    {
-      label: t('Models (ratio)'),
-      value: describeActivityModelScope(t, preview.model_ratio_overrides),
-    },
-    {
-      label: t('RPM limit'),
-      value: preview.rpm_limit > 0 ? String(preview.rpm_limit) : t('Unlimited'),
-    },
-    {
-      label: t('Wallet balance'),
-      value: formatQuota(preview.balance_quota),
-    },
-  ]
+  const preview = props.preview
+  const benefits = preview.benefits ?? []
+  // 旧接口没有 type/benefits：按 ratio 预览展示，保持原行为。
+  const isBenefit = preview.type === 'benefit' && benefits.length > 0
+  // benefit 类型可能覆盖多个分组，确认文案里全部列出。
+  const benefitGroups = isBenefit
+    ? [
+        ...new Set(
+          benefits.map((benefit) => benefit.group_desc || benefit.group_name)
+        ),
+      ]
+    : []
+  const targetLabel =
+    benefitGroups.length > 0
+      ? benefitGroups.join(', ')
+      : preview.group_desc || preview.group_name
+
+  // benefit 类型以权益列表为准，不再展示 ratio/模型倍率行。
+  const rows: { label: string; value: string }[] = isBenefit
+    ? [
+        {
+          label: t('Validity'),
+          value: describeActivityDuration(t, preview.duration_seconds),
+        },
+        {
+          label: t('Wallet balance'),
+          value: formatQuota(preview.balance_quota),
+        },
+      ]
+    : [
+        {
+          label: t('Group'),
+          value: preview.group_desc || preview.group_name,
+        },
+        {
+          label: t('Validity'),
+          value: describeActivityDuration(t, preview.duration_seconds),
+        },
+        {
+          label: t('Ratio'),
+          value: describeActivityRatio(
+            t,
+            preview.ratio_mode,
+            preview.ratio_override
+          ),
+        },
+        {
+          label: t('Models (ratio)'),
+          value: describeActivityModelScope(t, preview.model_ratio_overrides),
+        },
+        {
+          label: t('RPM limit'),
+          value:
+            preview.rpm_limit > 0 ? String(preview.rpm_limit) : t('Unlimited'),
+        },
+        {
+          label: t('Wallet balance'),
+          value: formatQuota(preview.balance_quota),
+        },
+      ]
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className='sm:max-w-[480px]'>
         <DialogHeader>
           <DialogTitle>{t('Confirm Redemption')}</DialogTitle>
           <DialogDescription>
-            {t(
-              'Spend {{quota}} of your wallet balance to redeem {{group}}?',
-              {
-                quota: formatQuota(preview.price_quota),
-                group: preview.group_desc || preview.group_name,
-              }
-            )}
+            {t('Spend {{quota}} of your wallet balance to redeem {{group}}?', {
+              quota: formatQuota(preview.price_quota),
+              group: targetLabel,
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className='space-y-2'>
+          {isBenefit && (
+            <div className='space-y-1'>
+              <p className='text-muted-foreground text-sm'>{t('Benefits')}</p>
+              <ul className='space-y-1'>
+                {benefits.map((benefit) => (
+                  <li
+                    key={`${benefit.key}:${benefit.group_name}:${benefit.model_name}`}
+                    className='text-sm font-medium break-all'
+                  >
+                    {describeActivityBenefit(t, benefit, i18n.language)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {rows.map((row) => (
             <div
               key={row.label}
@@ -119,12 +165,15 @@ export function ActivityRedeemConfirmDialog({
         <DialogFooter>
           <Button
             variant='outline'
-            disabled={redeeming}
-            onClick={() => onOpenChange(false)}
+            disabled={props.redeeming}
+            onClick={() => props.onOpenChange(false)}
           >
             {t('Cancel')}
           </Button>
-          <Button disabled={redeeming || !preview.can_afford} onClick={onConfirm}>
+          <Button
+            disabled={props.redeeming || !preview.can_afford}
+            onClick={props.onConfirm}
+          >
             {t('Confirm and Redeem')}
           </Button>
         </DialogFooter>

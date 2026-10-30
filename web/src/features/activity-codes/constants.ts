@@ -40,6 +40,24 @@ export const ACTIVITY_RATIO_SCOPE = {
   MODELS: 'models',
 } as const
 
+// 活动码类型：ratio 沿用倍率优惠，benefit 是一次兑换多条免费权益。
+export const ACTIVITY_CODE_TYPE = {
+  RATIO: 'ratio',
+  BENEFIT: 'benefit',
+} as const
+
+// 权益范围：整组免费，或只对单个模型免费。
+export const ACTIVITY_BENEFIT_SCOPE = {
+  GROUP: 'group',
+  MODEL: 'model',
+} as const
+
+// 权益额度模式：不限量免费，或赠送一定 Token 总量（用完回退原价）。
+export const ACTIVITY_BENEFIT_TOKEN_MODE = {
+  UNLIMITED: 'unlimited',
+  PACKAGE: 'package',
+} as const
+
 export const ACTIVITY_GRANT_STATUS = {
   ACTIVE: 'active',
   EXPIRED: 'expired',
@@ -77,6 +95,27 @@ export function getActivityRatioScopeOptions(t: TFunction) {
   return [
     { label: t('Whole group'), value: ACTIVITY_RATIO_SCOPE.GROUP },
     { label: t('Selected models'), value: ACTIVITY_RATIO_SCOPE.MODELS },
+  ]
+}
+
+export function getActivityCodeTypeOptions(t: TFunction) {
+  return [
+    { label: t('Ratio discount'), value: ACTIVITY_CODE_TYPE.RATIO },
+    { label: t('Free benefits'), value: ACTIVITY_CODE_TYPE.BENEFIT },
+  ]
+}
+
+export function getActivityBenefitScopeOptions(t: TFunction) {
+  return [
+    { label: t('Whole group'), value: ACTIVITY_BENEFIT_SCOPE.GROUP },
+    { label: t('Single model'), value: ACTIVITY_BENEFIT_SCOPE.MODEL },
+  ]
+}
+
+export function getActivityBenefitTokenModeOptions(t: TFunction) {
+  return [
+    { label: t('Unlimited'), value: ACTIVITY_BENEFIT_TOKEN_MODE.UNLIMITED },
+    { label: t('Token package'), value: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE },
   ]
 }
 
@@ -144,4 +183,6 @@ export const ACTIVITY_VALIDATION = {
   // 与后端 model.ActivityCodeMaxModelRatioOverrides / ActivityModelNameMaxLength 保持一致。
   MODEL_RATIO_MAX_ENTRIES: 100,
   MODEL_NAME_MAX_LENGTH: 255,
+  // 与后端 model.ActivityCodeMaxBenefits 保持一致。
+  BENEFIT_MAX_ENTRIES: 20,
 } as const

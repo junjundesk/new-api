@@ -241,3 +241,37 @@ func TestResolveModelGroupRatioActivityFreePrecedence(t *testing.T) {
 		require.NotNil(t, info.ChannelModelRatio)
 	})
 }
+
+func TestResolveModelGroupRatioRecordsTokenPackageGrant(t *testing.T) {
+	savedGroups := GroupRatio2JSONString()
+	t.Cleanup(func() {
+		assert.NoError(t, UpdateGroupRatioByJSONString(savedGroups))
+	})
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"default":2,"package-group":1.5}`))
+
+	zero := 0.0
+	activity := &ActivityRatioOverride{
+		GroupRatio:        &zero,
+		GroupTokenGrantId: 11,
+		ModelRatios:       map[string]float64{"gpt-5": 0},
+		ModelTokenGrantIds: map[string]int{
+			"gpt-5": 12,
+		},
+	}
+
+	modelGranted := ResolveModelGroupRatio("default", "package-group", "gpt-5", nil, activity)
+	assert.Equal(t, float64(0), modelGranted.GroupRatio)
+	assert.Equal(t, 12, modelGranted.ActivityGrantId, "命中的单模型套餐记录自己的授权 id")
+
+	groupGranted := ResolveModelGroupRatio("default", "package-group", "o3", nil, activity)
+	assert.Equal(t, float64(0), groupGranted.GroupRatio)
+	assert.Equal(t, 11, groupGranted.ActivityGrantId, "未命中模型使用分组套餐授权 id")
+
+	unlimited := &ActivityRatioOverride{GroupRatio: &zero}
+	unlimitedInfo := ResolveModelGroupRatio("default", "package-group", "o3", nil, unlimited)
+	assert.Equal(t, float64(0), unlimitedInfo.GroupRatio)
+	assert.Equal(t, 0, unlimitedInfo.ActivityGrantId, "不限量免费不扣减任何套餐")
+
+	withoutGrant := ResolveModelGroupRatio("default", "package-group", "o3", nil, nil)
+	assert.Equal(t, 0, withoutGrant.ActivityGrantId)
+}

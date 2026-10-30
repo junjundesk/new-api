@@ -44,6 +44,23 @@ const claudeCacheCreation1hMultiplier = 6 / 3.75
 // the pre-consumed quota still reflects a plausible output cost in paid groups.
 const defaultTieredPreConsumeMaxTokens = 8192
 
+// activityTokenPackagesApply 判断当前 relay 格式是否会返回 token 用量、可以消费
+// 活动码 Token 套餐。按次/任务计费（图片、MJ、视频等）返回 false，避免没有
+// token 扣减的请求被 Token 套餐变成免费；不限量免费权益不受影响。
+func activityTokenPackagesApply(info *relaycommon.RelayInfo) bool {
+	if info == nil {
+		return false
+	}
+	switch info.RelayFormat {
+	case types.RelayFormatOpenAI, types.RelayFormatClaude, types.RelayFormatGemini,
+		types.RelayFormatOpenAIResponses, types.RelayFormatOpenAIResponsesCompaction,
+		types.RelayFormatOpenAIAlphaSearch, types.RelayFormatOpenAIAudio,
+		types.RelayFormatOpenAIRealtime, types.RelayFormatRerank, types.RelayFormatEmbedding:
+		return true
+	}
+	return false
+}
+
 // HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present
 func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hosttypes.GroupRatioInfo {
 	if autoGroup, exists := ctx.Get("auto_group"); exists {
@@ -61,7 +78,7 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	// 优先于渠道模型专属倍率；没有活动授权时才使用渠道专属倍率。
 	var activity *ratio_setting.ActivityRatioOverride
 	if activityView := service.GetRequestActivityView(ctx, relayInfo.UserId, relayInfo.UsingGroup); activityView != nil {
-		activity = activityView.BillingRatioOverride()
+		activity = activityView.BillingRatioOverride(relayInfo.AllowActivityTokenPackages)
 	}
 	return ratio_setting.ResolveModelGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup, modelName, settings.ModelGroupRatios, activity)
 }
@@ -69,6 +86,7 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (hosttypes.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 
+	info.AllowActivityTokenPackages = activityTokenPackagesApply(info)
 	groupRatioInfo := HandleGroupRatio(c, info)
 
 	// Check if this model uses tiered_expr billing
@@ -195,6 +213,8 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (hosttypes.PriceData, error) {
+	// 按次/任务计费不消耗 token 用量，因此不适用 Token 套餐。
+	info.AllowActivityTokenPackages = false
 	groupRatioInfo := HandleGroupRatio(c, info)
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)

@@ -53,7 +53,7 @@ export function ActivityCodeCard() {
             <p className='text-sm font-medium'>{t('Activity Code')}</p>
             <p className='text-muted-foreground text-xs'>
               {t(
-                'Redeem a code to unlock a group for a limited time and at a special ratio.'
+                'Redeem a code to unlock group access or a token package for a limited time.'
               )}
             </p>
           </div>

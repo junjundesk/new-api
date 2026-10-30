@@ -19,6 +19,32 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 
 // ============================================================================
+// Activity Code Type & Benefits
+// ============================================================================
+
+export const activityCodeTypeSchema = z.enum(['ratio', 'benefit'])
+
+export type ActivityCodeType = z.infer<typeof activityCodeTypeSchema>
+
+// 权益范围：整组免费，或只对单个模型免费。
+export const activityBenefitScopeSchema = z.enum(['group', 'model'])
+
+export type ActivityBenefitScope = z.infer<typeof activityBenefitScopeSchema>
+
+// 一条免费权益：目标分组 + 范围 + 单模型名 + 独立 RPM + Token 总量（0 = 不限量）。
+// 创建/更新时已有权益的 key 原样回传，新权益传空字符串由后端生成。
+export const activityBenefitSchema = z.object({
+  key: z.string(),
+  group_name: z.string(),
+  scope: activityBenefitScopeSchema,
+  model_name: z.string().default(''),
+  rpm_limit: z.number(),
+  token_total: z.number(),
+})
+
+export type ActivityBenefit = z.infer<typeof activityBenefitSchema>
+
+// ============================================================================
 // Activity Code Schema & Types
 // ============================================================================
 
@@ -27,6 +53,9 @@ export const activityCodeSchema = z.object({
   code: z.string(),
   name: z.string(),
   description: z.string(),
+  // 老数据没有 type/benefits：按 ratio 类型、无权益处理；非法值也回退 ratio。
+  type: activityCodeTypeSchema.catch('ratio'),
+  benefits: z.array(activityBenefitSchema).nullable().default(null),
   status: z.number(), // 1: enabled, 2: disabled
   group_name: z.string(),
   duration_seconds: z.number(),
@@ -68,6 +97,11 @@ export const activityGrantSchema = z.object({
   source: z.string().optional(),
   remark: z.string(),
   created_time: z.number(),
+  // benefit 类型扩展字段：同一 redeem_batch 的多条授权属于同一次兑换。
+  redeem_batch: z.string().default(''),
+  benefit_key: z.string().default(''),
+  token_total: z.number().default(0),
+  token_used: z.number().default(0),
 })
 
 export type ActivityGrant = z.infer<typeof activityGrantSchema>
@@ -124,6 +158,8 @@ export interface ActivityCodeFormData {
   total_limit: number
   per_user_limit: number
   public_visible: number
+  type: ActivityCodeType
+  benefits: ActivityBenefit[]
 }
 
 // 分组内在架模型（GET /api/models/group_members），用作指定模型的选择建议。
@@ -145,6 +181,8 @@ export interface GrantActivityCodeItem {
   grant_id?: number
   expire_time?: number
   group_name?: string
+  // benefit 类型一次赠送可能覆盖多个分组；缺失时回退 group_name。
+  group_names?: string[]
   message?: string
 }
 
