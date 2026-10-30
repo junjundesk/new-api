@@ -870,6 +870,16 @@ func (info *RelayInfo) SetFirstResponseTime() {
 	}
 }
 
+// ResetFirstResponseTime 按首个生成内容事件重新打点首响应时间。
+//
+// 有的上游（如 Responses 协议的网关）在真正开始生成之前就先下发
+// response.created / response.in_progress 这类生命周期事件，协议首帧只能说明
+// 请求已被受理，不能代表首字；此时以首个携带生成内容的事件作为首字时间。
+func (info *RelayInfo) ResetFirstResponseTime() {
+	info.FirstResponseTime = time.Now()
+	info.isFirstResponse = false
+}
+
 func (info *RelayInfo) HasSendResponse() bool {
 	return info.FirstResponseTime.After(info.StartTime)
 }

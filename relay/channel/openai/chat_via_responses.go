@@ -267,6 +267,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		}
 	}
 
+	outputStarted := false
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if streamErr != nil {
 			sr.Stop(streamErr)
@@ -278,6 +279,10 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			logger.LogError(c, "failed to unmarshal responses stream event: "+err.Error())
 			sr.Error(err)
 			return
+		}
+		if !outputStarted && responsesStreamOutputEvent(streamResp.Type) {
+			info.ResetFirstResponseTime()
+			outputStarted = true
 		}
 
 		if streamResp.Type == "response.error" || streamResp.Type == "response.failed" {

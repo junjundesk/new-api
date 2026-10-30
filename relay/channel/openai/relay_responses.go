@@ -72,6 +72,27 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	return &usage, nil
 }
 
+// responsesStreamOutputEvent 判断 Responses 流事件是否携带模型生成的内容
+// （正文、推理、工具参数、音频或图片分片）。
+//
+// response.created / response.in_progress 这类生命周期事件只表示请求已被上游受理：
+// 部分网关在受理时就会下发，真正的首字可能晚数秒，因此不能作为首字时间。
+func responsesStreamOutputEvent(eventType string) bool {
+	switch eventType {
+	case "response.output_text.delta",
+		"response.refusal.delta",
+		"response.reasoning_text.delta",
+		"response.reasoning_summary_text.delta",
+		"response.function_call_arguments.delta",
+		"response.audio.delta",
+		"response.audio.transcript.delta",
+		"response.image_generation_call.partial_image":
+		return true
+	default:
+		return false
+	}
+}
+
 func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		logger.LogError(c, "invalid response or response body")
@@ -85,6 +106,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	imageCounter := &relaycommon.ImageGenerationCallCounter{}
 	imageCommitted := false
 	started := false
+	outputStarted := false
 	upstreamFailed := false
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
@@ -95,6 +117,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			logger.LogError(c, "failed to unmarshal stream response: "+err.Error())
 			sr.Error(err)
 			return
+		}
+		if !outputStarted && responsesStreamOutputEvent(streamResponse.Type) {
+			info.ResetFirstResponseTime()
+			outputStarted = true
 		}
 		sendResponsesStreamData(c, streamResponse, data)
 		started = true
