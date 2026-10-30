@@ -52,6 +52,7 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       remain_quota_dollars: z.number().optional(),
       expired_time: z.date().optional(),
       unlimited_quota: z.boolean(),
+      display_wallet_quota: z.boolean(),
       model_limits: z.array(z.string()),
       model_mappings: getModelMappingsSchema(t),
       fallback_enabled: z.boolean(),
@@ -142,6 +143,7 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   remain_quota_dollars: 10,
   expired_time: undefined,
   unlimited_quota: true,
+  display_wallet_quota: false,
   model_limits: [],
   model_mappings: [],
   fallback_enabled: false,
@@ -188,6 +190,7 @@ export function transformFormDataToPayload(
       ? Math.floor(data.expired_time.getTime() / 1000)
       : -1,
     unlimited_quota: data.unlimited_quota,
+    display_wallet_quota: data.display_wallet_quota,
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     model_mappings: normalizeModelMappings(data.model_mappings),
@@ -228,6 +231,7 @@ export function transformApiKeyToFormDefaults(
         ? new Date(apiKey.expired_time * 1000)
         : undefined,
     unlimited_quota: apiKey.unlimited_quota,
+    display_wallet_quota: !!apiKey.display_wallet_quota,
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],

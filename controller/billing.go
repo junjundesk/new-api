@@ -8,35 +8,59 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// billingStatToken 返回计费面板接口应当按密钥自身额度统计的令牌。
+// 全局关闭“显示令牌统计”或该密钥开启 display_wallet_quota 时返回 nil，
+// 表示改按所属账户的钱包余额统计。
+func billingStatToken(c *gin.Context) (*model.Token, error) {
+	if !common.DisplayTokenStatEnabled {
+		return nil, nil
+	}
+	token, err := model.GetTokenById(c.GetInt("token_id"))
+	if err != nil {
+		return nil, err
+	}
+	if token.DisplayWalletQuota {
+		return nil, nil
+	}
+	return token, nil
+}
+
 func GetSubscription(c *gin.Context) {
 	var remainQuota int
 	var usedQuota int
-	var err error
-	var token *model.Token
 	var expiredTime int64
-	if common.DisplayTokenStatEnabled {
-		tokenId := c.GetInt("token_id")
-		token, err = model.GetTokenById(tokenId)
+	token, err := billingStatToken(c)
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": types.OpenAIError{
+				Message: err.Error(),
+				Type:    "upstream_error",
+			},
+		})
+		return
+	}
+	if token != nil {
 		expiredTime = token.ExpiredTime
 		remainQuota = token.RemainQuota
 		usedQuota = token.UsedQuota
 	} else {
 		userId := c.GetInt("id")
 		remainQuota, err = model.GetUserQuota(userId, false)
-		usedQuota, err = model.GetUserUsedQuota(userId)
+		if err == nil {
+			usedQuota, err = model.GetUserUsedQuota(userId)
+		}
+		if err != nil {
+			c.JSON(200, gin.H{
+				"error": types.OpenAIError{
+					Message: err.Error(),
+					Type:    "upstream_error",
+				},
+			})
+			return
+		}
 	}
 	if expiredTime <= 0 {
 		expiredTime = 0
-	}
-	if err != nil {
-		openAIError := types.OpenAIError{
-			Message: err.Error(),
-			Type:    "upstream_error",
-		}
-		c.JSON(200, gin.H{
-			"error": openAIError,
-		})
-		return
 	}
 	quota := remainQuota + usedQuota
 	amount := float64(quota)
@@ -70,25 +94,29 @@ func GetSubscription(c *gin.Context) {
 
 func GetUsage(c *gin.Context) {
 	var quota int
-	var err error
-	var token *model.Token
-	if common.DisplayTokenStatEnabled {
-		tokenId := c.GetInt("token_id")
-		token, err = model.GetTokenById(tokenId)
-		quota = token.UsedQuota
-	} else {
-		userId := c.GetInt("id")
-		quota, err = model.GetUserUsedQuota(userId)
-	}
+	token, err := billingStatToken(c)
 	if err != nil {
-		openAIError := types.OpenAIError{
-			Message: err.Error(),
-			Type:    "new_api_error",
-		}
 		c.JSON(200, gin.H{
-			"error": openAIError,
+			"error": types.OpenAIError{
+				Message: err.Error(),
+				Type:    "new_api_error",
+			},
 		})
 		return
+	}
+	if token != nil {
+		quota = token.UsedQuota
+	} else {
+		quota, err = model.GetUserUsedQuota(c.GetInt("id"))
+		if err != nil {
+			c.JSON(200, gin.H{
+				"error": types.OpenAIError{
+					Message: err.Error(),
+					Type:    "new_api_error",
+				},
+			})
+			return
+		}
 	}
 	amount := float64(quota)
 	switch operation_setting.GetQuotaDisplayType() {

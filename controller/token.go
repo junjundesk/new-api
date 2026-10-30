@@ -587,16 +587,40 @@ func GetTokenUsage(c *gin.Context) {
 		expiredAt = 0
 	}
 
+	totalGranted := token.RemainQuota + token.UsedQuota
+	totalUsed := token.UsedQuota
+	totalAvailable := token.RemainQuota
+	unlimitedQuota := token.UnlimitedQuota
+	if token.DisplayWalletQuota {
+		// 密钥开启了钱包额度展示：返回所属账户的真实钱包余额，而不是密钥自身额度。
+		remainQuota, err := model.GetUserQuota(token.UserId, false)
+		if err != nil {
+			common.SysError("failed to get user quota for token usage: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgTokenGetInfoFailed)
+			return
+		}
+		usedQuota, err := model.GetUserUsedQuota(token.UserId)
+		if err != nil {
+			common.SysError("failed to get user used quota for token usage: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgTokenGetInfoFailed)
+			return
+		}
+		totalGranted = remainQuota + usedQuota
+		totalUsed = usedQuota
+		totalAvailable = remainQuota
+		unlimitedQuota = false
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    true,
 		"message": "ok",
 		"data": gin.H{
 			"object":               "token_usage",
 			"name":                 token.Name,
-			"total_granted":        token.RemainQuota + token.UsedQuota,
-			"total_used":           token.UsedQuota,
-			"total_available":      token.RemainQuota,
-			"unlimited_quota":      token.UnlimitedQuota,
+			"total_granted":        totalGranted,
+			"total_used":           totalUsed,
+			"total_available":      totalAvailable,
+			"unlimited_quota":      unlimitedQuota,
 			"model_limits":         token.GetModelLimitsMap(),
 			"model_limits_enabled": token.ModelLimitsEnabled,
 			"expires_at":           expiredAt,
@@ -639,6 +663,7 @@ func AddToken(c *gin.Context) {
 		ExpiredTime:        token.ExpiredTime,
 		RemainQuota:        token.RemainQuota,
 		UnlimitedQuota:     token.UnlimitedQuota,
+		DisplayWalletQuota: token.DisplayWalletQuota,
 		ModelLimitsEnabled: token.ModelLimitsEnabled,
 		ModelLimits:        token.ModelLimits,
 		AllowIps:           token.AllowIps,
@@ -754,6 +779,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota
+		cleanToken.DisplayWalletQuota = token.DisplayWalletQuota
 		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
 		cleanToken.ModelLimits = token.ModelLimits
 		cleanToken.AllowIps = token.AllowIps

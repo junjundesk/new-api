@@ -223,6 +223,18 @@ function findButton(text: string, required = true): HTMLButtonElement | null {
   return button ?? null
 }
 
+function findSwitchByLabel(labelText: string): HTMLElement {
+  const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
+    (candidate) => candidate.textContent?.trim() === labelText
+  )
+  assert.ok(label, `Expected label "${labelText}"`)
+  const switchControl = label
+    .closest('[data-slot="form-item"]')
+    ?.querySelector<HTMLElement>('[role="switch"]')
+  assert.ok(switchControl, `Expected a switch for label "${labelText}"`)
+  return switchControl
+}
+
 function getControlByLabel<T extends HTMLElement>(labelText: string): T {
   const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
@@ -367,5 +379,57 @@ describe('API keys mutate drawer Auto group integration', () => {
       )
     )
     assert.deepEqual(createdPayloads[0]?.auto_groups, ['vip'])
+  })
+})
+
+describe('API keys mutate drawer wallet quota display', () => {
+  test('submits display_wallet_quota false by default when creating a key', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    const walletQuotaSwitch = findSwitchByLabel('Display Wallet Quota')
+    assert.equal(walletQuotaSwitch.getAttribute('aria-checked'), 'false')
+
+    await changeInput(
+      getControlByLabel<HTMLInputElement>('Name'),
+      'wallet-default'
+    )
+    await act(async () => findButton('Save changes', true).click())
+    await act(async () =>
+      waitForCondition(
+        () => createdPayloads.length === 1,
+        'API key with default wallet quota display was not created'
+      )
+    )
+
+    assert.equal(createdPayloads[0]?.display_wallet_quota, false)
+  })
+
+  test('submits display_wallet_quota true after enabling the wallet quota switch', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    await act(async () => findSwitchByLabel('Display Wallet Quota').click())
+
+    assert.equal(
+      findSwitchByLabel('Display Wallet Quota').getAttribute('aria-checked'),
+      'true'
+    )
+
+    await changeInput(
+      getControlByLabel<HTMLInputElement>('Name'),
+      'wallet-enabled'
+    )
+    await act(async () => findButton('Save changes', true).click())
+    await act(async () =>
+      waitForCondition(
+        () => createdPayloads.length === 1,
+        'API key with wallet quota display enabled was not created'
+      )
+    )
+
+    assert.equal(createdPayloads[0]?.display_wallet_quota, true)
   })
 })
