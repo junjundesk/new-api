@@ -5239,6 +5239,7 @@
     "This model has both fixed-price and ratio settings. Saving the current mode will rewrite the conflicting fields.": "This model has both fixed-price and ratio settings. Saving the current mode will rewrite the conflicting fields.",
     "This model has both fixed-price and token-price settings. Saving the current mode will rewrite the conflicting fields.": "This model has both fixed-price and token-price settings. Saving the current mode will rewrite the conflicting fields.",
     "This model is not available in any group, or no group pricing information is configured.": "This model is not available in any group, or no group pricing information is configured.",
+    "This model name also exists in the selected group. Requests using it will be routed and billed to {{target}} instead.": "This model name also exists in the selected group. Requests using it will be routed and billed to {{target}} instead.",
     "This month": "This month",
     "This page has not been created yet.": "This page has not been created yet.",
     "This plan does not allow balance redemption": "This plan does not allow balance redemption",

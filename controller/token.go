@@ -323,11 +323,38 @@ func tokenFallbackModelBillable(c *gin.Context, modelName string) bool {
 	return helper.HasModelBillingConfig(modelName)
 }
 
-func setTokenFallbackModels(c *gin.Context, token *model.Token, items []setting.TokenFallbackModel) bool {
+func setTokenFallbackModels(c *gin.Context, token *model.Token, items []setting.TokenFallbackModel, previouslyEnabled bool) bool {
+	// A disabled list is an inert draft that auth never loads and the edit form
+	// keeps for later, so it must stay storable even when a row is unfinished or
+	// references models the newly selected group no longer serves.
+	if !token.FallbackEnabled {
+		drafts, err := setting.NormalizeDisabledTokenFallbackModels(items)
+		if err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		if err := token.SetFallbackModels(drafts); err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		return true
+	}
 	normalized, err := setting.NormalizeTokenFallbackModels(items)
 	if err != nil {
 		common.ApiError(c, err)
 		return false
+	}
+	// Re-validating an unchanged enabled list would block unrelated edits (for
+	// example switching the key's group) because the available models moved.
+	// Request-time checks already skip targets that no longer resolve, so only a
+	// fallback configuration the request actually changes is validated here.
+	existing, err := token.GetFallbackModels()
+	if err == nil && previouslyEnabled && slices.Equal(existing, normalized) {
+		if err := token.SetFallbackModels(normalized); err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		return true
 	}
 	if len(normalized) > 0 {
 		userGroup, err := getTokenRequestUserGroup(c)
@@ -626,7 +653,7 @@ func AddToken(c *gin.Context) {
 		}
 	}
 	if request.FallbackModels != nil {
-		if !setTokenFallbackModels(c, &cleanToken, *request.FallbackModels) {
+		if !setTokenFallbackModels(c, &cleanToken, *request.FallbackModels, false) {
 			return
 		}
 	}
@@ -686,6 +713,7 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	previouslyFallbackEnabled := cleanToken.FallbackEnabled
 	if token.Status == common.TokenStatusEnabled {
 		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
 			common.ApiErrorI18n(c, i18n.MsgTokenExpiredCannotEnable)
@@ -750,7 +778,7 @@ func UpdateToken(c *gin.Context) {
 			}
 		}
 		if request.FallbackModels != nil {
-			if !setTokenFallbackModels(c, cleanToken, *request.FallbackModels) {
+			if !setTokenFallbackModels(c, cleanToken, *request.FallbackModels, previouslyFallbackEnabled) {
 				return
 			}
 		}

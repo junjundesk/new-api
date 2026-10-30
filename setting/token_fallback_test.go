@@ -84,3 +84,47 @@ func TestNormalizeTokenFallbackModelsAllowsEmptyList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
+
+func TestNormalizeDisabledTokenFallbackModelsKeepsIncompleteDraft(t *testing.T) {
+	input := []TokenFallbackModel{
+		{SourceModel: " gpt-5 ", Group: " vip ", Model: " claude-sonnet-4-5 "},
+		{SourceModel: "   ", Group: "  ", Model: " "},
+	}
+
+	got, err := NormalizeDisabledTokenFallbackModels(input)
+	require.NoError(t, err)
+	assert.Equal(t, []TokenFallbackModel{
+		{SourceModel: "gpt-5", Group: "vip", Model: "claude-sonnet-4-5"},
+		{},
+	}, got)
+	assert.Equal(t, " gpt-5 ", input[0].SourceModel, "normalization must not mutate the caller's draft")
+}
+
+func TestNormalizeDisabledTokenFallbackModelsRejectsInvalidFieldShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		item    TokenFallbackModel
+		wantErr string
+	}{
+		{name: "source contains whitespace", item: TokenFallbackModel{SourceModel: "gpt 5"}, wantErr: "source model is invalid"},
+		{name: "group contains control character", item: TokenFallbackModel{Group: "v\tip"}, wantErr: "group is invalid"},
+		{name: "model too long", item: TokenFallbackModel{Model: strings.Repeat("m", MaxTokenFallbackNameLength+1)}, wantErr: "model is invalid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeDisabledTokenFallbackModels([]TokenFallbackModel{tt.item})
+			require.Error(t, err)
+			assert.Nil(t, got)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestNormalizeDisabledTokenFallbackModelsEnforcesListLimit(t *testing.T) {
+	items := make([]TokenFallbackModel, MaxTokenFallbackModels+1)
+
+	got, err := NormalizeDisabledTokenFallbackModels(items)
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Contains(t, err.Error(), "at most")
+}

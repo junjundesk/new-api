@@ -33,6 +33,36 @@ func isValidTokenFallbackName(name string) bool {
 	return true
 }
 
+// NormalizeDisabledTokenFallbackModels trims and bounds the fallback list kept
+// for a key whose fallback is disabled. That list is an inert draft: auth never
+// loads it and the edit form keeps unfinished rows, so empty fields are allowed
+// and only field shape limits apply. Enabling fallback runs the full validation
+// again.
+func NormalizeDisabledTokenFallbackModels(items []TokenFallbackModel) ([]TokenFallbackModel, error) {
+	if len(items) > MaxTokenFallbackModels {
+		return nil, fmt.Errorf("use at most %d fallback models", MaxTokenFallbackModels)
+	}
+	normalized := make([]TokenFallbackModel, 0, len(items))
+	for i, item := range items {
+		entry := TokenFallbackModel{
+			SourceModel: strings.TrimSpace(item.SourceModel),
+			Group:       strings.TrimSpace(item.Group),
+			Model:       strings.TrimSpace(item.Model),
+		}
+		if entry.SourceModel != "" && !isValidTokenFallbackName(entry.SourceModel) {
+			return nil, fmt.Errorf("fallback %d: source model is invalid", i+1)
+		}
+		if entry.Group != "" && !isValidTokenFallbackName(entry.Group) {
+			return nil, fmt.Errorf("fallback %d: group is invalid", i+1)
+		}
+		if entry.Model != "" && !isValidTokenFallbackName(entry.Model) {
+			return nil, fmt.Errorf("fallback %d: model is invalid", i+1)
+		}
+		normalized = append(normalized, entry)
+	}
+	return normalized, nil
+}
+
 // NormalizeTokenFallbackModels trims every field and validates the list shape.
 // Permission, group membership and pricing checks belong to the controller:
 // this package must not depend on service or relay helpers.

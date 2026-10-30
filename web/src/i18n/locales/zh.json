@@ -5239,6 +5239,7 @@
     "This model has both fixed-price and ratio settings. Saving the current mode will rewrite the conflicting fields.": "该模型同时存在固定价格和比例设置。保存当前模式会重写冲突字段。",
     "This model has both fixed-price and token-price settings. Saving the current mode will rewrite the conflicting fields.": "该模型同时存在固定价格和按 token 价格设置。保存当前模式会重写冲突字段。",
     "This model is not available in any group, or no group pricing information is configured.": "此模型在任何分组中均不可用，或未配置分组定价信息。",
+    "This model name also exists in the selected group. Requests using it will be routed and billed to {{target}} instead.": "该模型名与所选分组中的模型重名，使用该名称的请求将被路由并按 {{target}} 计费。",
     "This month": "本月获得",
     "This page has not been created yet.": "此页面尚未创建。",
     "This plan does not allow balance redemption": "该套餐不允许使用余额兑换",

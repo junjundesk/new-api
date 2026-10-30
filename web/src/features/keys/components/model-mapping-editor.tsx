@@ -61,7 +61,9 @@ import {
   createMappingRowId,
   getModelMappingIssueMessage,
   getModelMappingIssues,
+  getModelMappingNotices,
   type ModelMappingIssue,
+  type ModelMappingNotice,
 } from '../lib/model-mapping'
 import type { TokenModelMapping } from '../types'
 
@@ -71,6 +73,7 @@ type ModelMappingRowProps = {
   disabled?: boolean
   targetsDisabled?: boolean
   issues: ModelMappingIssue[]
+  notice?: ModelMappingNotice
   onChange: (mapping: TokenModelMapping) => void
   onRemove: () => void
 }
@@ -114,6 +117,12 @@ function ModelMappingRow(props: ModelMappingRowProps) {
   const sourceIssue = props.issues.find((i) => i.field === 'source_model')
   const targetIssue = props.issues.find((i) => i.field === 'target_model')
   const effortIssue = props.issues.find((i) => i.field === 'reasoning_effort')
+  const sourceDescriptionIds = [
+    sourceIssue ? `${id}-source-error` : '',
+    props.notice ? `${id}-source-notice` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   const models = props.models ?? []
   const target = props.mapping.target_model
@@ -143,7 +152,7 @@ function ModelMappingRow(props: ModelMappingRowProps) {
             value={props.mapping.source_model}
             disabled={props.disabled}
             aria-invalid={!!sourceIssue}
-            aria-describedby={sourceIssue ? `${id}-source-error` : undefined}
+            aria-describedby={sourceDescriptionIds || undefined}
             placeholder={t('e.g. gpt-6-luna')}
             onChange={(e) =>
               emit({ ...props.mapping, source_model: e.target.value })
@@ -153,6 +162,17 @@ function ModelMappingRow(props: ModelMappingRowProps) {
             <FieldError id={`${id}-source-error`}>
               {getModelMappingIssueMessage(sourceIssue, t)}
             </FieldError>
+          )}
+          {props.notice && (
+            <FieldDescription
+              id={`${id}-source-notice`}
+              className='text-amber-600 dark:text-amber-400'
+            >
+              {t(
+                'This model name also exists in the selected group. Requests using it will be routed and billed to {{target}} instead.',
+                { target: props.notice.target }
+              )}
+            </FieldDescription>
           )}
         </Field>
         <Field data-invalid={!!targetIssue}>
@@ -298,6 +318,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       props.showValidation ||
       (issue.code !== 'source-required' && issue.code !== 'target-required')
   )
+  const notices = getModelMappingNotices(props.value, props.models)
 
   return (
     <div className='flex min-w-0 flex-col gap-4'>
@@ -329,6 +350,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
             disabled={props.disabled}
             targetsDisabled={props.targetsDisabled}
             issues={issues.filter((issue) => issue.index === index)}
+            notice={notices.find((notice) => notice.index === index)}
             onChange={(next) =>
               props.onChange(
                 props.value.map((item, i) => (i === index ? next : item))
@@ -353,9 +375,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
         variant='outline'
         size='sm'
         className='self-start'
-        disabled={
-          props.disabled || props.value.length >= MAX_MODEL_MAPPINGS
-        }
+        disabled={props.disabled || props.value.length >= MAX_MODEL_MAPPINGS}
         onClick={() =>
           props.onChange([
             ...props.value,

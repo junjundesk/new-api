@@ -135,6 +135,37 @@ export function getModelMappingIssueMessage(
   }
 }
 
+export type ModelMappingNotice = {
+  index: number
+  code: 'shadows-group-model'
+  model: string
+  target: string
+}
+
+/**
+ * Reports mappings whose source name is also served by the selected group.
+ * Such a mapping is allowed, but it overrides the group's own model: requests
+ * for that name are routed and billed as the target, and the name disappears
+ * from the key's model list. Omit `availableModels` while options are loading.
+ */
+export function getModelMappingNotices(
+  mappings: TokenModelMapping[],
+  availableModels?: string[]
+): ModelMappingNotice[] {
+  if (!availableModels || availableModels.length === 0) return []
+  const available = new Set(availableModels)
+  const notices: ModelMappingNotice[] = []
+  mappings.forEach((mapping, index) => {
+    const source = mapping.source_model.trim()
+    const target = mapping.target_model.trim()
+    // A self-mapping only overrides reasoning effort; it does not shadow the model.
+    if (!source || !target || source === target) return
+    if (!available.has(source)) return
+    notices.push({ index, code: 'shadows-group-model', model: source, target })
+  })
+  return notices
+}
+
 export function getModelMappingsSchema(
   t: TFunction,
   availableModels?: string[]
