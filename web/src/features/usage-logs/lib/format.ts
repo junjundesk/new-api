@@ -23,6 +23,7 @@ import {
   parseTiersFromExpr,
   type ParsedTier,
 } from '@/features/pricing/lib/billing-expr'
+import { formatUseTime } from '@/lib/format'
 
 import type { UsageLog } from '../data/schema'
 import type { FallbackLogInfo, LogOtherData } from '../types'
@@ -173,6 +174,19 @@ export function getRequestIpForDisplay(
   isAdmin: boolean
 ): string {
   return (isAdmin ? adminInfo?.request_ip : undefined) || logIp
+}
+
+/**
+ * Format a first-token latency (in seconds) for display.
+ *
+ * Sub-second latencies are rendered as integer milliseconds so values below
+ * 50ms no longer round to "0.0s" and read as missing data; one second and
+ * above keep the shared duration formatting ("1.2s", "1m 5s", ...).
+ */
+export function formatFirstTokenTime(seconds: number): string {
+  const milliseconds = Math.round(seconds * 1000)
+  if (milliseconds < 1000) return `${milliseconds}ms`
+  return formatUseTime(seconds)
 }
 
 /**

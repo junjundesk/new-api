@@ -72,6 +72,7 @@ import {
   getTieredBillingSummary,
   hasAnyCacheTokens,
   isViolationFeeLog,
+  formatFirstTokenTime,
   getFirstResponseTimeColor,
   getResponseTimeColor,
   getRequestIpForDisplay,
@@ -763,7 +764,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                         )}
                       >
                         {' '}
-                        (FRT: {formatUseTime(other.frt / 1000)})
+                        (FRT: {formatFirstTokenTime(other.frt / 1000)})
                       </span>
                     )}
                 </span>
