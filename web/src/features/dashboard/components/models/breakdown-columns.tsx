@@ -23,7 +23,11 @@ import { useTranslation } from 'react-i18next'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { breakdownShare, isGroupedBreakdownRow } from '@/features/dashboard/lib'
+import {
+  breakdownShare,
+  computeCacheRate,
+  isGroupedBreakdownRow,
+} from '@/features/dashboard/lib'
 import type { UserQuotaBreakdownRow } from '@/features/dashboard/types'
 import {
   formatCompactNumber,
@@ -166,6 +170,21 @@ export function useBreakdownColumns(
         </div>
       ),
       size: 130,
+    },
+    {
+      id: 'cache-rate',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Cache Rate')} />
+      ),
+      cell: ({ row }) => {
+        const rate = computeCacheRate([row.original])
+        return (
+          <div className='text-right font-mono text-xs tabular-nums'>
+            {rate === null ? '--' : formatPercent(rate)}
+          </div>
+        )
+      },
+      size: 110,
     },
     {
       id: 'share',

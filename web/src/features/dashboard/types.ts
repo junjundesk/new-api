@@ -31,6 +31,10 @@ export interface QuotaDataItem {
   token_used?: number
   count?: number
   quota?: number
+  /** Prompt-cache reads; the numerator of the cache rate. */
+  cache_tokens?: number
+  /** Complete input volume the cache reads are compared against. */
+  cache_input_tokens?: number
 }
 
 // One aggregated line of the user x group x model consumption breakdown.
@@ -42,6 +46,10 @@ export interface UserQuotaBreakdownRow {
   count: number
   quota: number
   token_used: number
+  /** Prompt-cache reads; the numerator of the cache rate. */
+  cache_tokens?: number
+  /** Complete input volume the cache reads are compared against. */
+  cache_input_tokens?: number
 }
 
 // One row per user in the admin breakdown: totals across every group and model.

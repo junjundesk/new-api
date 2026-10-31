@@ -17,6 +17,10 @@ type UserQuotaBreakdownRow struct {
 	Count     int64  `json:"count" gorm:"column:count"`
 	Quota     int64  `json:"quota" gorm:"column:quota"`
 	TokenUsed int64  `json:"token_used" gorm:"column:token_used"`
+	// Cache totals backing the dashboard cache-rate metric: CacheTokens are the
+	// cache reads, CacheInputTokens the complete input volume they divide by.
+	CacheTokens      int64 `json:"cache_tokens" gorm:"column:cache_tokens"`
+	CacheInputTokens int64 `json:"cache_input_tokens" gorm:"column:cache_input_tokens"`
 }
 
 type UserQuotaBreakdownResult struct {
@@ -32,7 +36,7 @@ type UserQuotaBreakdownResult struct {
 func GetUserQuotaBreakdown(startTime int64, endTime int64, username string, userID int, role int, excludeUserIDs []int) (*UserQuotaBreakdownResult, error) {
 	rows := make([]*UserQuotaBreakdownRow, 0)
 	query := DB.Table("quota_data").
-		Select("user_id, username, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
+		Select("user_id, username, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_tokens) as cache_tokens, sum(cache_input_tokens) as cache_input_tokens")
 	if role >= common.RoleAdminUser {
 		if username != "" {
 			query = query.Where("username = ?", username)

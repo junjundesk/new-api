@@ -25,6 +25,7 @@ import {
   Flame,
   TrendingUp,
   Activity,
+  Database,
   type LucideIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -38,6 +39,8 @@ interface StatCardConfig {
   description: string
   icon: LucideIcon
   iconTone: IconBadgeTone
+  // Selects the value formatter; defaults to a plain number.
+  display?: 'quota' | 'percent'
   getValue: (stat: Record<string, number>, days?: number) => number
 }
 
@@ -59,6 +62,7 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
       description: t('Statistical quota'),
       icon: Coins,
       iconTone: 'success',
+      display: 'quota',
       getValue: (stat) => stat?.quota ?? 0,
     },
     {
@@ -86,6 +90,17 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
       iconTone: 'warning',
       getValue: (stat, timeRangeMinutes = 1) =>
         safeDivide(stat?.tpm ?? 0, timeRangeMinutes),
+    },
+    {
+      // -1 means no request in range reported input tokens, so the card shows
+      // "--" instead of a fabricated 0%.
+      key: 'cacheRate',
+      title: t('Total Cache Rate'),
+      description: t('Cache reads over total input tokens'),
+      icon: Database,
+      iconTone: 'chart-1',
+      display: 'percent',
+      getValue: (stat) => stat?.cacheRate ?? -1,
     },
   ]
 }

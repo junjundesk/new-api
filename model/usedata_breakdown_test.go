@@ -44,6 +44,23 @@ func TestGetUserQuotaBreakdownAggregatesByUserGroupAndModel(t *testing.T) {
 	}, *result.Rows[2])
 }
 
+func TestGetUserQuotaBreakdownSumsCacheTokensPerRow(t *testing.T) {
+	truncateTables(t)
+	// Two hourly buckets of the same user/group/model must collapse into one
+	// row whose cache read and input totals are summed, so the dashboard can
+	// divide them without ever seeing an hourly slice.
+	seedBreakdownQuotaData(t,
+		QuotaData{UserID: 1, Username: "alice", UseGroup: "vip", ModelName: "gpt-a", CreatedAt: 3600, Count: 1, Quota: 100, TokenUsed: 40, CacheTokens: 30, CacheInputTokens: 40},
+		QuotaData{UserID: 1, Username: "alice", UseGroup: "vip", ModelName: "gpt-a", CreatedAt: 7200, Count: 1, Quota: 50, TokenUsed: 60, CacheTokens: 10, CacheInputTokens: 60},
+	)
+
+	result, err := GetUserQuotaBreakdown(0, 0, "", 0, common.RoleRootUser, nil)
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 1)
+	require.EqualValues(t, 40, result.Rows[0].CacheTokens)
+	require.EqualValues(t, 100, result.Rows[0].CacheInputTokens)
+}
+
 func TestGetUserQuotaBreakdownScopesByRole(t *testing.T) {
 	truncateTables(t)
 	seedBreakdownQuotaData(t,

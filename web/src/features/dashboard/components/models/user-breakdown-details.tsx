@@ -26,8 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { computeCacheRate } from '@/features/dashboard/lib'
 import type { UserQuotaBreakdownRow } from '@/features/dashboard/types'
-import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
+import {
+  formatCompactNumber,
+  formatNumber,
+  formatPercent,
+  formatQuota,
+} from '@/lib/format'
 
 const EMPTY_DIMENSION = '—'
 
@@ -53,6 +59,7 @@ export function UserBreakdownDetails(props: UserBreakdownDetailsProps) {
             <TableHead className='h-8 text-right'>{t('Requests')}</TableHead>
             <TableHead className='h-8 text-right'>{t('Tokens')}</TableHead>
             <TableHead className='h-8 text-right'>{t('Cost')}</TableHead>
+            <TableHead className='h-8 text-right'>{t('Cache Rate')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -78,6 +85,12 @@ export function UserBreakdownDetails(props: UserBreakdownDetailsProps) {
               </TableCell>
               <TableCell className='text-right font-mono text-xs font-semibold tabular-nums'>
                 {formatQuota(detail.quota)}
+              </TableCell>
+              <TableCell className='text-right font-mono text-xs tabular-nums'>
+                {(() => {
+                  const rate = computeCacheRate([detail])
+                  return rate === null ? '--' : formatPercent(rate)
+                })()}
               </TableCell>
             </TableRow>
           ))}

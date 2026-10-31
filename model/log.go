@@ -470,17 +470,30 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
 	if common.DataExportEnabled {
+		// Cache rate denominator: Anthropic reports prompt tokens that exclude
+		// cache reads and writes, so those are added back; OpenAI/Gemini already
+		// include cached tokens in the prompt total. This mirrors the usage-log
+		// UI so both pages agree on the same rate.
+		cacheTokens := numberFromOther(params.Other, "cache_tokens")
+		cacheCreationTokens := cacheWriteTokensTotalFromOther(params.Other)
+		cacheInputTokens := params.PromptTokens
+		if boolFromOther(params.Other, "claude") {
+			cacheInputTokens += cacheTokens + cacheCreationTokens
+		}
 		LogQuotaData(QuotaDataLogParams{
-			UserID:    userId,
-			Username:  username,
-			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
-			TokenUsed: params.PromptTokens + params.CompletionTokens,
-			UseGroup:  group,
-			TokenID:   params.TokenId,
-			ChannelID: params.ChannelId,
-			NodeName:  common.NodeName,
+			UserID:              userId,
+			Username:            username,
+			ModelName:           params.ModelName,
+			Quota:               params.Quota,
+			CreatedAt:           createdAt,
+			TokenUsed:           params.PromptTokens + params.CompletionTokens,
+			UseGroup:            group,
+			TokenID:             params.TokenId,
+			ChannelID:           params.ChannelId,
+			NodeName:            common.NodeName,
+			CacheTokens:         cacheTokens,
+			CacheCreationTokens: cacheCreationTokens,
+			CacheInputTokens:    cacheInputTokens,
 		})
 	}
 }

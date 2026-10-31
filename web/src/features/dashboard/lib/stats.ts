@@ -27,7 +27,7 @@ export function safeDivide(
   precision: number = 3
 ): number {
   const result = value / divisor
-  if (isNaN(result) || !isFinite(result)) return 0
+  if (Number.isNaN(result) || !Number.isFinite(result)) return 0
   const factor = Math.pow(10, precision)
   return Math.round(result * factor) / factor
 }
@@ -44,4 +44,36 @@ export function calculateDashboardStats(data: QuotaDataItem[]) {
     }),
     { totalQuota: 0, totalCount: 0, totalTokens: 0 }
   )
+}
+
+/** Rejects input volumes large enough to be corrupted usage, not real traffic. */
+const MAX_CACHE_INPUT_TOKENS = 1_000_000_000
+
+interface CacheRateRow {
+  cache_tokens?: number
+  cache_input_tokens?: number
+}
+
+/**
+ * Token-weighted cache hit rate (0-100) across the given rows, or null when no
+ * row reports a usable input volume. Both sides are normalized by the server
+ * (Anthropic prompt tokens exclude cache reads and writes, OpenAI and Gemini
+ * include them), so the rate is a plain division shared by the page stat cards
+ * and the consumption breakdown.
+ */
+export function computeCacheRate(rows: readonly CacheRateRow[]): number | null {
+  let cachedTokens = 0
+  let inputTokens = 0
+
+  for (const row of rows) {
+    const input = row.cache_input_tokens ?? 0
+    const cached = row.cache_tokens ?? 0
+    if (input <= 0 || input > MAX_CACHE_INPUT_TOKENS) continue
+    if (cached < 0 || cached > input) continue
+    inputTokens += input
+    cachedTokens += cached
+  }
+
+  if (inputTokens <= 0) return null
+  return Math.min(Math.max((cachedTokens / inputTokens) * 100, 0), 100)
 }

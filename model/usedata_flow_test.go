@@ -191,3 +191,35 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
 }
+
+func TestLogQuotaDataAccumulatesCacheTokens(t *testing.T) {
+	truncateTables(t)
+	CacheQuotaDataLock.Lock()
+	CacheQuotaData = make(map[string]*QuotaData)
+	CacheQuotaDataLock.Unlock()
+
+	params := QuotaDataLogParams{
+		UserID:              1,
+		Username:            "alice",
+		ModelName:           "claude-a",
+		CreatedAt:           3661,
+		UseGroup:            "vip",
+		Quota:               100,
+		TokenUsed:           40,
+		CacheTokens:         30,
+		CacheCreationTokens: 5,
+		CacheInputTokens:    75,
+	}
+	LogQuotaData(params)
+	LogQuotaData(params)
+	SaveQuotaDataCache()
+
+	var rows []QuotaData
+	require.NoError(t, DB.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	// The same hourly bucket merges, so both the cache reads and the input
+	// volume they are measured against must accumulate together.
+	require.Equal(t, 60, rows[0].CacheTokens)
+	require.Equal(t, 10, rows[0].CacheCreationTokens)
+	require.Equal(t, 150, rows[0].CacheInputTokens)
+}
