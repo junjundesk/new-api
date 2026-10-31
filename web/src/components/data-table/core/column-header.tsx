@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type Column } from '@tanstack/react-table'
+import type { Column } from '@tanstack/react-table'
 import {
   ArrowDown as ArrowDownIcon,
   ArrowUp as ArrowUpIcon,
@@ -39,20 +39,42 @@ type DataTableColumnHeaderProps<TData, TValue> =
   React.HTMLAttributes<HTMLDivElement> & {
     column: Column<TData, TValue>
     title: React.ReactNode
+    /**
+     * Side the header label aligns to. Numeric columns right-align their cells,
+     * so their header has to follow or the label floats away from the values.
+     */
+    align?: 'start' | 'end'
   }
 
 export function DataTableColumnHeader<TData, TValue>({
   column,
   title,
   className,
+  align = 'start',
 }: DataTableColumnHeaderProps<TData, TValue>) {
   const { t } = useTranslation()
+  const alignClass = align === 'end' ? 'text-right' : undefined
   if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>
+    return <div className={cn(alignClass, className)}>{title}</div>
+  }
+
+  const sorted = column.getIsSorted()
+  let sortIcon = <CaretSortIcon className='ms-2 h-4 w-4' />
+  if (sorted === 'desc') {
+    sortIcon = <ArrowDownIcon className='ms-2 h-4 w-4' />
+  } else if (sorted === 'asc') {
+    sortIcon = <ArrowUpIcon className='ms-2 h-4 w-4' />
   }
 
   return (
-    <div className={cn('flex items-center space-x-2', className)}>
+    <div
+      className={cn(
+        'flex items-center space-x-2',
+        align === 'end' && 'justify-end',
+        alignClass,
+        className
+      )}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -64,13 +86,7 @@ export function DataTableColumnHeader<TData, TValue>({
           }
         >
           <span>{title}</span>
-          {column.getIsSorted() === 'desc' ? (
-            <ArrowDownIcon className='ms-2 h-4 w-4' />
-          ) : column.getIsSorted() === 'asc' ? (
-            <ArrowUpIcon className='ms-2 h-4 w-4' />
-          ) : (
-            <CaretSortIcon className='ms-2 h-4 w-4' />
-          )}
+          {sortIcon}
         </DropdownMenuTrigger>
         <DropdownMenuContent align='start'>
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>

@@ -135,7 +135,11 @@ export function useBreakdownColumns(
     {
       accessorKey: 'count',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Requests')} />
+        <DataTableColumnHeader
+          column={column}
+          title={t('Requests')}
+          align='end'
+        />
       ),
       cell: ({ row }) => (
         <div className='text-right font-mono text-xs tabular-nums'>
@@ -147,7 +151,11 @@ export function useBreakdownColumns(
     {
       accessorKey: 'token_used',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Tokens')} />
+        <DataTableColumnHeader
+          column={column}
+          title={t('Tokens')}
+          align='end'
+        />
       ),
       cell: ({ row }) => (
         <div
@@ -162,7 +170,7 @@ export function useBreakdownColumns(
     {
       accessorKey: 'quota',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Cost')} />
+        <DataTableColumnHeader column={column} title={t('Cost')} align='end' />
       ),
       cell: ({ row }) => (
         <div className='text-right font-mono text-xs font-semibold tabular-nums'>
@@ -174,7 +182,11 @@ export function useBreakdownColumns(
     {
       id: 'cache-rate',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Cache Rate')} />
+        <DataTableColumnHeader
+          column={column}
+          title={t('Cache Rate')}
+          align='end'
+        />
       ),
       cell: ({ row }) => {
         const rate = computeCacheRate([row.original])
@@ -190,7 +202,7 @@ export function useBreakdownColumns(
       id: 'share',
       accessorFn: (row) => row.quota,
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Share')} />
+        <DataTableColumnHeader column={column} title={t('Share')} align='end' />
       ),
       cell: ({ row }) => {
         const share = breakdownShare(row.original.quota, options.totalQuota)
