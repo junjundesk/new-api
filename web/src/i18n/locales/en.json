@@ -4376,6 +4376,7 @@
     "Request overrides, routing behavior, and upstream model automation": "Request overrides, routing behavior, and upstream model automation",
     "Request retry": "Request retry",
     "Request rule pricing": "Request rule pricing",
+    "Request Source": "Request Source",
     "Request success rate sampled over the last 24 hours": "Request success rate sampled over the last 24 hours",
     "Request success rate; {{incidents}} incident buckets in the last 24 hours": "Request success rate; {{incidents}} incident buckets in the last 24 hours",
     "Request timed out, please refresh and restart GitHub login": "Request timed out, please refresh and restart GitHub login",

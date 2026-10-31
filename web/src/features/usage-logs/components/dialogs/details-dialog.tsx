@@ -526,6 +526,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     !!mappedUpstreamModelName
   const fallback = other?.fallback
   const fallbackAttempts = props.isAdmin ? adminInfo?.fallback_attempts : undefined
+  const requestSource = other?.request_source
   const requestIp = getRequestIpForDisplay(
     props.log.ip,
     adminInfo,
@@ -719,6 +720,29 @@ export function DetailsDialog(props: DetailsDialogProps) {
             <DetailRow
               label={t('Group')}
               value={props.log.group || other?.group || ''}
+              mono
+            />
+          )}
+
+          {requestSource?.host && (
+            <DetailRow
+              label={t('Request Source')}
+              value={
+                <span className='flex min-w-0 items-center gap-1'>
+                  <Cloud
+                    className='size-3 shrink-0 text-sky-500'
+                    aria-hidden='true'
+                  />
+                  <span className='min-w-0 break-all'>
+                    {requestSource.host}
+                  </span>
+                  {requestSource.origin && (
+                    <span className='text-muted-foreground min-w-0 break-all'>
+                      ← {requestSource.origin}
+                    </span>
+                  )}
+                </span>
+              }
               mono
             />
           )}

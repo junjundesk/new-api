@@ -103,6 +103,10 @@ const NEW_KEYS = {
     en: "IP Address",
     zh: "IP 地址",
   },
+  "Request Source": {
+    en: "Request Source",
+    zh: "请求来源",
+  },
   "Type": {
     en: "Type",
     zh: "类型",
@@ -368,6 +372,17 @@ function keyLineIndex(lines, key, from, to) {
   return -1
 }
 
+// 返回新键应按字母序插入的行号；键排在所有既有键之后时返回 -1，
+// 由调用方改用「插到末键之前」的兼容分支。
+function sortedInsertIndex(lines, key, from, to) {
+  for (let i = from; i < to; i += 1) {
+    const match = lines[i].match(/^\s*"((?:[^"\\]|\\.)*)"\s*:/)
+    if (!match) continue
+    if (JSON.parse('"' + match[1] + '"').localeCompare(key, 'en') > 0) return i
+  }
+  return -1
+}
+
 async function insertMissingKeys(locale) {
   const file = path.join(LOCALES_DIR, locale + '.json')
   const text = await fs.readFile(file, 'utf8')
@@ -398,6 +413,9 @@ async function insertMissingKeys(locale) {
 
   for (const key of pending) {
     let insertAt = keyLineIndex(lines, key, translationStart + 1, end)
+    if (insertAt < 0) {
+      insertAt = sortedInsertIndex(lines, key, translationStart + 1, end)
+    }
     if (insertAt < 0) {
       // Keep the trailing key unprefixed by inserting after the last key line.
       let lastKeyLine = -1

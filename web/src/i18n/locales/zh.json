@@ -4376,6 +4376,7 @@
     "Request overrides, routing behavior, and upstream model automation": "请求覆盖、路由行为和上游模型自动化",
     "Request retry": "请求重试",
     "Request rule pricing": "请求规则计费",
+    "Request Source": "请求来源",
     "Request success rate sampled over the last 24 hours": "最近 24 小时按时间桶采样的请求成功率",
     "Request success rate; {{incidents}} incident buckets in the last 24 hours": "请求成功率；最近 24 小时 {{incidents}} 个异常桶",
     "Request timed out, please refresh and restart GitHub login": "请求超时，请刷新页面后重新发起 GitHub 登录",

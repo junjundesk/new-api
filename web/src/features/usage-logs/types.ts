@@ -189,6 +189,13 @@ export interface LogOtherData {
   user_agent?: string
   request_path?: string
   request_conversion?: string[]
+  // Source site of the request: the host the client actually called (from
+  // X-Forwarded-Host or Host) plus, for browser callers, the referring site
+  // parsed from Origin/Referer. Tells which API site a caller came through.
+  request_source?: {
+    host?: string
+    origin?: string
+  }
   // Client recognition (parsed from User-Agent by the backend)
   client?: {
     name: string

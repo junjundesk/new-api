@@ -360,6 +360,7 @@ func RecordErrorLog(c *gin.Context, params RecordErrorLogParams) {
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	requestIP := requestClientIP(c)
 	other := attachRequestIPForAdmin(params.Other, requestIP)
+	common.AttachRequestSourceToOther(other, c.Request)
 	common.AttachClientInfoToOther(other, c.GetHeader("User-Agent"))
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
@@ -428,6 +429,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	createdAt := common.GetTimestamp()
 	requestIP := requestClientIP(c)
 	params.Other = attachRequestIPForAdmin(params.Other, requestIP)
+	common.AttachRequestSourceToOther(params.Other, c.Request)
 	otherStr := common.MapToJsonStr(params.Other)
 	group := resolveLogGroupName(userId, params.Group)
 	// 判断是否需要记录 IP
