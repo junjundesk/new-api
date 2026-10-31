@@ -3,9 +3,11 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -53,6 +55,18 @@ func GetUserLogs(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
+	return
+}
+
+// GetIPLocation 返回某个公网 IP 的归属地，用于日志列表 IP 下方的小字。
+// 归属地在 service 层缓存 24 小时；内网 IP 或查询失败时 location 为空字符串。
+func GetIPLocation(c *gin.Context) {
+	ip := strings.TrimSpace(c.Query("ip"))
+	if !common.IsIP(ip) {
+		common.ApiErrorMsg(c, "invalid ip")
+		return
+	}
+	common.ApiSuccess(c, gin.H{"location": service.GetIPLocation(ip)})
 	return
 }
 

@@ -59,10 +59,11 @@ import {
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
+import { IpLocationLabel } from '../ip-location-label'
 import { LogCacheRateBadge } from '../log-cache-rate-badge'
 import { LogClientBadge } from '../log-client-badge'
-import { LogFallbackBadge } from '../log-fallback-badge'
 import { LogCostDisplay } from '../log-cost-display'
+import { LogFallbackBadge } from '../log-fallback-badge'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
@@ -572,13 +573,18 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
 
+          // 两行堆叠：IP 一行，归属地一行小字。负外边距抵掉多出来的一行，
+          // 让单元格高度不超过原来单行的高度，行高保持不变。
           return (
-            <span className='inline-flex max-w-[180px] items-center gap-1 font-mono text-xs break-all'>
-              <Globe
-                className='size-3 shrink-0 text-amber-500'
-                aria-hidden='true'
-              />
-              {requestIp}
+            <span className='-my-1 inline-flex max-w-[180px] flex-col items-start leading-none'>
+              <span className='inline-flex items-center gap-1 font-mono break-all'>
+                <Globe
+                  className='size-3 shrink-0 text-amber-500'
+                  aria-hidden='true'
+                />
+                {requestIp}
+              </span>
+              <IpLocationLabel ip={requestIp} className='mt-px' />
             </span>
           )
         },

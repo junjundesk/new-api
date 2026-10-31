@@ -91,6 +91,23 @@ export async function getUserInfo(
   return res.data
 }
 
+/**
+ * Resolve the location of a logged request IP.
+ * Returns '' when the backend cannot resolve it (private IP, upstream failure),
+ * so callers can simply render nothing.
+ */
+export async function getIPLocation(ip: string): Promise<string> {
+  const res = await api.get(
+    `/api/log/self/ip_location?ip=${encodeURIComponent(ip)}`
+  )
+  const payload = res.data as {
+    success?: boolean
+    data?: { location?: string }
+  }
+  if (!payload?.success) return ''
+  return payload.data?.location ?? ''
+}
+
 // ============================================================================
 // MjProxy (Drawing) Logs API
 // ============================================================================
