@@ -211,7 +211,7 @@ describe('activity offer cards', () => {
         name: 'Benefit Pack',
         type: 'benefit',
         benefits: [
-          benefitFixture(),
+          benefitFixture({ rpm_limit: 5 }),
           benefitFixture({
             key: 'benefit-2',
             group_name: 'hdpro',
@@ -224,11 +224,14 @@ describe('activity offer cards', () => {
       }),
     ])
 
+    // 回归：管理端给权益配置了 RPM，用户端卡片必须能看到，否则会误判为不限速。
     expect(
-      screen.getByText('Free Group · Whole group · 10M tokens')
+      screen.getByText('Free Group · Whole group · 10M tokens · RPM limit: 5')
     ).toBeVisible()
     expect(
-      screen.getByText('Pro Group · Model gpt-5 · Unlimited tokens')
+      screen.getByText(
+        'Pro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
+      )
     ).toBeVisible()
     expect(screen.getByText('Benefits')).toBeVisible()
     expect(screen.queryByText('Ratio')).not.toBeInTheDocument()

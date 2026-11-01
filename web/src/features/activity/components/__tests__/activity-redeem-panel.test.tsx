@@ -287,10 +287,14 @@ describe('activity redeem panel', () => {
     await submitCode(user, 'hdfree')
 
     expect(
-      await screen.findByText('Free Group · Whole group · 10M tokens')
+      await screen.findByText(
+        'Free Group · Whole group · 10M tokens · RPM limit: Unlimited'
+      )
     ).toBeVisible()
     expect(
-      screen.getByText('Pro Group · Model gpt-5 · Unlimited tokens')
+      screen.getByText(
+        'Pro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
+      )
     ).toBeVisible()
     expect(screen.getByText('Benefits')).toBeVisible()
     expect(screen.queryByText('Ratio')).not.toBeInTheDocument()

@@ -65,6 +65,7 @@ await i18n.init({
         'Token quota used up (billed at the original price)':
           'Token quota used up (billed at the original price)',
         Unlimited: 'Unlimited',
+        'RPM limit': 'RPM limit',
         'Expires at': 'Expires at',
         Paid: 'Paid',
         'Group default ratio': 'Group default ratio',
@@ -135,6 +136,7 @@ describe('activity grants card', () => {
         benefit_key: 'benefit-1',
         redeem_batch: 'batch-1',
         ratio_scope: 'group',
+        rpm_limit: 5,
         token_total: 10_000_000,
         token_used: 2_500_000,
       }),
@@ -151,14 +153,18 @@ describe('activity grants card', () => {
     ])
 
     expect(await screen.findByText('hdfree')).toBeVisible()
+    // 权益授权自带 RPM 上限，必须同行展示，否则用户会误以为沿用分组的默认限速。
     expect(
       screen.getByText(
-        /Free Pack · Whole group · Used 2\.5M \/ 10M · Remaining 7\.5M/
+        /Free Pack · Whole group · Used 2\.5M \/ 10M · Remaining 7\.5M · RPM limit: 5 · Expires at/
       )
     ).toBeVisible()
     expect(screen.getByText('hdpro')).toBeVisible()
+    // 未配置 RPM（默认 0）时展示不限速，避免出现 "RPM limit: 0" 的误导文案。
     expect(
-      screen.getByText(/Free Pack · Model gpt-5 · Used 10K \/ Unlimited/)
+      screen.getByText(
+        /Free Pack · Model gpt-5 · Used 10K \/ Unlimited · RPM limit: Unlimited · Expires at/
+      )
     ).toBeVisible()
   })
 

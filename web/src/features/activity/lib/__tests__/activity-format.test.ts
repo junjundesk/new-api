@@ -44,6 +44,7 @@ await i18n.init({
         'Token quota used up (billed at the original price)':
           'Token quota used up (billed at the original price)',
         Unlimited: 'Unlimited',
+        'RPM limit': 'RPM limit',
       },
     },
   },
@@ -69,6 +70,7 @@ await zhI18n.init({
         'Token quota used up (billed at the original price)':
           'Token 已用完（按原价计费）',
         Unlimited: '无限制',
+        'RPM limit': 'RPM 限制',
       },
     },
   },
@@ -154,7 +156,7 @@ describe('describeActivityBenefits', () => {
         'en'
       )
     ).toBe(
-      'Free Group · Whole group · 10M tokens\nPro Group · Model gpt-5 · Unlimited tokens'
+      'Free Group · Whole group · 10M tokens · RPM limit: Unlimited\nPro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
     )
   })
 
@@ -167,6 +169,7 @@ describe('describeActivityBenefits', () => {
             group_desc: '免费分组',
             scope: 'group',
             token_total: 10_000_000,
+            rpm_limit: 5,
           }),
           benefitFixture({
             key: 'benefit-2',
@@ -180,8 +183,18 @@ describe('describeActivityBenefits', () => {
         'zhCN'
       )
     ).toBe(
-      '免费分组 · 整个分组 · 1000万 Token\n专业分组 · 模型 gpt-5 · 不限量 Token'
+      '免费分组 · 整个分组 · 1000万 Token · RPM 限制: 5\n专业分组 · 模型 gpt-5 · 不限量 Token · RPM 限制: 无限制'
     )
+  })
+
+  it('shows the configured RPM limit in the benefit summary', () => {
+    expect(
+      describeActivityBenefits(
+        i18n.t.bind(i18n),
+        [benefitFixture({ token_total: 10_000_000, rpm_limit: 5 })],
+        'en'
+      )
+    ).toBe('Free Group · Whole group · 10M tokens · RPM limit: 5')
   })
 
   it('returns an empty string when the old API has no benefits', () => {

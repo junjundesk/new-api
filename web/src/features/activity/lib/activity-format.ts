@@ -68,8 +68,13 @@ export function describeExpireTime(t: TFunction, expireTime: number): string {
   return new Date(expireTime * 1000).toLocaleString()
 }
 
-// 单条活动权益：「分组 · 整组/单模型 · Token 总量/不限量」。
-// token_total 为 0 表示不限量免费。
+// 活动授权/权益的每分钟请求上限；rpm_limit 为 0 表示不限速。
+export function describeActivityRpm(t: TFunction, rpmLimit: number): string {
+  return `${t('RPM limit')}: ${rpmLimit > 0 ? String(rpmLimit) : t('Unlimited')}`
+}
+
+// 单条活动权益：「分组 · 整组/单模型 · Token 总量/不限量 · RPM 上限」。
+// token_total 为 0 表示不限量免费；rpm_limit 为 0 表示不限速。
 export function describeActivityBenefit(
   t: TFunction,
   benefit: ActivityBenefit,
@@ -86,7 +91,7 @@ export function describeActivityBenefit(
           amount: formatTokenAmount(benefit.token_total, language),
         })
       : t('Unlimited tokens')
-  return `${group} · ${scope} · ${tokens}`
+  return `${group} · ${scope} · ${tokens} · ${describeActivityRpm(t, benefit.rpm_limit)}`
 }
 
 // 多权益活动逐条描述，每条权益一行；旧接口没有 benefits 时返回空串。

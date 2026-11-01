@@ -28,6 +28,7 @@ import { formatModelRatioOverrides, formatQuota } from '@/lib/format'
 import { getActivityGrants } from '../api'
 import {
   describeActivityRatio,
+  describeActivityRpm,
   describeExpireTime,
   describeTokenUsage,
 } from '../lib/activity-format'
@@ -82,6 +83,9 @@ function ActivityGrantRow(props: ActivityGrantRowProps) {
     )
     if (listedModels) parts.push(`${t('Models (ratio)')}: ${listedModels}`)
   }
+  // 授权自带 RPM 上限（benefit 按权益配置，ratio 按活动码配置），
+  // 与权益/倍率同行展示，否则用户只能看到管理端设置而不知道实际限速。
+  parts.push(describeActivityRpm(t, grant.rpm_limit))
   parts.push(`${t('Expires at')}: ${describeExpireTime(t, grant.expire_time)}`)
   if (props.showPaid && grant.price_quota > 0) {
     parts.push(`${t('Paid')}: ${formatQuota(grant.price_quota)}`)
