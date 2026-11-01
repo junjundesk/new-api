@@ -150,12 +150,20 @@ function renderPanel() {
   )
 }
 
+let writeText: ReturnType<typeof vi.fn>
+
 beforeEach(() => {
   mockedFetch.mockReset()
+  writeText = vi.fn(async () => {})
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  })
 })
 
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(navigator, 'clipboard')
 })
 
 describe('UserConsumptionBreakdown', () => {
@@ -240,6 +248,26 @@ describe('UserConsumptionBreakdown', () => {
     expect(screen.queryByText('gpt-4.1')).toBeNull()
     // Alice and Bob each account for half of the filtered total.
     expect(screen.getAllByText('50%').length).toBe(2)
+  })
+
+  test('copies a username without expanding the user row', async () => {
+    mockedFetch.mockResolvedValue(payload())
+
+    renderPanel()
+    await screen.findByRole('button', { name: 'alice' })
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Copy username: alice' })
+    )
+
+    expect(writeText).toHaveBeenCalledWith('alice')
+    // Copying must not open the group and model details hidden in the row.
+    expect(screen.queryByText('vip')).toBeNull()
+    expect(
+      screen
+        .getByRole('button', { name: 'alice' })
+        .getAttribute('aria-expanded')
+    ).toBe('false')
   })
 
   test('clicking a username expands and collapses group and model details', async () => {

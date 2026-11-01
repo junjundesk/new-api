@@ -20,6 +20,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CopyButton } from '@/components/copy-button'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -66,39 +67,58 @@ export function useBreakdownColumns(
       ),
       cell: ({ row }) => {
         const original = row.original
+        // The username is the only way back to the account, so it has to be
+        // copyable without expanding the row first.
+        const copyButton =
+          original.username.length > 0 ? (
+            <CopyButton
+              value={original.username}
+              className='text-muted-foreground/60 hover:text-foreground size-6'
+              iconClassName='size-3'
+              tooltip={t('Copy username')}
+              aria-label={`${t('Copy username')}: ${original.username}`}
+            />
+          ) : null
+
         if (!isGroupedBreakdownRow(original)) {
           return (
-            <span className='block max-w-40 truncate font-medium'>
-              {original.username || EMPTY_DIMENSION}
-            </span>
+            <div className='flex min-w-0 items-center gap-1'>
+              <span className='block max-w-40 truncate font-medium'>
+                {original.username || EMPTY_DIMENSION}
+              </span>
+              {copyButton}
+            </div>
           )
         }
 
         const expanded = options.expandedRowKeys.has(original.key)
         return (
-          <Button
-            type='button'
-            variant='ghost'
-            size='sm'
-            className='h-auto max-w-40 justify-start gap-1 p-0 font-medium'
-            aria-expanded={expanded}
-            aria-controls={options.getDetailPanelId(original.key)}
-            onClick={() => options.onToggleRow(original.key)}
-          >
-            <ChevronRight
-              className={cn(
-                'size-3.5 shrink-0 transition-transform',
-                expanded && 'rotate-90'
-              )}
-              aria-hidden='true'
-            />
-            <span className='truncate'>
-              {original.username || EMPTY_DIMENSION}
-            </span>
-          </Button>
+          <div className='flex min-w-0 items-center gap-1'>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-auto max-w-40 min-w-0 shrink justify-start gap-1 p-0 font-medium'
+              aria-expanded={expanded}
+              aria-controls={options.getDetailPanelId(original.key)}
+              onClick={() => options.onToggleRow(original.key)}
+            >
+              <ChevronRight
+                className={cn(
+                  'size-3.5 shrink-0 transition-transform',
+                  expanded && 'rotate-90'
+                )}
+                aria-hidden='true'
+              />
+              <span className='truncate'>
+                {original.username || EMPTY_DIMENSION}
+              </span>
+            </Button>
+            {copyButton}
+          </div>
         )
       },
-      size: options.grouped ? 200 : 160,
+      size: options.grouped ? 220 : 180,
     })
   }
 
