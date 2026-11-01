@@ -60,6 +60,9 @@ function validValues(
     model_ratio_overrides: [],
     start_time: undefined,
     end_time: undefined,
+    active_end_time: undefined,
+    sort_weight: 0,
+    image_url: '',
     total_limit: 0,
     per_user_limit: 1,
     public_visible: false,
@@ -128,7 +131,9 @@ function benefitValues(
   })
 }
 
-function benefitActivityCode(overrides: Partial<ActivityCode> = {}): ActivityCode {
+function benefitActivityCode(
+  overrides: Partial<ActivityCode> = {}
+): ActivityCode {
   return activityCode({
     type: ACTIVITY_CODE_TYPE.BENEFIT,
     benefits: [
@@ -156,8 +161,14 @@ describe('activity code form validation', () => {
   })
 
   test('rejects codes containing spaces or symbols', () => {
-    assert.equal(schema.safeParse(validValues({ code: '夏日 免费' })).success, false)
-    assert.equal(schema.safeParse(validValues({ code: '免费🎉' })).success, false)
+    assert.equal(
+      schema.safeParse(validValues({ code: '夏日 免费' })).success,
+      false
+    )
+    assert.equal(
+      schema.safeParse(validValues({ code: '免费🎉' })).success,
+      false
+    )
   })
 
   test('limits code length by characters instead of bytes', () => {
@@ -187,20 +198,26 @@ describe('activity code form validation', () => {
   })
 
   test('the selected-models scope requires at least one model', () => {
-    const parsed = schema.safeParse(modelScopeValues({ model_ratio_overrides: [] }))
+    const parsed = schema.safeParse(
+      modelScopeValues({ model_ratio_overrides: [] })
+    )
     assert.equal(parsed.success, false)
   })
 
   test('the selected-models scope rejects a row without a model or ratio', () => {
     assert.equal(
       schema.safeParse(
-        modelScopeValues({ model_ratio_overrides: [{ model: '  ', ratio: '0' }] })
+        modelScopeValues({
+          model_ratio_overrides: [{ model: '  ', ratio: '0' }],
+        })
       ).success,
       false
     )
     assert.equal(
       schema.safeParse(
-        modelScopeValues({ model_ratio_overrides: [{ model: 'gpt-5', ratio: '' }] })
+        modelScopeValues({
+          model_ratio_overrides: [{ model: 'gpt-5', ratio: '' }],
+        })
       ).success,
       false
     )
@@ -222,7 +239,9 @@ describe('activity code form validation', () => {
     for (const ratio of ['-1', '1001', 'abc']) {
       assert.equal(
         schema.safeParse(
-          modelScopeValues({ model_ratio_overrides: [{ model: 'gpt-5', ratio }] })
+          modelScopeValues({
+            model_ratio_overrides: [{ model: 'gpt-5', ratio }],
+          })
         ).success,
         false,
         `${ratio} must be rejected`
@@ -232,7 +251,9 @@ describe('activity code form validation', () => {
 
   test('the selected-models scope accepts a single free model', () => {
     const parsed = schema.safeParse(
-      modelScopeValues({ model_ratio_overrides: [{ model: 'gpt-5', ratio: '0' }] })
+      modelScopeValues({
+        model_ratio_overrides: [{ model: 'gpt-5', ratio: '0' }],
+      })
     )
     assert.equal(parsed.success, true)
   })
@@ -263,7 +284,10 @@ describe('activity code form payload', () => {
 
   test('an inherited group ratio never sends a stale override value', () => {
     const payload = transformFormValuesToPayload(
-      validValues({ ratio_mode: ACTIVITY_RATIO_MODE.INHERIT, ratio_override: 5 })
+      validValues({
+        ratio_mode: ACTIVITY_RATIO_MODE.INHERIT,
+        ratio_override: 5,
+      })
     )
     assert.equal(payload.ratio_override, 0)
   })

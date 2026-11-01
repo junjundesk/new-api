@@ -3,9 +3,12 @@ package service
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 // 同一分组的多张授权合并时：分组级倍率取最小、指定模型倍率取并集且同名取最小、
@@ -192,4 +195,62 @@ func TestMergeActivityViewsExhaustedPackageWithoutFallbackIsNotFree(t *testing.T
 	override := view.BillingRatioOverride(true)
 	require.NotNil(t, override, "活动授权仍然保留优先权")
 	assert.Nil(t, override.GroupRatio, "没有其他优惠时按分组原价计费")
+}
+
+// 活动到期时间会 cap 视图的到期时间：min(expire_time, activity_end_time)，0 表示永久。
+func TestMergeActivityViewsCapsExpireTimeByActivityEnd(t *testing.T) {
+	tests := []struct {
+		name       string
+		grant      model.ActivityGrant
+		wantExpire int64
+	}{
+		{name: "activity ends before the grant", grant: model.ActivityGrant{ExpireTime: 5000, ActivityEndTime: 3000}, wantExpire: 3000},
+		{name: "grant ends before the activity", grant: model.ActivityGrant{ExpireTime: 3000, ActivityEndTime: 5000}, wantExpire: 3000},
+		{name: "activity without end time", grant: model.ActivityGrant{ExpireTime: 3000}, wantExpire: 3000},
+		{name: "permanent grant capped by the activity", grant: model.ActivityGrant{ActivityEndTime: 3000}, wantExpire: 3000},
+		{name: "both permanent", grant: model.ActivityGrant{}, wantExpire: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			grant := tt.grant
+			grant.Id, grant.GroupName, grant.RatioMode = 1, "vip", model.ActivityRatioModeInherit
+			view := mergeActivityViews([]model.ActivityGrant{grant})[0]
+			assert.Equal(t, tt.wantExpire, view.ExpireTime)
+		})
+	}
+}
+
+// 合并视图沿用 model 的生效过滤：活动到期后该授权不再出现在用户的活动视图里。
+func TestGetActiveActivityViewsDropsGrantsAfterActivityEnd(t *testing.T) {
+	previousDB := model.DB
+	previousRedis := common.RedisEnabled
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, db.AutoMigrate(&model.ActivityGrant{}))
+	model.DB = db
+	common.RedisEnabled = false
+	t.Cleanup(func() {
+		model.DB = previousDB
+		common.RedisEnabled = previousRedis
+	})
+
+	now := common.GetTimestamp()
+	require.NoError(t, db.Create(&model.ActivityGrant{
+		UserId: 1, CodeId: 1, Code: "ended-activity", GroupName: "vip",
+		RatioMode: model.ActivityRatioModeOverride, RatioOverride: 0,
+		ExpireTime: now + 3600, ActivityEndTime: now - 1, Status: model.ActivityGrantStatusActive,
+	}).Error)
+	require.NoError(t, db.Create(&model.ActivityGrant{
+		UserId: 1, CodeId: 2, Code: "live-activity", GroupName: "svip",
+		RatioMode: model.ActivityRatioModeOverride, RatioOverride: 0,
+		ExpireTime: now + 3600, ActivityEndTime: now + 3600, Status: model.ActivityGrantStatusActive,
+	}).Error)
+
+	views := GetActiveActivityViews(1)
+	require.Len(t, views, 1, "活动到期后该授权不再生效")
+	assert.Equal(t, "svip", views[0].GroupName)
+	assert.Equal(t, now+3600, views[0].ExpireTime)
 }

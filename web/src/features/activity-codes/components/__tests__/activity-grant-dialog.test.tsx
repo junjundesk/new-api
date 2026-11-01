@@ -79,6 +79,9 @@ const activityCode: ActivityCode = {
   model_ratio_overrides: null,
   start_time: 0,
   end_time: 0,
+  active_end_time: 0,
+  sort_weight: 0,
+  image_url: '',
   total_limit: 0,
   used_count: 0,
   per_user_limit: 1,
@@ -193,11 +196,13 @@ describe('activity grant dialog', () => {
     renderDialog(benefitCode)
 
     expect(await screen.findByText(/vip, default/)).toBeVisible()
-    expect(screen.getByText('vip · Whole group · Unlimited tokens')).toBeVisible()
     expect(
-      screen.getByText(/default · gpt-5 · 2M tokens/)
+      screen.getByText('vip · Whole group · Unlimited tokens')
     ).toBeVisible()
-    expect(screen.getByText(/default · gpt-5 · 2M tokens · RPM: 60/)).toBeVisible()
+    expect(screen.getByText(/default · gpt-5 · 2M tokens/)).toBeVisible()
+    expect(
+      screen.getByText(/default · gpt-5 · 2M tokens · RPM: 60/)
+    ).toBeVisible()
   })
 
   it('keeps the grant action disabled until at least one user is selected', async () => {

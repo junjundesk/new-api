@@ -67,6 +67,12 @@ export const activityCodeSchema = z.object({
   model_ratio_overrides: z.record(z.string(), z.number()).nullish(),
   start_time: z.number(),
   end_time: z.number(),
+  // 活动到期时间（unix 秒，0 = 不限）：到达后活动立即失效，
+  // 独立于 end_time（兑换截止）与 duration_seconds（兑换后有效期）。
+  active_end_time: z.number().default(0),
+  // 活动中心卡片的展示配置：排序权重越大越靠前，背景图为空表示不启用。
+  sort_weight: z.number().default(0),
+  image_url: z.string().default(''),
   total_limit: z.number(),
   used_count: z.number(),
   per_user_limit: z.number(),
@@ -155,6 +161,12 @@ export interface ActivityCodeFormData {
   model_ratio_overrides: Record<string, number>
   start_time: number
   end_time: number
+  // unix 秒，0 = 不限。
+  active_end_time: number
+  // 排序权重 0..1000000，越大越靠前。
+  sort_weight: number
+  // 卡片背景图地址，空串表示不启用背景图。
+  image_url: string
   total_limit: number
   per_user_limit: number
   public_visible: number

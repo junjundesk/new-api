@@ -96,7 +96,10 @@ export function getActivityCodeFormSchema(t: TFunction) {
       ratio_override: z
         .number()
         .min(0, t('Ratio must be between 0 and 1000'))
-        .max(ACTIVITY_VALIDATION.RATIO_MAX, t('Ratio must be between 0 and 1000')),
+        .max(
+          ACTIVITY_VALIDATION.RATIO_MAX,
+          t('Ratio must be between 0 and 1000')
+        ),
       ratio_scope: z.enum([
         ACTIVITY_RATIO_SCOPE.GROUP,
         ACTIVITY_RATIO_SCOPE.MODELS,
@@ -115,6 +118,31 @@ export function getActivityCodeFormSchema(t: TFunction) {
       ),
       start_time: z.date().optional(),
       end_time: z.date().optional(),
+      // 活动到期时间：到达后活动立即失效，与授权自身的有效期无关，留空表示不限制。
+      active_end_time: z.date().optional(),
+      // 卡片排序权重：数字越大越靠前，与后端 0..1000000 的范围保持一致。
+      sort_weight: z
+        .number()
+        .min(0, t('Sort weight must be between 0 and 1000000'))
+        .max(
+          ACTIVITY_VALIDATION.SORT_WEIGHT_MAX,
+          t('Sort weight must be between 0 and 1000000')
+        ),
+      // 卡片背景图：留空不启用；非空须是 http(s) 链接或以 / 开头的站内路径。
+      image_url: z
+        .string()
+        .trim()
+        .max(
+          ACTIVITY_VALIDATION.IMAGE_URL_MAX_LENGTH,
+          t('Background image URL must be at most 512 characters')
+        )
+        .refine(
+          (value) =>
+            value === '' ||
+            value.startsWith('/') ||
+            /^https?:\/\//i.test(value),
+          t('Enter an http(s) URL or a path starting with /.')
+        ),
       total_limit: z
         .number()
         .min(0, t('Total limit must be 0 or greater'))
@@ -263,6 +291,9 @@ export type ActivityCodeFormValues = {
   model_ratio_overrides: ActivityModelRatioRow[]
   start_time?: Date
   end_time?: Date
+  active_end_time?: Date
+  sort_weight: number
+  image_url: string
   total_limit: number
   per_user_limit: number
   public_visible: boolean
@@ -284,6 +315,9 @@ export const ACTIVITY_CODE_FORM_DEFAULT_VALUES: ActivityCodeFormValues = {
   model_ratio_overrides: [],
   start_time: undefined,
   end_time: undefined,
+  active_end_time: undefined,
+  sort_weight: 0,
+  image_url: '',
   total_limit: 0,
   per_user_limit: 1,
   public_visible: false,
@@ -312,6 +346,10 @@ export function transformFormValuesToPayload(
     model_ratio_overrides: {},
     start_time: toEpochSeconds(values.start_time),
     end_time: toEpochSeconds(values.end_time),
+    // 未填到期时间时传 0，后端按「不限制」处理。
+    active_end_time: toEpochSeconds(values.active_end_time),
+    sort_weight: values.sort_weight,
+    image_url: values.image_url.trim(),
     total_limit: values.total_limit,
     per_user_limit: values.per_user_limit,
     public_visible: values.public_visible ? 1 : 0,
@@ -376,6 +414,7 @@ export function transformActivityCodeToFormValues(
     activityCode.type === ACTIVITY_CODE_TYPE.BENEFIT
       ? ACTIVITY_CODE_TYPE.BENEFIT
       : ACTIVITY_CODE_TYPE.RATIO
+  const activeEndTime = activityCode.active_end_time ?? 0
 
   return {
     code: activityCode.code,
@@ -400,6 +439,11 @@ export function transformActivityCodeToFormValues(
       activityCode.end_time > 0
         ? new Date(activityCode.end_time * 1000)
         : undefined,
+    // 0 表示不限制，回填为空；老数据缺字段时同样按默认值处理。
+    active_end_time:
+      activeEndTime > 0 ? new Date(activeEndTime * 1000) : undefined,
+    sort_weight: activityCode.sort_weight ?? 0,
+    image_url: activityCode.image_url ?? '',
     total_limit: activityCode.total_limit,
     per_user_limit: activityCode.per_user_limit,
     public_visible: activityCode.public_visible === 1,

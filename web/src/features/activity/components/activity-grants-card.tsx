@@ -34,9 +34,12 @@ import {
 } from '../lib/activity-format'
 import type { ActivityGrant } from '../types'
 
-function grantStatusLabelKey(status: string): string {
-  if (status === 'active') return 'Active'
+// 活动先于卡密有效期结束（或卡密本身已过期）时，status 可能仍是 active，
+// 所以状态文案以「生效到期时间」为准，不能只看 status。
+function grantStatusLabelKey(status: string, expired: boolean): string {
   if (status === 'revoked') return 'Revoked'
+  if (expired) return 'Expired'
+  if (status === 'active') return 'Active'
   return 'Expired'
 }
 
@@ -56,6 +59,14 @@ function ActivityGrantRow(props: ActivityGrantRowProps) {
     Boolean(grant.benefit_key) ||
     (grant.token_total ?? 0) > 0 ||
     (grant.token_used ?? 0) > 0
+
+  // effective_expire_time = min(expire_time, activity_end_time)，0 表示永久；
+  // 旧接口没有该字段时回退到卡密自身的 expire_time。
+  const effectiveExpireTime = grant.effective_expire_time ?? grant.expire_time
+  const expired =
+    effectiveExpireTime > 0 &&
+    effectiveExpireTime <= Math.floor(Date.now() / 1000)
+  const statusLabel = grantStatusLabelKey(grant.status, expired)
 
   const parts: string[] = [grant.code_name || grant.code]
   if (isBenefit) {
@@ -86,7 +97,9 @@ function ActivityGrantRow(props: ActivityGrantRowProps) {
   // 授权自带 RPM 上限（benefit 按权益配置，ratio 按活动码配置），
   // 与权益/倍率同行展示，否则用户只能看到管理端设置而不知道实际限速。
   parts.push(describeActivityRpm(t, grant.rpm_limit))
-  parts.push(`${t('Expires at')}: ${describeExpireTime(t, grant.expire_time)}`)
+  parts.push(
+    `${t('Expires at')}: ${describeExpireTime(t, effectiveExpireTime)}`
+  )
   if (props.showPaid && grant.price_quota > 0) {
     parts.push(`${t('Paid')}: ${formatQuota(grant.price_quota)}`)
   }
@@ -97,8 +110,8 @@ function ActivityGrantRow(props: ActivityGrantRowProps) {
         <div className='flex items-center gap-2'>
           <span className='text-sm font-medium'>{grant.group_name}</span>
           <StatusBadge
-            label={t(grantStatusLabelKey(grant.status))}
-            variant={grant.status === 'active' ? 'success' : 'neutral'}
+            label={t(statusLabel)}
+            variant={statusLabel === 'Active' ? 'success' : 'neutral'}
             copyable={false}
           />
         </div>

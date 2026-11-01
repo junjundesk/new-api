@@ -79,6 +79,10 @@ await i18n.init({
   interpolation: { escapeValue: false },
 })
 
+// 固定历史时间戳：用「已经过去的时间」当 fixture，而不是 mock 时钟。
+const ACTIVITY_ENDED_AT = 1_700_000_000 // 2023-11-14，早于当前时间
+const GRANT_VALID_UNTIL = 4_000_000_000 // 2096 年，远晚于活动结束
+
 function grantFixture(overrides: Partial<ActivityGrant> = {}): ActivityGrant {
   const now = Math.floor(Date.now() / 1000)
   return {
@@ -153,6 +157,8 @@ describe('activity grants card', () => {
     ])
 
     expect(await screen.findByText('hdfree')).toBeVisible()
+    // 未到期的授权仍然展示 Active（避免把「按时间判过期」误做成一律 Expired）。
+    expect(screen.getAllByText('Active')).toHaveLength(2)
     // 权益授权自带 RPM 上限，必须同行展示，否则用户会误以为沿用分组的默认限速。
     expect(
       screen.getByText(
@@ -209,6 +215,51 @@ describe('activity grants card', () => {
     ])
 
     expect(await screen.findAllByText(/Paid: \$1/)).toHaveLength(1)
+  })
+
+  // 回归：活动先于卡密有效期结束时，后端仍返回 status=active，
+  // 但授权实际已经失效，徽标必须是 Expired，到期时间展示生效值。
+  it('marks a grant expired when the activity ended before the code expiry', async () => {
+    renderGrants([
+      grantFixture({
+        id: 11,
+        group_name: 'hdexpired',
+        status: 'active',
+        expire_time: GRANT_VALID_UNTIL,
+        activity_end_time: ACTIVITY_ENDED_AT,
+        effective_expire_time: ACTIVITY_ENDED_AT,
+      }),
+    ])
+
+    expect(await screen.findByText('hdexpired')).toBeVisible()
+    expect(screen.getByText('Expired')).toBeVisible()
+    expect(screen.queryByText('Active')).not.toBeInTheDocument()
+
+    const summary = screen.getByText(/Expires at:/)
+    expect(summary).toHaveTextContent(
+      `Expires at: ${new Date(ACTIVITY_ENDED_AT * 1000).toLocaleString()}`
+    )
+    // 展示生效到期时间，而不是卡密自身更晚的有效期。
+    expect(summary).not.toHaveTextContent(
+      new Date(GRANT_VALID_UNTIL * 1000).toLocaleString()
+    )
+  })
+
+  it('falls back to expire_time when an old API omits effective_expire_time', async () => {
+    renderGrants([
+      grantFixture({
+        id: 12,
+        group_name: 'hdlegacyexpired',
+        status: 'active',
+        expire_time: ACTIVITY_ENDED_AT,
+      }),
+    ])
+
+    expect(await screen.findByText('hdlegacyexpired')).toBeVisible()
+    expect(screen.getByText('Expired')).toBeVisible()
+    expect(screen.getByText(/Expires at:/)).toHaveTextContent(
+      `Expires at: ${new Date(ACTIVITY_ENDED_AT * 1000).toLocaleString()}`
+    )
   })
 
   it('falls back to the ratio summary when a grant has no benefit fields', async () => {

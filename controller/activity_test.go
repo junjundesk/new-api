@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -29,7 +30,7 @@ func setupActivityControllerTest(t *testing.T) *gorm.DB {
 	previousRedis := common.RedisEnabled
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.ActivityCode{}, &model.ActivityGrant{}, &model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.ActivityCode{}, &model.ActivityGrant{}, &model.UserBonusGrant{}, &model.Log{}))
 	model.DB, model.LOG_DB = db, db
 	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
@@ -295,6 +296,205 @@ func TestActivityCodeModelsScopeAcceptsUnknownModelAndTrimsNames(t *testing.T) {
 	assert.Equal(t, map[string]float64{"not-enabled-yet": 0.25}, map[string]float64(stored.ModelRatioOverrides))
 }
 
+// 用户端活动中心：售罄与活动到期不再隐藏卡片，只标记不可兑换。
+func newActivityUserRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	userContext := func(c *gin.Context) {
+		c.Set("id", 11)
+	}
+	router.GET("/api/activity/offers", userContext, GetActivityOffers)
+	router.POST("/api/activity/verify", userContext, VerifyActivityCode)
+	return router
+}
+
+type activityOfferView struct {
+	Code          string `json:"code"`
+	Redeemable    bool   `json:"redeemable"`
+	BlockedReason string `json:"blocked_reason"`
+	SortWeight    int    `json:"sort_weight"`
+	ImageUrl      string `json:"image_url"`
+	ActiveEndTime int64  `json:"active_end_time"`
+}
+
+type activityOffersResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Enabled bool                `json:"enabled"`
+		Offers  []activityOfferView `json:"offers"`
+	} `json:"data"`
+}
+
+func callActivityOffers(t *testing.T, router *gin.Engine) activityOffersResponse {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/activity/offers", nil)
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	response := activityOffersResponse{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	return response
+}
+
+func TestActivityOffersKeepSoldOutAndEndedCards(t *testing.T) {
+	db := setupActivityControllerTest(t)
+	router := newActivityUserRouter()
+	now := common.GetTimestamp()
+
+	base := model.ActivityCode{
+		Name:          "offer",
+		GroupName:     "activity-test-group",
+		Status:        model.ActivityCodeStatusEnabled,
+		PublicVisible: 1,
+	}
+	codes := []model.ActivityCode{}
+	for _, mutate := range []func(code *model.ActivityCode){
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.SortWeight, code.ActiveEndTime = "hdmendedact", "已结束", 10, now-1
+		},
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.SortWeight, code.TotalLimit, code.UsedCount = "hdmsold", "已抢光", 5, 2, 2
+		},
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.ImageUrl = "hdmopen", "可兑换", "https://cdn.example.com/card.png"
+		},
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.PublicVisible = "hdmhidden", "未公开", 0
+		},
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.StartTime = "hdmfuture", "未开始", now+3600
+		},
+		func(code *model.ActivityCode) {
+			code.Code, code.Name, code.EndTime = "hdmclosed", "兑换已截止", now-1
+		},
+	} {
+		code := base
+		mutate(&code)
+		require.NoError(t, db.Create(&code).Error)
+		codes = append(codes, code)
+	}
+
+	response := callActivityOffers(t, router)
+	ordered := make([]string, 0, len(response.Data.Offers))
+	for _, offer := range response.Data.Offers {
+		ordered = append(ordered, offer.Code)
+	}
+	assert.Equal(t, []string{"hdmendedact", "hdmsold", "hdmopen"}, ordered,
+		"售罄与活动到期仍然展示；未公开、未开始、兑换截止已过的活动继续隐藏；排序按 sort_weight 倒序")
+
+	assert.False(t, response.Data.Offers[0].Redeemable)
+	assert.Equal(t, "activity_ended", response.Data.Offers[0].BlockedReason)
+	assert.Equal(t, 10, response.Data.Offers[0].SortWeight)
+	assert.Equal(t, codes[0].ActiveEndTime, response.Data.Offers[0].ActiveEndTime)
+
+	assert.False(t, response.Data.Offers[1].Redeemable)
+	assert.Equal(t, "sold_out", response.Data.Offers[1].BlockedReason)
+
+	assert.True(t, response.Data.Offers[2].Redeemable)
+	assert.Empty(t, response.Data.Offers[2].BlockedReason)
+	assert.Equal(t, "https://cdn.example.com/card.png", response.Data.Offers[2].ImageUrl)
+}
+
+func TestActivityPreviewReportsEndedActivityBeforeSoldOut(t *testing.T) {
+	db := setupActivityControllerTest(t)
+	router := newActivityUserRouter()
+	// 预览会按 blocked_reason 翻译提示文案，测试里初始化一次本地化资源。
+	require.NoError(t, i18n.Init())
+	now := common.GetTimestamp()
+
+	user := &model.User{Id: 11, Username: "activity-preview", Password: "password", Status: common.UserStatusEnabled, Quota: 100}
+	require.NoError(t, db.Create(user).Error)
+	code := &model.ActivityCode{
+		Code:          "hdmpreview",
+		Name:          "预览",
+		GroupName:     "activity-test-group",
+		Status:        model.ActivityCodeStatusEnabled,
+		PublicVisible: 1,
+		TotalLimit:    1,
+		UsedCount:     1,
+		ActiveEndTime: now - 1,
+		SortWeight:    7,
+		ImageUrl:      "/uploads/activity.png",
+	}
+	require.NoError(t, db.Create(code).Error)
+
+	body, err := common.Marshal(map[string]string{"code": "hdmpreview"})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/activity/verify", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	response := activityAPIResponse{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success, response.Message)
+	assert.Equal(t, false, response.Data["redeemable"])
+	assert.Equal(t, "activity_ended", response.Data["blocked_reason"], "活动到期优先于售罄")
+	assert.Equal(t, float64(7), response.Data["sort_weight"])
+	assert.Equal(t, "/uploads/activity.png", response.Data["image_url"])
+	assert.Equal(t, float64(code.ActiveEndTime), response.Data["active_end_time"])
+}
+
+func TestActivityCodeRejectsInvalidSortWeightAndImageUrl(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+	now := common.GetTimestamp()
+
+	tests := []struct {
+		name   string
+		mutate func(payload map[string]interface{})
+	}{
+		{name: "negative sort weight", mutate: func(payload map[string]interface{}) {
+			payload["sort_weight"] = -1
+		}},
+		{name: "sort weight above the maximum", mutate: func(payload map[string]interface{}) {
+			payload["sort_weight"] = model.ActivityCodeMaxSortWeight + 1
+		}},
+		{name: "image url without scheme or site path", mutate: func(payload map[string]interface{}) {
+			payload["image_url"] = "cdn.example.com/card.png"
+		}},
+		{name: "image url containing a space", mutate: func(payload map[string]interface{}) {
+			payload["image_url"] = "https://cdn.example.com/card .png"
+		}},
+		{name: "image url containing a control character", mutate: func(payload map[string]interface{}) {
+			payload["image_url"] = "https://cdn.example.com/card.png\nX-Injected: 1"
+		}},
+		{name: "image url longer than the column", mutate: func(payload map[string]interface{}) {
+			payload["image_url"] = "https://cdn.example.com/" + strings.Repeat("a", model.ActivityCodeImageUrlMaxLength)
+		}},
+		{name: "negative active end time", mutate: func(payload map[string]interface{}) {
+			payload["active_end_time"] = -1
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := activityRequestPayload()
+			tt.mutate(payload)
+			response := callActivityAdmin(t, router, http.MethodPost, payload)
+			assert.False(t, response.Success, "非法配置必须被拒绝")
+		})
+	}
+
+	payload := activityRequestPayload()
+	payload["code"] = "hdmvalid"
+	payload["sort_weight"] = 1234
+	payload["image_url"] = "  https://cdn.example.com/card.png  "
+	payload["active_end_time"] = now + 3600
+	created := callActivityAdmin(t, router, http.MethodPost, payload)
+	require.True(t, created.Success, created.Message)
+	codeIdValue, ok := created.Data["id"].(float64)
+	require.True(t, ok)
+
+	stored, err := model.GetActivityCodeById(int(codeIdValue))
+	require.NoError(t, err)
+	assert.Equal(t, 1234, stored.SortWeight)
+	assert.Equal(t, "https://cdn.example.com/card.png", stored.ImageUrl, "保存前去掉首尾空白")
+	assert.Equal(t, now+3600, stored.ActiveEndTime)
+}
+
 func newActivityGrantRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -368,6 +568,43 @@ func TestGrantActivityCodeGrantsEveryUserWithoutCharging(t *testing.T) {
 		require.NoError(t, db.First(&user, "id = ?", id).Error)
 		assert.Equal(t, 100, user.Quota, "赠送后余额不变")
 	}
+}
+
+// 活动到期后赠送整批拒绝：否则会写出一条立刻失效的授权，用户端只见 0 天可用。
+func TestGrantActivityCodeRejectsEndedActivity(t *testing.T) {
+	db := setupActivityControllerTest(t)
+	router := newActivityGrantRouter()
+	now := common.GetTimestamp()
+
+	code := &model.ActivityCode{
+		Code:            "hcmended",
+		Name:            "已结束赠送",
+		GroupName:       "activity-test-group",
+		DurationSeconds: 3600,
+		Status:          model.ActivityCodeStatusEnabled,
+		RatioMode:       model.ActivityRatioModeInherit,
+		PerUserLimit:    1,
+		ActiveEndTime:   now - 1,
+	}
+	require.NoError(t, db.Create(code).Error)
+	user := &model.User{Username: "grant-ended", Password: "password", Status: common.UserStatusEnabled, Quota: 100, AffCode: "gr99"}
+	require.NoError(t, db.Create(user).Error)
+
+	payload, err := common.Marshal(map[string]interface{}{"user_ids": []int{user.Id}})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/activity/%d/grants", code.Id), bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	response := activityAPIResponse{}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.False(t, response.Success, "活动到期后赠送必须被拒绝")
+
+	var count int64
+	require.NoError(t, db.Model(&model.ActivityGrant{}).Count(&count).Error)
+	assert.Zero(t, count, "拒绝赠送时不写授权")
 }
 
 func TestGrantActivityCodeRejectsEmptyUserList(t *testing.T) {

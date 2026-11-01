@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { formatQuota } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import {
   describeActivityBenefit,
@@ -56,6 +57,11 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
     >
       {props.offers.map((offer) => {
         const benefits = offer.benefits ?? []
+        const imageUrl = (offer.image_url ?? '').trim()
+        const hasImage = imageUrl !== ''
+        // 售罄/到期后后端仍返回该活动，只是把 redeemable 置为 false；
+        // 旧接口没有该字段（undefined）时保持原有可兑换行为。
+        const closed = offer.redeemable === false
         // 旧接口没有 type/benefits：按 ratio 卡片展示，保持原行为。
         const isBenefit = offer.type === 'benefit' && benefits.length > 0
         const modelScope = describeActivityModelScope(
@@ -87,7 +93,14 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
         ]
 
         return (
-          <Card key={offer.code_id} size='sm' className='h-full'>
+          <Card
+            key={offer.code_id}
+            size='sm'
+            className={cn(
+              'relative isolate h-full',
+              hasImage ? 'pt-24' : closed && 'pt-8'
+            )}
+          >
             <CardHeader>
               <CardTitle className='truncate'>
                 {offer.name || offer.code}
@@ -170,7 +183,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                 </Badge>
                 <Button
                   size='sm'
-                  disabled={props.disabled}
+                  disabled={props.disabled || closed}
                   aria-label={t('Redeem {{name}}', {
                     name: offer.name || offer.code,
                   })}
@@ -180,6 +193,42 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                 </Button>
               </div>
             </CardFooter>
+            {/* 背景图与角标放在最后：Card 的 \`*:[img:first-child]\` 等样式只认首个子节点，
+                绝对定位元素不参与布局，顺序不影响视觉层级（负 z-index 绘制在内容之下）。 */}
+            {hasImage && (
+              // 封面带：图片按 object-cover 铺满卡片顶部 96px，再向下渐变到卡片底色。
+              // 图片在顶部完整可见（不压文字），正文从 96px 处开始，对比度等同无背景图。
+              <div
+                data-slot='activity-offer-image-band'
+                className='pointer-events-none absolute inset-x-0 top-0 -z-10 h-24'
+              >
+                <img
+                  data-slot='activity-offer-image'
+                  src={imageUrl}
+                  alt=''
+                  aria-hidden='true'
+                  loading='lazy'
+                  className='absolute inset-0 h-full w-full object-cover'
+                />
+                <div
+                  data-slot='activity-offer-image-scrim'
+                  aria-hidden='true'
+                  className='to-card absolute inset-0 bg-linear-to-b from-transparent from-40%'
+                />
+              </div>
+            )}
+            {closed && (
+              // 斜角角标：45° 长条被左上角方框裁掉两侧，只留贴角的斜带；
+              // 文案不设 aria-hidden，读屏会把它作为卡片内容读出来。
+              <div className='pointer-events-none absolute top-0 left-0 z-10 h-16 w-16 overflow-hidden'>
+                <span
+                  data-slot='activity-offer-closed-badge'
+                  className='bg-foreground text-background absolute top-[7px] -left-[35px] w-[100px] -rotate-45 text-center text-[10px] leading-4 font-semibold tracking-wide'
+                >
+                  {t('Closed')}
+                </span>
+              </div>
+            )}
           </Card>
         )
       })}

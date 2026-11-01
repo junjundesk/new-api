@@ -180,6 +180,10 @@ export const ACTIVITY_VALIDATION = {
   RPM_MAX: 100000,
   RATIO_MAX: 1000,
   LIMIT_MAX: 1000000,
+  // 与后端 model.ActivityCodeSortWeightMax 保持一致。
+  SORT_WEIGHT_MAX: 1000000,
+  // 与后端 model.ActivityImageUrlMaxLength 保持一致。
+  IMAGE_URL_MAX_LENGTH: 512,
   // 与后端 model.ActivityCodeMaxModelRatioOverrides / ActivityModelNameMaxLength 保持一致。
   MODEL_RATIO_MAX_ENTRIES: 100,
   MODEL_NAME_MAX_LENGTH: 255,

@@ -69,6 +69,10 @@ const (
 	ActivityCodeMaxModelRatioOverrides = 100
 	// ActivityModelNameMaxLength 与 abilities.model 的 varchar(255) 保持一致。
 	ActivityModelNameMaxLength = 255
+	// ActivityCodeMaxSortWeight 是活动码排序权重的上限，权重越大用户端越靠前。
+	ActivityCodeMaxSortWeight = 1000000
+	// ActivityCodeImageUrlMaxLength 与 activity_codes.image_url 的 varchar(512) 保持一致。
+	ActivityCodeImageUrlMaxLength = 512
 )
 
 // ActivityModelRatioOverrides 是活动码「指定模型 → 倍率」的覆盖表，落库为 JSON 对象。
@@ -173,11 +177,14 @@ func (b ActivityBenefits) Value() (driver.Value, error) {
 
 // 兑换失败原因，由 controller 映射为 i18n 文案。
 var (
-	ErrActivityCodeInvalid          = errors.New("activity code invalid")
-	ErrActivityCodeDisabled         = errors.New("activity code disabled")
-	ErrActivityCodeNotStarted       = errors.New("activity code not started")
-	ErrActivityCodeEnded            = errors.New("activity code ended")
-	ErrActivityCodeSoldOut          = errors.New("activity code sold out")
+	ErrActivityCodeInvalid    = errors.New("activity code invalid")
+	ErrActivityCodeDisabled   = errors.New("activity code disabled")
+	ErrActivityCodeNotStarted = errors.New("activity code not started")
+	ErrActivityCodeEnded      = errors.New("activity code ended")
+	ErrActivityCodeSoldOut    = errors.New("activity code sold out")
+	// ErrActivityCodeActivityEnded 表示活动本身已到期（ActiveEndTime 已过），
+	// 与兑换截止（EndTime）失效的 ErrActivityCodeEnded 相互独立。
+	ErrActivityCodeActivityEnded    = errors.New("activity code activity ended")
 	ErrActivityCodeUserLimitReached = errors.New("activity code per user limit reached")
 	ErrActivityCodeGroupUnavailable = errors.New("activity code group unavailable")
 	ErrActivityCodeBalanceNotEnough = errors.New("activity code wallet quota not enough")
@@ -214,10 +221,17 @@ type ActivityCode struct {
 	UsedCount     int              `json:"used_count" gorm:"default:0"`
 	PerUserLimit  int              `json:"per_user_limit" gorm:"default:1"`
 	PublicVisible int              `json:"public_visible" gorm:"default:0"`
-	CreatedBy     int              `json:"created_by"`
-	CreatedTime   int64            `json:"created_time" gorm:"bigint"`
-	UpdatedTime   int64            `json:"updated_time" gorm:"bigint"`
-	DeletedAt     gorm.DeletedAt   `gorm:"index"`
+	// SortWeight 决定用户端列表顺序：越大越靠前，同权重按 id 倒序。
+	SortWeight int `json:"sort_weight" gorm:"default:0;index"`
+	// ImageUrl 是活动卡片的背景图；空字符串表示不启用背景图。
+	ImageUrl string `json:"image_url" gorm:"type:varchar(512);default:''"`
+	// ActiveEndTime 是「活动到期时间」：到点后活动立即失效（unix 秒，0 表示不限）。
+	// 它与兑换截止 EndTime、兑换后的授权有效期 DurationSeconds 互相独立。
+	ActiveEndTime int64          `json:"active_end_time" gorm:"bigint;default:0"`
+	CreatedBy     int            `json:"created_by"`
+	CreatedTime   int64          `json:"created_time" gorm:"bigint"`
+	UpdatedTime   int64          `json:"updated_time" gorm:"bigint"`
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
 
 // ActivityGrant 是某个用户的一次活动授权。Status 与 ExpireTime 由本表维护，
@@ -241,15 +255,35 @@ type ActivityGrant struct {
 	// BenefitKey 对应活动码权益的稳定 key；ratio 类型授权为空。
 	BenefitKey string `json:"benefit_key" gorm:"type:varchar(32);index"`
 	// TokenTotal/TokenUsed 仅 Token 套餐权益使用；0 表示不限量免费。
-	TokenTotal  int64  `json:"token_total" gorm:"bigint;default:0"`
-	TokenUsed   int64  `json:"token_used" gorm:"bigint;default:0"`
-	StartTime   int64  `json:"start_time" gorm:"bigint"`
-	ExpireTime  int64  `json:"expire_time" gorm:"bigint;index"`
-	Status      string `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
-	Source      string `json:"source" gorm:"type:varchar(32);default:'redeem'"`
-	Remark      string `json:"remark" gorm:"type:varchar(255);default:''"`
-	CreatedTime int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64  `json:"updated_time" gorm:"bigint"`
+	TokenTotal int64 `json:"token_total" gorm:"bigint;default:0"`
+	TokenUsed  int64 `json:"token_used" gorm:"bigint;default:0"`
+	StartTime  int64 `json:"start_time" gorm:"bigint"`
+	ExpireTime int64 `json:"expire_time" gorm:"bigint;index"`
+	// ActivityEndTime 是发放时活动到期时间的快照（0 表示活动不限时）；
+	// 生效到期时间取 ExpireTime 与 ActivityEndTime 中较小的非 0 值。
+	ActivityEndTime int64  `json:"activity_end_time" gorm:"bigint;default:0"`
+	Status          string `json:"status" gorm:"type:varchar(32);index;index:idx_activity_grant_user_status,priority:2"`
+	Source          string `json:"source" gorm:"type:varchar(32);default:'redeem'"`
+	Remark          string `json:"remark" gorm:"type:varchar(255);default:''"`
+	CreatedTime     int64  `json:"created_time" gorm:"bigint"`
+	UpdatedTime     int64  `json:"updated_time" gorm:"bigint"`
+	// EffectiveExpireTime 是派生字段（min(ExpireTime, ActivityEndTime)，0 表示永久），不入库。
+	EffectiveExpireTime int64 `json:"effective_expire_time" gorm:"-"`
+}
+
+// EffectiveExpire 返回授权实际失效时间：取 ExpireTime 与 ActivityEndTime 中较小的非 0 值，
+// 两者都为 0 表示永久有效。活动到期后活动立即失效，因此不能再按 ExpireTime 继续放行。
+func (grant *ActivityGrant) EffectiveExpire() int64 {
+	switch {
+	case grant.ExpireTime == 0:
+		return grant.ActivityEndTime
+	case grant.ActivityEndTime == 0:
+		return grant.ExpireTime
+	case grant.ActivityEndTime < grant.ExpireTime:
+		return grant.ActivityEndTime
+	default:
+		return grant.ExpireTime
+	}
 }
 
 func (activityCode *ActivityCode) BeforeCreate(tx *gorm.DB) error {
@@ -373,6 +407,8 @@ type activityGrantSpec struct {
 	RpmLimit            int
 	TokenTotal          int64
 	BenefitKey          string
+	// ActiveEndTime 是活动到期时间的快照，发放时写入授权。
+	ActiveEndTime int64
 }
 
 func activityGrantSpecForBenefit(benefit ActivityBenefit) activityGrantSpec {
@@ -404,11 +440,14 @@ func (activityCode *ActivityCode) grantSpecs() []activityGrantSpec {
 			RatioScope:          activityCode.RatioScope,
 			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
 			RpmLimit:            activityCode.RpmLimit,
+			ActiveEndTime:       activityCode.ActiveEndTime,
 		}}
 	}
 	specs := make([]activityGrantSpec, 0, len(activityCode.Benefits))
 	for _, benefit := range activityCode.Benefits {
-		specs = append(specs, activityGrantSpecForBenefit(benefit))
+		spec := activityGrantSpecForBenefit(benefit)
+		spec.ActiveEndTime = activityCode.ActiveEndTime
+		specs = append(specs, spec)
 	}
 	return specs
 }
@@ -427,6 +466,7 @@ func (spec activityGrantSpec) buildGrant(userId int, activityCode *ActivityCode,
 		RpmLimit:            spec.RpmLimit,
 		TokenTotal:          spec.TokenTotal,
 		BenefitKey:          spec.BenefitKey,
+		ActivityEndTime:     spec.ActiveEndTime,
 		RedeemBatch:         redeemBatch,
 		Status:              ActivityGrantStatusActive,
 	}
@@ -459,6 +499,12 @@ func sortedUserIds(users map[int]struct{}) []int {
 // WindowClosed 判断活动码的可兑换窗口是否已经结束。
 func (activityCode *ActivityCode) WindowClosed(now int64) bool {
 	return activityCode.EndTime != 0 && now > activityCode.EndTime
+}
+
+// ActivityEnded 判断活动本身是否已经到期：ActiveEndTime 到点后活动立即失效。
+// 它与兑换截止 EndTime（WindowClosed）互相独立，两者任一失效都不可再兑换。
+func (activityCode *ActivityCode) ActivityEnded(now int64) bool {
+	return activityCode.ActiveEndTime != 0 && now >= activityCode.ActiveEndTime
 }
 
 // RemainingTotal 返回该活动码剩余可兑换次数；返回 -1 表示不限次数。
@@ -495,14 +541,17 @@ func GetActivityCodes(keyword string, status string, startIdx int, num int) (act
 	if err = query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&activityCodes).Error
+	err = query.Order("sort_weight desc, id desc").Limit(num).Offset(startIdx).Find(&activityCodes).Error
 	return activityCodes, total, err
 }
 
 // GetEnabledActivityCodes 返回所有启用中的活动码，用于活动中心列表与开关判定。
+// 与活动中心一致按 sort_weight 倒序排列，同权重按 id 倒序。
 func GetEnabledActivityCodes() ([]*ActivityCode, error) {
 	activityCodes := make([]*ActivityCode, 0)
-	err := DB.Where("status = ?", ActivityCodeStatusEnabled).Order("id desc").Find(&activityCodes).Error
+	err := DB.Where("status = ?", ActivityCodeStatusEnabled).
+		Order("sort_weight desc, id desc").
+		Find(&activityCodes).Error
 	return activityCodes, err
 }
 
@@ -554,8 +603,8 @@ func (activityCode *ActivityCode) Update() error {
 		if err := tx.Model(activityCode).
 			Select("name", "description", "status", "group_name", "duration_seconds", "rpm_limit",
 				"price_quota", "ratio_mode", "ratio_override", "ratio_scope", "model_ratio_overrides",
-				"type", "benefits", "start_time", "end_time", "total_limit", "per_user_limit",
-				"public_visible", "updated_time").
+				"type", "benefits", "start_time", "end_time", "active_end_time", "total_limit",
+				"per_user_limit", "public_visible", "sort_weight", "image_url", "updated_time").
 			Updates(activityCode).Error; err != nil {
 			return err
 		}
@@ -617,6 +666,7 @@ func syncRatioActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int, 
 				"ratio_scope":           activityCode.RatioScope,
 				"model_ratio_overrides": activityCode.ModelRatioOverrides,
 				"rpm_limit":             activityCode.RpmLimit,
+				"activity_end_time":     activityCode.ActiveEndTime,
 				"updated_time":          now,
 			})
 		if result.Error != nil {
@@ -714,6 +764,7 @@ func syncBenefitActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int
 				"model_ratio_overrides": spec.ModelRatioOverrides,
 				"rpm_limit":             spec.RpmLimit,
 				"token_total":           spec.TokenTotal,
+				"activity_end_time":     activityCode.ActiveEndTime,
 				"updated_time":          now,
 			}); result.Error != nil {
 			return nil, result.Error
@@ -782,7 +833,8 @@ func UpdateActivityCodeStatus(id int, status int) error {
 // ---------------------------------------------------------------------------
 
 // filterActiveActivityGrants 在读时再次过滤：缓存中的记录同样必须满足
-// 「状态为 active 且未到期」，因此缓存过期不会延长任何授权。
+// 「状态为 active 且生效到期时间未到」，因此缓存过期不会延长任何授权。
+// 生效到期时间取 min(ExpireTime, ActivityEndTime)，活动到期后授权立即失效。
 func filterActiveActivityGrants(grants []ActivityGrant) []ActivityGrant {
 	now := common.GetTimestamp()
 	active := make([]ActivityGrant, 0, len(grants))
@@ -790,7 +842,7 @@ func filterActiveActivityGrants(grants []ActivityGrant) []ActivityGrant {
 		if grant.Status != ActivityGrantStatusActive {
 			continue
 		}
-		if grant.ExpireTime != 0 && grant.ExpireTime <= now {
+		if effective := grant.EffectiveExpire(); effective != 0 && effective <= now {
 			continue
 		}
 		active = append(active, grant)
@@ -800,8 +852,10 @@ func filterActiveActivityGrants(grants []ActivityGrant) []ActivityGrant {
 
 func queryActiveActivityGrants(tx *gorm.DB, userId int) ([]ActivityGrant, error) {
 	grants := make([]ActivityGrant, 0)
-	err := tx.Where("user_id = ? AND status = ? AND (expire_time = 0 OR expire_time > ?)",
-		userId, ActivityGrantStatusActive, common.GetTimestamp()).
+	now := common.GetTimestamp()
+	err := tx.Where("user_id = ? AND status = ? AND (expire_time = 0 OR expire_time > ?)"+
+		" AND (activity_end_time = 0 OR activity_end_time > ?)",
+		userId, ActivityGrantStatusActive, now, now).
 		Order("id desc").
 		Find(&grants).Error
 	if err != nil {
@@ -1064,6 +1118,9 @@ func RedeemActivityCode(req RedeemActivityCodeRequest) (*RedeemActivityCodeResul
 		if activityCode.StartTime != 0 && now < activityCode.StartTime {
 			return ErrActivityCodeNotStarted
 		}
+		if activityCode.ActivityEnded(now) {
+			return ErrActivityCodeActivityEnded
+		}
 		if activityCode.WindowClosed(now) {
 			return ErrActivityCodeEnded
 		}
@@ -1229,6 +1286,10 @@ func GrantActivityCode(req GrantActivityCodeRequest) (*GrantActivityCodeResult, 
 		}
 		if activityCode.StartTime != 0 && now < activityCode.StartTime {
 			return ErrActivityCodeNotStarted
+		}
+		// 活动到期后不再发放：否则会写出一条立刻失效的授权，用户只能看到 0 天可用。
+		if activityCode.ActivityEnded(now) {
+			return ErrActivityCodeActivityEnded
 		}
 		if activityCode.WindowClosed(now) {
 			return ErrActivityCodeEnded

@@ -48,6 +48,7 @@ const mockedGroupNames = api.getGroupNames as unknown as AsyncMock
 const mockedGroupModels = api.getGroupModels as unknown as AsyncMock
 const mockedGetActivityCode = api.getActivityCode as unknown as AsyncMock
 const mockedUpdateActivityCode = api.updateActivityCode as unknown as AsyncMock
+const mockedCreateActivityCode = api.createActivityCode as unknown as AsyncMock
 
 const i18n = createInstance()
 await i18n.init({
@@ -91,6 +92,9 @@ const benefitActivityCode: ActivityCode = {
   model_ratio_overrides: null,
   start_time: 0,
   end_time: 0,
+  active_end_time: 0,
+  sort_weight: 0,
+  image_url: '',
   total_limit: 0,
   used_count: 0,
   per_user_limit: 1,
@@ -111,14 +115,30 @@ const benefitActivityCode: ActivityCode = {
   updated_time: 0,
 }
 
+const displayActivityCode: ActivityCode = {
+  ...benefitActivityCode,
+  id: 9,
+  code: 'summer-ratio',
+  name: 'Summer ratio',
+  type: 'ratio',
+  benefits: null,
+  sort_weight: 30,
+  image_url: 'https://cdn.example.com/summer.png',
+  active_end_time: 1_900_000_000,
+}
+
 async function selectTargetGroup(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('combobox', { name: 'Target Group' }))
+  await user.click(
+    await screen.findByRole('combobox', { name: 'Target Group' })
+  )
   await user.click(await screen.findByRole('option', { name: 'vip' }))
 }
 
 async function selectModelScope(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('combobox', { name: 'Ratio scope' }))
-  await user.click(await screen.findByRole('option', { name: 'Selected models' }))
+  await user.click(
+    await screen.findByRole('option', { name: 'Selected models' })
+  )
 }
 
 beforeEach(() => {
@@ -126,7 +146,12 @@ beforeEach(() => {
   mockedGroupModels.mockReset()
   mockedGetActivityCode.mockReset()
   mockedUpdateActivityCode.mockReset()
-  mockedGroupNames.mockResolvedValue({ success: true, data: ['vip', 'default'] })
+  mockedCreateActivityCode.mockReset()
+  mockedCreateActivityCode.mockResolvedValue({ success: true })
+  mockedGroupNames.mockResolvedValue({
+    success: true,
+    data: ['vip', 'default'],
+  })
   mockedGroupModels.mockResolvedValue({
     success: true,
     data: [{ model_name: 'gpt-5' }, { model_name: 'o3' }],
@@ -166,9 +191,7 @@ describe('activity code mutate drawer ratio scope', () => {
     const user = userEvent.setup()
     renderDrawer()
     await selectTargetGroup(user)
-    await waitFor(() =>
-      expect(mockedGroupModels.mock.calls).toEqual([['vip']])
-    )
+    await waitFor(() => expect(mockedGroupModels.mock.calls).toEqual([['vip']]))
 
     await selectModelScope(user)
     await user.click(
@@ -254,5 +277,105 @@ describe('activity code mutate drawer type switch', () => {
         token_total: 1_234_567,
       },
     ])
+  })
+})
+
+describe('activity code mutate drawer display and expiry', () => {
+  it('starts the display fields empty and every time picker unset on create', async () => {
+    renderDrawer()
+
+    expect(
+      await screen.findByRole('spinbutton', { name: 'Sort weight' })
+    ).toHaveValue(0)
+    expect(
+      screen.getByRole('textbox', { name: 'Background image URL' })
+    ).toHaveValue('')
+    expect(screen.getAllByRole('button', { name: 'Select date' })).toHaveLength(
+      3
+    )
+  })
+
+  it('blocks saving a background image that is neither a URL nor a path', async () => {
+    const user = userEvent.setup()
+    renderDrawer()
+    await selectTargetGroup(user)
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Background image URL' }),
+      'summer.png'
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText('Enter an http(s) URL or a path starting with /.')
+    ).toBeVisible()
+    expect(mockedCreateActivityCode.mock.calls.length).toBe(0)
+  })
+
+  it('saves the sort weight and a root-relative background image with no end time', async () => {
+    const user = userEvent.setup()
+    renderDrawer()
+    await user.type(
+      screen.getByRole('textbox', { name: 'Activity Code' }),
+      'summer-2026'
+    )
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Summer')
+    await selectTargetGroup(user)
+
+    const weightInput = await screen.findByRole('spinbutton', {
+      name: 'Sort weight',
+    })
+    await user.clear(weightInput)
+    await user.type(weightInput, '15')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Background image URL' }),
+      '/static/banner.png'
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(mockedCreateActivityCode.mock.calls.length).toBe(1)
+    )
+    const payload = mockedCreateActivityCode.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >
+    expect(payload.sort_weight).toBe(15)
+    expect(payload.image_url).toBe('/static/banner.png')
+    expect(payload.active_end_time).toBe(0)
+  })
+
+  it('backfills the display fields and sends the activity end time in seconds', async () => {
+    mockedGetActivityCode.mockResolvedValue({
+      success: true,
+      data: displayActivityCode,
+    })
+    mockedUpdateActivityCode.mockResolvedValue({ success: true })
+    const user = userEvent.setup()
+    renderDrawer(displayActivityCode)
+
+    expect(
+      await screen.findByRole('spinbutton', { name: 'Sort weight' })
+    ).toHaveValue(30)
+    expect(
+      screen.getByRole('textbox', { name: 'Background image URL' })
+    ).toHaveValue('https://cdn.example.com/summer.png')
+    // 活动到期时间已回填，三个时间选择器里只剩兑换开始/结束显示占位文案。
+    expect(screen.getAllByRole('button', { name: 'Select date' })).toHaveLength(
+      2
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(mockedUpdateActivityCode.mock.calls.length).toBe(1)
+    )
+    const payload = mockedUpdateActivityCode.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >
+    expect(payload.sort_weight).toBe(30)
+    expect(payload.image_url).toBe('https://cdn.example.com/summer.png')
+    expect(payload.active_end_time).toBe(1_900_000_000)
   })
 })

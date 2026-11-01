@@ -25,7 +25,11 @@ import { I18nextProvider } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ActivityBenefit, ActivityPreview } from '../../types'
+import type {
+  ActivityBenefit,
+  ActivityOffer,
+  ActivityPreview,
+} from '../../types'
 import { ActivityRedeemPanel } from '../activity-redeem-panel'
 
 vi.mock('../../api', () => ({
@@ -94,6 +98,10 @@ await i18n.init({
         'Unlimited tokens': 'Unlimited tokens',
         'Models (ratio)': 'Models (ratio)',
         'All models in the group': 'All models in the group',
+        'Redeem {{name}}': 'Redeem {{name}}',
+        Remaining: 'Remaining',
+        'Free of charge': 'Free of charge',
+        Closed: 'Closed',
       },
     },
   },
@@ -125,6 +133,24 @@ function previewFixture(
     redeemable: true,
     blocked_reason: '',
     message: '',
+    ...overrides,
+  }
+}
+
+function offerFixture(overrides: Partial<ActivityOffer> = {}): ActivityOffer {
+  return {
+    code_id: 1,
+    code: 'hdmfree',
+    name: 'Free Group',
+    description: '',
+    group_name: 'hdfree',
+    group_desc: 'Free Group',
+    duration_seconds: 24 * 3600,
+    rpm_limit: 0,
+    ratio_mode: 'override',
+    ratio_override: 0,
+    price_quota: 0,
+    remaining_total: -1,
     ...overrides,
   }
 }
@@ -179,14 +205,14 @@ function mockActivityApi(
   })
 }
 
-function renderPanel(): void {
+function renderPanel(showOffers = false): void {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
-        <ActivityRedeemPanel />
+        <ActivityRedeemPanel showOffers={showOffers} />
       </I18nextProvider>
       <Toaster duration={60_000} />
     </QueryClientProvider>
@@ -299,6 +325,42 @@ describe('activity redeem panel', () => {
     expect(screen.getByText('Benefits')).toBeVisible()
     expect(screen.queryByText('Ratio')).not.toBeInTheDocument()
     expect(screen.queryByText('RPM limit')).not.toBeInTheDocument()
+  })
+
+  // 回归：售罄活动后端不再过滤而是返回 redeemable=false，面板必须继续展示它；
+  // 点击（按钮已禁用）不得发起 verify / redeem 请求。
+  it('keeps a sold-out offer in the list and never verifies it', async () => {
+    getOffersMock.mockResolvedValue({
+      success: true,
+      data: {
+        enabled: true,
+        offers: [
+          offerFixture({
+            code_id: 71,
+            code: 'soldout',
+            name: 'Sold Out Group',
+            remaining_total: 0,
+            redeemable: false,
+            blocked_reason: 'sold_out',
+          }),
+        ],
+      },
+    })
+    mockActivityApi(previewFixture(), { grantId: 31 })
+
+    const user = userEvent.setup()
+    renderPanel(true)
+
+    const button = await screen.findByRole('button', {
+      name: 'Redeem Sold Out Group',
+    })
+    expect(screen.getByText('Sold Out Group')).toBeVisible()
+    expect(screen.getByText('Closed')).toBeVisible()
+    expect(button).toBeDisabled()
+
+    await user.click(button)
+    expect(verifyMock).not.toHaveBeenCalled()
+    expect(redeemMock).not.toHaveBeenCalled()
   })
 
   it('insufficient balance disables the confirmation button', async () => {

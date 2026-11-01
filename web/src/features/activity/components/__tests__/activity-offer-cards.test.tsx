@@ -63,6 +63,7 @@ await i18n.init({
         'Model {{model}}': 'Model {{model}}',
         '{{amount}} tokens': '{{amount}} tokens',
         'Unlimited tokens': 'Unlimited tokens',
+        Closed: 'Closed',
       },
     },
   },
@@ -278,6 +279,107 @@ describe('activity offer cards', () => {
 
     expect(onRedeem).toHaveBeenCalledTimes(1)
     expect(onRedeem.mock.calls[0]?.[0]).toMatchObject({ code_id: 22 })
+  })
+
+  // 回归：活动配置了背景图时以图片作为卡片背景（绝对定位 + object-cover）并叠一层遮罩；
+  // 未配置时不能渲染任何图片节点，避免出现空图占位。
+  it('renders a background image and its scrim only for offers that carry an image url', () => {
+    const { container } = renderCards([
+      offerFixture({
+        code_id: 1,
+        image_url: 'https://cdn.example.com/activity.png',
+      }),
+      offerFixture({ code_id: 2 }),
+    ])
+
+    const images = [
+      ...container.querySelectorAll<HTMLImageElement>(
+        '[data-slot="activity-offer-image"]'
+      ),
+    ]
+    expect(images).toHaveLength(1)
+    expect(images[0]).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/activity.png'
+    )
+    // 背景图必须铺满卡片并保持等比裁切，否则会被拉伸。
+    expect(images[0]).toHaveClass('absolute', 'object-cover')
+    // 背景图是装饰性的，读屏不应重复播报它。
+    expect(images[0]).toHaveAttribute('aria-hidden', 'true')
+
+    expect(
+      container.querySelectorAll('[data-slot="activity-offer-image-scrim"]')
+    ).toHaveLength(1)
+  })
+
+  // 回归：封面带固定 96px，卡片正文必须整体下移同样的高度，
+  // 否则标题会压在图片上，对比度取决于管理员上传的任意图片。
+  it('reserves the cover band height above the card text when an image is present', () => {
+    const { container } = renderCards([
+      offerFixture({
+        code_id: 4,
+        image_url: 'https://cdn.example.com/activity.png',
+      }),
+    ])
+
+    expect(
+      container.querySelector('[data-slot="activity-offer-image-band"]')
+    ).toHaveClass('h-24')
+    expect(renderedCards(container)[0]).toHaveClass('pt-24')
+  })
+
+  it('renders no image node when the offer image url is empty', () => {
+    const { container } = renderCards([
+      offerFixture({ code_id: 3, image_url: '' }),
+    ])
+
+    expect(
+      container.querySelector('[data-slot="activity-offer-image"]')
+    ).toBeNull()
+    expect(
+      container.querySelector('[data-slot="activity-offer-image-scrim"]')
+    ).toBeNull()
+  })
+
+  // 回归：售罄或活动到期后后端不再过滤活动，而是返回 redeemable=false；
+  // 卡片要保留展示，但兑换按钮必须禁用，并给出 45° 的「Closed」角标。
+  it('disables the redeem button and shows a rotated Closed badge when the offer is not redeemable', async () => {
+    const user = userEvent.setup()
+    const { onRedeem } = renderCards([
+      offerFixture({
+        code_id: 51,
+        name: 'Sold Out Group',
+        redeemable: false,
+        blocked_reason: 'sold_out',
+      }),
+    ])
+
+    const badge = screen.getByText('Closed')
+    expect(badge).toBeVisible()
+    // 角标是斜切的一条长条，不能被 aria-hidden 藏起来：读屏必须能读到「已截止」。
+    expect(badge).toHaveClass('-rotate-45')
+    expect(badge).not.toHaveAttribute('aria-hidden')
+
+    const button = screen.getByRole('button', { name: 'Redeem Sold Out Group' })
+    expect(button).toBeDisabled()
+
+    await user.click(button)
+    expect(onRedeem).not.toHaveBeenCalled()
+  })
+
+  it('keeps the redeem button enabled when an old API omits redeemable', async () => {
+    const user = userEvent.setup()
+    const { onRedeem } = renderCards([
+      offerFixture({ code_id: 61, name: 'Legacy Group' }),
+    ])
+
+    expect(screen.queryByText('Closed')).not.toBeInTheDocument()
+
+    const button = screen.getByRole('button', { name: 'Redeem Legacy Group' })
+    expect(button).toBeEnabled()
+
+    await user.click(button)
+    expect(onRedeem).toHaveBeenCalledTimes(1)
   })
 
   it('disables every redeem button while a redemption is already running', async () => {

@@ -104,6 +104,11 @@ const (
 	MsgActivityCodeWindowInvalid       = "activity.window_invalid"
 	MsgActivityCodeLimitInvalid        = "activity.limit_invalid"
 
+	MsgActivityCodeActivityEnded        = "activity.activity_ended"
+	MsgActivityCodeSortWeightInvalid    = "activity.sort_weight_invalid"
+	MsgActivityCodeImageUrlInvalid      = "activity.image_url_invalid"
+	MsgActivityCodeActiveEndTimeInvalid = "activity.active_end_time_invalid"
+
 	MsgActivityCodeTypeInvalid         = "activity.type_invalid"
 	MsgActivityCodeTypeImmutable       = "activity.type_immutable"
 	MsgActivityCodeBenefitRequired     = "activity.benefit_required"

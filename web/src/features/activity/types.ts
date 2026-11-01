@@ -60,6 +60,16 @@ export interface ActivityOffer {
   // 旧接口没有 type/benefits：缺失时按 ratio 类型展示。
   type?: ActivityCodeType
   benefits?: ActivityBenefit[] | null
+  // 排序权重，数值越大越靠前；旧接口不返回时按后端顺序展示。
+  sort_weight?: number
+  // 活动背景图 URL；空串表示没有背景图。
+  image_url?: string
+  // 活动结束时间（unix 秒），0 表示不限。
+  active_end_time?: number
+  // 售罄或活动到期后后端不再过滤该活动，而是返回 redeemable=false；
+  // 旧接口没有这两个字段，缺失时按可兑换处理。
+  redeemable?: boolean
+  blocked_reason?: string
 }
 
 export interface ActivityOffersResponse {
@@ -82,6 +92,11 @@ export interface ActivityGrant {
   price_quota: number
   start_time: number
   expire_time: number
+  // 生效到期时间 = min(expire_time, activity_end_time)，0 表示永久；
+  // 活动可能先于卡密有效期结束，旧接口不返回该字段时回退 expire_time。
+  effective_expire_time?: number
+  // 活动结束时间（unix 秒），0 表示不限。
+  activity_end_time?: number
   status: string
   remark: string
   created_time: number
@@ -142,6 +157,10 @@ export interface ActivityPreview {
   message: string
   type?: ActivityCodeType
   benefits?: ActivityBenefit[] | null
+  // 活动背景图 URL；空串表示没有背景图。
+  image_url?: string
+  // 活动结束时间（unix 秒），0 表示不限。
+  active_end_time?: number
 }
 
 export interface RedeemActivityResult {

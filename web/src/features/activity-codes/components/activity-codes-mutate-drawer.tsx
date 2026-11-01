@@ -92,8 +92,9 @@ import {
 } from '../lib/activity-form'
 import type { ActivityCode } from '../types'
 import { ActivityBenefitsEditor } from './activity-benefits-editor'
-import { ActivityModelRatiosEditor } from './activity-model-ratios-editor'
 import { useActivityCodes } from './activity-codes-provider'
+import { ActivityImagePreview } from './activity-image-preview'
+import { ActivityModelRatiosEditor } from './activity-model-ratios-editor'
 
 type ActivityCodesMutateDrawerProps = {
   open: boolean
@@ -122,6 +123,10 @@ export function ActivityCodesMutateDrawer({
     resolver: zodResolver(getActivityCodeFormSchema(t)),
     defaultValues: ACTIVITY_CODE_FORM_DEFAULT_VALUES,
   })
+
+  // 背景图预览：填了合法地址就先在本地渲染缩略图，加载失败时给提示，
+  // 避免保存完才发现地址写错或图片不可用。
+  const imageUrlValue = form.watch('image_url')
 
   useEffect(() => {
     if (!open) return
@@ -362,7 +367,10 @@ export function ActivityCodesMutateDrawer({
                     <FormItem>
                       <FormLabel>{t('Description')}</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder={t('Optional description')} />
+                        <Input
+                          {...field}
+                          placeholder={t('Optional description')}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -392,7 +400,7 @@ export function ActivityCodesMutateDrawer({
                               过高时按可用高度滚动，避免长分组名或长列表被截断。 */}
                           <SelectContent
                             alignItemWithTrigger={false}
-                            className='max-h-[min(22rem,var(--available-height))] w-max min-w-(--anchor-width) max-w-[min(32rem,var(--available-width))]'
+                            className='max-h-[min(22rem,var(--available-height))] w-max max-w-[min(32rem,var(--available-width))] min-w-(--anchor-width)'
                           >
                             <SelectGroup>
                               {groupNames.map((group) => (
@@ -522,7 +530,9 @@ export function ActivityCodesMutateDrawer({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>
-                          {t('Price ({{currency}})', { currency: currencyLabel })}
+                          {t('Price ({{currency}})', {
+                            currency: currencyLabel,
+                          })}
                         </FormLabel>
                         <FormControl>
                           <Input
@@ -565,14 +575,16 @@ export function ActivityCodesMutateDrawer({
                             </FormControl>
                             <SelectContent alignItemWithTrigger={false}>
                               <SelectGroup>
-                                {getActivityRatioModeOptions(t).map((option) => (
-                                  <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                  >
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
+                                {getActivityRatioModeOptions(t).map(
+                                  (option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
+                                    </SelectItem>
+                                  )
+                                )}
                               </SelectGroup>
                             </SelectContent>
                           </Select>
@@ -726,6 +738,73 @@ export function ActivityCodesMutateDrawer({
                 </div>
                 <FormField
                   control={form.control}
+                  name='active_end_time'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Activity end time')}</FormLabel>
+                      <FormControl>
+                        <DateTimePicker
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'After this time the activity stops even if the grant has not expired. Leave empty for no limit.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name='sort_weight'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Sort weight')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='number'
+                          min={0}
+                          step={1}
+                          value={field.value}
+                          onChange={(event) =>
+                            field.onChange(
+                              numberFieldValue(event.target.valueAsNumber)
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Larger values are shown first.')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name='image_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Background image URL')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder='https://example.com/banner.png'
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Leave empty to disable the background image.')}
+                      </FormDescription>
+                      <ActivityImagePreview url={imageUrlValue ?? ''} />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name='public_visible'
                   render={({ field }) => (
                     <FormItem className='flex flex-row items-center justify-between rounded-lg border p-3'>
@@ -754,7 +833,11 @@ export function ActivityCodesMutateDrawer({
           >
             {t('Cancel')}
           </SheetClose>
-          <Button type='submit' form='activity-code-form' disabled={isSubmitting}>
+          <Button
+            type='submit'
+            form='activity-code-form'
+            disabled={isSubmitting}
+          >
             <Ticket className='mr-2 h-4 w-4' />
             {submitButtonLabel}
           </Button>

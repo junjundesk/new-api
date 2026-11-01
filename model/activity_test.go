@@ -699,3 +699,111 @@ func TestActivityBenefitsScanAndValue(t *testing.T) {
 	invalid := ActivityBenefits{}
 	require.Error(t, invalid.Scan([]byte("{not json")))
 }
+
+// 活动到期时间在发放时被快照到授权：兑换与管理员赠送都必须写入。
+// 兑换后的授权有效期（expire_time）与活动到期时间互相独立。
+func TestActivityCodeIssueSnapshotsActivityEndTime(t *testing.T) {
+	now := common.GetTimestamp()
+	tests := []struct {
+		name  string
+		issue func(t *testing.T, user *User, code *ActivityCode) (grantId int, expireTime int64)
+	}{
+		{
+			name: "redeem",
+			issue: func(t *testing.T, user *User, code *ActivityCode) (int, int64) {
+				result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: code.Code, UserId: user.Id})
+				require.NoError(t, err)
+				return result.GrantId, result.ExpireTime
+			},
+		},
+		{
+			name: "admin grant",
+			issue: func(t *testing.T, user *User, code *ActivityCode) (int, int64) {
+				result, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: code.Id, UserId: user.Id})
+				require.NoError(t, err)
+				return result.GrantId, result.ExpireTime
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code := ActivityCode{
+				Code:            "hdmactive",
+				Name:            "活动到期快照",
+				DurationSeconds: 7 * 24 * 3600,
+				ActiveEndTime:   now + 3600,
+			}
+			user, created := setupActivityFixture(t, code, 0)
+
+			grantId, expireTime := tt.issue(t, user, created)
+			require.Greater(t, expireTime, created.ActiveEndTime, "授权有效期与活动到期时间互相独立")
+
+			grant := &ActivityGrant{}
+			require.NoError(t, DB.First(grant, "id = ?", grantId).Error)
+			assert.Equal(t, created.ActiveEndTime, grant.ActivityEndTime, "发放时快照活动到期时间")
+			assert.Equal(t, created.ActiveEndTime, grant.EffectiveExpire(), "生效到期时间被活动到期时间 cap")
+		})
+	}
+}
+
+// 活动到期后授权立即失效：即使 expire_time 还是永久（0），也不再出现在有效授权里。
+func TestActivityGrantDisappearsWhenActivityEnds(t *testing.T) {
+	now := common.GetTimestamp()
+	code := ActivityCode{Code: "hdmendgrant", Name: "活动到期失效", ActiveEndTime: now + 3600}
+	user, _ := setupActivityFixture(t, code, 0)
+
+	result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "hdmendgrant", UserId: user.Id})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), result.ExpireTime, "未配置时长时授权永久有效")
+
+	grants, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	require.Len(t, grants, 1, "活动未到期时授权有效")
+
+	require.NoError(t, DB.Model(&ActivityGrant{}).Where("id = ?", result.GrantId).
+		Update("activity_end_time", now-1).Error)
+	grants, err = GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	assert.Empty(t, grants, "活动到期后不再返回该授权")
+}
+
+// 活动到期后管理员赠送同样被拒绝：任何发放路径都不能产生瞬间失效的授权。
+func TestGrantActivityCodeRejectsEndedActivity(t *testing.T) {
+	now := common.GetTimestamp()
+	code := ActivityCode{Code: "hdmgrantended", Name: "已结束赠送", DurationSeconds: 3600, ActiveEndTime: now - 1}
+	user, created := setupActivityFixture(t, code, 100)
+
+	_, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.ErrorIs(t, err, ErrActivityCodeActivityEnded)
+
+	var count int64
+	require.NoError(t, DB.Model(&ActivityGrant{}).Count(&count).Error)
+	assert.Zero(t, count, "拒绝赠送时不写授权")
+}
+
+// 活动到期后拒绝兑换，并且不写授权、不扣余额。
+func TestRedeemActivityCodeRejectsEndedActivity(t *testing.T) {
+	now := common.GetTimestamp()
+	code := ActivityCode{
+		Code:            "hdmended",
+		Name:            "已结束活动",
+		DurationSeconds: 3600,
+		PriceQuota:      100,
+		ActiveEndTime:   now - 1,
+	}
+	user, created := setupActivityFixture(t, code, 1000)
+
+	_, err := RedeemActivityCode(RedeemActivityCodeRequest{
+		Code:               "hdmended",
+		UserId:             user.Id,
+		Confirm:            true,
+		ExpectedPriceQuota: 100,
+	})
+	require.ErrorIs(t, err, ErrActivityCodeActivityEnded, "活动到期与兑换截止是两个独立原因")
+
+	var count int64
+	require.NoError(t, DB.Model(&ActivityGrant{}).Count(&count).Error)
+	assert.Zero(t, count, "拒绝兑换时不写授权")
+	assert.Equal(t, 1000, reloadUserQuota(t, user.Id), "拒绝兑换时不扣余额")
+	assert.Equal(t, 0, reloadActivityCode(t, created.Id).UsedCount, "拒绝兑换时不占名额")
+}

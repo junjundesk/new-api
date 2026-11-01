@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -62,6 +63,11 @@ type activityCodeRequest struct {
 	TotalLimit          int                      `json:"total_limit"`
 	PerUserLimit        *int                     `json:"per_user_limit"`
 	PublicVisible       *int                     `json:"public_visible"`
+	// SortWeight 越大用户端越靠前；ImageUrl 为空表示不启用卡片背景图。
+	SortWeight int    `json:"sort_weight"`
+	ImageUrl   string `json:"image_url"`
+	// ActiveEndTime 是活动到期时间（unix 秒，0 表示不限），与兑换截止 end_time 相互独立。
+	ActiveEndTime int64 `json:"active_end_time"`
 }
 
 // resolveActivityCodeType 解析并校验活动码类型。类型创建后不可修改。
@@ -219,6 +225,33 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		common.ApiErrorI18n(c, i18n.MsgActivityCodePriceInvalid, map[string]any{"Max": model.ActivityCodeMaxPriceQuota})
 		return nil, false
 	}
+	if req.SortWeight < 0 || req.SortWeight > model.ActivityCodeMaxSortWeight {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeSortWeightInvalid, map[string]any{"Max": model.ActivityCodeMaxSortWeight})
+		return nil, false
+	}
+	if req.ActiveEndTime < 0 {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeActiveEndTimeInvalid)
+		return nil, false
+	}
+	// 卡片背景图：空串表示不启用；非空时只接受 http(s) 绝对地址或站内绝对路径，
+	// 且不允许空白与控制字符，避免把换行、截断符写进 <img src> 或落库超长。
+	imageUrl := strings.TrimSpace(req.ImageUrl)
+	if utf8.RuneCountInString(imageUrl) > model.ActivityCodeImageUrlMaxLength {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeImageUrlInvalid, map[string]any{"Max": model.ActivityCodeImageUrlMaxLength})
+		return nil, false
+	}
+	if imageUrl != "" {
+		hasValidPrefix := strings.HasPrefix(imageUrl, "http://") ||
+			strings.HasPrefix(imageUrl, "https://") ||
+			strings.HasPrefix(imageUrl, "/")
+		hasInvalidChar := strings.ContainsFunc(imageUrl, func(r rune) bool {
+			return unicode.IsSpace(r) || unicode.IsControl(r)
+		})
+		if !hasValidPrefix || hasInvalidChar {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeImageUrlInvalid, map[string]any{"Max": model.ActivityCodeImageUrlMaxLength})
+			return nil, false
+		}
+	}
 
 	var (
 		benefits            model.ActivityBenefits
@@ -328,6 +361,9 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 	activityCode.TotalLimit = req.TotalLimit
 	activityCode.PerUserLimit = perUserLimit
 	activityCode.PublicVisible = publicVisible
+	activityCode.SortWeight = req.SortWeight
+	activityCode.ImageUrl = imageUrl
+	activityCode.ActiveEndTime = req.ActiveEndTime
 	if codeType == model.ActivityCodeTypeBenefit {
 		activityCode.Type = model.ActivityCodeTypeBenefit
 		activityCode.Benefits = benefits
@@ -561,6 +597,11 @@ func GrantActivityCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeNotFound)
 		return
 	}
+	// 活动到期后赠送只会产生立刻失效的授权（用户端只见 0 天可用），与兑换一致整批拒绝。
+	if activityCode.ActivityEnded(common.GetTimestamp()) {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeActivityEnded)
+		return
+	}
 	myRole := c.GetInt("role")
 	remark := strings.TrimSpace(req.Remark)
 
@@ -633,6 +674,7 @@ func GrantActivityCode(c *gin.Context) {
 // ---------------------------------------------------------------------------
 
 // GetActivityOffers 返回公开可见的活动码列表，以及站点是否启用了活动码。
+// 售罄与活动到期不再隐藏卡片，而是标记 redeemable=false 让用户看到「已抢光/已结束」。
 func GetActivityOffers(c *gin.Context) {
 	activityCodes, err := model.GetEnabledActivityCodes()
 	if err != nil {
@@ -642,7 +684,7 @@ func GetActivityOffers(c *gin.Context) {
 	now := common.GetTimestamp()
 	offers := make([]gin.H, 0, len(activityCodes))
 	for _, activityCode := range activityCodes {
-		if activityCode.PublicVisible != 1 || activityCode.RemainingTotal() == 0 {
+		if activityCode.PublicVisible != 1 {
 			continue
 		}
 		if activityCode.StartTime != 0 && now < activityCode.StartTime {
@@ -653,6 +695,13 @@ func GetActivityOffers(c *gin.Context) {
 		}
 		if !activityCode.AllGroupsAvailable() {
 			continue
+		}
+		blockedReason := ""
+		switch {
+		case activityCode.ActivityEnded(now):
+			blockedReason = activityBlockedActivityEnded
+		case activityCode.RemainingTotal() == 0:
+			blockedReason = activityBlockedSoldOut
 		}
 		offers = append(offers, gin.H{
 			"type":                  model.NormalizeActivityCodeType(activityCode.Type),
@@ -671,6 +720,11 @@ func GetActivityOffers(c *gin.Context) {
 			"model_ratio_overrides": activityCode.ModelRatioOverrides,
 			"price_quota":           activityCode.PriceQuota,
 			"remaining_total":       activityCode.RemainingTotal(),
+			"sort_weight":           activityCode.SortWeight,
+			"image_url":             activityCode.ImageUrl,
+			"active_end_time":       activityCode.ActiveEndTime,
+			"redeemable":            blockedReason == "",
+			"blocked_reason":        blockedReason,
 		})
 	}
 	common.ApiSuccess(c, gin.H{"enabled": len(activityCodes) > 0, "offers": offers})
@@ -683,6 +737,11 @@ func GetSelfActivityGrants(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// 生效到期时间取 min(expire_time, activity_end_time)，0 表示永久；
+	// 前端据此直接展示「实际可用到什么时候」，无需自己再算一次。
+	for i := range grants {
+		grants[i].EffectiveExpireTime = grants[i].EffectiveExpire()
 	}
 	common.ApiSuccess(c, gin.H{
 		"grants": grants,
@@ -770,6 +829,8 @@ func activityRedeemErrorKey(err error) string {
 		return i18n.MsgActivityCodeNotStarted
 	case errors.Is(err, model.ErrActivityCodeEnded):
 		return i18n.MsgActivityCodeEnded
+	case errors.Is(err, model.ErrActivityCodeActivityEnded):
+		return i18n.MsgActivityCodeActivityEnded
 	case errors.Is(err, model.ErrActivityCodeSoldOut):
 		return i18n.MsgActivityCodeSoldOut
 	case errors.Is(err, model.ErrActivityCodeUserLimitReached):
@@ -795,6 +856,8 @@ func activityBlockedReasonKey(reason string) string {
 		return i18n.MsgActivityCodeNotStarted
 	case activityBlockedEnded:
 		return i18n.MsgActivityCodeEnded
+	case activityBlockedActivityEnded:
+		return i18n.MsgActivityCodeActivityEnded
 	case activityBlockedSoldOut:
 		return i18n.MsgActivityCodeSoldOut
 	case activityBlockedUserLimit:
@@ -811,6 +874,7 @@ const (
 	activityBlockedDisabled            = "disabled"
 	activityBlockedNotStarted          = "not_started"
 	activityBlockedEnded               = "ended"
+	activityBlockedActivityEnded       = "activity_ended"
 	activityBlockedSoldOut             = "sold_out"
 	activityBlockedUserLimit           = "user_limit"
 	activityBlockedGroupUnavailable    = "group_unavailable"
@@ -892,6 +956,8 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 		blockedReason = activityBlockedNotStarted
 	case activityCode.WindowClosed(now):
 		blockedReason = activityBlockedEnded
+	case activityCode.ActivityEnded(now):
+		blockedReason = activityBlockedActivityEnded
 	case activityCode.RemainingTotal() == 0:
 		blockedReason = activityBlockedSoldOut
 	case activityCode.PerUserLimit > 0 && usedByUser >= activityCode.PerUserLimit:
@@ -923,6 +989,9 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 		"ratio_scope":           activityCode.RatioScope,
 		"model_ratio_overrides": activityCode.ModelRatioOverrides,
 		"price_quota":           activityCode.PriceQuota,
+		"sort_weight":           activityCode.SortWeight,
+		"image_url":             activityCode.ImageUrl,
+		"active_end_time":       activityCode.ActiveEndTime,
 		"balance_quota":         balanceQuota,
 		"bonus_quota":           bonusQuota,
 		"can_afford":            activityCode.PriceQuota <= 0 || balanceQuota >= activityCode.PriceQuota,

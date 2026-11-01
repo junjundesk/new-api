@@ -59,7 +59,7 @@ func activityPackageCandidateFromGrant(grant model.ActivityGrant) activityPackag
 	if remaining < 0 {
 		remaining = 0
 	}
-	return activityPackageCandidate{GrantId: grant.Id, Remaining: remaining, ExpireTime: grant.ExpireTime}
+	return activityPackageCandidate{GrantId: grant.Id, Remaining: remaining, ExpireTime: grant.EffectiveExpire()}
 }
 
 // aggregateActivityPackageCandidates 汇总同组/同模型的套餐剩余量，并选出本次扣减的授权：
@@ -131,6 +131,9 @@ func newActivityViewBuilder(groupName string) *activityViewBuilder {
 }
 
 func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
+	// 生效到期时间取 min(expire_time, activity_end_time)：活动到期后授权立即失效，
+	// 展示的到期时间不能停在 activity 结束之后。
+	expireTime := grant.EffectiveExpire()
 	if !builder.seen {
 		builder.view.GrantId = grant.Id
 		builder.view.Code = grant.Code
@@ -138,7 +141,7 @@ func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
 		builder.view.RatioMode = grant.RatioMode
 		builder.view.RatioOverride = grant.RatioOverride
 		builder.view.RpmLimit = grant.RpmLimit
-		builder.view.ExpireTime = grant.ExpireTime
+		builder.view.ExpireTime = expireTime
 		builder.seen = true
 	} else {
 		if grant.RatioMode == model.ActivityRatioModeOverride &&
@@ -152,10 +155,10 @@ func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
 		if grant.RpmLimit > builder.view.RpmLimit {
 			builder.view.RpmLimit = grant.RpmLimit
 		}
-		if builder.view.ExpireTime == 0 || grant.ExpireTime == 0 {
+		if builder.view.ExpireTime == 0 || expireTime == 0 {
 			builder.view.ExpireTime = 0
-		} else if grant.ExpireTime > builder.view.ExpireTime {
-			builder.view.ExpireTime = grant.ExpireTime
+		} else if expireTime > builder.view.ExpireTime {
+			builder.view.ExpireTime = expireTime
 		}
 	}
 
