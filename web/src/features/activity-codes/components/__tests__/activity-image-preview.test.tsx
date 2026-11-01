@@ -69,11 +69,33 @@ describe('activity image preview', () => {
     expect(screen.getByText('Preview')).toBeVisible()
   })
 
-  it('shows a fallback message when the image fails to load', () => {
+  it('shows a fallback message and troubleshooting hint when the image fails to load', () => {
     const { container } = renderPreview('/images/missing.png')
     fireEvent.error(container.querySelector('img') as HTMLImageElement)
     expect(screen.getByRole('status')).toHaveTextContent('Image failed to load')
+    expect(
+      screen.getByText(
+        'Common causes: hotlink protection, an http image on an https page, or a URL that is not a direct image link.'
+      )
+    ).toBeVisible()
     expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('offers a link that opens the failed image in a new window', () => {
+    const { container } = renderPreview('https://cdn.example.com/missing.png')
+    fireEvent.error(container.querySelector('img') as HTMLImageElement)
+    const link = screen.getByRole('link', { name: 'Open in new window' })
+    expect(link).toHaveAttribute('href', 'https://cdn.example.com/missing.png')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+  })
+
+  it('loads cross-origin images without a Referer so hotlink protection does not block preview', () => {
+    const { container } = renderPreview('https://cdn.example.com/banner.png')
+    expect(container.querySelector('img')).toHaveAttribute(
+      'referrerpolicy',
+      'no-referrer'
+    )
   })
 
   it('retries the thumbnail after the url changes', () => {

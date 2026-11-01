@@ -198,6 +198,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
             {hasImage && (
               // 封面带：图片按 object-cover 铺满卡片顶部 96px，再向下渐变到卡片底色。
               // 图片在顶部完整可见（不压文字），正文从 96px 处开始，对比度等同无背景图。
+              // 图床常用 Referer 防盗链，这里与表单预览一致使用 no-referrer，避免线上卡片破图。
               <div
                 data-slot='activity-offer-image-band'
                 className='pointer-events-none absolute inset-x-0 top-0 -z-10 h-24'
@@ -208,6 +209,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                   alt=''
                   aria-hidden='true'
                   loading='lazy'
+                  referrerPolicy='no-referrer'
                   className='absolute inset-0 h-full w-full object-cover'
                 />
                 <div
