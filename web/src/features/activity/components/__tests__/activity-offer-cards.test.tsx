@@ -281,9 +281,9 @@ describe('activity offer cards', () => {
     expect(onRedeem.mock.calls[0]?.[0]).toMatchObject({ code_id: 22 })
   })
 
-  // 回归：活动配置了背景图时以图片作为卡片背景（绝对定位 + object-cover）并叠一层遮罩；
-  // 未配置时不能渲染任何图片节点，避免出现空图占位。
-  it('renders a background image and its scrim only for offers that carry an image url', () => {
+  // 回归：配置了背景图时，封面图必须是卡片的首个子节点——Card 依赖
+  // has-[>img:first-child]:pt-0 去掉顶部内边距，正文才会排在图片下方而不是压在图上。
+  it('renders a cover image as the first card child only for offers that carry an image url', () => {
     const { container } = renderCards([
       offerFixture({
         code_id: 1,
@@ -302,30 +302,14 @@ describe('activity offer cards', () => {
       'src',
       'https://cdn.example.com/activity.png'
     )
-    // 背景图必须铺满卡片并保持等比裁切，否则会被拉伸。
-    expect(images[0]).toHaveClass('absolute', 'object-cover')
-    // 背景图是装饰性的，读屏不应重复播报它。
+    // 固定高度 + object-cover 才不会把图片拉伸变形。
+    expect(images[0]).toHaveClass('h-36', 'object-cover')
+    // 装饰性图片，读屏不应重复播报。
     expect(images[0]).toHaveAttribute('aria-hidden', 'true')
+    // 图床常用 Referer 防盗链，必须去掉 Referer 才能渲染。
+    expect(images[0]).toHaveAttribute('referrerpolicy', 'no-referrer')
 
-    expect(
-      container.querySelectorAll('[data-slot="activity-offer-image-scrim"]')
-    ).toHaveLength(1)
-  })
-
-  // 回归：封面带固定 96px，卡片正文必须整体下移同样的高度，
-  // 否则标题会压在图片上，对比度取决于管理员上传的任意图片。
-  it('reserves the cover band height above the card text when an image is present', () => {
-    const { container } = renderCards([
-      offerFixture({
-        code_id: 4,
-        image_url: 'https://cdn.example.com/activity.png',
-      }),
-    ])
-
-    expect(
-      container.querySelector('[data-slot="activity-offer-image-band"]')
-    ).toHaveClass('h-24')
-    expect(renderedCards(container)[0]).toHaveClass('pt-24')
+    expect(renderedCards(container)[0]?.firstElementChild).toBe(images[0])
   })
 
   it('renders no image node when the offer image url is empty', () => {
@@ -335,9 +319,6 @@ describe('activity offer cards', () => {
 
     expect(
       container.querySelector('[data-slot="activity-offer-image"]')
-    ).toBeNull()
-    expect(
-      container.querySelector('[data-slot="activity-offer-image-scrim"]')
     ).toBeNull()
   })
 

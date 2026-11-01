@@ -96,11 +96,22 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
           <Card
             key={offer.code_id}
             size='sm'
-            className={cn(
-              'relative isolate h-full',
-              hasImage ? 'pt-24' : closed && 'pt-8'
-            )}
+            className={cn('relative h-full', closed && !hasImage && 'pt-8')}
           >
+            {/* 封面图作为首个子节点：Card 内置的 has-[>img:first-child]:pt-0 与
+                *:[img:first-child]:rounded-t-xl 会去掉顶部内边距并裁圆角，
+                图片是普通文档流元素，正文自然排在它下面，不会被压住。 */}
+            {hasImage && (
+              <img
+                data-slot='activity-offer-image'
+                src={imageUrl}
+                alt=''
+                aria-hidden='true'
+                loading='lazy'
+                referrerPolicy='no-referrer'
+                className='bg-muted h-36 w-full shrink-0 object-cover'
+              />
+            )}
             <CardHeader>
               <CardTitle className='truncate'>
                 {offer.name || offer.code}
@@ -193,32 +204,7 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
                 </Button>
               </div>
             </CardFooter>
-            {/* 背景图与角标放在最后：Card 的 \`*:[img:first-child]\` 等样式只认首个子节点，
-                绝对定位元素不参与布局，顺序不影响视觉层级（负 z-index 绘制在内容之下）。 */}
-            {hasImage && (
-              // 封面带：图片按 object-cover 铺满卡片顶部 96px，再向下渐变到卡片底色。
-              // 图片在顶部完整可见（不压文字），正文从 96px 处开始，对比度等同无背景图。
-              // 图床常用 Referer 防盗链，这里与表单预览一致使用 no-referrer，避免线上卡片破图。
-              <div
-                data-slot='activity-offer-image-band'
-                className='pointer-events-none absolute inset-x-0 top-0 -z-10 h-24'
-              >
-                <img
-                  data-slot='activity-offer-image'
-                  src={imageUrl}
-                  alt=''
-                  aria-hidden='true'
-                  loading='lazy'
-                  referrerPolicy='no-referrer'
-                  className='absolute inset-0 h-full w-full object-cover'
-                />
-                <div
-                  data-slot='activity-offer-image-scrim'
-                  aria-hidden='true'
-                  className='to-card absolute inset-0 bg-linear-to-b from-transparent from-40%'
-                />
-              </div>
-            )}
+            {/* 角标是绝对定位，不参与布局；放在最后不会被封面图的首子节点样式影响。 */}
             {closed && (
               // 斜角角标：45° 长条被左上角方框裁掉两侧，只留贴角的斜带；
               // 文案不设 aria-hidden，读屏会把它作为卡片内容读出来。
