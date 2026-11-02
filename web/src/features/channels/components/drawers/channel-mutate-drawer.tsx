@@ -149,6 +149,7 @@ import { useChannelMutateForm } from '../../hooks/use-channel-mutate-form'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
   CHANNEL_TYPE_ADVANCED_CUSTOM,
+  DEFAULT_ADVANCED_CUSTOM_CONFIG_JSON,
   channelFormSchema,
   channelsQueryKeys,
   getAdvancedCustomStats,
@@ -778,6 +779,24 @@ export function ChannelMutateDrawer({
       resetDoubaoApiUnlock()
     }
   }, [open, resetDoubaoApiUnlock])
+
+  // Newly created Advanced Custom channels start from the built-in template so
+  // the three protocol entry points are wired without extra clicks. Leaving the
+  // type drops the untouched template again to keep other channels clean.
+  useEffect(() => {
+    if (!open) return
+    const current = form.getValues('advanced_custom')?.trim() || ''
+    if (currentType !== CHANNEL_TYPE_ADVANCED_CUSTOM) {
+      if (current === DEFAULT_ADVANCED_CUSTOM_CONFIG_JSON) {
+        form.setValue('advanced_custom', '', { shouldDirty: false })
+      }
+      return
+    }
+    if (isEditing || current) return
+    form.setValue('advanced_custom', DEFAULT_ADVANCED_CUSTOM_CONFIG_JSON, {
+      shouldDirty: false,
+    })
+  }, [open, isEditing, currentType, form])
 
   const applyConnectionInfo = useCallback(
     (connectionInfo: ChannelConnectionInfo) => {

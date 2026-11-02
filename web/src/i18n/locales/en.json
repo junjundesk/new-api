@@ -3634,6 +3634,7 @@
     "OpenAI": "OpenAI",
     "OpenAI Chat": "OpenAI Chat",
     "OpenAI Chat Completions": "OpenAI Chat Completions",
+    "OpenAI Chat Multi-Protocol Gateway": "OpenAI Chat Multi-Protocol Gateway",
     "OpenAI Chat to Anthropic Messages": "OpenAI Chat to Anthropic Messages",
     "OpenAI Chat to Gemini Generate Content": "OpenAI Chat to Gemini Generate Content",
     "OpenAI Chat to OpenAI Responses": "OpenAI Chat to OpenAI Responses",

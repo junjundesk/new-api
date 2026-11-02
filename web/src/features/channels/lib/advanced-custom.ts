@@ -220,28 +220,25 @@ const geminiQueryAuth = (): AdvancedCustomRouteAuth => ({
 export const ADVANCED_CUSTOM_TEMPLATE_OPTIONS: AdvancedCustomTemplateOption[] =
   [
     {
-      value: 'official_openai_chat',
-      label: 'Official OpenAI Chat',
+      value: 'openai_chat_multi_protocol',
+      label: 'OpenAI Chat Multi-Protocol Gateway',
       config: {
         advanced_routes: [
           {
             incoming_path: '/v1/chat/completions',
             upstream_path: '/v1/chat/completions',
             converter: 'none',
-            auth: bearerHeaderAuth(),
           },
-        ],
-      },
-    },
-    {
-      value: 'official_openai_responses',
-      label: 'Official OpenAI Responses',
-      config: {
-        advanced_routes: [
           {
             incoming_path: '/v1/responses',
-            upstream_path: '/v1/responses',
-            converter: 'none',
+            upstream_path: '/v1/chat/completions',
+            converter: 'openai_responses_to_openai_chat_completions',
+            auth: bearerHeaderAuth(),
+          },
+          {
+            incoming_path: '/v1/messages',
+            upstream_path: '/v1/chat/completions',
+            converter: 'anthropic_messages_to_openai_chat_completions',
             auth: bearerHeaderAuth(),
           },
         ],
@@ -352,6 +349,13 @@ export function getAdvancedCustomTemplateConfig(
     ) || ADVANCED_CUSTOM_TEMPLATE_OPTIONS[0]
   return cloneAdvancedCustomConfig(template.config)
 }
+
+export const DEFAULT_ADVANCED_CUSTOM_TEMPLATE_KEY = 'openai_chat_multi_protocol'
+
+export const DEFAULT_ADVANCED_CUSTOM_CONFIG_JSON =
+  stringifyAdvancedCustomConfig(
+    getAdvancedCustomTemplateConfig(DEFAULT_ADVANCED_CUSTOM_TEMPLATE_KEY)
+  )
 
 export function createAdvancedCustomRoute(): AdvancedCustomRoute {
   return {
