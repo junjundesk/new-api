@@ -27,6 +27,55 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const LOCALES = ['en', 'zh']
 
 const NEW_KEYS = {
+  'Limit type': {
+    en: 'Limit type',
+    zh: '限流类型',
+  },
+  'Limit type for benefit {{index}}': {
+    en: 'Limit type for benefit {{index}}',
+    zh: '第 {{index}} 条权益的限流类型',
+  },
+  'Choose how usage is limited. The unused limit type is not enforced.': {
+    en: 'Choose how usage is limited. The unused limit type is not enforced.',
+    zh: '选择限制方式，未选中的限流类型不生效。',
+  },
+  Concurrency: {
+    en: 'Concurrency',
+    zh: '并发',
+  },
+  'Concurrency limit': {
+    en: 'Concurrency limit',
+    zh: '并发限制',
+  },
+  'Concurrency for benefit {{index}}': {
+    en: 'Concurrency for benefit {{index}}',
+    zh: '第 {{index}} 条权益的并发限制',
+  },
+  'Concurrent in-flight requests per user in this group. 0 means unlimited.': {
+    en: 'Concurrent in-flight requests per user in this group. 0 means unlimited.',
+    zh: '限制每位用户在此分组中同时进行的请求数，0 表示不限。',
+  },
+  'Concurrency is shared per user and group; a single-model benefit is not its own pool. 0 means unlimited.':
+    {
+      en: 'Concurrency is shared per user and group; a single-model benefit is not its own pool. 0 means unlimited.',
+      zh: '并发名额按用户和分组共享，单模型权益不单独计算，0 表示不限。',
+    },
+  'Concurrency limit must be 0 or greater': {
+    en: 'Concurrency limit must be 0 or greater',
+    zh: '并发限制不能为负数',
+  },
+  'Concurrency limit must be a whole number': {
+    en: 'Concurrency limit must be a whole number',
+    zh: '并发限制必须为整数',
+  },
+  'Concurrency limit is too large': {
+    en: 'Concurrency limit is too large',
+    zh: '并发限制过大',
+  },
+  'Rate limit': {
+    en: 'Rate limit',
+    zh: '请求限制',
+  },
   "Yesterday": {
     en: "Yesterday",
     zh: "昨天",

@@ -66,6 +66,8 @@ await i18n.init({
           'Token quota used up (billed at the original price)',
         Unlimited: 'Unlimited',
         'RPM limit': 'RPM limit',
+        RPM: 'RPM',
+        Concurrency: 'Concurrency',
         'Expires at': 'Expires at',
         Paid: 'Paid',
         'Group default ratio': 'Group default ratio',
@@ -162,16 +164,43 @@ describe('activity grants card', () => {
     // 权益授权自带 RPM 上限，必须同行展示，否则用户会误以为沿用分组的默认限速。
     expect(
       screen.getByText(
-        /Free Pack · Whole group · Used 2\.5M \/ 10M · Remaining 7\.5M · RPM limit: 5 · Expires at/
+        /Free Pack · Whole group · Used 2\.5M \/ 10M · Remaining 7\.5M · RPM: 5 · Expires at/
       )
     ).toBeVisible()
     expect(screen.getByText('hdpro')).toBeVisible()
     // 未配置 RPM（默认 0）时展示不限速，避免出现 "RPM limit: 0" 的误导文案。
     expect(
       screen.getByText(
-        /Free Pack · Model gpt-5 · Used 10K \/ Unlimited · RPM limit: Unlimited · Expires at/
+        /Free Pack · Model gpt-5 · Used 10K \/ Unlimited · RPM: Unlimited · Expires at/
       )
     ).toBeVisible()
+  })
+
+  it('shows the rpm and concurrency limits of mixed grants separately', async () => {
+    renderGrants([
+      grantFixture({
+        id: 1,
+        group_name: 'hdmixed',
+        benefit_key: 'benefit-1',
+        redeem_batch: 'batch-9',
+        ratio_scope: 'group',
+        limit_mode: 'rpm',
+        rpm_limit: 5,
+      }),
+      grantFixture({
+        id: 2,
+        group_name: 'hdmixed',
+        benefit_key: 'benefit-2',
+        redeem_batch: 'batch-9',
+        ratio_scope: 'group',
+        limit_mode: 'concurrency',
+        rpm_limit: 0,
+        concurrency_limit: 10,
+      }),
+    ])
+
+    expect(await screen.findByText(/· RPM: 5 · Expires at/)).toBeVisible()
+    expect(screen.getByText(/· Concurrency: 10 · Expires at/)).toBeVisible()
   })
 
   it('tells the user a used-up token package falls back to the original price', async () => {

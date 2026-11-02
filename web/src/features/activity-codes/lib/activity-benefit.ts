@@ -24,24 +24,29 @@ import { formatTokenAmount, parseTokenAmountInput } from '@/lib/token-amount'
 import {
   ACTIVITY_BENEFIT_SCOPE,
   ACTIVITY_BENEFIT_TOKEN_MODE,
+  ACTIVITY_LIMIT_MODE,
   ACTIVITY_VALIDATION,
 } from '../constants'
 import {
   activityBenefitScopeSchema,
   type ActivityBenefit,
   type ActivityBenefitScope,
+  type ActivityLimitMode,
 } from '../types'
 
 export type ActivityBenefitTokenMode =
   (typeof ACTIVITY_BENEFIT_TOKEN_MODE)[keyof typeof ACTIVITY_BENEFIT_TOKEN_MODE]
 
-// 权益编辑器的行数据：token_total 以文本保存，提交时按 token_mode 解析。
+// 权益编辑器的行数据：token_total 以文本保存，提交时按 token_mode 解析；
+// 限流二选一，未启用的限流值提交为 0。
 export type ActivityBenefitRow = {
   key: string
   group_name: string
   scope: (typeof ACTIVITY_BENEFIT_SCOPE)[keyof typeof ACTIVITY_BENEFIT_SCOPE]
   model_name: string
+  limit_mode: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit: number
   token_mode: ActivityBenefitTokenMode
   token_total_input: string
 }
@@ -54,7 +59,9 @@ export function createActivityBenefitRow(
     group_name: '',
     scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
     model_name: '',
+    limit_mode: ACTIVITY_LIMIT_MODE.RPM,
     rpm_limit: 0,
+    concurrency_limit: 0,
     token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.UNLIMITED,
     token_total_input: '',
     ...overrides,
@@ -82,11 +89,13 @@ export function getActivityBenefitRowSchema(t: TFunction) {
           ACTIVITY_VALIDATION.MODEL_NAME_MAX_LENGTH,
           t('Model name must be 1-255 characters')
         ),
-      rpm_limit: z
-        .number()
-        .int(t('RPM limit must be a whole number'))
-        .min(0, t('RPM limit must be 0 or greater'))
-        .max(ACTIVITY_VALIDATION.RPM_MAX, t('RPM limit is too large')),
+      limit_mode: z.enum([
+        ACTIVITY_LIMIT_MODE.RPM,
+        ACTIVITY_LIMIT_MODE.CONCURRENCY,
+      ]),
+      // 未启用的限流类型数值不生效且提交时归 0，范围校验只针对当前选中的输入。
+      rpm_limit: z.number(),
+      concurrency_limit: z.number(),
       token_mode: z.enum([
         ACTIVITY_BENEFIT_TOKEN_MODE.UNLIMITED,
         ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
@@ -94,6 +103,50 @@ export function getActivityBenefitRowSchema(t: TFunction) {
       token_total_input: z.string(),
     })
     .superRefine((row, ctx) => {
+      // 每行限流二选一：只校验当前选中的数值，未选中的输入不阻止保存。
+      if (row.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY) {
+        const limit = row.concurrency_limit
+        if (!Number.isInteger(limit)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit must be a whole number'),
+          })
+        } else if (limit < 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit must be 0 or greater'),
+          })
+        } else if (limit > ACTIVITY_VALIDATION.CONCURRENCY_MAX) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit is too large'),
+          })
+        }
+      } else {
+        const limit = row.rpm_limit
+        if (!Number.isInteger(limit)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit must be a whole number'),
+          })
+        } else if (limit < 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit must be 0 or greater'),
+          })
+        } else if (limit > ACTIVITY_VALIDATION.RPM_MAX) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit is too large'),
+          })
+        }
+      }
       if (!row.group_name.trim()) {
         ctx.addIssue({
           code: 'custom',
@@ -152,12 +205,24 @@ export function transformBenefitRowsToPayload(
       row.token_mode === ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE
         ? parseTokenAmountInput(row.token_total_input)
         : null
+    // 限流二选一：未启用的限流类型数值归 0，两个输入互不影响。
+    const isConcurrency = row.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY
+    const rpmLimit = Number.isFinite(row.rpm_limit)
+      ? Math.trunc(row.rpm_limit)
+      : 0
+    const concurrencyLimit = Number.isFinite(row.concurrency_limit)
+      ? Math.trunc(row.concurrency_limit)
+      : 0
     return {
       key: row.key,
       group_name: row.group_name.trim(),
       scope: row.scope,
       model_name: isModelScope ? row.model_name.trim() : '',
-      rpm_limit: Number.isFinite(row.rpm_limit) ? Math.trunc(row.rpm_limit) : 0,
+      limit_mode: isConcurrency
+        ? ACTIVITY_LIMIT_MODE.CONCURRENCY
+        : ACTIVITY_LIMIT_MODE.RPM,
+      rpm_limit: isConcurrency ? 0 : rpmLimit,
+      concurrency_limit: isConcurrency ? concurrencyLimit : 0,
       token_total: parsed?.ok ? parsed.value : 0,
     }
   })
@@ -172,12 +237,22 @@ export function transformBenefitsToRows(
         ? ACTIVITY_BENEFIT_SCOPE.MODEL
         : ACTIVITY_BENEFIT_SCOPE.GROUP
     const tokenTotal = benefit.token_total ?? 0
+    // 历史数据缺 limit_mode/concurrency_limit：按 RPM、0（不限）回填。
+    const limitMode: ActivityLimitMode =
+      benefit.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY
+        ? ACTIVITY_LIMIT_MODE.CONCURRENCY
+        : ACTIVITY_LIMIT_MODE.RPM
     return {
       key: benefit.key ?? '',
       group_name: benefit.group_name,
       scope,
-      model_name: scope === ACTIVITY_BENEFIT_SCOPE.MODEL ? benefit.model_name ?? '' : '',
+      model_name:
+        scope === ACTIVITY_BENEFIT_SCOPE.MODEL
+          ? (benefit.model_name ?? '')
+          : '',
+      limit_mode: limitMode,
       rpm_limit: benefit.rpm_limit ?? 0,
+      concurrency_limit: benefit.concurrency_limit ?? 0,
       // 回填用原始整数字符串，避免单位格式化造成精度丢失。
       token_mode:
         tokenTotal > 0
@@ -227,6 +302,23 @@ export function describeActivityBenefit(
     language
   )
   return `${benefit.group_name} · ${scopeLabel} · ${tokenLabel}`
+}
+
+// 请求限制文案：按限流类型展示 RPM 或并发上限，0 = 不限。
+// 同组混合授权会同时有 RPM 与并发有效值，各自按自己的 limit_mode 展示。
+export function describeActivityLimit(
+  t: TFunction,
+  limitMode: ActivityLimitMode | undefined,
+  rpmLimit: number,
+  concurrencyLimit: number
+): string {
+  if (limitMode === ACTIVITY_LIMIT_MODE.CONCURRENCY) {
+    const value =
+      concurrencyLimit > 0 ? String(concurrencyLimit) : t('Unlimited')
+    return `${t('Concurrency')}: ${value}`
+  }
+  const value = rpmLimit > 0 ? String(rpmLimit) : t('Unlimited')
+  return `${t('RPM')}: ${value}`
 }
 
 // 授权列表的 Token 用量文案，配合 formatTokenAmount 使用。

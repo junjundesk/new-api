@@ -32,12 +32,16 @@ const activityGrantMaxBatch = 100
 // ---------------------------------------------------------------------------
 
 type activityBenefitRequest struct {
-	Key        string `json:"key"`
-	GroupName  string `json:"group_name"`
-	Scope      string `json:"scope"`
-	ModelName  string `json:"model_name"`
-	RpmLimit   int    `json:"rpm_limit"`
-	TokenTotal int64  `json:"token_total"`
+	Key       string `json:"key"`
+	GroupName string `json:"group_name"`
+	Scope     string `json:"scope"`
+	ModelName string `json:"model_name"`
+	// LimitMode/ConcurrencyLimit 是新增字段，用指针区分「未传」与「显式零值」：
+	// 编辑未传时按 key 沿用原权益的取值，新建/切换模式未传时默认 0。
+	LimitMode        *string `json:"limit_mode"`
+	RpmLimit         int     `json:"rpm_limit"`
+	ConcurrencyLimit *int    `json:"concurrency_limit"`
+	TokenTotal       int64   `json:"token_total"`
 }
 
 type activityCodeRequest struct {
@@ -49,10 +53,15 @@ type activityCodeRequest struct {
 	Type          string  `json:"type"`
 	GroupName     string  `json:"group_name"`
 	DurationHours float64 `json:"duration_hours"`
-	RpmLimit      int     `json:"rpm_limit"`
-	PriceQuota    int     `json:"price_quota"`
-	RatioMode     string  `json:"ratio_mode"`
-	RatioOverride float64 `json:"ratio_override"`
+	// LimitMode/ConcurrencyLimit 是新增字段，用指针区分「未传」与「显式零值」：
+	// 编辑未传 limit_mode 时保留已有模式，未传 concurrency_limit 时仅在原模式为
+	// concurrency 的编辑中保留旧值，新建或切换模式默认 0。
+	LimitMode        *string `json:"limit_mode"`
+	RpmLimit         int     `json:"rpm_limit"`
+	ConcurrencyLimit *int    `json:"concurrency_limit"`
+	PriceQuota       int     `json:"price_quota"`
+	RatioMode        string  `json:"ratio_mode"`
+	RatioOverride    float64 `json:"ratio_override"`
 	// RatioScope 为 models 时只使用 ModelRatioOverrides 改价（可无视原分组定价），
 	// 为空或 group 时沿用 RatioMode/RatioOverride 作用于整个分组。
 	RatioScope          string                   `json:"ratio_scope"`
@@ -110,10 +119,11 @@ func buildActivityBenefits(c *gin.Context, req []activityBenefitRequest, existin
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitLimit, map[string]any{"Max": model.ActivityCodeMaxBenefits})
 		return nil, false
 	}
-	existingKeys := make(map[string]struct{})
+	// 已有权益按 key 索引：编辑时 key 命中的条目可沿用原限流取值。
+	existingByKey := make(map[string]model.ActivityBenefit)
 	if existing != nil {
 		for _, benefit := range existing.Benefits {
-			existingKeys[benefit.Key] = struct{}{}
+			existingByKey[benefit.Key] = benefit
 		}
 	}
 	groupRatios := ratio_setting.GetGroupRatioCopy()
@@ -165,7 +175,7 @@ func buildActivityBenefits(c *gin.Context, req []activityBenefitRequest, existin
 				common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitKeyInvalid)
 				return nil, false
 			}
-			if _, exists := existingKeys[key]; exists {
+			if _, exists := existingByKey[key]; exists {
 				usedKeys[key] = struct{}{}
 			} else {
 				key = model.NewActivityBenefitKey()
@@ -175,13 +185,51 @@ func buildActivityBenefits(c *gin.Context, req []activityBenefitRequest, existin
 			key = model.NewActivityBenefitKey()
 			usedKeys[key] = struct{}{}
 		}
+
+		priorBenefit, hasPrior := existingByKey[key]
+		limitMode := model.ActivityLimitModeRPM
+		if hasPrior {
+			// 编辑未传 limit_mode 时保留原条目模式；存量条目为空按 rpm。
+			if priorMode := model.NormalizeActivityLimitMode(priorBenefit.LimitMode); priorMode != "" {
+				limitMode = priorMode
+			}
+		}
+		if item.LimitMode != nil {
+			requestedMode := model.NormalizeActivityLimitMode(*item.LimitMode)
+			if requestedMode == "" {
+				common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitLimitModeInvalid)
+				return nil, false
+			}
+			limitMode = requestedMode
+		}
+		concurrencyLimit := 0
+		if item.ConcurrencyLimit != nil {
+			concurrencyLimit = *item.ConcurrencyLimit
+		} else if hasPrior && model.NormalizeActivityLimitMode(priorBenefit.LimitMode) == model.ActivityLimitModeConcurrency {
+			// 原本就是并发模式的条目在缺值编辑时保留旧值；
+			// 新建或切换到并发模式时默认 0。
+			concurrencyLimit = priorBenefit.ConcurrencyLimit
+		}
+		if concurrencyLimit < 0 || concurrencyLimit > model.ActivityCodeMaxConcurrency {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeBenefitConcurrencyInvalid, map[string]any{"Max": model.ActivityCodeMaxConcurrency})
+			return nil, false
+		}
+		rpmLimit := item.RpmLimit
+		// 未启用的限流数值归 0，避免出现「配置了但不生效」的条目。
+		if limitMode == model.ActivityLimitModeConcurrency {
+			rpmLimit = 0
+		} else {
+			concurrencyLimit = 0
+		}
 		benefits = append(benefits, model.ActivityBenefit{
-			Key:        key,
-			GroupName:  groupName,
-			Scope:      scope,
-			ModelName:  modelName,
-			RpmLimit:   item.RpmLimit,
-			TokenTotal: item.TokenTotal,
+			Key:              key,
+			GroupName:        groupName,
+			Scope:            scope,
+			ModelName:        modelName,
+			LimitMode:        limitMode,
+			RpmLimit:         rpmLimit,
+			ConcurrencyLimit: concurrencyLimit,
+			TokenTotal:       item.TokenTotal,
 		})
 	}
 	return benefits, true
@@ -220,6 +268,40 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 	if req.RpmLimit < 0 || req.RpmLimit > model.ActivityCodeMaxRpm {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodeRpmInvalid, map[string]any{"Max": model.ActivityCodeMaxRpm})
 		return nil, false
+	}
+	if req.ConcurrencyLimit != nil && (*req.ConcurrencyLimit < 0 || *req.ConcurrencyLimit > model.ActivityCodeMaxConcurrency) {
+		common.ApiErrorI18n(c, i18n.MsgActivityCodeConcurrencyInvalid, map[string]any{"Max": model.ActivityCodeMaxConcurrency})
+		return nil, false
+	}
+	// 限流模式：新建默认 rpm；编辑未传保留已有模式（存量为空按 rpm）。
+	limitMode := model.ActivityLimitModeRPM
+	if existing != nil {
+		if existingMode := model.NormalizeActivityLimitMode(existing.LimitMode); existingMode != "" {
+			limitMode = existingMode
+		}
+	}
+	if req.LimitMode != nil {
+		requestedMode := model.NormalizeActivityLimitMode(*req.LimitMode)
+		if requestedMode == "" {
+			common.ApiErrorI18n(c, i18n.MsgActivityCodeLimitModeInvalid)
+			return nil, false
+		}
+		limitMode = requestedMode
+	}
+	// 并发上限：显式传入即用；缺值时只有「原本就是并发模式的编辑」保留旧值，
+	// 新建或切换到并发模式默认 0。
+	concurrencyLimit := 0
+	if req.ConcurrencyLimit != nil {
+		concurrencyLimit = *req.ConcurrencyLimit
+	} else if existing != nil && model.NormalizeActivityLimitMode(existing.LimitMode) == model.ActivityLimitModeConcurrency {
+		concurrencyLimit = existing.ConcurrencyLimit
+	}
+	// 未启用的限流数值归 0：并发模式不写 RPM，RPM 模式不写并发。
+	rpmLimit := req.RpmLimit
+	if limitMode == model.ActivityLimitModeConcurrency {
+		rpmLimit = 0
+	} else {
+		concurrencyLimit = 0
 	}
 	if req.PriceQuota < 0 || req.PriceQuota > model.ActivityCodeMaxPriceQuota {
 		common.ApiErrorI18n(c, i18n.MsgActivityCodePriceInvalid, map[string]any{"Max": model.ActivityCodeMaxPriceQuota})
@@ -372,12 +454,17 @@ func buildActivityCode(c *gin.Context, req *activityCodeRequest, existing *model
 		activityCode.RatioOverride = 0
 		activityCode.RatioScope = model.ActivityRatioScopeGroup
 		activityCode.ModelRatioOverrides = nil
+		// benefit 类型的限流下沉到各权益条目，顶层固定 rpm + 0 + 0，不参与执行。
+		activityCode.LimitMode = model.ActivityLimitModeRPM
 		activityCode.RpmLimit = 0
+		activityCode.ConcurrencyLimit = 0
 	} else {
 		activityCode.Type = model.ActivityCodeTypeRatio
 		activityCode.Benefits = nil
 		activityCode.GroupName = groupName
-		activityCode.RpmLimit = req.RpmLimit
+		activityCode.LimitMode = limitMode
+		activityCode.RpmLimit = rpmLimit
+		activityCode.ConcurrencyLimit = concurrencyLimit
 		activityCode.RatioMode = ratioMode
 		activityCode.RatioOverride = ratioOverride
 		activityCode.RatioScope = ratioScope
@@ -713,7 +800,9 @@ func GetActivityOffers(c *gin.Context) {
 			"group_name":            activityCode.GroupName,
 			"group_desc":            setting.GetUsableGroupDescription(activityCode.GroupName),
 			"duration_seconds":      activityCode.DurationSeconds,
+			"limit_mode":            activityCode.EffectiveLimitMode(),
 			"rpm_limit":             activityCode.RpmLimit,
+			"concurrency_limit":     activityCode.ConcurrencyLimit,
 			"ratio_mode":            activityCode.RatioMode,
 			"ratio_override":        activityCode.RatioOverride,
 			"ratio_scope":           activityCode.RatioScope,
@@ -889,14 +978,21 @@ func activityBenefitViews(activityCode *model.ActivityCode) []gin.H {
 	}
 	benefits := make([]gin.H, 0, len(activityCode.Benefits))
 	for _, benefit := range activityCode.Benefits {
+		benefitLimitMode := model.NormalizeActivityLimitMode(benefit.LimitMode)
+		if benefitLimitMode == "" {
+			// 存量权益条目缺模式，按 rpm 输出。
+			benefitLimitMode = model.ActivityLimitModeRPM
+		}
 		benefits = append(benefits, gin.H{
-			"key":         benefit.Key,
-			"group_name":  benefit.GroupName,
-			"group_desc":  setting.GetUsableGroupDescription(benefit.GroupName),
-			"scope":       benefit.Scope,
-			"model_name":  benefit.ModelName,
-			"rpm_limit":   benefit.RpmLimit,
-			"token_total": benefit.TokenTotal,
+			"key":               benefit.Key,
+			"group_name":        benefit.GroupName,
+			"group_desc":        setting.GetUsableGroupDescription(benefit.GroupName),
+			"scope":             benefit.Scope,
+			"model_name":        benefit.ModelName,
+			"limit_mode":        benefitLimitMode,
+			"rpm_limit":         benefit.RpmLimit,
+			"concurrency_limit": benefit.ConcurrencyLimit,
+			"token_total":       benefit.TokenTotal,
 		})
 	}
 	return benefits
@@ -983,7 +1079,9 @@ func buildActivityCodePreview(c *gin.Context, userId int, activityCode *model.Ac
 		"group_name":            activityCode.GroupName,
 		"group_desc":            setting.GetUsableGroupDescription(activityCode.GroupName),
 		"duration_seconds":      activityCode.DurationSeconds,
+		"limit_mode":            activityCode.EffectiveLimitMode(),
 		"rpm_limit":             activityCode.RpmLimit,
+		"concurrency_limit":     activityCode.ConcurrencyLimit,
 		"ratio_mode":            activityCode.RatioMode,
 		"ratio_override":        activityCode.RatioOverride,
 		"ratio_scope":           activityCode.RatioScope,

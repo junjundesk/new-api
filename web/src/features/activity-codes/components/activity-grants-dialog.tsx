@@ -41,6 +41,7 @@ import {
   getActivityGrantStatusLabelKey,
 } from '../constants'
 import {
+  describeActivityLimit,
   formatActivityBenefitUsage,
   getActivityBenefitScopeLabel,
 } from '../lib/activity-benefit'
@@ -89,8 +90,9 @@ export function ActivityGrantsDialog() {
   // 同一次兑换的多条权益共享 redeem_batch：已支付金额只在批次首行展示一次。
   const seenBatches = new Set<string>()
   const renderedGrants = grants.map((grant) => {
-    const batchKey =
-      grant.redeem_batch ? grant.redeem_batch : `grant:${grant.id}`
+    const batchKey = grant.redeem_batch
+      ? grant.redeem_batch
+      : `grant:${grant.id}`
     const showPaid = !seenBatches.has(batchKey)
     seenBatches.add(batchKey)
     const benefit = grant.benefit_key
@@ -132,12 +134,11 @@ export function ActivityGrantsDialog() {
                 : t('Permanent')
             let groupLabel = grant.group_name
             if (benefit) {
-              groupLabel =
-                `${benefit.group_name} · ${getActivityBenefitScopeLabel(
-                  t,
-                  benefit.scope,
-                  benefit.model_name
-                )}`
+              groupLabel = `${benefit.group_name} · ${getActivityBenefitScopeLabel(
+                t,
+                benefit.scope,
+                benefit.model_name
+              )}`
             }
             return (
               <div
@@ -165,7 +166,14 @@ export function ActivityGrantsDialog() {
                     />
                   </div>
                   <p className='text-muted-foreground text-xs'>
-                    {groupLabel} · {t('Expires at')}: {expireText}
+                    {groupLabel} ·{' '}
+                    {describeActivityLimit(
+                      t,
+                      grant.limit_mode,
+                      grant.rpm_limit,
+                      grant.concurrency_limit
+                    )}{' '}
+                    · {t('Expires at')}: {expireText}
                     {showPaid
                       ? ` · ${t('Paid')}: ${formatQuota(grant.price_quota)}`
                       : ''}

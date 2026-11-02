@@ -32,6 +32,7 @@ import { formatQuota } from '@/lib/format'
 import {
   describeActivityBenefit,
   describeActivityDuration,
+  describeActivityLimit,
   describeActivityModelScope,
   describeActivityRatio,
 } from '../../lib/activity-format'
@@ -102,9 +103,13 @@ export function ActivityRedeemConfirmDialog(
           value: describeActivityModelScope(t, preview.model_ratio_overrides),
         },
         {
-          label: t('RPM limit'),
-          value:
-            preview.rpm_limit > 0 ? String(preview.rpm_limit) : t('Unlimited'),
+          label: t('Rate limit'),
+          value: describeActivityLimit(
+            t,
+            preview.limit_mode,
+            preview.rpm_limit,
+            preview.concurrency_limit
+          ),
         },
         {
           label: t('Wallet balance'),

@@ -57,10 +57,17 @@ const (
 	// ActivityCodeMaxTokenTotal 与前端 Number 安全整数上限保持一致，避免精度丢失。
 	ActivityCodeMaxTokenTotal = int64(1_000_000_000_000_000)
 
+	// ActivityLimitModeRPM 是默认限流模式：按每分钟请求数（RPM）限流，存量数据一律按此处理。
+	ActivityLimitModeRPM = "rpm"
+	// ActivityLimitModeConcurrency 是并发限流模式：按同时在途请求数限流。
+	ActivityLimitModeConcurrency = "concurrency"
+
 	// ActivityCodeMaxLength 是活动码的字符数上限（按 rune 计，中文等宽字符按 1 个算）。
 	ActivityCodeMaxLength = 64
 	// ActivityCodeMaxRpm 是活动码每分钟请求上限的允许最大值。
 	ActivityCodeMaxRpm = 100000
+	// ActivityCodeMaxConcurrency 是活动码并发上限的允许最大值。
+	ActivityCodeMaxConcurrency = 100000
 	// ActivityCodeMaxPriceQuota 与用户余额列的 32 位存储保持一致。
 	ActivityCodeMaxPriceQuota = math.MaxInt32
 	// ActivityCodeMaxDurationSeconds 限制单次授权的有效期长度。
@@ -119,14 +126,17 @@ func (m ActivityModelRatioOverrides) Value() (driver.Value, error) {
 }
 
 // ActivityBenefit 是「免费权益列表」类型中的一条权益：
-// 目标分组 + 整组/单模型范围 + 独立 RPM + 可选 Token 总量（0 表示不限量免费）。
+// 目标分组 + 整组/单模型范围 + 独立限流（RPM 或并发）+ 可选 Token 总量（0 表示不限量免费）。
+// LimitMode 为空的存量 JSON 按 rpm 处理；未启用的限流数值应为 0。
 type ActivityBenefit struct {
-	Key        string `json:"key"`
-	GroupName  string `json:"group_name"`
-	Scope      string `json:"scope"`
-	ModelName  string `json:"model_name,omitempty"`
-	RpmLimit   int    `json:"rpm_limit"`
-	TokenTotal int64  `json:"token_total"`
+	Key              string `json:"key"`
+	GroupName        string `json:"group_name"`
+	Scope            string `json:"scope"`
+	ModelName        string `json:"model_name,omitempty"`
+	LimitMode        string `json:"limit_mode"`
+	RpmLimit         int    `json:"rpm_limit"`
+	ConcurrencyLimit int    `json:"concurrency_limit"`
+	TokenTotal       int64  `json:"token_total"`
 }
 
 // ActivityBenefits 是权益列表，落库为 JSON 数组；空列表写 NULL。
@@ -202,13 +212,17 @@ type ActivityCode struct {
 	Description string `json:"description" gorm:"type:text"`
 	Status      int    `json:"status" gorm:"default:1"`
 	// Type 为空或 ratio 时是现有倍率类型；benefit 时使用 Benefits 列表。
-	Type            string  `json:"type" gorm:"type:varchar(16);default:'ratio'"`
-	GroupName       string  `json:"group_name" gorm:"type:varchar(64);index"`
-	DurationSeconds int64   `json:"duration_seconds" gorm:"bigint;default:0"`
-	RpmLimit        int     `json:"rpm_limit" gorm:"default:0"`
-	PriceQuota      int     `json:"price_quota" gorm:"default:0"`
-	RatioMode       string  `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
-	RatioOverride   float64 `json:"ratio_override"`
+	Type            string `json:"type" gorm:"type:varchar(16);default:'ratio'"`
+	GroupName       string `json:"group_name" gorm:"type:varchar(64);index"`
+	DurationSeconds int64  `json:"duration_seconds" gorm:"bigint;default:0"`
+	// LimitMode 决定限流模式：rpm 按 RpmLimit 每分钟限流（存量默认），concurrency 按
+	// ConcurrencyLimit 限制同时在途请求数；未启用的数值保持 0，不参与执行。
+	LimitMode        string  `json:"limit_mode" gorm:"type:varchar(16);default:'rpm'"`
+	RpmLimit         int     `json:"rpm_limit" gorm:"default:0"`
+	ConcurrencyLimit int     `json:"concurrency_limit" gorm:"default:0"`
+	PriceQuota       int     `json:"price_quota" gorm:"default:0"`
+	RatioMode        string  `json:"ratio_mode" gorm:"type:varchar(16);default:'inherit'"`
+	RatioOverride    float64 `json:"ratio_override"`
 	// RatioScope 决定倍率的作用范围：group 作用于整个分组（默认），models 只作用于
 	// ModelRatioOverrides 命中的模型；存量行该列为空，按 group 处理。
 	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
@@ -248,8 +262,12 @@ type ActivityGrant struct {
 	// RatioScope 与 ModelRatioOverrides 是当前生效的活动条款；编辑活动码时同步更新。
 	RatioScope          string                      `json:"ratio_scope" gorm:"type:varchar(16);default:'group'"`
 	ModelRatioOverrides ActivityModelRatioOverrides `json:"model_ratio_overrides" gorm:"type:json"`
-	RpmLimit            int                         `json:"rpm_limit" gorm:"default:0"`
-	PriceQuota          int                         `json:"price_quota" gorm:"default:0"`
+	// LimitMode/ConcurrencyLimit 与活动码条款一致：rpm 用 RpmLimit，concurrency 用
+	// ConcurrencyLimit；存量行 LimitMode 为空，读取时按 rpm 处理。
+	LimitMode        string `json:"limit_mode" gorm:"type:varchar(16);default:'rpm'"`
+	RpmLimit         int    `json:"rpm_limit" gorm:"default:0"`
+	ConcurrencyLimit int    `json:"concurrency_limit" gorm:"default:0"`
+	PriceQuota       int    `json:"price_quota" gorm:"default:0"`
 	// RedeemBatch 把同一次兑换生成的多条权益授权归为一组；存量为空字符串。
 	RedeemBatch string `json:"redeem_batch" gorm:"type:varchar(64);index"`
 	// BenefitKey 对应活动码权益的稳定 key；ratio 类型授权为空。
@@ -343,6 +361,28 @@ func NormalizeActivityCodeType(codeType string) string {
 	}
 }
 
+// NormalizeActivityLimitMode 归一化限流模式：空值/空白按 rpm 处理，兼容存量数据与旧 payload；
+// 合法值标准化返回，非法值返回空串。
+func NormalizeActivityLimitMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", ActivityLimitModeRPM:
+		return ActivityLimitModeRPM
+	case ActivityLimitModeConcurrency:
+		return ActivityLimitModeConcurrency
+	default:
+		return ""
+	}
+}
+
+// EffectiveLimitMode 返回活动码限流模式的归一化取值：存量空值与非法值一律按 rpm，
+// 保证任何读取方拿到的都是 rpm|concurrency 之一。
+func (activityCode *ActivityCode) EffectiveLimitMode() string {
+	if mode := NormalizeActivityLimitMode(activityCode.LimitMode); mode != "" {
+		return mode
+	}
+	return ActivityLimitModeRPM
+}
+
 // NewActivityBenefitKey 生成权益的稳定 key，用于编辑时把新权益同步到已发放授权。
 func NewActivityBenefitKey() string {
 	return strings.ReplaceAll(common.GetUUID(), "-", "")
@@ -404,7 +444,9 @@ type activityGrantSpec struct {
 	RatioOverride       float64
 	RatioScope          string
 	ModelRatioOverrides ActivityModelRatioOverrides
+	LimitMode           string
 	RpmLimit            int
+	ConcurrencyLimit    int
 	TokenTotal          int64
 	BenefitKey          string
 	// ActiveEndTime 是活动到期时间的快照，发放时写入授权。
@@ -413,12 +455,18 @@ type activityGrantSpec struct {
 
 func activityGrantSpecForBenefit(benefit ActivityBenefit) activityGrantSpec {
 	spec := activityGrantSpec{
-		GroupName:  benefit.GroupName,
-		RatioMode:  ActivityRatioModeInherit,
-		RatioScope: ActivityRatioScopeGroup,
-		RpmLimit:   benefit.RpmLimit,
-		TokenTotal: benefit.TokenTotal,
-		BenefitKey: benefit.Key,
+		GroupName:        benefit.GroupName,
+		RatioMode:        ActivityRatioModeInherit,
+		RatioScope:       ActivityRatioScopeGroup,
+		LimitMode:        benefit.LimitMode,
+		RpmLimit:         benefit.RpmLimit,
+		ConcurrencyLimit: benefit.ConcurrencyLimit,
+		TokenTotal:       benefit.TokenTotal,
+		BenefitKey:       benefit.Key,
+	}
+	if spec.LimitMode == "" {
+		// 存量权益 JSON 没有 limit_mode，一律按 rpm 处理。
+		spec.LimitMode = ActivityLimitModeRPM
 	}
 	if benefit.Scope == ActivityBenefitScopeModel {
 		spec.RatioScope = ActivityRatioScopeModels
@@ -439,7 +487,9 @@ func (activityCode *ActivityCode) grantSpecs() []activityGrantSpec {
 			RatioOverride:       activityCode.RatioOverride,
 			RatioScope:          activityCode.RatioScope,
 			ModelRatioOverrides: maps.Clone(activityCode.ModelRatioOverrides),
+			LimitMode:           activityCode.EffectiveLimitMode(),
 			RpmLimit:            activityCode.RpmLimit,
+			ConcurrencyLimit:    activityCode.ConcurrencyLimit,
 			ActiveEndTime:       activityCode.ActiveEndTime,
 		}}
 	}
@@ -463,7 +513,9 @@ func (spec activityGrantSpec) buildGrant(userId int, activityCode *ActivityCode,
 		RatioOverride:       spec.RatioOverride,
 		RatioScope:          spec.RatioScope,
 		ModelRatioOverrides: maps.Clone(spec.ModelRatioOverrides),
+		LimitMode:           spec.LimitMode,
 		RpmLimit:            spec.RpmLimit,
+		ConcurrencyLimit:    spec.ConcurrencyLimit,
 		TokenTotal:          spec.TokenTotal,
 		BenefitKey:          spec.BenefitKey,
 		ActivityEndTime:     spec.ActiveEndTime,
@@ -601,7 +653,8 @@ func (activityCode *ActivityCode) Update() error {
 		}
 		activityCode.UpdatedTime = common.GetTimestamp()
 		if err := tx.Model(activityCode).
-			Select("name", "description", "status", "group_name", "duration_seconds", "rpm_limit",
+			Select("name", "description", "status", "group_name", "duration_seconds", "limit_mode",
+				"rpm_limit", "concurrency_limit",
 				"price_quota", "ratio_mode", "ratio_override", "ratio_scope", "model_ratio_overrides",
 				"type", "benefits", "start_time", "end_time", "active_end_time", "total_limit",
 				"per_user_limit", "public_visible", "sort_weight", "image_url", "updated_time").
@@ -665,7 +718,9 @@ func syncRatioActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int, 
 				"ratio_override":        activityCode.RatioOverride,
 				"ratio_scope":           activityCode.RatioScope,
 				"model_ratio_overrides": activityCode.ModelRatioOverrides,
+				"limit_mode":            activityCode.EffectiveLimitMode(),
 				"rpm_limit":             activityCode.RpmLimit,
+				"concurrency_limit":     activityCode.ConcurrencyLimit,
 				"activity_end_time":     activityCode.ActiveEndTime,
 				"updated_time":          now,
 			})
@@ -762,7 +817,9 @@ func syncBenefitActivityGrantsTx(tx *gorm.DB, activityCode *ActivityCode) ([]int
 				"ratio_override":        spec.RatioOverride,
 				"ratio_scope":           spec.RatioScope,
 				"model_ratio_overrides": spec.ModelRatioOverrides,
+				"limit_mode":            spec.LimitMode,
 				"rpm_limit":             spec.RpmLimit,
+				"concurrency_limit":     spec.ConcurrencyLimit,
 				"token_total":           spec.TokenTotal,
 				"activity_end_time":     activityCode.ActiveEndTime,
 				"updated_time":          now,
@@ -939,8 +996,10 @@ func GetActiveActivityGrants(userId int) ([]ActivityGrant, error) {
 	return grants, nil
 }
 
+// activityGrantCacheKey 使用 v2 前缀：授权结构新增限流字段后，
+// 旧缓存负载不再读取，避免新旧序列化结构混用。
 func activityGrantCacheKey(userId int) string {
-	return fmt.Sprintf("activity:grants:%d", userId)
+	return fmt.Sprintf("activity:grants:v2:%d", userId)
 }
 
 // InvalidateActivityGrantCache 清除用户的活动授权缓存（兑换、撤销后调用）。

@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest'
 import type { ActivityBenefit } from '../../types'
 import {
   describeActivityBenefits,
+  describeActivityLimit,
   describeActivityModelScope,
   describeTokenUsage,
 } from '../activity-format'
@@ -45,6 +46,8 @@ await i18n.init({
           'Token quota used up (billed at the original price)',
         Unlimited: 'Unlimited',
         'RPM limit': 'RPM limit',
+        RPM: 'RPM',
+        Concurrency: 'Concurrency',
       },
     },
   },
@@ -71,6 +74,8 @@ await zhI18n.init({
           'Token 已用完（按原价计费）',
         Unlimited: '无限制',
         'RPM limit': 'RPM 限制',
+        RPM: 'RPM',
+        Concurrency: '并发',
       },
     },
   },
@@ -156,7 +161,7 @@ describe('describeActivityBenefits', () => {
         'en'
       )
     ).toBe(
-      'Free Group · Whole group · 10M tokens · RPM limit: Unlimited\nPro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
+      'Free Group · Whole group · 10M tokens · RPM: Unlimited\nPro Group · Model gpt-5 · Unlimited tokens · RPM: Unlimited'
     )
   })
 
@@ -183,7 +188,7 @@ describe('describeActivityBenefits', () => {
         'zhCN'
       )
     ).toBe(
-      '免费分组 · 整个分组 · 1000万 Token · RPM 限制: 5\n专业分组 · 模型 gpt-5 · 不限量 Token · RPM 限制: 无限制'
+      '免费分组 · 整个分组 · 1000万 Token · RPM: 5\n专业分组 · 模型 gpt-5 · 不限量 Token · RPM: 无限制'
     )
   })
 
@@ -194,7 +199,7 @@ describe('describeActivityBenefits', () => {
         [benefitFixture({ token_total: 10_000_000, rpm_limit: 5 })],
         'en'
       )
-    ).toBe('Free Group · Whole group · 10M tokens · RPM limit: 5')
+    ).toBe('Free Group · Whole group · 10M tokens · RPM: 5')
   })
 
   it('returns an empty string when the old API has no benefits', () => {
@@ -232,5 +237,82 @@ describe('describeTokenUsage', () => {
     expect(describeTokenUsage(zhI18n.t.bind(zhI18n), 10_000, 0, 'zhCN')).toBe(
       '已用 1万 / 无限制'
     )
+  })
+
+  describe('describeActivityLimit', () => {
+    it('labels an rpm-limited activity with its rpm value', () => {
+      expect(describeActivityLimit(i18n.t.bind(i18n), 'rpm', 60, 0)).toBe(
+        'RPM: 60'
+      )
+      expect(describeActivityLimit(i18n.t.bind(i18n), 'rpm', 0, 0)).toBe(
+        'RPM: Unlimited'
+      )
+    })
+
+    it('labels a concurrency-limited activity with its concurrency value', () => {
+      expect(
+        describeActivityLimit(i18n.t.bind(i18n), 'concurrency', 0, 10)
+      ).toBe('Concurrency: 10')
+      expect(
+        describeActivityLimit(i18n.t.bind(i18n), 'concurrency', 0, 0)
+      ).toBe('Concurrency: Unlimited')
+      expect(
+        describeActivityLimit(zhI18n.t.bind(zhI18n), 'concurrency', 0, 10)
+      ).toBe('并发: 10')
+    })
+
+    it('falls back to rpm for grants without a limit type from an old API', () => {
+      expect(
+        describeActivityLimit(i18n.t.bind(i18n), undefined, 5, undefined)
+      ).toBe('RPM: 5')
+      expect(
+        describeActivityLimit(i18n.t.bind(i18n), undefined, 0, undefined)
+      ).toBe('RPM: Unlimited')
+      expect(
+        describeActivityLimit(zhI18n.t.bind(zhI18n), undefined, 0, undefined)
+      ).toBe('RPM: 无限制')
+    })
+
+    it('describes mixed grants with their own limit type on each line', () => {
+      expect(
+        describeActivityBenefits(
+          i18n.t.bind(i18n),
+          [
+            benefitFixture({
+              key: 'a',
+              group_name: 'hdmixed',
+              group_desc: 'Mixed Group',
+              limit_mode: 'rpm',
+              rpm_limit: 5,
+            }),
+            benefitFixture({
+              key: 'b',
+              group_name: 'hdmixed',
+              group_desc: 'Mixed Group',
+              limit_mode: 'concurrency',
+              rpm_limit: 0,
+              concurrency_limit: 10,
+            }),
+          ],
+          'en'
+        )
+      ).toBe(
+        'Mixed Group · Whole group · Unlimited tokens · RPM: 5\nMixed Group · Whole group · Unlimited tokens · Concurrency: 10'
+      )
+    })
+  })
+
+  describe('describeActivityLimit for the aggregated active view', () => {
+    it('shows both effective limits instead of picking one when the group is mixed', () => {
+      expect(describeActivityLimit(i18n.t.bind(i18n), 'mixed', 5, 10)).toBe(
+        'RPM: 5 · Concurrency: 10'
+      )
+      expect(describeActivityLimit(zhI18n.t.bind(zhI18n), 'mixed', 5, 10)).toBe(
+        'RPM: 5 · 并发: 10'
+      )
+      expect(describeActivityLimit(i18n.t.bind(i18n), 'mixed', 0, 0)).toBe(
+        'RPM: Unlimited · Concurrency: Unlimited'
+      )
+    })
   })
 })

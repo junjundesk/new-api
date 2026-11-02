@@ -21,7 +21,7 @@ import type { TFunction } from 'i18next'
 import { formatModelRatioOverrides, formatRatioMultiplier } from '@/lib/format'
 import { formatTokenAmount } from '@/lib/token-amount'
 
-import type { ActivityBenefit } from '../types'
+import type { ActivityActiveLimitMode, ActivityBenefit } from '../types'
 
 // ============================================================================
 // Activity display helpers
@@ -68,13 +68,29 @@ export function describeExpireTime(t: TFunction, expireTime: number): string {
   return new Date(expireTime * 1000).toLocaleString()
 }
 
-// 活动授权/权益的每分钟请求上限；rpm_limit 为 0 表示不限速。
-export function describeActivityRpm(t: TFunction, rpmLimit: number): string {
-  return `${t('RPM limit')}: ${rpmLimit > 0 ? String(rpmLimit) : t('Unlimited')}`
+// 请求限制文案：按限流类型展示「模式 + 值」，0 = 不限；
+// 历史数据缺 limit_mode 时按 RPM 处理，缺 concurrency_limit 时按 0（不限）。
+// 聚合视图的 mixed 表示同组同时有 RPM 与并发约束，两个有效值都要展示。
+export function describeActivityLimit(
+  t: TFunction,
+  limitMode: ActivityActiveLimitMode | undefined,
+  rpmLimit: number,
+  concurrencyLimit: number | undefined
+): string {
+  const rpmPart = `${t('RPM')}: ${rpmLimit > 0 ? String(rpmLimit) : t('Unlimited')}`
+  const limit = concurrencyLimit ?? 0
+  const concurrencyPart = `${t('Concurrency')}: ${limit > 0 ? String(limit) : t('Unlimited')}`
+  if (limitMode === 'concurrency') {
+    return concurrencyPart
+  }
+  if (limitMode === 'mixed') {
+    return `${rpmPart} · ${concurrencyPart}`
+  }
+  return rpmPart
 }
 
-// 单条活动权益：「分组 · 整组/单模型 · Token 总量/不限量 · RPM 上限」。
-// token_total 为 0 表示不限量免费；rpm_limit 为 0 表示不限速。
+// 单条活动权益：「分组 · 整组/单模型 · Token 总量/不限量 · 请求限制」。
+// token_total 为 0 表示不限量免费；限流按权益自己的 limit_mode 展示。
 export function describeActivityBenefit(
   t: TFunction,
   benefit: ActivityBenefit,
@@ -91,7 +107,13 @@ export function describeActivityBenefit(
           amount: formatTokenAmount(benefit.token_total, language),
         })
       : t('Unlimited tokens')
-  return `${group} · ${scope} · ${tokens} · ${describeActivityRpm(t, benefit.rpm_limit)}`
+  const limit = describeActivityLimit(
+    t,
+    benefit.limit_mode,
+    benefit.rpm_limit,
+    benefit.concurrency_limit
+  )
+  return `${group} · ${scope} · ${tokens} · ${limit}`
 }
 
 // 多权益活动逐条描述，每条权益一行；旧接口没有 benefits 时返回空串。

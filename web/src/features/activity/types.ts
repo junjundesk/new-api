@@ -30,15 +30,25 @@ export type ActivityCodeType = 'ratio' | 'benefit'
 
 export type ActivityBenefitScope = 'group' | 'model'
 
+// 限流类型：按每分钟请求数（RPM）或按并发数限流，一条配置二选一。
+export type ActivityLimitMode = 'rpm' | 'concurrency'
+
+// active 聚合视图的限流类型：同组混合授权会同时存在 RPM 与并发约束，
+// 聚合结果为 mixed，两个约束的有效值必须分别展示，不能只挑一种覆盖。
+export type ActivityActiveLimitMode = ActivityLimitMode | 'mixed'
+
 // 一条活动权益：某个分组（整组或单个模型）的免费额度。
 // token_total 为 0 表示不限量免费；旧接口不会返回 benefits。
+// 历史数据缺 limit_mode 时按 RPM，缺 concurrency_limit 时按 0（不限）。
 export interface ActivityBenefit {
   key: string
   group_name: string
   group_desc: string
   scope: ActivityBenefitScope
   model_name: string
+  limit_mode?: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit?: number
   token_total: number
 }
 
@@ -50,7 +60,10 @@ export interface ActivityOffer {
   group_name: string
   group_desc: string
   duration_seconds: number
+  // 历史数据缺 limit_mode 时按 RPM，缺 concurrency_limit 时按 0（不限）。
+  limit_mode?: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit?: number
   ratio_mode: string
   ratio_override: number
   ratio_scope?: string
@@ -88,7 +101,10 @@ export interface ActivityGrant {
   ratio_override: number
   ratio_scope?: string
   model_ratio_overrides?: Record<string, number> | null
+  // 历史数据缺 limit_mode 时按 RPM，缺 concurrency_limit 时按 0（不限）。
+  limit_mode?: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit?: number
   price_quota: number
   start_time: number
   expire_time: number
@@ -117,8 +133,15 @@ export interface ActivityActiveView {
   ratio_override: number
   ratio_scope?: string
   model_ratio_overrides?: Record<string, number> | null
+  // 同组混合授权聚合后 limit_mode 可能为 "mixed"：rpm_limit 与 concurrency_limit
+  // 都是该组聚合后的有效值（各自 0 = 不限），展示时两者都要给出；
+  // 缺省字段按 RPM / 0（不限）处理。
+  limit_mode?: ActivityActiveLimitMode
   rpm_limit: number
+  concurrency_limit?: number
   expire_time: number
+  // 该聚合行是否带 Token 总量限制（token_total > 0）。
+  token_limited?: boolean
   type?: ActivityCodeType
   benefit_key?: string
   redeem_batch?: string
@@ -139,7 +162,10 @@ export interface ActivityPreview {
   group_name: string
   group_desc: string
   duration_seconds: number
+  // 历史数据缺 limit_mode 时按 RPM，缺 concurrency_limit 时按 0（不限）。
+  limit_mode?: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit?: number
   ratio_mode: string
   ratio_override: number
   ratio_scope?: string

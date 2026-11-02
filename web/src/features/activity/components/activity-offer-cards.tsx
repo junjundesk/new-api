@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import {
   describeActivityBenefit,
   describeActivityDuration,
+  describeActivityLimit,
   describeActivityModelScope,
   describeActivityRatio,
 } from '../lib/activity-format'
@@ -86,9 +87,13 @@ export function ActivityOfferCards(props: ActivityOfferCardsProps) {
             ),
           },
           {
-            label: t('RPM limit'),
-            value:
-              offer.rpm_limit > 0 ? String(offer.rpm_limit) : t('Unlimited'),
+            label: t('Rate limit'),
+            value: describeActivityLimit(
+              t,
+              offer.limit_mode,
+              offer.rpm_limit,
+              offer.concurrency_limit
+            ),
           },
         ]
 

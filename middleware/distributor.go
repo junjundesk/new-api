@@ -33,6 +33,9 @@ type ModelRequest struct {
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
+		// selectGroup 是本次选渠道最终使用的实际分组（auto/chain 解析后的组），
+		// 供活动限流按「用户 + 实际分组」计数。
+		var selectGroup string
 		channelId, ok := common.GetContextKey(c, constant.ContextKeyTokenSpecificChannelId)
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
 		if err != nil {
@@ -86,7 +89,6 @@ func Distribute() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorModelNameRequired))
 					return
 				}
-				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 				// check path is /pg/chat/completions
 				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
@@ -168,7 +170,22 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		if channel == nil {
+			// 任务查询（mj/视频 fetch 等）不选渠道：没有渠道上下文可设置，
+			// 只记录原模型。历史上这里调用 SetupContextForSelectedChannel(c, nil, ...)
+			// 并忽略其「channel is nil」返回错误，正是在容忍这条合法路径。
+			c.Set("original_model", modelRequest.Model)
+		} else if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil {
+			// 忽略该错误会让后续重试/计费沿用上一次尝试的渠道与分组上下文。
+			abortWithOpenAiMessage(c, setupErr.StatusCode, setupErr.Error(), setupErr.GetErrorCode())
+			return
+		}
+		// 实际分组已确定（含 pg 指定组、auto/chain 选组）：在上游调用前做活动限流检查。
+		// 不选渠道的任务查询同样受检查（同组幂等，每请求每组只计一次）。
+		if limitErr := service.ActivityLimitGuard(c, selectGroup); limitErr != nil {
+			abortWithActivityLimit(c, limitErr)
+			return
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)

@@ -26,6 +26,7 @@ import {
   ACTIVITY_CODE_FORMAT_MESSAGE,
   ACTIVITY_CODE_PATTERN,
   ACTIVITY_CODE_TYPE,
+  ACTIVITY_LIMIT_MODE,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_RATIO_SCOPE,
   ACTIVITY_VALIDATION,
@@ -34,6 +35,7 @@ import type {
   ActivityCode,
   ActivityCodeFormData,
   ActivityCodeType,
+  ActivityLimitMode,
 } from '../types'
 import {
   type ActivityBenefitRow,
@@ -84,10 +86,15 @@ export function getActivityCodeFormSchema(t: TFunction) {
           ACTIVITY_VALIDATION.DURATION_MAX_HOURS,
           t('Validity must be between 0 and 87600 hours')
         ),
-      rpm_limit: z
-        .number()
-        .min(0, t('RPM limit must be 0 or greater'))
-        .max(ACTIVITY_VALIDATION.RPM_MAX, t('RPM limit is too large')),
+      // 限流二选一：RPM 与并发都是 0..100000 整数，0 = 不限；
+      // 未启用的限流类型数值不生效且提交时归 0，因此范围校验只针对当前
+      // 选中的那个输入（见 superRefine），未选中输入的非法值不阻止保存。
+      limit_mode: z.enum([
+        ACTIVITY_LIMIT_MODE.RPM,
+        ACTIVITY_LIMIT_MODE.CONCURRENCY,
+      ]),
+      rpm_limit: z.number(),
+      concurrency_limit: z.number(),
       price_dollars: z.number().min(0, t('Price must be zero or greater')),
       ratio_mode: z.enum([
         ACTIVITY_RATIO_MODE.INHERIT,
@@ -207,7 +214,52 @@ export function getActivityCodeFormSchema(t: TFunction) {
         return
       }
 
-      // ratio 类型：分组必填，「指定模型」下每一行都必须给出模型与倍率。
+      // ratio 类型：只校验当前限流类型选中的数值；另一个输入已禁用且提交归 0。
+      if (values.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY) {
+        const limit = values.concurrency_limit
+        if (!Number.isInteger(limit)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit must be a whole number'),
+          })
+        } else if (limit < 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit must be 0 or greater'),
+          })
+        } else if (limit > ACTIVITY_VALIDATION.CONCURRENCY_MAX) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['concurrency_limit'],
+            message: t('Concurrency limit is too large'),
+          })
+        }
+      } else {
+        const limit = values.rpm_limit
+        if (!Number.isInteger(limit)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit must be a whole number'),
+          })
+        } else if (limit < 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit must be 0 or greater'),
+          })
+        } else if (limit > ACTIVITY_VALIDATION.RPM_MAX) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['rpm_limit'],
+            message: t('RPM limit is too large'),
+          })
+        }
+      }
+
+      // 分组必填，「指定模型」下每一行都必须给出模型与倍率。
       if (!values.group_name.trim()) {
         ctx.addIssue({
           code: 'custom',
@@ -283,7 +335,9 @@ export type ActivityCodeFormValues = {
   description: string
   group_name: string
   duration_hours: number
+  limit_mode: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit: number
   price_dollars: number
   ratio_mode: (typeof ACTIVITY_RATIO_MODE)[keyof typeof ACTIVITY_RATIO_MODE]
   ratio_override: number
@@ -307,7 +361,9 @@ export const ACTIVITY_CODE_FORM_DEFAULT_VALUES: ActivityCodeFormValues = {
   description: '',
   group_name: '',
   duration_hours: 24,
+  limit_mode: ACTIVITY_LIMIT_MODE.RPM,
   rpm_limit: 0,
+  concurrency_limit: 0,
   price_dollars: 0,
   ratio_mode: ACTIVITY_RATIO_MODE.INHERIT,
   ratio_override: 0,
@@ -332,13 +388,20 @@ function toEpochSeconds(value?: Date): number {
 export function transformFormValuesToPayload(
   values: ActivityCodeFormValues
 ): ActivityCodeFormData {
+  // 限流二选一：未启用的限流类型数值归 0，两个输入互不影响。
+  const isConcurrencyLimit =
+    values.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY
   const basePayload: ActivityCodeFormData = {
     code: values.code.trim().toLowerCase(),
     name: values.name.trim(),
     description: values.description.trim(),
     group_name: values.group_name,
     duration_hours: values.duration_hours,
-    rpm_limit: values.rpm_limit,
+    limit_mode: isConcurrencyLimit
+      ? ACTIVITY_LIMIT_MODE.CONCURRENCY
+      : ACTIVITY_LIMIT_MODE.RPM,
+    rpm_limit: isConcurrencyLimit ? 0 : values.rpm_limit,
+    concurrency_limit: isConcurrencyLimit ? values.concurrency_limit : 0,
     price_quota: parseQuotaFromDollars(values.price_dollars),
     ratio_mode: ACTIVITY_RATIO_MODE.INHERIT,
     ratio_override: 0,
@@ -358,7 +421,7 @@ export function transformFormValuesToPayload(
   }
 
   // benefit 类型以权益为准：顶层分组取第一条权益分组（兼容旧字段），
-  // 倍率与活动码级 RPM 不再有意义，统一归一为默认值。
+  // 倍率与活动码级限流不再有意义，统一归一为默认值（rpm + 0 + 0，不参与执行）。
   if (values.type === ACTIVITY_CODE_TYPE.BENEFIT) {
     const benefits = transformBenefitRowsToPayload(values.benefits)
     return {
@@ -366,7 +429,9 @@ export function transformFormValuesToPayload(
       type: ACTIVITY_CODE_TYPE.BENEFIT,
       benefits,
       group_name: benefits[0]?.group_name ?? values.group_name.trim(),
+      limit_mode: ACTIVITY_LIMIT_MODE.RPM,
       rpm_limit: 0,
+      concurrency_limit: 0,
     }
   }
 
@@ -389,7 +454,6 @@ export function transformFormValuesToPayload(
   return {
     ...basePayload,
     group_name: values.group_name,
-    rpm_limit: values.rpm_limit,
     ratio_mode: isModelScope ? ACTIVITY_RATIO_MODE.INHERIT : values.ratio_mode,
     ratio_override: ratioOverride,
     ratio_scope: values.ratio_scope,
@@ -422,7 +486,13 @@ export function transformActivityCodeToFormValues(
     description: activityCode.description,
     group_name: activityCode.group_name,
     duration_hours: activityCode.duration_seconds / 3600,
+    // 历史数据缺 limit_mode 或为空时按 RPM 处理，缺 concurrency_limit 时按 0（不限）。
+    limit_mode:
+      activityCode.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY
+        ? ACTIVITY_LIMIT_MODE.CONCURRENCY
+        : ACTIVITY_LIMIT_MODE.RPM,
     rpm_limit: activityCode.rpm_limit,
+    concurrency_limit: activityCode.concurrency_limit ?? 0,
     price_dollars: quotaUnitsToEditableAmount(activityCode.price_quota),
     ratio_mode:
       activityCode.ratio_mode === ACTIVITY_RATIO_MODE.OVERRIDE

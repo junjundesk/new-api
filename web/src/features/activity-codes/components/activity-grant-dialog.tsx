@@ -38,7 +38,10 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
 } from '../constants'
-import { describeActivityBenefit } from '../lib/activity-benefit'
+import {
+  describeActivityBenefit,
+  describeActivityLimit,
+} from '../lib/activity-benefit'
 import { useActivityCodes } from './activity-codes-provider'
 
 type SelectedUser = {
@@ -233,9 +236,12 @@ export function ActivityGrantDialog() {
                     className='text-muted-foreground text-xs'
                   >
                     {describeActivityBenefit(t, benefit, i18n.language)}
-                    {benefit.rpm_limit > 0
-                      ? ` · ${t('RPM')}: ${benefit.rpm_limit}`
-                      : ''}
+                    {` · ${describeActivityLimit(
+                      t,
+                      benefit.limit_mode,
+                      benefit.rpm_limit,
+                      benefit.concurrency_limit
+                    )}`}
                   </li>
                 ))}
               </ul>

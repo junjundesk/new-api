@@ -33,7 +33,7 @@ func SetVideoRouter(router *gin.Engine) {
 
 	klingV1Router := router.Group("/kling/v1")
 	klingV1Router.Use(middleware.RouteTag("relay"))
-	klingV1Router.Use(middleware.KlingRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
+	klingV1Router.Use(middleware.KlingRequestConvert(), middleware.TokenAuth(), middleware.ActivityGrantRateLimit(), middleware.Distribute())
 	{
 		klingV1Router.POST("/videos/text2video", controller.RelayTask)
 		klingV1Router.POST("/videos/image2video", controller.RelayTask)
@@ -44,7 +44,7 @@ func SetVideoRouter(router *gin.Engine) {
 	// Jimeng official API routes - direct mapping to official API format
 	jimengOfficialGroup := router.Group("jimeng")
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))
-	jimengOfficialGroup.Use(middleware.JimengRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
+	jimengOfficialGroup.Use(middleware.JimengRequestConvert(), middleware.TokenAuth(), middleware.ActivityGrantRateLimit(), middleware.Distribute())
 	{
 		// Maps to: /?Action=CVSync2AsyncSubmitTask&Version=2022-08-31 and /?Action=CVSync2AsyncGetResult&Version=2022-08-31
 		jimengOfficialGroup.POST("/", controller.RelayTask)

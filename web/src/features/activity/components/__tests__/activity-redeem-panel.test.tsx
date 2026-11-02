@@ -77,6 +77,9 @@ await i18n.init({
         Validity: 'Validity',
         Ratio: 'Ratio',
         'RPM limit': 'RPM limit',
+        RPM: 'RPM',
+        Concurrency: 'Concurrency',
+        'Rate limit': 'Rate limit',
         Unlimited: 'Unlimited',
         'Group default ratio': 'Group default ratio',
         'Fully free': 'Fully free',
@@ -314,17 +317,17 @@ describe('activity redeem panel', () => {
 
     expect(
       await screen.findByText(
-        'Free Group · Whole group · 10M tokens · RPM limit: Unlimited'
+        'Free Group · Whole group · 10M tokens · RPM: Unlimited'
       )
     ).toBeVisible()
     expect(
       screen.getByText(
-        'Pro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
+        'Pro Group · Model gpt-5 · Unlimited tokens · RPM: Unlimited'
       )
     ).toBeVisible()
     expect(screen.getByText('Benefits')).toBeVisible()
     expect(screen.queryByText('Ratio')).not.toBeInTheDocument()
-    expect(screen.queryByText('RPM limit')).not.toBeInTheDocument()
+    expect(screen.queryByText('Rate limit')).not.toBeInTheDocument()
   })
 
   // 回归：售罄活动后端不再过滤而是返回 redeemable=false，面板必须继续展示它；

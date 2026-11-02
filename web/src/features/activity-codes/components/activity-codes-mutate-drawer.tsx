@@ -75,11 +75,13 @@ import {
 } from '../api'
 import {
   ACTIVITY_CODE_TYPE,
+  ACTIVITY_LIMIT_MODE,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_RATIO_SCOPE,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   getActivityCodeTypeOptions,
+  getActivityLimitModeOptions,
   getActivityRatioModeOptions,
   getActivityRatioScopeOptions,
 } from '../constants'
@@ -215,6 +217,7 @@ export function ActivityCodesMutateDrawer({
 
   const activityType = form.watch('type')
   const isBenefit = activityType === ACTIVITY_CODE_TYPE.BENEFIT
+  const limitMode = form.watch('limit_mode')
   const ratioMode = form.watch('ratio_mode')
   const ratioScope = form.watch('ratio_scope')
   const groupName = form.watch('group_name')
@@ -499,6 +502,48 @@ export function ActivityCodesMutateDrawer({
                   {!isBenefit && (
                     <FormField
                       control={form.control}
+                      name='limit_mode'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Limit type')}</FormLabel>
+                          <Select
+                            items={getActivityLimitModeOptions(t)}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger className='w-full'>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                {getActivityLimitModeOptions(t).map(
+                                  (option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
+                                    </SelectItem>
+                                  )
+                                )}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            {t(
+                              'Choose how usage is limited. The unused limit type is not enforced.'
+                            )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {!isBenefit && (
+                    <FormField
+                      control={form.control}
                       name='rpm_limit'
                       render={({ field }) => (
                         <FormItem>
@@ -509,6 +554,7 @@ export function ActivityCodesMutateDrawer({
                               min={0}
                               step={1}
                               value={field.value}
+                              disabled={limitMode !== ACTIVITY_LIMIT_MODE.RPM}
                               onChange={(event) =>
                                 field.onChange(
                                   numberFieldValue(event.target.valueAsNumber)
@@ -518,6 +564,39 @@ export function ActivityCodesMutateDrawer({
                           </FormControl>
                           <FormDescription>
                             {t('Requests per minute. 0 means unlimited.')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {!isBenefit && (
+                    <FormField
+                      control={form.control}
+                      name='concurrency_limit'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Concurrency limit')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              min={0}
+                              step={1}
+                              value={field.value}
+                              disabled={
+                                limitMode !== ACTIVITY_LIMIT_MODE.CONCURRENCY
+                              }
+                              onChange={(event) =>
+                                field.onChange(
+                                  numberFieldValue(event.target.valueAsNumber)
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t(
+                              'Concurrent in-flight requests per user in this group. 0 means unlimited.'
+                            )}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

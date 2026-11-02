@@ -53,10 +53,12 @@ import { getGroupModels } from '../api'
 import {
   ACTIVITY_BENEFIT_SCOPE,
   ACTIVITY_BENEFIT_TOKEN_MODE,
+  ACTIVITY_LIMIT_MODE,
   ACTIVITY_VALIDATION,
   ERROR_MESSAGES,
   getActivityBenefitScopeOptions,
   getActivityBenefitTokenModeOptions,
+  getActivityLimitModeOptions,
 } from '../constants'
 import {
   createActivityBenefitRow,
@@ -88,14 +90,15 @@ export function ActivityBenefitsEditor(props: Props) {
     control: props.form.control,
     name: 'benefits',
   })
-  const rows =
-    useWatch({ control: props.form.control, name: 'benefits' }) ?? []
+  const rows = useWatch({ control: props.form.control, name: 'benefits' }) ?? []
   const fieldErrors = props.form.formState.errors.benefits
   const listError = Array.isArray(fieldErrors)
     ? undefined
     : (fieldErrors as { message?: string } | undefined)?.message
   const rowErrors = Array.isArray(fieldErrors)
-    ? (fieldErrors as unknown as Array<FieldErrors<ActivityBenefitRow> | undefined>)
+    ? (fieldErrors as unknown as Array<
+        FieldErrors<ActivityBenefitRow> | undefined
+      >)
     : undefined
 
   return (
@@ -156,6 +159,7 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
   const { t, i18n } = useTranslation()
   const id = useId()
   const isModelScope = props.row.scope === ACTIVITY_BENEFIT_SCOPE.MODEL
+  const isConcurrency = props.row.limit_mode === ACTIVITY_LIMIT_MODE.CONCURRENCY
   const isTokenPackage =
     props.row.token_mode === ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE
 
@@ -201,6 +205,7 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
   const groupError = props.errors?.group_name?.message
   const modelError = props.errors?.model_name?.message
   const rpmError = props.errors?.rpm_limit?.message
+  const concurrencyError = props.errors?.concurrency_limit?.message
   const tokenError = props.errors?.token_total_input?.message
 
   return (
@@ -229,7 +234,7 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
             </SelectTrigger>
             <SelectContent
               alignItemWithTrigger={false}
-              className='max-h-[min(22rem,var(--available-height))] w-max min-w-(--anchor-width) max-w-[min(32rem,var(--available-width))]'
+              className='max-h-[min(22rem,var(--available-height))] w-max max-w-[min(32rem,var(--available-width))] min-w-(--anchor-width)'
             >
               <SelectGroup>
                 {groupOptions.map((group) => (
@@ -309,6 +314,42 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
           </Field>
         )}
 
+        <Field>
+          <FieldLabel htmlFor={`${id}-limit-mode`}>
+            {t('Limit type for benefit {{index}}', { index: props.index + 1 })}
+          </FieldLabel>
+          <Select
+            items={getActivityLimitModeOptions(t)}
+            value={props.row.limit_mode}
+            onValueChange={(value) =>
+              // 切换限流类型只改模式：RPM 与并发是两个独立输入，互不复制数值。
+              updateRow({
+                limit_mode: (value ?? '') as ActivityBenefitRow['limit_mode'],
+              })
+            }
+          >
+            <SelectTrigger id={`${id}-limit-mode`} className='w-full'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                {getActivityLimitModeOptions(t).map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            {t(
+              'Choose how usage is limited. The unused limit type is not enforced.'
+            )}
+          </FieldDescription>
+        </Field>
+      </div>
+
+      <div className='grid gap-3 sm:grid-cols-2'>
         <Field data-invalid={Boolean(rpmError)}>
           <FieldLabel htmlFor={`${id}-rpm`}>
             {t('RPM for benefit {{index}}', { index: props.index + 1 })}
@@ -319,6 +360,7 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
             min={0}
             step={1}
             value={props.row.rpm_limit}
+            disabled={isConcurrency}
             aria-invalid={Boolean(rpmError)}
             onChange={(event) =>
               updateRow({ rpm_limit: event.target.valueAsNumber || 0 })
@@ -330,6 +372,38 @@ function ActivityBenefitRowEditor(props: RowEditorProps) {
           {rpmError && (
             <p role='alert' className='text-destructive text-sm'>
               {t(rpmError)}
+            </p>
+          )}
+        </Field>
+
+        <Field data-invalid={Boolean(concurrencyError)}>
+          <FieldLabel htmlFor={`${id}-concurrency`}>
+            {t('Concurrency for benefit {{index}}', {
+              index: props.index + 1,
+            })}
+          </FieldLabel>
+          <Input
+            id={`${id}-concurrency`}
+            type='number'
+            min={0}
+            step={1}
+            value={props.row.concurrency_limit}
+            disabled={!isConcurrency}
+            aria-invalid={Boolean(concurrencyError)}
+            onChange={(event) =>
+              updateRow({
+                concurrency_limit: event.target.valueAsNumber || 0,
+              })
+            }
+          />
+          <FieldDescription>
+            {t(
+              'Concurrency is shared per user and group; a single-model benefit is not its own pool. 0 means unlimited.'
+            )}
+          </FieldDescription>
+          {concurrencyError && (
+            <p role='alert' className='text-destructive text-sm'>
+              {t(concurrencyError)}
             </p>
           )}
         </Field>

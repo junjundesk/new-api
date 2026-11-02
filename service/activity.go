@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"maps"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,8 +19,13 @@ type ActivityTokenBudget struct {
 	Remaining int64
 }
 
+// ActivityLimitModeMixed 表示同一分组同时存在 rpm 型与 concurrency 型授权，
+// 两种限流约束都会生效；它只用于聚合视图展示，不是授权行的取值。
+const ActivityLimitModeMixed = "mixed"
+
 // ActivityView 是用户在某一个分组上的有效活动授权（同一分组的多张授权合并后的结果）：
-// 倍率取最小值、RPM 取最大值（两项都对用户最有利），到期时间取最晚（有永久授权则永久）。
+// 倍率取最小值、RPM 取最大值、并发取最宽松（显式 0 = 不限 优先），到期时间取最晚
+// （有永久授权则永久）。限流按模式分流聚合，混合授权的两种约束同时生效。
 // Token 套餐按权益 grant 单独计量；合并后的 TokenTotal/TokenUsed 只用于展示。
 type ActivityView struct {
 	GrantId       int     `json:"grant_id"`
@@ -31,8 +37,15 @@ type ActivityView struct {
 	// ModelRatioOverrides 是「指定模型 → 倍率」覆盖：命中的模型优先于 RatioOverride，
 	// 未命中的模型继续沿用 RatioMode/RatioOverride 与分组默认倍率。
 	ModelRatioOverrides map[string]float64 `json:"model_ratio_overrides"`
-	RpmLimit            int                `json:"rpm_limit"`
-	ExpireTime          int64              `json:"expire_time"`
+	// LimitMode 是该分组限流模式的聚合结果：rpm / concurrency / mixed（两种授权都有）。
+	LimitMode string `json:"limit_mode"`
+	// RpmLimit 是 rpm 型授权的 RPM 上限（取最大值，0 表示不限）。
+	RpmLimit int `json:"rpm_limit"`
+	// ConcurrencyLimit 是 concurrency 型授权的并发上限（取最宽松值，0 表示不限）。
+	// rpm 型授权不参与该聚合：其 ConcurrencyLimit 恒为 0（未启用），
+	// 若被当作「不限」并参与取最宽松，会把并发约束错误地取消掉。
+	ConcurrencyLimit int   `json:"concurrency_limit"`
+	ExpireTime       int64 `json:"expire_time"`
 
 	// Token 套餐展示字段：同一分组所有 Token 套餐权益的总量/已用量。
 	TokenTotal   int64 `json:"token_total"`
@@ -93,25 +106,47 @@ func packageCandidateEarlier(left, right int64) bool {
 	return left < right
 }
 
-// GetActiveActivityViews 读取用户当前有效的活动授权并按分组合并。
-func GetActiveActivityViews(userId int) []ActivityView {
+// GetActiveActivityViewsE 读取用户当前有效的活动授权并按分组合并。
+// 查询失败时返回错误而不是空列表：把失败当作「没有授权」会让限流路径
+// 在数据库故障时直接绕过限制，因此限流侧必须使用本函数并 fail closed。
+func GetActiveActivityViewsE(userId int) ([]ActivityView, error) {
 	if userId <= 0 {
-		return nil
+		return nil, nil
+	}
+	if common.RedisEnabled && common.RDB == nil {
+		// Redis 已启用但客户端未初始化：授权缓存读取会因空客户端崩溃，
+		// 而故障期间绝不能当作「没有授权」。返回错误让限流路径 fail closed。
+		return nil, errors.New("activity grant store unavailable: Redis is enabled but its client is not initialized")
 	}
 	grants, err := model.GetActiveActivityGrants(userId)
+	if err != nil {
+		return nil, err
+	}
+	return mergeActivityViews(grants), nil
+}
+
+// GetActiveActivityViews 读取用户当前有效的活动授权并按分组合并；
+// 查询失败只记日志并返回空列表，仅用于展示与计费等「无授权即无优惠」安全的路径。
+func GetActiveActivityViews(userId int) []ActivityView {
+	views, err := GetActiveActivityViewsE(userId)
 	if err != nil {
 		common.SysError("failed to load active activity grants: " + err.Error())
 		return nil
 	}
-	return mergeActivityViews(grants)
+	return views
 }
 
 type activityViewBuilder struct {
-	view               ActivityView
-	seen               bool
-	groupUnlimitedFree bool
-	groupPackages      []activityPackageCandidate
-	groupFallbackRatio *float64
+	view                 ActivityView
+	seen                 bool
+	rpmSeen              bool
+	rpmMax               int
+	concurrencySeen      bool
+	concurrencyMax       int
+	concurrencyUnlimited bool
+	groupUnlimitedFree   bool
+	groupPackages        []activityPackageCandidate
+	groupFallbackRatio   *float64
 
 	modelUnlimitedFree  map[string]bool
 	modelPackages       map[string][]activityPackageCandidate
@@ -140,7 +175,6 @@ func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
 		builder.view.CodeName = grant.CodeName
 		builder.view.RatioMode = grant.RatioMode
 		builder.view.RatioOverride = grant.RatioOverride
-		builder.view.RpmLimit = grant.RpmLimit
 		builder.view.ExpireTime = expireTime
 		builder.seen = true
 	} else {
@@ -152,13 +186,31 @@ func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
 			builder.view.Code = grant.Code
 			builder.view.CodeName = grant.CodeName
 		}
-		if grant.RpmLimit > builder.view.RpmLimit {
-			builder.view.RpmLimit = grant.RpmLimit
-		}
+
 		if builder.view.ExpireTime == 0 || expireTime == 0 {
 			builder.view.ExpireTime = 0
 		} else if expireTime > builder.view.ExpireTime {
 			builder.view.ExpireTime = expireTime
+		}
+	}
+
+	// 限流聚合按模式分流：rpm 型授权只参与 RPM 聚合（数值取最大），
+	// concurrency 型授权只参与并发聚合（取最宽松，显式的 0 = 不限 优先）。
+	// 存量数据 LimitMode 为空，NormalizeActivityLimitMode 会按 rpm 处理，
+	// 因此旧 RPM 数值的 max 聚合行为保持不变。
+	switch model.NormalizeActivityLimitMode(grant.LimitMode) {
+	case model.ActivityLimitModeConcurrency:
+		builder.concurrencySeen = true
+		if grant.ConcurrencyLimit <= 0 {
+			builder.concurrencyUnlimited = true
+		} else if grant.ConcurrencyLimit > builder.concurrencyMax {
+			builder.concurrencyMax = grant.ConcurrencyLimit
+		}
+	default:
+		// 非法 LimitMode 也按 rpm 处理：限流配置损坏不能导致用户完全不限流。
+		builder.rpmSeen = true
+		if grant.RpmLimit > builder.rpmMax {
+			builder.rpmMax = grant.RpmLimit
 		}
 	}
 
@@ -207,6 +259,18 @@ func (builder *activityViewBuilder) merge(grant model.ActivityGrant) {
 
 func (builder *activityViewBuilder) finalize() ActivityView {
 	view := builder.view
+	view.RpmLimit = builder.rpmMax
+	if builder.concurrencySeen && !builder.concurrencyUnlimited {
+		view.ConcurrencyLimit = builder.concurrencyMax
+	}
+	switch {
+	case builder.rpmSeen && builder.concurrencySeen:
+		view.LimitMode = ActivityLimitModeMixed
+	case builder.concurrencySeen:
+		view.LimitMode = model.ActivityLimitModeConcurrency
+	default:
+		view.LimitMode = model.ActivityLimitModeRPM
+	}
 	view.groupUnlimitedFree = builder.groupUnlimitedFree
 	view.groupFallbackRatio = builder.groupFallbackRatio
 	view.modelUnlimitedFree = builder.modelUnlimitedFree
@@ -291,23 +355,49 @@ func mergeActivityViews(grants []model.ActivityGrant) []ActivityView {
 	return views
 }
 
+// requestActivityViews 按请求缓存读取用户的活动授权聚合；只有查询成功才写缓存，
+// 失败不缓存，避免一次失败把「未知」固化成「没有授权」。
+func requestActivityViews(c *gin.Context, userId int) ([]ActivityView, error) {
+	views, ok := common.GetContextKeyType[[]ActivityView](c, constant.ContextKeyActivityGrants)
+	if ok {
+		return views, nil
+	}
+	views, err := GetActiveActivityViewsE(userId)
+	if err != nil {
+		return nil, err
+	}
+	common.SetContextKey(c, constant.ContextKeyActivityGrants, views)
+	return views, nil
+}
+
 // GetRequestActivityView 返回请求用户在某分组上的有效活动授权，结果按请求缓存在
-// gin context 中，一次请求只查一次（鉴权、限流、计费共用）。
+// gin context 中，一次请求只查一次（鉴权、限流、计费共用）。查询失败只记日志，
+// 仅用于「无授权即无优惠/无额外能力」不会造成绕过的路径。
 func GetRequestActivityView(c *gin.Context, userId int, group string) *ActivityView {
-	if c == nil || userId <= 0 || group == "" {
+	view, err := GetRequestActivityViewChecked(c, userId, group)
+	if err != nil {
+		common.SysError("failed to load activity grants: " + err.Error())
 		return nil
 	}
-	views, ok := common.GetContextKeyType[[]ActivityView](c, constant.ContextKeyActivityGrants)
-	if !ok {
-		views = GetActiveActivityViews(userId)
-		common.SetContextKey(c, constant.ContextKeyActivityGrants, views)
+	return view
+}
+
+// GetRequestActivityViewChecked 与 GetRequestActivityView 相同，但把查询失败返回给调用方。
+// 限流路径必须使用本函数：数据库故障时拒绝请求，而不是当作没有活动授权绕过限制。
+func GetRequestActivityViewChecked(c *gin.Context, userId int, group string) (*ActivityView, error) {
+	if c == nil || userId <= 0 || group == "" {
+		return nil, nil
+	}
+	views, err := requestActivityViews(c, userId)
+	if err != nil {
+		return nil, err
 	}
 	for i := range views {
 		if views[i].GroupName == group {
-			return &views[i]
+			return &views[i], nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // BillingRatioOverride 把该授权的倍率覆盖转换成计费解析所需形态。

@@ -1,12 +1,15 @@
 package model
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -684,7 +687,7 @@ func TestActivityBenefitsScanAndValue(t *testing.T) {
 	require.NoError(t, err)
 	raw, ok := value.([]byte)
 	require.True(t, ok)
-	assert.JSONEq(t, `[{"key":"a","group_name":"vip","scope":"group","rpm_limit":0,"token_total":100}]`, string(raw))
+	assert.JSONEq(t, `[{"key":"a","group_name":"vip","scope":"group","limit_mode":"","rpm_limit":0,"concurrency_limit":0,"token_total":100}]`, string(raw))
 
 	for _, stored := range []interface{}{nil, []byte(nil), "", []byte(""), []byte("null")} {
 		benefits := ActivityBenefits{{Key: "stale"}}
@@ -806,4 +809,315 @@ func TestRedeemActivityCodeRejectsEndedActivity(t *testing.T) {
 	assert.Zero(t, count, "拒绝兑换时不写授权")
 	assert.Equal(t, 1000, reloadUserQuota(t, user.Id), "拒绝兑换时不扣余额")
 	assert.Equal(t, 0, reloadActivityCode(t, created.Id).UsedCount, "拒绝兑换时不占名额")
+}
+
+// 限流模式归一化：存量缺模式按 rpm，合法值标准化，非法值返回空串由调用方拒绝。
+func TestNormalizeActivityLimitMode(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"空值按 rpm", "", ActivityLimitModeRPM},
+		{"纯空白按 rpm", "   ", ActivityLimitModeRPM},
+		{"合法 rpm 小写", "rpm", ActivityLimitModeRPM},
+		{"合法 rpm 大小写混合", "RPM", ActivityLimitModeRPM},
+		{"合法 rpm 带空白", " rpm ", ActivityLimitModeRPM},
+		{"合法 concurrency", "concurrency", ActivityLimitModeConcurrency},
+		{"合法 concurrency 大写", "Concurrency", ActivityLimitModeConcurrency},
+		{"未知模式返回空串", "qps", ""},
+		{"相似值返回空串", "rpm-per-minute", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, NormalizeActivityLimitMode(tt.value))
+		})
+	}
+}
+
+// 旧缓存/旧落库 JSON 没有新字段：反序列化后按 rpm 处理，读取归一化兼容存量数据。
+func TestActivityLimitModeLegacyJSONDefaultsToRpm(t *testing.T) {
+	var legacyCode ActivityCode
+	require.NoError(t, common.Unmarshal([]byte(`{"code":"legacy","group_name":"vip","rpm_limit":10}`), &legacyCode))
+	assert.Equal(t, "", legacyCode.LimitMode)
+	assert.Equal(t, 0, legacyCode.ConcurrencyLimit)
+	specs := legacyCode.grantSpecs()
+	require.Len(t, specs, 1)
+	assert.Equal(t, ActivityLimitModeRPM, specs[0].LimitMode, "存量活动码缺模式按 rpm 发放")
+	assert.Equal(t, 10, specs[0].RpmLimit)
+
+	var legacyGrant ActivityGrant
+	require.NoError(t, common.Unmarshal([]byte(`{"id":1,"rpm_limit":10}`), &legacyGrant))
+	assert.Equal(t, "", legacyGrant.LimitMode)
+	assert.Equal(t, ActivityLimitModeRPM, NormalizeActivityLimitMode(legacyGrant.LimitMode), "存量授权缺模式按 rpm 处理")
+	assert.Equal(t, 0, legacyGrant.ConcurrencyLimit)
+
+	legacyBenefits := ActivityBenefits{}
+	require.NoError(t, legacyBenefits.Scan([]byte(`[{"key":"a","group_name":"vip","scope":"group","rpm_limit":10}]`)))
+	require.Len(t, legacyBenefits, 1)
+	assert.Equal(t, "", legacyBenefits[0].LimitMode)
+	assert.Equal(t, 0, legacyBenefits[0].ConcurrencyLimit)
+	spec := activityGrantSpecForBenefit(legacyBenefits[0])
+	assert.Equal(t, ActivityLimitModeRPM, spec.LimitMode, "存量权益缺模式按 rpm 发放")
+	assert.Equal(t, 10, spec.RpmLimit)
+}
+
+// 双类型限流落库：concurrency 模式写入并发上限，兑换与管理员赠送两条发放路径都要贯通，
+// 编辑活动码后有效授权实时同步。
+func TestActivityCodeConcurrencyPersistsAndSyncsToGrants(t *testing.T) {
+	code := ActivityCode{
+		Code:             "act-concurrency",
+		Name:             "并发活动",
+		DurationSeconds:  3600,
+		LimitMode:        ActivityLimitModeConcurrency,
+		ConcurrencyLimit: 5,
+	}
+	user, created := setupActivityFixture(t, code, 0)
+
+	result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-concurrency", UserId: user.Id})
+	require.NoError(t, err)
+	grant := &ActivityGrant{}
+	require.NoError(t, DB.First(grant, "id = ?", result.GrantId).Error)
+	assert.Equal(t, ActivityLimitModeConcurrency, grant.LimitMode, "兑换授权写入并发模式")
+	assert.Equal(t, 5, grant.ConcurrencyLimit)
+
+	gift, err := GrantActivityCode(GrantActivityCodeRequest{CodeId: created.Id, UserId: user.Id})
+	require.NoError(t, err)
+	giftGrant := &ActivityGrant{}
+	require.NoError(t, DB.First(giftGrant, "id = ?", gift.GrantId).Error)
+	assert.Equal(t, ActivityLimitModeConcurrency, giftGrant.LimitMode, "管理员赠送授权写入并发模式")
+	assert.Equal(t, 5, giftGrant.ConcurrencyLimit)
+
+	created.ConcurrencyLimit = 9
+	require.NoError(t, created.Update())
+	reloaded := &ActivityGrant{}
+	require.NoError(t, DB.First(reloaded, "id = ?", result.GrantId).Error)
+	assert.Equal(t, ActivityLimitModeConcurrency, reloaded.LimitMode)
+	assert.Equal(t, 9, reloaded.ConcurrencyLimit, "编辑活动码后有效授权实时同步")
+
+	// 缓存键升级到 v2：同结构数据经缓存读回后模式与并发值不丢。
+	require.NoError(t, DB.Model(&ActivityGrant{}).Where("id = ?", result.GrantId).Update("limit_mode", ActivityLimitModeConcurrency).Error)
+	cached, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	require.NotEmpty(t, cached)
+	assert.Equal(t, ActivityLimitModeConcurrency, cached[0].LimitMode)
+	assert.Equal(t, 9, cached[0].ConcurrencyLimit)
+}
+
+// benefit 条目各自携带限流模式：兑换发放按条目落库，编辑活动码按 key 同步。
+func TestBenefitLimitModePersistsAndSyncsByKey(t *testing.T) {
+	code := ActivityCode{
+		Code:            "act-benefit-limits",
+		Name:            "权益限流",
+		Type:            ActivityCodeTypeBenefit,
+		DurationSeconds: 3600,
+		PerUserLimit:    1,
+		Benefits: ActivityBenefits{
+			{Key: "key-a", GroupName: "benefit-a", Scope: ActivityBenefitScopeGroup, LimitMode: ActivityLimitModeRPM, RpmLimit: 10},
+			{Key: "key-b", GroupName: "benefit-b", Scope: ActivityBenefitScopeGroup, LimitMode: ActivityLimitModeConcurrency, ConcurrencyLimit: 3},
+		},
+	}
+	user, created := setupActivityFixture(t, code, 0)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"activity-test-group":1,"benefit-a":1,"benefit-b":1}`))
+	_, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-benefit-limits", UserId: user.Id})
+	require.NoError(t, err)
+
+	grantA := findGrantByBenefitKey(t, created.Id, "key-a")
+	assert.Equal(t, ActivityLimitModeRPM, grantA.LimitMode)
+	assert.Equal(t, 10, grantA.RpmLimit)
+	assert.Equal(t, 0, grantA.ConcurrencyLimit, "RPM 条目不写并发")
+	grantB := findGrantByBenefitKey(t, created.Id, "key-b")
+	assert.Equal(t, ActivityLimitModeConcurrency, grantB.LimitMode)
+	assert.Equal(t, 3, grantB.ConcurrencyLimit)
+	assert.Equal(t, 0, grantB.RpmLimit, "并发条目不写 RPM")
+
+	created.Benefits = ActivityBenefits{
+		{Key: "key-a", GroupName: "benefit-a", Scope: ActivityBenefitScopeGroup, LimitMode: ActivityLimitModeRPM, RpmLimit: 20},
+		{Key: "key-b", GroupName: "benefit-b", Scope: ActivityBenefitScopeGroup, LimitMode: ActivityLimitModeConcurrency, ConcurrencyLimit: 8},
+	}
+	require.NoError(t, created.Update())
+
+	grantA = findGrantByBenefitKey(t, created.Id, "key-a")
+	assert.Equal(t, 20, grantA.RpmLimit)
+	assert.Equal(t, 0, grantA.ConcurrencyLimit)
+	grantB = findGrantByBenefitKey(t, created.Id, "key-b")
+	assert.Equal(t, ActivityLimitModeConcurrency, grantB.LimitMode)
+	assert.Equal(t, 8, grantB.ConcurrencyLimit, "按 key 同步并发上限")
+}
+
+// activityCodeLegacySchema/activityGrantLegacySchema 是加限流列之前的表结构快照，
+// 用它先落库存量数据再跑 AutoMigrate，验证真实升级路径而不只是新建表。
+type activityCodeLegacySchema struct {
+	Id                  int    `gorm:"primaryKey"`
+	Code                string `gorm:"type:varchar(64);uniqueIndex"`
+	Name                string `gorm:"type:varchar(64);index"`
+	Description         string `gorm:"type:text"`
+	Status              int    `gorm:"default:1"`
+	Type                string `gorm:"type:varchar(16);default:'ratio'"`
+	GroupName           string `gorm:"type:varchar(64);index"`
+	DurationSeconds     int64  `gorm:"bigint;default:0"`
+	RpmLimit            int    `gorm:"default:0"`
+	PriceQuota          int    `gorm:"default:0"`
+	RatioMode           string `gorm:"type:varchar(16);default:'inherit'"`
+	RatioOverride       float64
+	RatioScope          string                      `gorm:"type:varchar(16);default:'group'"`
+	ModelRatioOverrides ActivityModelRatioOverrides `gorm:"type:json"`
+	Benefits            ActivityBenefits            `gorm:"type:json"`
+	StartTime           int64                       `gorm:"bigint;default:0"`
+	EndTime             int64                       `gorm:"bigint;default:0"`
+	TotalLimit          int                         `gorm:"default:0"`
+	UsedCount           int                         `gorm:"default:0"`
+	PerUserLimit        int                         `gorm:"default:1"`
+	PublicVisible       int                         `gorm:"default:0"`
+	SortWeight          int                         `gorm:"default:0;index"`
+	ImageUrl            string                      `gorm:"type:varchar(512);default:''"`
+	ActiveEndTime       int64                       `gorm:"bigint;default:0"`
+	CreatedBy           int
+	CreatedTime         int64          `gorm:"bigint"`
+	UpdatedTime         int64          `gorm:"bigint"`
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
+}
+
+type activityGrantLegacySchema struct {
+	Id                  int    `gorm:"primaryKey"`
+	UserId              int    `gorm:"index"`
+	CodeId              int    `gorm:"index"`
+	Code                string `gorm:"type:varchar(64)"`
+	CodeName            string `gorm:"type:varchar(64)"`
+	GroupName           string `gorm:"type:varchar(64);index"`
+	RatioMode           string `gorm:"type:varchar(16);default:'inherit'"`
+	RatioOverride       float64
+	RatioScope          string                      `gorm:"type:varchar(16);default:'group'"`
+	ModelRatioOverrides ActivityModelRatioOverrides `gorm:"type:json"`
+	RpmLimit            int                         `gorm:"default:0"`
+	PriceQuota          int                         `gorm:"default:0"`
+	RedeemBatch         string                      `gorm:"type:varchar(64);index"`
+	BenefitKey          string                      `gorm:"type:varchar(32);index"`
+	TokenTotal          int64                       `gorm:"bigint;default:0"`
+	TokenUsed           int64                       `gorm:"bigint;default:0"`
+	StartTime           int64                       `gorm:"bigint"`
+	ExpireTime          int64                       `gorm:"bigint;index"`
+	ActivityEndTime     int64                       `gorm:"bigint;default:0"`
+	Status              string                      `gorm:"type:varchar(32);index"`
+	Source              string                      `gorm:"type:varchar(32);default:'redeem'"`
+	Remark              string                      `gorm:"type:varchar(255);default:''"`
+	CreatedTime         int64                       `gorm:"bigint"`
+	UpdatedTime         int64                       `gorm:"bigint"`
+}
+
+// SQLite 旧 schema 升级：加列前落库的存量 RPM 行在 AutoMigrate 后保留原值、模式读取为 rpm，
+// 新的并发列可以正常保存——真实升级路径，而不是新建表后的空库验证。
+func TestActivityLimitModeSchemaUpgradeKeepsLegacyRows(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Table("activity_codes").AutoMigrate(&activityCodeLegacySchema{}))
+	require.NoError(t, db.Table("activity_grants").AutoMigrate(&activityGrantLegacySchema{}))
+	now := common.GetTimestamp()
+	legacyCode := &activityCodeLegacySchema{
+		Code: "legacy-rpm", Name: "存量活动", GroupName: activityTestGroup,
+		DurationSeconds: 3600, RpmLimit: 42, Status: ActivityCodeStatusEnabled,
+		RatioMode: ActivityRatioModeInherit, PerUserLimit: 1, CreatedTime: now, UpdatedTime: now,
+	}
+	require.NoError(t, db.Table("activity_codes").Create(legacyCode).Error)
+	legacyGrant := &activityGrantLegacySchema{
+		UserId: 5, CodeId: legacyCode.Id, Code: "legacy-rpm", GroupName: activityTestGroup,
+		RatioMode: ActivityRatioModeInherit, RpmLimit: 12, Status: ActivityGrantStatusActive,
+		Source: ActivityGrantSourceRedeem, StartTime: now, ExpireTime: now + 3600,
+		CreatedTime: now, UpdatedTime: now,
+	}
+	require.NoError(t, db.Table("activity_grants").Create(legacyGrant).Error)
+
+	// 与启动时相同的升级入口。
+	require.NoError(t, db.AutoMigrate(&ActivityCode{}, &ActivityGrant{}))
+
+	var code ActivityCode
+	require.NoError(t, db.Table("activity_codes").First(&code, "id = ?", legacyCode.Id).Error)
+	assert.Equal(t, 42, code.RpmLimit, "存量 RPM 值必须保留")
+	assert.Equal(t, ActivityLimitModeRPM, code.EffectiveLimitMode(), "存量行模式读取为 rpm")
+	assert.Equal(t, 0, code.ConcurrencyLimit)
+
+	var grant ActivityGrant
+	require.NoError(t, db.Table("activity_grants").First(&grant, "id = ?", legacyGrant.Id).Error)
+	assert.Equal(t, 12, grant.RpmLimit, "存量授权 RPM 值必须保留")
+	assert.Equal(t, ActivityLimitModeRPM, NormalizeActivityLimitMode(grant.LimitMode), "存量授权模式读取为 rpm")
+	assert.Equal(t, 0, grant.ConcurrencyLimit)
+
+	// 新并发列可保存：升级后的表能写入并读回新模式与并发上限。
+	code.LimitMode = ActivityLimitModeConcurrency
+	code.ConcurrencyLimit = 7
+	require.NoError(t, db.Table("activity_codes").Save(&code).Error)
+	var reloadedCode ActivityCode
+	require.NoError(t, db.Table("activity_codes").First(&reloadedCode, "id = ?", legacyCode.Id).Error)
+	assert.Equal(t, ActivityLimitModeConcurrency, reloadedCode.LimitMode)
+	assert.Equal(t, 7, reloadedCode.ConcurrencyLimit)
+
+	grant.LimitMode = ActivityLimitModeConcurrency
+	grant.ConcurrencyLimit = 5
+	require.NoError(t, db.Table("activity_grants").Save(&grant).Error)
+	var reloadedGrant ActivityGrant
+	require.NoError(t, db.Table("activity_grants").First(&reloadedGrant, "id = ?", legacyGrant.Id).Error)
+	assert.Equal(t, ActivityLimitModeConcurrency, reloadedGrant.LimitMode)
+	assert.Equal(t, 5, reloadedGrant.ConcurrencyLimit)
+}
+
+// 授权缓存 v2：限流新字段随缓存读写不丢；旧 v1 缓存不能让并发授权按 0 并发放行；
+// 编辑活动码与撤销授权都必须失效缓存。
+func TestActivityGrantCacheV2KeepsLimitFieldsAndInvalidates(t *testing.T) {
+	code := ActivityCode{
+		Code: "act-cache-v2", Name: "缓存并发活动", DurationSeconds: 3600,
+		LimitMode: ActivityLimitModeConcurrency, ConcurrencyLimit: 7,
+	}
+	user, created := setupActivityFixture(t, code, 0)
+	result, err := RedeemActivityCode(RedeemActivityCodeRequest{Code: "act-cache-v2", UserId: user.Id})
+	require.NoError(t, err)
+
+	server := useUserCacheMiniRedis(t)
+
+	// 旧 v1 缓存负载：旧结构没有新字段，却声称有一条永久有效的授权；
+	// 若代码仍读 v1 键，这条授权会以 0 并发放行。
+	legacyKey := "activity:grants:" + strconv.Itoa(user.Id)
+	legacyPayload := `[{"id":99999,"user_id":` + strconv.Itoa(user.Id) + `,"code":"act-cache-v2","group_name":"activity-test-group","ratio_mode":"override","ratio_override":0,"ratio_scope":"group","rpm_limit":0,"status":"active","source":"redeem","start_time":1,"expire_time":0,"created_time":1,"updated_time":1}]`
+	require.NoError(t, common.RedisSet(legacyKey, legacyPayload, time.Minute))
+	require.True(t, server.Exists(legacyKey))
+
+	grants, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	require.Len(t, grants, 1)
+	assert.NotEqual(t, 99999, grants[0].Id, "旧 v1 缓存必须被忽略")
+	assert.Equal(t, result.GrantId, grants[0].Id)
+	assert.Equal(t, ActivityLimitModeConcurrency, grants[0].LimitMode)
+	assert.Equal(t, 7, grants[0].ConcurrencyLimit, "并发授权不能按旧缓存的 0 值放行")
+
+	// 第二次读取命中 v2 缓存，新字段不丢。
+	cachedRaw, err := common.RedisGet(activityGrantCacheKey(user.Id))
+	require.NoError(t, err)
+	require.Contains(t, cachedRaw, `"concurrency_limit":7`)
+	require.Contains(t, cachedRaw, `"limit_mode":"concurrency"`)
+	cached, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	require.Len(t, cached, 1)
+	assert.Equal(t, ActivityLimitModeConcurrency, cached[0].LimitMode)
+	assert.Equal(t, 7, cached[0].ConcurrencyLimit, "缓存命中后并发值不丢")
+
+	// 编辑活动码失效缓存，读到同步后的新值。
+	created.ConcurrencyLimit = 9
+	require.NoError(t, created.Update())
+	_, err = common.RedisGet(activityGrantCacheKey(user.Id))
+	assert.Error(t, err, "编辑活动码后 v2 缓存必须失效")
+	updated, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	require.Len(t, updated, 1)
+	assert.Equal(t, 9, updated[0].ConcurrencyLimit, "编辑后读到同步的新值")
+
+	// 撤销授权同样失效缓存，下一次读取不再返回。
+	require.NoError(t, RevokeActivityGrant(result.GrantId, "测试撤销"))
+	_, err = common.RedisGet(activityGrantCacheKey(user.Id))
+	assert.Error(t, err, "撤销授权后 v2 缓存必须失效")
+	remaining, err := GetActiveActivityGrants(user.Id)
+	require.NoError(t, err)
+	assert.Empty(t, remaining)
 }

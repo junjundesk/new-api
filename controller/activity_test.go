@@ -309,12 +309,16 @@ func newActivityUserRouter() *gin.Engine {
 }
 
 type activityOfferView struct {
-	Code          string `json:"code"`
-	Redeemable    bool   `json:"redeemable"`
-	BlockedReason string `json:"blocked_reason"`
-	SortWeight    int    `json:"sort_weight"`
-	ImageUrl      string `json:"image_url"`
-	ActiveEndTime int64  `json:"active_end_time"`
+	Code             string                   `json:"code"`
+	Redeemable       bool                     `json:"redeemable"`
+	BlockedReason    string                   `json:"blocked_reason"`
+	SortWeight       int                      `json:"sort_weight"`
+	ImageUrl         string                   `json:"image_url"`
+	ActiveEndTime    int64                    `json:"active_end_time"`
+	LimitMode        string                   `json:"limit_mode"`
+	RpmLimit         int                      `json:"rpm_limit"`
+	ConcurrencyLimit int                      `json:"concurrency_limit"`
+	Benefits         []map[string]interface{} `json:"benefits"`
 }
 
 type activityOffersResponse struct {
@@ -767,4 +771,273 @@ func TestActivityCodeBenefitRejectsInvalidPayloads(t *testing.T) {
 			assert.False(t, response.Success, "非法权益配置必须被拒绝")
 		})
 	}
+}
+
+// 双类型限流的持久化与缺省语义：旧 payload 缺字段默认 rpm，更新缺 mode 保留已有模式，
+// 未启用的限流数值归 0，新建/切换到并发模式缺值默认 0。
+func TestActivityCodeLimitModeCreateUpdateAndLegacyPayload(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	legacy := activityRequestPayload()
+	legacy["code"] = "hdmlegacy"
+	created := callActivityAdmin(t, router, http.MethodPost, legacy)
+	require.True(t, created.Success, created.Message)
+	stored, err := model.GetActivityCodeById(int(created.Data["id"].(float64)))
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.LimitMode, "旧 payload 创建默认 rpm")
+	assert.Equal(t, 0, stored.ConcurrencyLimit)
+	assert.Equal(t, 5, stored.RpmLimit)
+
+	blankMode := activityRequestPayload()
+	blankMode["code"] = "hdmblank"
+	blankMode["limit_mode"] = "  "
+	created = callActivityAdmin(t, router, http.MethodPost, blankMode)
+	require.True(t, created.Success, created.Message)
+	stored, err = model.GetActivityCodeById(int(created.Data["id"].(float64)))
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.LimitMode, "空白模式按 rpm")
+
+	concurrent := activityRequestPayload()
+	concurrent["code"] = "hdmconcurrent"
+	concurrent["limit_mode"] = "concurrency"
+	created = callActivityAdmin(t, router, http.MethodPost, concurrent)
+	require.True(t, created.Success, created.Message)
+	concurrentId := int(created.Data["id"].(float64))
+	stored, err = model.GetActivityCodeById(concurrentId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.LimitMode)
+	assert.Equal(t, 0, stored.ConcurrencyLimit, "新建并发模式缺值默认 0")
+	assert.Equal(t, 0, stored.RpmLimit, "并发模式不写 RPM")
+
+	withLimit := activityRequestPayload()
+	withLimit["id"] = concurrentId
+	withLimit["limit_mode"] = "concurrency"
+	withLimit["concurrency_limit"] = 7
+	withLimit["rpm_limit"] = 60
+	updated := callActivityAdmin(t, router, http.MethodPut, withLimit)
+	require.True(t, updated.Success, updated.Message)
+	stored, err = model.GetActivityCodeById(concurrentId)
+	require.NoError(t, err)
+	assert.Equal(t, 7, stored.ConcurrencyLimit)
+	assert.Equal(t, 0, stored.RpmLimit, "未启用数值归 0")
+
+	legacyEdit := activityRequestPayload()
+	legacyEdit["id"] = concurrentId
+	legacyEdit["name"] = "keep mode"
+	updated = callActivityAdmin(t, router, http.MethodPut, legacyEdit)
+	require.True(t, updated.Success, updated.Message)
+	stored, err = model.GetActivityCodeById(concurrentId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.LimitMode, "更新缺 mode 保留已有模式")
+	assert.Equal(t, 7, stored.ConcurrencyLimit, "并发编辑缺值保留旧值")
+
+	switchToRpm := activityRequestPayload()
+	switchToRpm["id"] = concurrentId
+	switchToRpm["limit_mode"] = "rpm"
+	switchToRpm["rpm_limit"] = 30
+	updated = callActivityAdmin(t, router, http.MethodPut, switchToRpm)
+	require.True(t, updated.Success, updated.Message)
+	stored, err = model.GetActivityCodeById(concurrentId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.LimitMode)
+	assert.Equal(t, 30, stored.RpmLimit)
+	assert.Equal(t, 0, stored.ConcurrencyLimit, "切回 rpm 后并发值归 0")
+
+	switchToConcurrent := activityRequestPayload()
+	switchToConcurrent["id"] = concurrentId
+	switchToConcurrent["limit_mode"] = "concurrency"
+	updated = callActivityAdmin(t, router, http.MethodPut, switchToConcurrent)
+	require.True(t, updated.Success, updated.Message)
+	stored, err = model.GetActivityCodeById(concurrentId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.LimitMode)
+	assert.Equal(t, 0, stored.ConcurrencyLimit, "切换到并发模式缺值默认 0")
+	assert.Equal(t, 0, stored.RpmLimit)
+}
+
+func TestActivityCodeLimitModeRejectsInvalidPayloads(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	tests := []struct {
+		name    string
+		payload func() map[string]interface{}
+	}{
+		{"unknown limit mode", func() map[string]interface{} {
+			payload := activityRequestPayload()
+			payload["limit_mode"] = "qps"
+			return payload
+		}},
+		{"negative concurrency limit", func() map[string]interface{} {
+			payload := activityRequestPayload()
+			payload["limit_mode"] = "concurrency"
+			payload["concurrency_limit"] = -1
+			return payload
+		}},
+		{"concurrency limit above the maximum", func() map[string]interface{} {
+			payload := activityRequestPayload()
+			payload["limit_mode"] = "concurrency"
+			payload["concurrency_limit"] = model.ActivityCodeMaxConcurrency + 1
+			return payload
+		}},
+		{"benefit limit mode invalid", func() map[string]interface{} {
+			payload := activityBenefitRequestPayload()
+			payload["benefits"] = benefitItems(map[string]interface{}{"group_name": "activity-test-group", "scope": "group", "limit_mode": "qps"})
+			return payload
+		}},
+		{"benefit concurrency above the maximum", func() map[string]interface{} {
+			payload := activityBenefitRequestPayload()
+			payload["benefits"] = benefitItems(map[string]interface{}{"group_name": "activity-test-group", "scope": "group", "limit_mode": "concurrency", "concurrency_limit": model.ActivityCodeMaxConcurrency + 1})
+			return payload
+		}},
+		{"benefit negative concurrency", func() map[string]interface{} {
+			payload := activityBenefitRequestPayload()
+			payload["benefits"] = benefitItems(map[string]interface{}{"group_name": "activity-test-group", "scope": "group", "limit_mode": "concurrency", "concurrency_limit": -1})
+			return payload
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := tt.payload()
+			payload["code"] = "hdminvalid-" + strings.ReplaceAll(tt.name, " ", "-")
+			response := callActivityAdmin(t, router, http.MethodPost, payload)
+			assert.False(t, response.Success, "非法限流配置必须被拒绝")
+		})
+	}
+}
+
+// benefit 条目的限流模式按 key 贯通：创建落库、编辑缺值保留旧条目取值、未启用数值归 0。
+func TestActivityCodeBenefitLimitModePersistsPerKey(t *testing.T) {
+	setupActivityControllerTest(t)
+	router := newActivityAdminRouter()
+
+	payload := activityBenefitRequestPayload()
+	payload["benefits"] = benefitItems(
+		map[string]interface{}{"group_name": "activity-test-group", "scope": "group", "limit_mode": "rpm", "rpm_limit": 10},
+		map[string]interface{}{"group_name": "default", "scope": "group", "limit_mode": "concurrency", "concurrency_limit": 3},
+	)
+	created := callActivityAdmin(t, router, http.MethodPost, payload)
+	require.True(t, created.Success, created.Message)
+	codeId := int(created.Data["id"].(float64))
+
+	stored, err := model.GetActivityCodeById(codeId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.LimitMode, "benefit 顶层固定 rpm")
+	assert.Equal(t, 0, stored.RpmLimit, "benefit 顶层限流不参与执行")
+	assert.Equal(t, 0, stored.ConcurrencyLimit, "benefit 顶层限流不参与执行")
+	require.Len(t, stored.Benefits, 2)
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.Benefits[0].LimitMode)
+	assert.Equal(t, 10, stored.Benefits[0].RpmLimit)
+	assert.Equal(t, 0, stored.Benefits[0].ConcurrencyLimit, "RPM 条目不写并发")
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.Benefits[1].LimitMode)
+	assert.Equal(t, 3, stored.Benefits[1].ConcurrencyLimit)
+	assert.Equal(t, 0, stored.Benefits[1].RpmLimit, "并发条目不写 RPM")
+
+	// 编辑缺 limit_mode/concurrency_limit：按 key 沿用原条目取值。
+	legacyEdit := activityBenefitRequestPayload()
+	legacyEdit["id"] = codeId
+	legacyEdit["benefits"] = benefitItems(
+		map[string]interface{}{"key": stored.Benefits[0].Key, "group_name": "activity-test-group", "scope": "group", "rpm_limit": 10},
+		map[string]interface{}{"key": stored.Benefits[1].Key, "group_name": "default", "scope": "group"},
+	)
+	updated := callActivityAdmin(t, router, http.MethodPut, legacyEdit)
+	require.True(t, updated.Success, updated.Message)
+
+	stored, err = model.GetActivityCodeById(codeId)
+	require.NoError(t, err)
+	require.Len(t, stored.Benefits, 2)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.Benefits[1].LimitMode, "按 key 缺值保留原模式")
+	assert.Equal(t, 3, stored.Benefits[1].ConcurrencyLimit, "并发条目缺值保留旧值")
+	assert.Equal(t, model.ActivityLimitModeRPM, stored.Benefits[0].LimitMode)
+	assert.Equal(t, 10, stored.Benefits[0].RpmLimit)
+
+	// 切换到并发模式且缺值：默认 0。
+	switchItem := activityBenefitRequestPayload()
+	switchItem["id"] = codeId
+	switchItem["benefits"] = benefitItems(
+		map[string]interface{}{"key": stored.Benefits[0].Key, "group_name": "activity-test-group", "scope": "group", "limit_mode": "concurrency"},
+		map[string]interface{}{"key": stored.Benefits[1].Key, "group_name": "default", "scope": "group"},
+	)
+	updated = callActivityAdmin(t, router, http.MethodPut, switchItem)
+	require.True(t, updated.Success, updated.Message)
+
+	stored, err = model.GetActivityCodeById(codeId)
+	require.NoError(t, err)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, stored.Benefits[0].LimitMode)
+	assert.Equal(t, 0, stored.Benefits[0].ConcurrencyLimit, "切换到并发模式缺值默认 0")
+	assert.Equal(t, 0, stored.Benefits[0].RpmLimit, "未启用数值归 0")
+}
+
+// 用户端视图输出限流模式与并发上限：活动卡片、兑换预览与权益条目都必须带，
+// 历史缺模式的落库行按 rpm 输出。
+func TestActivityOffersAndPreviewExposeLimitMode(t *testing.T) {
+	db := setupActivityControllerTest(t)
+	router := newActivityUserRouter()
+	require.NoError(t, i18n.Init())
+	user := &model.User{Id: 11, Username: "activity-views", Password: "password", Status: common.UserStatusEnabled, Quota: 100}
+	require.NoError(t, db.Create(user).Error)
+
+	require.NoError(t, db.Create(&model.ActivityCode{
+		Code: "hdmviews", Name: "并发卡片", GroupName: "activity-test-group",
+		Status: model.ActivityCodeStatusEnabled, PublicVisible: 1,
+		RatioMode: model.ActivityRatioModeInherit, PerUserLimit: 1,
+		LimitMode: model.ActivityLimitModeConcurrency, ConcurrencyLimit: 12, RpmLimit: 66,
+	}).Error)
+	require.NoError(t, db.Create(&model.ActivityCode{
+		Code: "hdmbenefitviews", Name: "权益卡片", Type: model.ActivityCodeTypeBenefit,
+		GroupName: "activity-test-group", Status: model.ActivityCodeStatusEnabled, PublicVisible: 1,
+		RatioMode: model.ActivityRatioModeInherit, PerUserLimit: 1,
+		Benefits: model.ActivityBenefits{
+			{Key: "key-a", GroupName: "activity-test-group", Scope: model.ActivityBenefitScopeGroup, LimitMode: model.ActivityLimitModeRPM, RpmLimit: 10},
+			{Key: "key-b", GroupName: "default", Scope: model.ActivityBenefitScopeGroup, LimitMode: model.ActivityLimitModeConcurrency, ConcurrencyLimit: 4},
+		},
+	}).Error)
+
+	offers := callActivityOffers(t, router)
+	require.Len(t, offers.Data.Offers, 2)
+	views := map[string]activityOfferView{}
+	for _, offer := range offers.Data.Offers {
+		views[offer.Code] = offer
+	}
+	concurrentView := views["hdmviews"]
+	assert.Equal(t, model.ActivityLimitModeConcurrency, concurrentView.LimitMode)
+	assert.Equal(t, 12, concurrentView.ConcurrencyLimit)
+	benefitView := views["hdmbenefitviews"]
+	assert.Equal(t, model.ActivityLimitModeRPM, benefitView.LimitMode, "benefit 顶层固定 rpm")
+	assert.Equal(t, 0, benefitView.ConcurrencyLimit)
+	require.Len(t, benefitView.Benefits, 2)
+	assert.Equal(t, model.ActivityLimitModeRPM, benefitView.Benefits[0]["limit_mode"])
+	assert.Equal(t, float64(10), benefitView.Benefits[0]["rpm_limit"])
+	assert.Equal(t, model.ActivityLimitModeConcurrency, benefitView.Benefits[1]["limit_mode"])
+	assert.Equal(t, float64(4), benefitView.Benefits[1]["concurrency_limit"])
+
+	verify := func(code string) map[string]interface{} {
+		t.Helper()
+		body, err := common.Marshal(map[string]string{"code": code})
+		require.NoError(t, err)
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/activity/verify", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		response := activityAPIResponse{}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		require.True(t, response.Success, response.Message)
+		return response.Data
+	}
+
+	preview := verify("hdmviews")
+	assert.Equal(t, model.ActivityLimitModeConcurrency, preview["limit_mode"])
+	assert.Equal(t, float64(12), preview["concurrency_limit"])
+
+	benefitPreview := verify("hdmbenefitviews")
+	assert.Equal(t, model.ActivityLimitModeRPM, benefitPreview["limit_mode"])
+	previewBenefits, ok := benefitPreview["benefits"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, previewBenefits, 2)
+	second, ok := previewBenefits[1].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, model.ActivityLimitModeConcurrency, second["limit_mode"])
+	assert.Equal(t, float64(4), second["concurrency_limit"])
 }

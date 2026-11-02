@@ -43,6 +43,9 @@ await i18n.init({
         Validity: 'Validity',
         Ratio: 'Ratio',
         'RPM limit': 'RPM limit',
+        RPM: 'RPM',
+        Concurrency: 'Concurrency',
+        'Rate limit': 'Rate limit',
         Unlimited: 'Unlimited',
         Remaining: 'Remaining',
         Permanent: 'Permanent',
@@ -227,11 +230,11 @@ describe('activity offer cards', () => {
 
     // 回归：管理端给权益配置了 RPM，用户端卡片必须能看到，否则会误判为不限速。
     expect(
-      screen.getByText('Free Group · Whole group · 10M tokens · RPM limit: 5')
+      screen.getByText('Free Group · Whole group · 10M tokens · RPM: 5')
     ).toBeVisible()
     expect(
       screen.getByText(
-        'Pro Group · Model gpt-5 · Unlimited tokens · RPM limit: Unlimited'
+        'Pro Group · Model gpt-5 · Unlimited tokens · RPM: Unlimited'
       )
     ).toBeVisible()
     expect(screen.getByText('Benefits')).toBeVisible()

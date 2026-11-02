@@ -31,6 +31,7 @@ import {
   ACTIVITY_BENEFIT_SCOPE,
   ACTIVITY_BENEFIT_TOKEN_MODE,
   ACTIVITY_CODE_TYPE,
+  ACTIVITY_LIMIT_MODE,
 } from '../../constants'
 import {
   type ActivityBenefitRow,
@@ -171,7 +172,9 @@ describe('activity benefits editor', () => {
               group_name: 'vip',
               scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
               model_name: '',
+              limit_mode: ACTIVITY_LIMIT_MODE.RPM,
               rpm_limit: 0,
+              concurrency_limit: 0,
               token_total: 100_000,
             },
           ],
@@ -188,9 +191,7 @@ describe('activity benefits editor', () => {
     await addBenefitRow(user)
     await selectOption(user, 'Group for benefit 1', 'vip')
     await selectOption(user, 'Scope for benefit 1', 'Single model')
-    await waitFor(() =>
-      expect(mockedGroupModels.mock.calls).toEqual([['vip']])
-    )
+    await waitFor(() => expect(mockedGroupModels.mock.calls).toEqual([['vip']]))
 
     await user.click(
       screen.getByRole('combobox', { name: 'Model for benefit 1' })
@@ -280,9 +281,7 @@ describe('activity benefits editor', () => {
       />
     )
 
-    await user.click(
-      screen.getByRole('button', { name: 'Remove benefit 1' })
-    )
+    await user.click(screen.getByRole('button', { name: 'Remove benefit 1' }))
     expect(
       screen.queryByRole('combobox', { name: 'Group for benefit 2' })
     ).not.toBeInTheDocument()
@@ -331,5 +330,152 @@ describe('activity benefits editor', () => {
     expect(
       screen.getByRole('button', { name: 'Remove benefit 1' })
     ).toBeDisabled()
+  })
+})
+
+describe('benefit limit type fields', () => {
+  it('switches a benefit row to concurrency without copying the rpm number', async () => {
+    const user = userEvent.setup()
+    render(<Fixture onSubmit={vi.fn()} />)
+
+    await addBenefitRow(user)
+    await selectOption(user, 'Group for benefit 1', 'vip')
+    await user.type(
+      screen.getByRole('spinbutton', { name: 'RPM for benefit 1' }),
+      '60'
+    )
+
+    await selectOption(user, 'Limit type for benefit 1', 'Concurrency')
+
+    const rpmInput = screen.getByRole('spinbutton', {
+      name: 'RPM for benefit 1',
+    })
+    const concurrencyInput = screen.getByRole('spinbutton', {
+      name: 'Concurrency for benefit 1',
+    })
+    expect(rpmInput).toBeDisabled()
+    expect(concurrencyInput).toBeEnabled()
+    expect(concurrencyInput).toHaveValue(0)
+
+    await selectOption(user, 'Limit type for benefit 1', 'RPM')
+
+    expect(
+      screen.getByRole('spinbutton', { name: 'RPM for benefit 1' })
+    ).toHaveValue(60)
+    expect(
+      screen.getByRole('spinbutton', { name: 'Concurrency for benefit 1' })
+    ).toBeDisabled()
+  })
+
+  it('keeps every benefit row on its own limit type in the saved payload', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(
+      <Fixture
+        onSubmit={onSubmit}
+        initialRows={[
+          createActivityBenefitRow({
+            group_name: 'vip',
+            limit_mode: ACTIVITY_LIMIT_MODE.RPM,
+            rpm_limit: 60,
+            concurrency_limit: 0,
+          }),
+          createActivityBenefitRow({
+            group_name: 'default',
+            limit_mode: ACTIVITY_LIMIT_MODE.CONCURRENCY,
+            rpm_limit: 0,
+            concurrency_limit: 10,
+          }),
+        ]}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          benefits: [
+            expect.objectContaining({
+              group_name: 'vip',
+              limit_mode: ACTIVITY_LIMIT_MODE.RPM,
+              rpm_limit: 60,
+              concurrency_limit: 0,
+            }),
+            expect.objectContaining({
+              group_name: 'default',
+              limit_mode: ACTIVITY_LIMIT_MODE.CONCURRENCY,
+              rpm_limit: 0,
+              concurrency_limit: 10,
+            }),
+          ],
+        })
+      )
+    )
+  })
+
+  it('explains the shared concurrency pool on a single-model benefit row', async () => {
+    const user = userEvent.setup()
+    render(<Fixture onSubmit={vi.fn()} />)
+
+    await addBenefitRow(user)
+    await selectOption(user, 'Group for benefit 1', 'vip')
+    await selectOption(user, 'Scope for benefit 1', 'Single model')
+    await user.click(
+      screen.getByRole('combobox', { name: 'Model for benefit 1' })
+    )
+    await user.click(await screen.findByRole('option', { name: 'gpt-5' }))
+
+    expect(
+      screen.getByText(
+        'Concurrency is shared per user and group; a single-model benefit is not its own pool. 0 means unlimited.'
+      )
+    ).toBeVisible()
+  })
+
+  it('backs a concurrency benefit row with its own value and a disabled rpm input', () => {
+    render(
+      <Fixture
+        onSubmit={vi.fn()}
+        initialRows={[
+          createActivityBenefitRow({
+            group_name: 'vip',
+            limit_mode: ACTIVITY_LIMIT_MODE.CONCURRENCY,
+            rpm_limit: 60,
+            concurrency_limit: 10,
+          }),
+        ]}
+      />
+    )
+
+    expect(
+      screen.getByRole('combobox', { name: 'Limit type for benefit 1' })
+    ).toHaveTextContent('Concurrency')
+    expect(
+      screen.getByRole('spinbutton', { name: 'Concurrency for benefit 1' })
+    ).toHaveValue(10)
+    expect(
+      screen.getByRole('spinbutton', { name: 'RPM for benefit 1' })
+    ).toBeDisabled()
+  })
+
+  it('blocks saving a benefit row whose concurrency limit exceeds 100000', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<Fixture onSubmit={onSubmit} />)
+
+    await addBenefitRow(user)
+    await selectOption(user, 'Group for benefit 1', 'vip')
+    await selectOption(user, 'Limit type for benefit 1', 'Concurrency')
+    await user.type(
+      screen.getByRole('spinbutton', { name: 'Concurrency for benefit 1' }),
+      '100001'
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Concurrency limit is too large'
+    )
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 })

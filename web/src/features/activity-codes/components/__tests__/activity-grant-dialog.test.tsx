@@ -71,7 +71,9 @@ const activityCode: ActivityCode = {
   status: 1,
   group_name: 'vip',
   duration_seconds: 24 * 3600,
+  limit_mode: 'rpm',
   rpm_limit: 0,
+  concurrency_limit: 0,
   price_quota: 0,
   ratio_mode: 'inherit',
   ratio_override: 0,
@@ -177,7 +179,9 @@ const benefitCode: ActivityCode = {
       group_name: 'vip',
       scope: 'group',
       model_name: '',
+      limit_mode: 'rpm',
       rpm_limit: 0,
+      concurrency_limit: 0,
       token_total: 0,
     },
     {
@@ -185,7 +189,9 @@ const benefitCode: ActivityCode = {
       group_name: 'default',
       scope: 'model',
       model_name: 'gpt-5',
+      limit_mode: 'rpm',
       rpm_limit: 60,
+      concurrency_limit: 0,
       token_total: 2_000_000,
     },
   ],
@@ -197,7 +203,7 @@ describe('activity grant dialog', () => {
 
     expect(await screen.findByText(/vip, default/)).toBeVisible()
     expect(
-      screen.getByText('vip · Whole group · Unlimited tokens')
+      screen.getByText('vip · Whole group · Unlimited tokens · RPM: Unlimited')
     ).toBeVisible()
     expect(screen.getByText(/default · gpt-5 · 2M tokens/)).toBeVisible()
     expect(

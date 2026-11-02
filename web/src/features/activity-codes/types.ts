@@ -31,14 +31,22 @@ export const activityBenefitScopeSchema = z.enum(['group', 'model'])
 
 export type ActivityBenefitScope = z.infer<typeof activityBenefitScopeSchema>
 
-// 一条免费权益：目标分组 + 范围 + 单模型名 + 独立 RPM + Token 总量（0 = 不限量）。
+// 限流类型：按每分钟请求数（RPM）或按并发数限流，一条配置二选一。
+export const activityLimitModeSchema = z.enum(['rpm', 'concurrency'])
+
+export type ActivityLimitMode = z.infer<typeof activityLimitModeSchema>
+
+// 一条免费权益：目标分组 + 范围 + 单模型名 + 独立限流（RPM 或并发）+ Token 总量（0 = 不限量）。
 // 创建/更新时已有权益的 key 原样回传，新权益传空字符串由后端生成。
+// 历史数据缺 limit_mode 或为空时按 RPM 处理，缺 concurrency_limit 时按 0（不限）处理。
 export const activityBenefitSchema = z.object({
   key: z.string(),
   group_name: z.string(),
   scope: activityBenefitScopeSchema,
   model_name: z.string().default(''),
+  limit_mode: activityLimitModeSchema.catch('rpm'),
   rpm_limit: z.number(),
+  concurrency_limit: z.number().catch(0),
   token_total: z.number(),
 })
 
@@ -59,7 +67,10 @@ export const activityCodeSchema = z.object({
   status: z.number(), // 1: enabled, 2: disabled
   group_name: z.string(),
   duration_seconds: z.number(),
+  // 历史数据缺 limit_mode 或为空时按 RPM 处理，缺 concurrency_limit 时按 0（不限）处理。
+  limit_mode: activityLimitModeSchema.catch('rpm'),
   rpm_limit: z.number(),
+  concurrency_limit: z.number().catch(0),
   price_quota: z.number(),
   ratio_mode: z.string(), // inherit | override
   ratio_override: z.number(),
@@ -95,7 +106,10 @@ export const activityGrantSchema = z.object({
   ratio_override: z.number(),
   ratio_scope: z.string(),
   model_ratio_overrides: z.record(z.string(), z.number()).nullish(),
+  // 历史数据缺 limit_mode 或为空时按 RPM 处理，缺 concurrency_limit 时按 0（不限）处理。
+  limit_mode: activityLimitModeSchema.catch('rpm'),
   rpm_limit: z.number(),
+  concurrency_limit: z.number().catch(0),
   price_quota: z.number(),
   start_time: z.number(),
   expire_time: z.number(),
@@ -153,7 +167,9 @@ export interface ActivityCodeFormData {
   description: string
   group_name: string
   duration_hours: number
+  limit_mode: ActivityLimitMode
   rpm_limit: number
+  concurrency_limit: number
   price_quota: number
   ratio_mode: string
   ratio_override: number

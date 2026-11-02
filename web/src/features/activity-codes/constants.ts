@@ -34,6 +34,12 @@ export const ACTIVITY_RATIO_MODE = {
   OVERRIDE: 'override',
 } as const
 
+// 限流类型：按每分钟请求数（RPM）或按并发数限流，一条配置二选一。
+export const ACTIVITY_LIMIT_MODE = {
+  RPM: 'rpm',
+  CONCURRENCY: 'concurrency',
+} as const
+
 // 倍率作用范围：整个分组沿用 ratio_mode/ratio_override，指定模型只看模型倍率列表。
 export const ACTIVITY_RATIO_SCOPE = {
   GROUP: 'group',
@@ -82,6 +88,13 @@ export function getActivityStatusFilterOptions(t: TFunction) {
 
 export function getActivityStatusLabelKey(status: number): string {
   return status === ACTIVITY_CODE_STATUS.ENABLED ? 'Enabled' : 'Disabled'
+}
+
+export function getActivityLimitModeOptions(t: TFunction) {
+  return [
+    { label: t('RPM'), value: ACTIVITY_LIMIT_MODE.RPM },
+    { label: t('Concurrency'), value: ACTIVITY_LIMIT_MODE.CONCURRENCY },
+  ]
 }
 
 export function getActivityRatioModeOptions(t: TFunction) {
@@ -178,6 +191,8 @@ export const ACTIVITY_VALIDATION = {
   NAME_MAX_LENGTH: 64,
   DURATION_MAX_HOURS: 87600,
   RPM_MAX: 100000,
+  // 与后端并发上限范围保持一致（0..100000 整数，0 = 不限）。
+  CONCURRENCY_MAX: 100000,
   RATIO_MAX: 1000,
   LIMIT_MAX: 1000000,
   // 与后端 model.ActivityCodeSortWeightMax 保持一致。

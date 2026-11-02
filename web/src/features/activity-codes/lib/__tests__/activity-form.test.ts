@@ -17,14 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
 
 import type { TFunction } from 'i18next'
+import { describe, test } from 'vitest'
 
 import {
   ACTIVITY_BENEFIT_SCOPE,
   ACTIVITY_BENEFIT_TOKEN_MODE,
   ACTIVITY_CODE_TYPE,
+  ACTIVITY_LIMIT_MODE,
   ACTIVITY_RATIO_MODE,
   ACTIVITY_RATIO_SCOPE,
 } from '../../constants'
@@ -52,7 +53,9 @@ function validValues(
     description: '',
     group_name: 'default',
     duration_hours: 24,
+    limit_mode: ACTIVITY_LIMIT_MODE.RPM,
     rpm_limit: 5,
+    concurrency_limit: 0,
     price_dollars: 0,
     ratio_mode: ACTIVITY_RATIO_MODE.OVERRIDE,
     ratio_override: 0,
@@ -142,7 +145,9 @@ function benefitActivityCode(
         group_name: 'vip',
         scope: 'model',
         model_name: 'gpt-5',
+        limit_mode: ACTIVITY_LIMIT_MODE.RPM,
         rpm_limit: 60,
+        concurrency_limit: 0,
         token_total: 1_000_000,
       },
     ],
@@ -493,7 +498,9 @@ describe('activity benefit form payload', () => {
         group_name: 'vip',
         scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
         model_name: '',
+        limit_mode: ACTIVITY_LIMIT_MODE.RPM,
         rpm_limit: 60,
+        concurrency_limit: 0,
         token_total: 100_000,
       },
       {
@@ -501,7 +508,9 @@ describe('activity benefit form payload', () => {
         group_name: 'default',
         scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
         model_name: 'gpt-5',
+        limit_mode: ACTIVITY_LIMIT_MODE.RPM,
         rpm_limit: 0,
+        concurrency_limit: 0,
         token_total: 0,
       },
     ])
@@ -517,7 +526,9 @@ describe('activity benefit form payload', () => {
       })
     )
     assert.equal(payload.group_name, 'default')
+    assert.equal(payload.limit_mode, ACTIVITY_LIMIT_MODE.RPM)
     assert.equal(payload.rpm_limit, 0)
+    assert.equal(payload.concurrency_limit, 0)
     assert.equal(payload.ratio_mode, ACTIVITY_RATIO_MODE.INHERIT)
     assert.equal(payload.ratio_override, 0)
     assert.deepEqual(payload.model_ratio_overrides, {})
@@ -542,7 +553,9 @@ describe('activity code benefits to form values', () => {
         group_name: 'vip',
         scope: ACTIVITY_BENEFIT_SCOPE.MODEL,
         model_name: 'gpt-5',
+        limit_mode: ACTIVITY_LIMIT_MODE.RPM,
         rpm_limit: 60,
+        concurrency_limit: 0,
         token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.PACKAGE,
         token_total_input: '1000000',
       },
@@ -558,7 +571,9 @@ describe('activity code benefits to form values', () => {
             group_name: 'default',
             scope: 'group',
             model_name: '',
+            limit_mode: ACTIVITY_LIMIT_MODE.RPM,
             rpm_limit: 0,
+            concurrency_limit: 0,
             token_total: 0,
           },
         ],
@@ -570,7 +585,9 @@ describe('activity code benefits to form values', () => {
         group_name: 'default',
         scope: ACTIVITY_BENEFIT_SCOPE.GROUP,
         model_name: '',
+        limit_mode: ACTIVITY_LIMIT_MODE.RPM,
         rpm_limit: 0,
+        concurrency_limit: 0,
         token_mode: ACTIVITY_BENEFIT_TOKEN_MODE.UNLIMITED,
         token_total_input: '',
       },

@@ -415,6 +415,10 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		if !autoBan {
 			autoBanInt = 0
 		}
+		// 不重新选渠道：分组沿用当前上下文，活动限流检查幂等（同组不重复计数/占用）。
+		if limitErr := service.ActivityLimitGuard(c, ""); limitErr != nil {
+			return nil, activityLimitToAPIError(limitErr)
+		}
 		return &model.Channel{
 			Id:      c.GetInt("channel_id"),
 			Type:    c.GetInt("channel_type"),
@@ -434,8 +438,19 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if newAPIError != nil {
 		return nil, newAPIError
 	}
+	// 重试/跨组 fallback/auto 换组后实际分组可能变化：对新分组各检查一次，同组不重复。
+	if limitErr := service.ActivityLimitGuard(c, selectGroup); limitErr != nil {
+		return nil, activityLimitToAPIError(limitErr)
+	}
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 	return channel, nil
+}
+
+// activityLimitToAPIError 把活动限流拒绝转换为 relay 错误：不重试（重试仍会被拒），
+// 状态码保持 429（额度用尽）或 503（暂时无法验证限制）。
+func activityLimitToAPIError(limitErr *service.ActivityLimitError) *types.NewAPIError {
+	return types.NewError(limitErr, types.ErrorCode(limitErr.Code),
+		types.ErrOptionWithStatusCode(limitErr.StatusCode), types.ErrOptionWithSkipRetry())
 }
 
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
@@ -660,6 +675,12 @@ func RelayTask(c *gin.Context) {
 				taskErr = service.TaskErrorWrapperLocal(setupErr.Err, "setup_locked_channel_failed", http.StatusInternalServerError)
 				break
 			}
+			// 任务提交是 HTTP 期请求：并发槽只在本次 HTTP 请求期间持有，
+			// 请求结束即释放，异步任务执行不再占用活动并发额度。
+			if limitErr := service.ActivityLimitGuard(c, relayInfo.UsingGroup); limitErr != nil {
+				taskErr = service.TaskErrorWrapperLocal(limitErr, limitErr.Code, limitErr.StatusCode)
+				break
+			}
 		} else {
 			var channelErr *types.NewAPIError
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
@@ -763,7 +784,8 @@ func RelayTask(c *gin.Context) {
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
-	if taskErr.StatusCode == http.StatusTooManyRequests {
+	// 本地限流拒绝（活动 RPM/并发）说明的是额度而不是上游饱和，不改写文案。
+	if taskErr.StatusCode == http.StatusTooManyRequests && !taskErr.LocalError {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}
 	c.JSON(taskErr.StatusCode, taskErr)

@@ -34,7 +34,10 @@ import {
   ACTIVITY_CODE_TYPE,
   ACTIVITY_RATIO_MODE,
 } from '../constants'
-import { describeActivityBenefit } from '../lib/activity-benefit'
+import {
+  describeActivityBenefit,
+  describeActivityLimit,
+} from '../lib/activity-benefit'
 import type { ActivityCode } from '../types'
 import { DataTableRowActions } from './activity-codes-row-actions'
 
@@ -86,7 +89,9 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
     {
       accessorKey: 'name',
       header: t('Name'),
-      cell: ({ row }) => <span className='font-medium'>{row.original.name}</span>,
+      cell: ({ row }) => (
+        <span className='font-medium'>{row.original.name}</span>
+      ),
       size: 160,
     },
     {
@@ -162,7 +167,9 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
         if (row.original.type === ACTIVITY_CODE_TYPE.BENEFIT) {
           const benefits = row.original.benefits ?? []
           const summary = benefits
-            .map((benefit) => describeActivityBenefit(t, benefit, i18n.language))
+            .map((benefit) =>
+              describeActivityBenefit(t, benefit, i18n.language)
+            )
             .join('; ')
           if (!summary) {
             return <span className='text-muted-foreground'>-</span>
@@ -205,20 +212,54 @@ export function useActivityCodesColumns(): ColumnDef<ActivityCode>[] {
             />
           )
         }
-        return <span>{formatRatioMultiplier(row.original.ratio_override)}x</span>
+        return (
+          <span>{formatRatioMultiplier(row.original.ratio_override)}x</span>
+        )
       },
       size: 200,
     },
     {
       id: 'rpm_limit',
-      header: t('RPM'),
-      cell: ({ row }) =>
-        row.original.rpm_limit > 0 ? (
-          <span>{row.original.rpm_limit}</span>
-        ) : (
-          <span className='text-muted-foreground'>{t('Unlimited')}</span>
-        ),
-      size: 90,
+      header: t('Rate limit'),
+      cell: ({ row }) => {
+        // benefit 类型逐条展示各权益自己的限流模式与值；
+        // 顶层 rpm/concurrency 对 benefit 类型恒为 0（不参与执行），不能拿它显示 Unlimited。
+        if (row.original.type === ACTIVITY_CODE_TYPE.BENEFIT) {
+          const benefits = row.original.benefits ?? []
+          if (benefits.length === 0) {
+            return <span className='text-muted-foreground'>-</span>
+          }
+          const summary = benefits
+            .map((benefit) =>
+              describeActivityLimit(
+                t,
+                benefit.limit_mode,
+                benefit.rpm_limit,
+                benefit.concurrency_limit
+              )
+            )
+            .join('; ')
+          return (
+            <span
+              className='block max-w-[12rem] truncate text-xs'
+              title={summary}
+            >
+              {summary}
+            </span>
+          )
+        }
+        return (
+          <span>
+            {describeActivityLimit(
+              t,
+              row.original.limit_mode,
+              row.original.rpm_limit,
+              row.original.concurrency_limit
+            )}
+          </span>
+        )
+      },
+      size: 110,
     },
     {
       id: 'limits',
