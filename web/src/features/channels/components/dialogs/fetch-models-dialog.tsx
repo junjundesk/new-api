@@ -22,6 +22,7 @@ import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -47,7 +48,9 @@ import {
   normalizeModelName,
   parseModelsString,
 } from '../../lib'
+import { parseModelMappingEntries } from '../../lib/model-mapping-edit'
 import { useChannels } from '../channels-provider'
+import { ModelMappingPopover } from './model-mapping-popover'
 
 function normalizeModelNameList(models: readonly string[]): string[] {
   return [...new Set(models.map((m) => normalizeModelName(m)).filter(Boolean))]
@@ -60,6 +63,9 @@ type FetchModelsDialogBaseProps = {
   redirectSourceModels?: string[]
   customFetcher?: () => Promise<string[]>
   channelName?: string | null
+  /** Current model_mapping JSON. Provide it together with onModelMappingChange. */
+  modelMapping?: string
+  onModelMappingChange?: (modelMapping: string) => void
 }
 
 type FetchModelsDialogProps = FetchModelsDialogBaseProps &
@@ -83,6 +89,8 @@ export function FetchModelsDialog({
   customFetcher,
   existingModelsOverride,
   channelName,
+  modelMapping,
+  onModelMappingChange,
 }: FetchModelsDialogProps) {
   const { t } = useTranslation()
   const { currentRow } = useChannels()
@@ -93,6 +101,8 @@ export function FetchModelsDialog({
   const [fetchedModels, setFetchedModels] = useState<string[]>([])
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
+  // Standalone mode keeps mapping edits local until "Save Models" persists them.
+  const [localModelMapping, setLocalModelMapping] = useState('')
 
   // Parse existing models
   const existingModels = useMemo(
@@ -108,6 +118,24 @@ export function FetchModelsDialog({
   )
 
   const { classificationSet, redirectOnlySet } = modelCategories
+
+  const currentModelMapping = onModelMappingChange
+    ? modelMapping || ''
+    : localModelMapping
+
+  // The inline editor is upstream-first: a fetched row maps to public names.
+  const exposedNamesByUpstream = useMemo(() => {
+    const entries = parseModelMappingEntries(currentModelMapping) ?? {}
+    const namesByUpstream = new Map<string, string[]>()
+    for (const [publicName, upstreamModels] of Object.entries(entries)) {
+      for (const upstreamModel of upstreamModels) {
+        const names = namesByUpstream.get(upstreamModel) ?? []
+        names.push(publicName)
+        namesByUpstream.set(upstreamModel, names)
+      }
+    }
+    return namesByUpstream
+  }, [currentModelMapping])
 
   const fetchedModelSet = useMemo(
     () => new Set(normalizeModelNameList(fetchedModels)),
@@ -138,6 +166,11 @@ export function FetchModelsDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeChannel?.id, customFetcher])
+
+  useEffect(() => {
+    if (!open) return
+    setLocalModelMapping(activeChannel?.model_mapping || '')
+  }, [open, activeChannel?.id, activeChannel?.model_mapping])
 
   const handleFetchModels = async () => {
     if (!activeChannel && !customFetcher) return
@@ -185,8 +218,11 @@ export function FetchModelsDialog({
     setIsSaving(true)
     try {
       const modelsString = selectedModels.join(',')
+      const mappingChanged =
+        localModelMapping !== (activeChannel.model_mapping || '')
       const response = await updateChannel(activeChannel.id, {
         models: modelsString,
+        ...(mappingChanged ? { model_mapping: localModelMapping } : {}),
       })
       if (response.success) {
         toast.success(t('Models updated successfully'))
@@ -260,6 +296,24 @@ export function FetchModelsDialog({
     )
   }
 
+  const handleModelMappingApply = (
+    exposedName: string,
+    nextMapping: string
+  ) => {
+    if (onModelMappingChange) {
+      onModelMappingChange(nextMapping)
+    } else {
+      setLocalModelMapping(nextMapping)
+    }
+    // Clients request the public name, so it has to be in the published list.
+    if (exposedName) {
+      setSelectedModels((prev) =>
+        prev.includes(exposedName) ? prev : [...prev, exposedName]
+      )
+    }
+    toast.success(t('Model mapping updated'))
+  }
+
   const toggleCategory = (categoryModels: string[], isChecked: boolean) => {
     setSelectedModels((prev) => {
       if (isChecked) {
@@ -311,31 +365,67 @@ export function FetchModelsDialog({
         </CollapsibleTrigger>
         <CollapsibleContent className='px-4 py-2'>
           <div className='grid grid-cols-2 gap-2'>
-            {categoryModels.map((model) => (
-              <div key={model} className='flex items-center space-x-2'>
-                <Checkbox
-                  id={model}
-                  checked={selectedModels.includes(model)}
-                  onCheckedChange={() => toggleModel(model)}
-                />
-                <Label
-                  htmlFor={model}
-                  className='flex cursor-pointer items-center gap-1.5 text-sm font-normal'
+            {categoryModels.map((model) => {
+              const exposedNames =
+                exposedNamesByUpstream.get(model.trim()) ?? []
+              return (
+                <div
+                  key={model}
+                  className='hover:bg-muted/40 flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5'
                 >
-                  <span>{model}</span>
+                  <Checkbox
+                    id={model}
+                    checked={selectedModels.includes(model)}
+                    onCheckedChange={() => toggleModel(model)}
+                  />
+                  <Label
+                    htmlFor={model}
+                    className='min-w-0 flex-1 cursor-pointer truncate text-sm font-normal'
+                    title={model}
+                  >
+                    {model}
+                  </Label>
+                  {exposedNames.length > 0 && (
+                    <span
+                      className='text-muted-foreground max-w-24 shrink-0 truncate text-xs'
+                      title={exposedNames.join(', ')}
+                    >
+                      → {exposedNames.join(', ')}
+                    </span>
+                  )}
                   {redirectOnlySet.has(normalizeModelName(model)) && (
                     <Tooltip>
                       <TooltipTrigger
-                        render={<Info className='h-3.5 w-3.5 text-amber-500' />}
+                        render={
+                          <Info className='h-3.5 w-3.5 shrink-0 text-amber-500' />
+                        }
                       />
                       <TooltipContent>
                         {t('From model redirect, not yet added to models list')}
                       </TooltipContent>
                     </Tooltip>
                   )}
-                </Label>
-              </div>
-            ))}
+                  <div className='flex shrink-0 items-center'>
+                    <ModelMappingPopover
+                      model={model}
+                      modelMapping={currentModelMapping}
+                      onApply={(nextMapping, exposedName) =>
+                        handleModelMappingApply(exposedName, nextMapping)
+                      }
+                    />
+                    <CopyButton
+                      value={model}
+                      size='icon'
+                      className='text-muted-foreground hover:text-foreground size-6'
+                      iconClassName='size-3.5'
+                      tooltip={t('Copy model name')}
+                      successTooltip={t('Copied!')}
+                      aria-label={t('Copy model name')}
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </CollapsibleContent>
       </Collapsible>

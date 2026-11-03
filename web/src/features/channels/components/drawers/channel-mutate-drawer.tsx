@@ -4852,6 +4852,13 @@ export function ChannelMutateDrawer({
         onModelsSelected={(models) => {
           form.setValue('models', formatModelsArray(models))
         }}
+        modelMapping={currentModelMapping || ''}
+        onModelMappingChange={(nextMapping) => {
+          form.setValue('model_mapping', nextMapping, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }}
         redirectModels={redirectModelList}
         redirectSourceModels={redirectModelKeyList}
         customFetcher={
