@@ -131,6 +131,7 @@ func main() {
 
 	// Referral reward settlement task (invite-a-friend top-up commission)
 	service.StartReferralSettlementTask()
+	service.StartBaseURLProbeTask()
 
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.

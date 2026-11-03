@@ -400,6 +400,34 @@ const NEW_KEYS = {
     en: "{{amount}} tokens",
     zh: "{{amount}} Token",
   },
+  "Primary address": {
+    en: "Primary address",
+    zh: "主地址",
+  },
+  "Backup address": {
+    en: "Backup address",
+    zh: "备用地址",
+  },
+  "Add backup address": {
+    en: "Add backup address",
+    zh: "添加备用地址",
+  },
+  "API address {{index}}": {
+    en: "API address {{index}}",
+    zh: "API 地址 {{index}}",
+  },
+  "Remove API address {{index}}": {
+    en: "Remove API address {{index}}",
+    zh: "删除 API 地址 {{index}}",
+  },
+  "Please enter a valid http/https absolute URL": {
+    en: "Please enter a valid http/https absolute URL",
+    zh: "请输入有效的 http/https 绝对地址",
+  },
+  "At most 16 API addresses are supported": {
+    en: "At most 16 API addresses are supported",
+    zh: "最多支持 16 个 API 地址",
+  },
 }
 
 // Values that exist in every locale but still equal the English key.

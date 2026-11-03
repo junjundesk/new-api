@@ -281,11 +281,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 
+	baseURLChannelID := 0
 	for ; retryParam.GetRetry() <= relayRetryLimit(c); retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
+		attemptStart := time.Now()
 		result := runRelayAttempt(c, relayFormat, relayInfo, retryParam, relayAttemptOptions{})
 		if result.err == nil {
 			relayInfo.LastError = nil
+			if ttfb := relayInfo.FirstResponseTime.Sub(attemptStart); ttfb > 0 {
+				service.ReportBaseURLSuccess(relayInfo.ChannelId, relayInfo.ChannelBaseUrl, ttfb)
+			}
 			return
 		}
 		newAPIError = result.err
@@ -297,6 +302,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		channel := result.channel
+		if channel.Id != baseURLChannelID {
+			relayInfo.TriedBaseURLs = nil
+			baseURLChannelID = channel.Id
+		}
 
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
@@ -309,17 +318,24 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			continueAfterThisAttempt = shouldRetry(c, newAPIError, relayRetryLimit(c)-retryParam.GetRetry())
 		}
 
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, continueAfterThisAttempt)
-
 		// 模型映射配置了多个候选模型时，先在同一渠道内换下一个候选重试，
 		// 候选全部用尽后再回到常规的渠道级重试。候选进度按渠道记录，
 		// 换到其它渠道时自动从第一个候选重新开始。
 		if failoverToNextCandidate && helper.AdvanceModelCandidate(relayInfo) {
+			processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, true)
 			logger.LogInfo(c, fmt.Sprintf("模型映射候选失败，切换下一个候选模型（channel #%d）：%s -> %s", channel.Id, relayInfo.UpstreamModelName, helper.CurrentModelCandidate(relayInfo)))
 			retryParam.SetPinnedChannel(channel)
 			retryParam.ResetRetryNextTry()
 			continue
 		}
+
+		// 同一渠道配置了多个 API 地址时，先在同一渠道内换地址重试；此时不记录
+		// 渠道错误也不触发渠道级禁用，避免单个地址故障连带禁用整个渠道。
+		if !failoverToNextCandidate && tryFailoverChannelBaseURL(c, relayInfo, channel, newAPIError, retryParam) {
+			continue
+		}
+
+		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, continueAfterThisAttempt)
 		retryParam.ClearPinnedChannel()
 
 		if !continueAfterThisAttempt {
@@ -483,6 +499,40 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+// tryFailoverChannelBaseURL 在同一渠道内切换到下一个可用 API 地址重试。
+// 只有渠道级错误才换地址；换地址后由分发器读取地址覆盖键，下一次尝试直接使用。
+func tryFailoverChannelBaseURL(c *gin.Context, relayInfo *relaycommon.RelayInfo, channel *model.Channel, newAPIError *types.NewAPIError, retryParam *service.RetryParam) bool {
+	if newAPIError == nil || !types.IsChannelError(newAPIError) {
+		return false
+	}
+	current := relayInfo.ChannelBaseUrl
+	if current == "" {
+		return false
+	}
+	service.ReportBaseURLFailure(channel.Id, current)
+	tried := relayInfo.TriedBaseURLs
+	alreadyTried := false
+	for _, item := range tried {
+		if item == current {
+			alreadyTried = true
+			break
+		}
+	}
+	if !alreadyTried {
+		tried = append(tried, current)
+	}
+	relayInfo.TriedBaseURLs = tried
+	next, ok := service.NextBaseURL(channel.Id, current, tried)
+	if !ok {
+		return false
+	}
+	common.SetContextKey(c, constant.ContextKeyChannelBaseURLOverride, next)
+	retryParam.SetPinnedChannel(channel)
+	retryParam.ResetRetryNextTry()
+	logger.LogInfo(c, fmt.Sprintf("渠道 #%d 地址 %s 请求失败，切换备用地址 %s 重试", channel.Id, current, next))
+	return true
 }
 
 // processChannelError 记录渠道错误并视情况禁用渠道。errorLogAdminOnly 置位时

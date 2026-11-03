@@ -47,6 +47,7 @@ const SENSITIVE_UPDATE_FIELDS = [
   'type',
   'key',
   'base_url',
+  'base_urls',
   'openai_organization',
   'param_override',
   'header_override',

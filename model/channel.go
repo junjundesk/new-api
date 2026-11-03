@@ -21,25 +21,26 @@ import (
 )
 
 type Channel struct {
-	Id                 int     `json:"id"`
-	Type               int     `json:"type" gorm:"default:0"`
-	Key                string  `json:"key" gorm:"not null"`
-	OpenAIOrganization *string `json:"openai_organization"`
-	TestModel          *string `json:"test_model"`
-	Status             int     `json:"status" gorm:"default:1"`
-	Name               string  `json:"name" gorm:"index"`
-	Weight             *uint   `json:"weight" gorm:"default:0"`
-	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
-	TestTime           int64   `json:"test_time" gorm:"bigint"`
-	ResponseTime       int     `json:"response_time"` // in milliseconds
-	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
-	Other              string  `json:"other"`
-	Balance            float64 `json:"balance"` // in USD
-	BalanceUpdatedTime int64   `json:"balance_updated_time" gorm:"bigint"`
-	Models             string  `json:"models"`
-	Group              string  `json:"group" gorm:"type:varchar(64);default:'default'"`
-	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
-	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
+	Id                 int      `json:"id"`
+	Type               int      `json:"type" gorm:"default:0"`
+	Key                string   `json:"key" gorm:"not null"`
+	OpenAIOrganization *string  `json:"openai_organization"`
+	TestModel          *string  `json:"test_model"`
+	Status             int      `json:"status" gorm:"default:1"`
+	Name               string   `json:"name" gorm:"index"`
+	Weight             *uint    `json:"weight" gorm:"default:0"`
+	CreatedTime        int64    `json:"created_time" gorm:"bigint"`
+	TestTime           int64    `json:"test_time" gorm:"bigint"`
+	ResponseTime       int      `json:"response_time"` // in milliseconds
+	BaseURL            *string  `json:"base_url" gorm:"column:base_url;default:''"`
+	BaseURLs           []string `json:"base_urls" gorm:"type:text;serializer:json"`
+	Other              string   `json:"other"`
+	Balance            float64  `json:"balance"` // in USD
+	BalanceUpdatedTime int64    `json:"balance_updated_time" gorm:"bigint"`
+	Models             string   `json:"models"`
+	Group              string   `json:"group" gorm:"type:varchar(64);default:'default'"`
+	UsedQuota          int64    `json:"used_quota" gorm:"bigint;default:0"`
+	ModelMapping       *string  `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`
@@ -365,6 +366,16 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	return channels, err
 }
 
+// GetChannelsForBaseURLProbe 只读取选路探测需要的字段，避免每分钟把全部
+// 渠道密钥加载进内存。
+func GetChannelsForBaseURLProbe() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Select("id", "base_url", "base_urls").
+		Where("status = ?", common.ChannelStatusEnabled).
+		Find(&channels).Error
+	return channels, err
+}
+
 func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
 	var channels []*Channel
 	order := resolveChannelSortOptions(idSort, sortOptions)
@@ -505,6 +516,29 @@ func (channel *Channel) GetBaseURL() string {
 	return url
 }
 
+func (channel *Channel) GetBaseURLs() []string {
+	seen := make(map[string]struct{}, len(channel.BaseURLs))
+	urls := make([]string, 0, len(channel.BaseURLs))
+	for _, u := range channel.BaseURLs {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		urls = append(urls, u)
+	}
+	if len(urls) > 0 {
+		return urls
+	}
+	if base := channel.GetBaseURL(); base != "" {
+		return []string{base}
+	}
+	return nil
+}
+
 func (channel *Channel) GetModelMapping() string {
 	if channel.ModelMapping == nil {
 		return ""
@@ -576,6 +610,12 @@ func (channel *Channel) Update() error {
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
 	err = channel.UpdateAbilities(nil)
 	return err
+}
+
+// UpdateBaseURLs 显式写入主地址与地址列表。结构体 Updates 会跳过零值，
+// 清空地址列表时必须通过 Select 强制写入。
+func (channel *Channel) UpdateBaseURLs() error {
+	return DB.Model(channel).Select("base_url", "base_urls").Updates(channel).Error
 }
 
 func (channel *Channel) UpdateResponseTime(responseTime int64) {

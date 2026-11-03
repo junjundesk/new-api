@@ -166,6 +166,7 @@ import {
   findMissingModelsInMapping,
   validateModelMappingJson,
   hasAdvancedSettingsErrors,
+  normalizeBaseUrls,
   normalizeCandidateModels,
 } from '../../lib'
 import {
@@ -173,6 +174,7 @@ import {
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
 import type { Channel } from '../../types'
+import { BaseUrlListField } from '../base-url-list-field'
 import { useChannels } from '../channels-provider'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
@@ -270,6 +272,7 @@ const UPSTREAM_DETECTED_MODEL_PREVIEW_LIMIT = 8
 const SENSITIVE_FORM_FIELDS = [
   'type',
   'base_url',
+  'base_urls',
   'key',
   'openai_organization',
   'other',
@@ -798,20 +801,47 @@ export function ChannelMutateDrawer({
     })
   }, [open, isEditing, currentType, form])
 
+  // base_urls rows are the source of truth; base_url mirrors the first
+  // effective address so existing helpers keep working.
+  const handleBaseUrlsChange = useCallback(
+    (
+      nextRows: string[],
+      options?: { shouldDirty?: boolean; shouldValidate?: boolean }
+    ) => {
+      form.setValue('base_urls', nextRows, options)
+      form.setValue('base_url', normalizeBaseUrls(nextRows)[0] ?? '', options)
+    },
+    [form]
+  )
+
+  const applyPrimaryBaseUrl = useCallback(
+    (
+      value: string,
+      options?: { shouldDirty?: boolean; shouldValidate?: boolean }
+    ) => {
+      const rows = form.getValues('base_urls') ?? []
+      handleBaseUrlsChange(
+        rows.length > 0 ? [value, ...rows.slice(1)] : [value],
+        options
+      )
+    },
+    [form, handleBaseUrlsChange]
+  )
+
   const applyConnectionInfo = useCallback(
     (connectionInfo: ChannelConnectionInfo) => {
       form.setValue('key', connectionInfo.key, {
         shouldDirty: true,
         shouldValidate: true,
       })
-      form.setValue('base_url', connectionInfo.url, {
+      applyPrimaryBaseUrl(connectionInfo.url, {
         shouldDirty: true,
         shouldValidate: true,
       })
       setClipboardConnectionInfo(null)
       toast.success(t('Connection info filled in'))
     },
-    [form, t]
+    [applyPrimaryBaseUrl, form, t]
   )
 
   const pasteConnectionInfoFromClipboard = useCallback(async () => {
@@ -1283,7 +1313,7 @@ export function ChannelMutateDrawer({
     if (currentType === 45) {
       const currentBaseUrlValue = form.getValues('base_url')
       if (!currentBaseUrlValue || currentBaseUrlValue === '') {
-        form.setValue('base_url', 'https://ark.cn-beijing.volces.com')
+        applyPrimaryBaseUrl('https://ark.cn-beijing.volces.com')
       }
     }
 
@@ -1294,16 +1324,16 @@ export function ChannelMutateDrawer({
         form.setValue('other', 'v2.1')
       }
     }
-  }, [currentType, isEditing, form])
+  }, [applyPrimaryBaseUrl, currentType, isEditing, form])
 
   useEffect(() => {
     if (currentType !== 45 || currentBaseUrl !== 'doubao-coding-plan') return
 
-    form.setValue('base_url', 'https://ark.cn-beijing.volces.com', {
+    applyPrimaryBaseUrl('https://ark.cn-beijing.volces.com', {
       shouldDirty: false,
       shouldValidate: true,
     })
-  }, [currentBaseUrl, currentType, form])
+  }, [applyPrimaryBaseUrl, currentBaseUrl, currentType, form])
 
   useEffect(() => {
     if (isEditing || supportsMultiKeyAddMode) return
@@ -2175,20 +2205,25 @@ export function ChannelMutateDrawer({
                               <>
                                 <FormField
                                   control={form.control}
-                                  name='base_url'
+                                  name='base_urls'
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>
                                         {t('AZURE_OPENAI_ENDPOINT *')}
                                       </FormLabel>
-                                      <FormControl>
-                                        <Input
-                                          placeholder={t(
-                                            'e.g., https://docs-test-001.openai.azure.com'
-                                          )}
-                                          {...field}
-                                        />
-                                      </FormControl>
+                                      <BaseUrlListField
+                                        value={field.value ?? []}
+                                        onChange={(rows) =>
+                                          handleBaseUrlsChange(rows, {
+                                            shouldDirty: true,
+                                            shouldValidate: true,
+                                          })
+                                        }
+                                        onBlur={field.onBlur}
+                                        placeholder={t(
+                                          'e.g., https://docs-test-001.openai.azure.com'
+                                        )}
+                                      />
                                       <FormDescription>
                                         {t('Your Azure OpenAI endpoint URL')}
                                       </FormDescription>
@@ -2251,7 +2286,7 @@ export function ChannelMutateDrawer({
                             {currentType === 8 && (
                               <FormField
                                 control={form.control}
-                                name='base_url'
+                                name='base_urls'
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>
@@ -2259,14 +2294,19 @@ export function ChannelMutateDrawer({
                                       {t('model')}
                                       {'}'} {t('variable) *')}
                                     </FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          'e.g., https://api.openai.com/v1/chat/completions'
-                                        )}
-                                        {...field}
-                                      />
-                                    </FormControl>
+                                    <BaseUrlListField
+                                      value={field.value ?? []}
+                                      onChange={(rows) =>
+                                        handleBaseUrlsChange(rows, {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      onBlur={field.onBlur}
+                                      placeholder={t(
+                                        'e.g., https://api.openai.com/v1/chat/completions'
+                                      )}
+                                    />
                                     <FormDescription>
                                       {t('Enter the complete URL, supports')}{' '}
                                       {'{'}
@@ -2420,20 +2460,25 @@ export function ChannelMutateDrawer({
                             {currentType === 22 && (
                               <FormField
                                 control={form.control}
-                                name='base_url'
+                                name='base_urls'
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>
                                       {t('Private Deployment URL')}
                                     </FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          'e.g., https://fastgpt.run/api/openapi'
-                                        )}
-                                        {...field}
-                                      />
-                                    </FormControl>
+                                    <BaseUrlListField
+                                      value={field.value ?? []}
+                                      onChange={(rows) =>
+                                        handleBaseUrlsChange(rows, {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      onBlur={field.onBlur}
+                                      placeholder={t(
+                                        'e.g., https://fastgpt.run/api/openapi'
+                                      )}
+                                    />
                                     <FormDescription>
                                       {t(
                                         'For private deployments, format: https://fastgpt.run/api/openapi'
@@ -2449,7 +2494,7 @@ export function ChannelMutateDrawer({
                             {currentType === 36 && (
                               <FormField
                                 control={form.control}
-                                name='base_url'
+                                name='base_urls'
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>
@@ -2457,14 +2502,19 @@ export function ChannelMutateDrawer({
                                         'API Base URL (Important: Not Chat API) *'
                                       )}
                                     </FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          'e.g., https://api.example.com (path before /suno)'
-                                        )}
-                                        {...field}
-                                      />
-                                    </FormControl>
+                                    <BaseUrlListField
+                                      value={field.value ?? []}
+                                      onChange={(rows) =>
+                                        handleBaseUrlsChange(rows, {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      onBlur={field.onBlur}
+                                      placeholder={t(
+                                        'e.g., https://api.example.com (path before /suno)'
+                                      )}
+                                    />
                                     <FormDescription>
                                       {t(
                                         'Enter the path before /suno, usually just the domain'
@@ -2719,7 +2769,12 @@ export function ChannelMutateDrawer({
                                           ),
                                         },
                                       ]}
-                                      onValueChange={field.onChange}
+                                      onValueChange={(value) =>
+                                        applyPrimaryBaseUrl(value ?? '', {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
                                       value={
                                         field.value === 'doubao-coding-plan'
                                           ? 'https://ark.cn-beijing.volces.com'
@@ -2762,18 +2817,23 @@ export function ChannelMutateDrawer({
                             {currentType === 45 && doubaoApiEditUnlocked && (
                               <FormField
                                 control={form.control}
-                                name='base_url'
+                                name='base_urls'
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>{t('API Base URL *')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          'e.g., https://ark.cn-beijing.volces.com'
-                                        )}
-                                        {...field}
-                                      />
-                                    </FormControl>
+                                    <BaseUrlListField
+                                      value={field.value ?? []}
+                                      onChange={(rows) =>
+                                        handleBaseUrlsChange(rows, {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      onBlur={field.onBlur}
+                                      placeholder={t(
+                                        'e.g., https://ark.cn-beijing.volces.com'
+                                      )}
+                                    />
                                     <FormDescription>
                                       {t('Enter custom API endpoint URL')}
                                     </FormDescription>
@@ -2810,18 +2870,23 @@ export function ChannelMutateDrawer({
                             {![3, 8, 22, 36, 45].includes(currentType) && (
                               <FormField
                                 control={form.control}
-                                name='base_url'
+                                name='base_urls'
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>{t('Base URL')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={t(
-                                          FIELD_PLACEHOLDERS.BASE_URL
-                                        )}
-                                        {...field}
-                                      />
-                                    </FormControl>
+                                    <BaseUrlListField
+                                      value={field.value ?? []}
+                                      onChange={(rows) =>
+                                        handleBaseUrlsChange(rows, {
+                                          shouldDirty: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      onBlur={field.onBlur}
+                                      placeholder={t(
+                                        FIELD_PLACEHOLDERS.BASE_URL
+                                      )}
+                                    />
                                     <FormDescription>
                                       {t(
                                         'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'

@@ -245,6 +245,7 @@ export const channelFormSchema = z
     name: z.string().min(1, ERROR_MESSAGES.REQUIRED_NAME),
     type: z.number().min(0, ERROR_MESSAGES.REQUIRED_TYPE),
     base_url: z.string().optional(),
+    base_urls: z.array(z.string()).optional(),
     key: z.string(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
@@ -329,6 +330,24 @@ export const channelFormSchema = z
     upstream_model_update_ignored_models: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    const invalidBaseUrl = (data.base_urls ?? []).find(
+      (url) => url.trim() !== '' && !isValidBaseUrl(url)
+    )
+    if (invalidBaseUrl !== undefined) {
+      addRequiredIssue(
+        ctx,
+        'base_urls',
+        'Please enter a valid http/https absolute URL'
+      )
+    }
+    if ((data.base_urls ?? []).length > MAX_BASE_URLS) {
+      addRequiredIssue(
+        ctx,
+        'base_urls',
+        'At most 16 API addresses are supported'
+      )
+    }
+
     if (
       [3, 8, 36, 45, CHANNEL_TYPE_NEW_API].includes(data.type) &&
       !data.base_url?.trim()
@@ -450,6 +469,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   name: '',
   type: 1,
   base_url: '',
+  base_urls: [],
   key: '',
   openai_organization: '',
   models: '',
@@ -605,10 +625,18 @@ export function transformChannelToFormDefaults(
     }
   }
 
+  let baseUrls: string[] = []
+  if (channel.base_urls && channel.base_urls.length > 0) {
+    baseUrls = [...channel.base_urls]
+  } else if (channel.base_url) {
+    baseUrls = [channel.base_url]
+  }
+
   return {
     name: channel.name || '',
     type: channel.type,
     base_url: channel.base_url || '',
+    base_urls: baseUrls,
     key: '', // Never populate key from backend for security
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
@@ -840,6 +868,33 @@ function normalizeBaseUrl(value: string | undefined): string {
     .replace(/\/+$/, '')
 }
 
+export const MAX_BASE_URLS = 16
+
+export function isValidBaseUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!/^https?:\/\//i.test(trimmed)) return false
+  try {
+    const parsed = new URL(trimmed)
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      Boolean(parsed.host)
+    )
+  } catch {
+    return false
+  }
+}
+
+export function normalizeBaseUrls(values: string[] | undefined): string[] {
+  const result: string[] = []
+  for (const value of values ?? []) {
+    const normalized = normalizeBaseUrl(value)
+    if (normalized && !result.includes(normalized)) {
+      result.push(normalized)
+    }
+  }
+  return result
+}
+
 /**
  * Transform form data to API payload for creating channel
  */
@@ -850,11 +905,15 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
   channel: Partial<Channel>
 } {
   const mode = formData.multi_key_mode || 'single'
+  const baseUrls = normalizeBaseUrls(
+    formData.base_urls?.length ? formData.base_urls : [formData.base_url || '']
+  )
 
   const channel: Partial<Channel> = {
     name: formData.name,
     type: formData.type,
-    base_url: normalizeBaseUrl(formData.base_url) || null,
+    base_url: baseUrls[0] || null,
+    base_urls: baseUrls.length > 0 ? baseUrls : null,
     key: formData.key,
     openai_organization: formData.openai_organization || null,
     models: formData.models,
@@ -899,11 +958,15 @@ export function transformFormDataToUpdatePayload(
   formData: ChannelFormValues,
   channelId: number
 ): Partial<Channel> {
+  const baseUrls = normalizeBaseUrls(
+    formData.base_urls?.length ? formData.base_urls : [formData.base_url || '']
+  )
+
   const payload: Partial<Channel> = {
     id: channelId,
     name: formData.name,
     type: formData.type,
-    base_url: normalizeBaseUrl(formData.base_url) || null,
+    base_url: baseUrls[0] || null,
     openai_organization: formData.openai_organization || null,
     models: formData.models,
     group: formatGroups(formData.group),
@@ -935,7 +998,9 @@ export function transformFormDataToUpdatePayload(
   })
 
   // Send explicit empty strings for nullable fields so GORM updates can clear them.
-  payload.base_url = normalizeBaseUrl(formData.base_url) || ''
+  payload.base_url = baseUrls[0] || ''
+  // Always send the full address list so updates can add or clear entries.
+  payload.base_urls = baseUrls
   payload.openai_organization = formData.openai_organization || ''
   payload.test_model = formData.test_model || ''
   payload.tag = formData.tag || ''

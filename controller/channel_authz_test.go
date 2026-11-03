@@ -53,6 +53,32 @@ func TestChannelHasSensitiveChanges(t *testing.T) {
 		assert.True(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"base_url": newBaseURL}))
 	})
 
+	t.Run("legacy single base url is not sensitive when unchanged", func(t *testing.T) {
+		originWithSlash := *origin
+		slashURL := "https://api.example.com/"
+		originWithSlash.BaseURL = &slashURL
+		updated := PatchChannel{Channel: originWithSlash}
+		normalized := "https://api.example.com"
+		updated.BaseURL = &normalized
+		updated.BaseURLs = []string{normalized}
+
+		assert.False(t, channelHasSensitiveChanges(&updated, &originWithSlash, map[string]any{
+			"base_url":  normalized,
+			"base_urls": []string{normalized},
+		}))
+	})
+
+	t.Run("base url order change", func(t *testing.T) {
+		originMulti := *origin
+		originMulti.BaseURLs = []string{"https://a.example.com", "https://b.example.com"}
+		updated := PatchChannel{Channel: originMulti}
+		updated.BaseURLs = []string{"https://b.example.com", "https://a.example.com"}
+
+		assert.True(t, channelHasSensitiveChanges(&updated, &originMulti, map[string]any{
+			"base_urls": updated.BaseURLs,
+		}))
+	})
+
 	t.Run("header override change", func(t *testing.T) {
 		updated := PatchChannel{Channel: *origin}
 		newHeaderOverride := `{"X-Key":"{api_key}"}`

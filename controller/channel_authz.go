@@ -1,6 +1,10 @@
 package controller
 
-import "github.com/QuantumNous/new-api/model"
+import (
+	"slices"
+
+	"github.com/QuantumNous/new-api/model"
+)
 
 func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, requestData map[string]any) bool {
 	if _, ok := requestData["type"]; ok && channel.Type != origin.Type {
@@ -9,8 +13,19 @@ func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, re
 	if _, ok := requestData["key"]; ok && channel.Key != "" && channel.Key != origin.Key {
 		return true
 	}
-	if _, ok := requestData["base_url"]; ok && !equalStringPtr(channel.BaseURL, origin.BaseURL) {
-		return true
+	if _, ok := requestData["base_url"]; ok {
+		current, currentErr := normalizeChannelBaseURLs(nil, channel.BaseURL)
+		previous, previousErr := normalizeChannelBaseURLs(nil, origin.BaseURL)
+		if currentErr != nil || previousErr != nil || !slices.Equal(current, previous) {
+			return true
+		}
+	}
+	if _, ok := requestData["base_urls"]; ok {
+		current, currentErr := normalizeChannelBaseURLs(channel.GetBaseURLs(), nil)
+		previous, previousErr := normalizeChannelBaseURLs(origin.GetBaseURLs(), nil)
+		if currentErr != nil || previousErr != nil || !slices.Equal(current, previous) {
+			return true
+		}
 	}
 	if _, ok := requestData["openai_organization"]; ok && !equalStringPtr(channel.OpenAIOrganization, origin.OpenAIOrganization) {
 		return true
@@ -64,6 +79,7 @@ var channelSensitiveFields = map[string]struct{}{
 	"type":                {},
 	"key":                 {},
 	"base_url":            {},
+	"base_urls":           {},
 	"openai_organization": {},
 	"header_override":     {},
 	"param_override":      {},

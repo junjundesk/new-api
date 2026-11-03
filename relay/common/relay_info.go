@@ -130,7 +130,9 @@ type RelayInfo struct {
 	TokenUnlimited    bool
 	StartTime         time.Time
 	FirstResponseTime time.Time
-	isFirstResponse   bool
+	// TriedBaseURLs 记录本次请求已尝试过的渠道地址，切换渠道时重置。
+	TriedBaseURLs   []string
+	isFirstResponse bool
 	//SendLastReasoningResponse bool
 	IsStream               bool
 	IsGeminiBatchEmbedding bool

@@ -499,7 +499,16 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	}
 	// c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	common.SetContextKey(c, constant.ContextKeyChannelKey, key)
-	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, channel.GetBaseURL())
+	baseURL := common.GetContextKeyString(c, constant.ContextKeyChannelBaseURLOverride)
+	if baseURL != "" {
+		common.SetContextKey(c, constant.ContextKeyChannelBaseURLOverride, "")
+	} else {
+		baseURL = service.SelectChannelBaseURL(channel)
+	}
+	if baseURL == "" {
+		baseURL = channel.GetBaseURL()
+	}
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, baseURL)
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -469,6 +470,52 @@ func validateTwoFactorAuth(twoFA *model.TwoFA, code string) bool {
 	return false
 }
 
+const maxChannelBaseURLs = 16
+
+// normalizeChannelBaseURLs 去空、去重并校验地址，只接受 http/https 绝对地址。
+func normalizeChannelBaseURLs(urls []string, fallback *string) ([]string, error) {
+	candidates := urls
+	if len(candidates) == 0 && fallback != nil {
+		candidates = []string{*fallback}
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	normalized := make([]string, 0, len(candidates))
+	for _, raw := range candidates {
+		value := strings.TrimRight(strings.TrimSpace(raw), "/")
+		if value == "" {
+			continue
+		}
+		parsed, err := url.Parse(value)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return nil, fmt.Errorf("无效的 API 地址: %s", raw)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	if len(normalized) > maxChannelBaseURLs {
+		return nil, fmt.Errorf("API 地址最多支持 %d 个", maxChannelBaseURLs)
+	}
+	return normalized, nil
+}
+
+// applyChannelBaseURLs 将地址列表写回渠道，首个地址同时作为主地址。
+func applyChannelBaseURLs(channel *model.Channel, urls []string, fallback *string) error {
+	normalized, err := normalizeChannelBaseURLs(urls, fallback)
+	if err != nil {
+		return err
+	}
+	channel.BaseURLs = normalized
+	primary := ""
+	if len(normalized) > 0 {
+		primary = normalized[0]
+	}
+	channel.BaseURL = &primary
+	return nil
+}
+
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
 	if channel == nil {
@@ -626,6 +673,15 @@ func AddChannel(c *gin.Context) {
 	}
 
 	// 使用统一的校验函数
+	if addChannelRequest.Channel != nil {
+		if err := applyChannelBaseURLs(addChannelRequest.Channel, addChannelRequest.Channel.BaseURLs, addChannelRequest.Channel.BaseURL); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	}
 	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -740,6 +796,7 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 	model.InitChannelCache()
+	service.InvalidateChannelBaseURLs(id)
 	if channelLookupFailed {
 		service.ResetProxyClientCache()
 	} else {
@@ -1018,6 +1075,20 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 	clearChannelReadOnlyFields(&channel, requestData)
+	// 地址列表显式提交时规范化并校验；否则沿用原渠道配置。
+	_, baseURLsProvided := requestData["base_urls"]
+	if _, ok := requestData["base_url"]; ok {
+		baseURLsProvided = true
+	}
+	if baseURLsProvided {
+		if err := applyChannelBaseURLs(&channel.Channel, channel.BaseURLs, channel.BaseURL); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	}
 
 	// 使用统一的校验函数
 	if err := validateChannel(&channel.Channel, false); err != nil {
@@ -1046,6 +1117,10 @@ func UpdateChannel(c *gin.Context) {
 
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
+	if !baseURLsProvided {
+		channel.BaseURLs = originChannel.BaseURLs
+		channel.BaseURL = originChannel.BaseURL
+	}
 
 	if channelHasSensitiveChanges(&channel, originChannel, requestData) &&
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
@@ -1143,7 +1218,14 @@ func UpdateChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if baseURLsProvided {
+		if err := channel.UpdateBaseURLs(); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	model.InitChannelCache()
+	service.InvalidateChannelBaseURLs(channel.Id)
 	if proxyChanged {
 		service.InvalidateProxyClient(originProxy)
 	}
