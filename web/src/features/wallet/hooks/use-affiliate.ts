@@ -23,9 +23,12 @@ import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getSelf } from '@/lib/api'
 
-import { getAffiliateCode, getReferralSummary, transferAffiliateQuota } from '../api'
+import {
+  getAffiliateCode,
+  getReferralSummary,
+  transferAffiliateQuota,
+} from '../api'
 import { generateAffiliateLink } from '../lib'
-
 import type { ReferralSummary } from '../types'
 
 // ============================================================================
@@ -84,7 +87,7 @@ export function useAffiliate() {
 
       toast.error(response.message || i18next.t('Transfer failed'))
       return false
-    } catch (_error) {
+    } catch {
       toast.error(i18next.t('Transfer failed'))
       return false
     } finally {

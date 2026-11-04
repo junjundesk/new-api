@@ -210,6 +210,7 @@ export const WebPreviewBody = ({
 
   return (
     <div className='flex-1'>
+      {/* eslint-disable react/iframe-missing-sandbox -- previewed HTML must run scripts with same-origin access to render like a real page */}
       <iframe
         className={cn('size-full', className)}
         sandbox='allow-scripts allow-same-origin allow-forms allow-popups allow-presentation'
@@ -217,6 +218,7 @@ export const WebPreviewBody = ({
         title={t('Preview')}
         {...props}
       />
+      {/* eslint-enable react/iframe-missing-sandbox */}
       {loading}
     </div>
   )
@@ -238,6 +240,14 @@ export const WebPreviewConsole = ({
 }: WebPreviewConsoleProps) => {
   const { t } = useTranslation()
   const { consoleOpen, setConsoleOpen } = useWebPreview()
+
+  const logKeyCounts = new Map<string, number>()
+  const keyedLogs = logs.map((log) => {
+    const baseKey = `${log.timestamp.getTime()}-${log.level}-${log.message}`
+    const occurrence = logKeyCounts.get(baseKey) ?? 0
+    logKeyCounts.set(baseKey, occurrence + 1)
+    return { log, key: `${baseKey}-${occurrence}` }
+  })
 
   return (
     <Collapsible
@@ -272,7 +282,7 @@ export const WebPreviewConsole = ({
           {logs.length === 0 ? (
             <p className='text-muted-foreground'>{t('No console output')}</p>
           ) : (
-            logs.map((log, index) => (
+            keyedLogs.map(({ log, key }) => (
               <div
                 className={cn(
                   'text-xs',
@@ -280,7 +290,7 @@ export const WebPreviewConsole = ({
                   log.level === 'warn' && 'text-warning',
                   log.level === 'log' && 'text-foreground'
                 )}
-                key={`${log.timestamp.getTime()}-${index}`}
+                key={key}
               >
                 <span className='text-muted-foreground'>
                   {dayjs(log.timestamp).format('HH:mm:ss')}

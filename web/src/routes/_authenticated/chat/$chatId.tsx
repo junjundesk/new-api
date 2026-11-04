@@ -154,6 +154,7 @@ function ChatRouteComponent() {
   }
 
   return (
+    // eslint-disable-next-line react/iframe-missing-sandbox -- the configured chat preset page needs full scripting and same-origin access to work
     <iframe
       src={iframeSrc}
       key={iframeSrc}

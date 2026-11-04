@@ -46,7 +46,10 @@ describe('channel model billing overrides', () => {
       transformFormDataToCreatePayload(data).channel,
       transformFormDataToUpdatePayload(data, 1),
     ]) {
-      expect(JSON.parse(payload.setting!).model_group_ratios).toEqual({
+      if (!payload.setting) {
+        throw new Error('Expected setting payload')
+      }
+      expect(JSON.parse(payload.setting).model_group_ratios).toEqual({
         'public-model': 0,
         'other-model': 1,
       })
@@ -71,12 +74,15 @@ describe('channel model billing overrides', () => {
         { ...defaults, model_group_ratios: rows },
         1
       )
-      const setting = JSON.parse(payload.setting!)
+      if (!payload.setting) {
+        throw new Error('Expected setting payload')
+      }
+      const setting = JSON.parse(payload.setting)
       expect(setting).not.toHaveProperty('model_group_ratios')
       expect(setting.proxy).toBe('https://proxy.example')
       expect(setting.custom_flag).toBe(true)
       expect(
-        transformChannelToFormDefaults(channel(payload.setting!))
+        transformChannelToFormDefaults(channel(payload.setting))
           .model_group_ratios
       ).toEqual([])
     }

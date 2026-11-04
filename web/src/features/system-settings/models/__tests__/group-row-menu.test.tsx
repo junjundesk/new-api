@@ -55,7 +55,11 @@ describe('group row menu', () => {
       data: {
         success: true,
         data: [
-          { model_name: 'gpt-4o', description: '', group_description: '旧描述' },
+          {
+            model_name: 'gpt-4o',
+            description: '',
+            group_description: '旧描述',
+          },
         ],
       },
     })

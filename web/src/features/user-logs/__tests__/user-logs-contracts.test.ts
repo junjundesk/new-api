@@ -73,6 +73,9 @@ describe('user logs feature contracts', () => {
         action
       )
     }
-    assert.equal(renderAuditContent({ op: { action: 'unknown.action' } }, fakeT), null)
+    assert.equal(
+      renderAuditContent({ op: { action: 'unknown.action' } }, fakeT),
+      null
+    )
   })
 })

@@ -31,6 +31,12 @@ import { cn } from '@/lib/utils'
 import { adjustUserQuota } from '../api'
 import type { QuotaAdjustMode } from '../types'
 
+const QUOTA_MODES = [
+  { value: 'add', labelKey: 'Add' },
+  { value: 'subtract', labelKey: 'Subtract' },
+  { value: 'override', labelKey: 'Override' },
+] as const
+
 interface UserQuotaDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,7 +55,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const currencyLabel = getCurrencyLabel()
   const tokensOnly = currencyMeta.kind === 'tokens'
 
-  const amountValue = parseFloat(amount) || 0
+  const amountValue = Number.parseFloat(amount) || 0
   const quotaValue = parseQuotaFromDollars(Math.abs(amountValue))
 
   const getPreviewText = () => {
@@ -134,26 +140,22 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
         <div className='space-y-2'>
           <Label>{t('Mode')}</Label>
           <div className='flex gap-1'>
-            {(['add', 'subtract', 'override'] as const).map((m) => (
+            {QUOTA_MODES.map((option) => (
               <Button
-                key={m}
+                key={option.value}
                 type='button'
                 variant='outline'
                 size='sm'
                 className={cn(
-                  mode === m &&
+                  mode === option.value &&
                     'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
                 )}
                 onClick={() => {
-                  setMode(m)
+                  setMode(option.value)
                   setAmount('')
                 }}
               >
-                {m === 'add'
-                  ? t('Add')
-                  : m === 'subtract'
-                    ? t('Subtract')
-                    : t('Override')}
+                {t(option.labelKey)}
               </Button>
             ))}
           </div>

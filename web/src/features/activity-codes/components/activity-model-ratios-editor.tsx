@@ -50,7 +50,8 @@ export function ActivityModelRatiosEditor(props: Props) {
     name: 'model_ratio_overrides',
   })
   const values =
-    useWatch({ control: props.form.control, name: 'model_ratio_overrides' }) ?? []
+    useWatch({ control: props.form.control, name: 'model_ratio_overrides' }) ??
+    []
   const errors = props.form.formState.errors.model_ratio_overrides
   // 数组级错误（模型列表为空或超出上限）由 superRefine 挂在数组本身，而不是某一行。
   const listError = Array.isArray(errors)
@@ -88,7 +89,10 @@ export function ActivityModelRatiosEditor(props: Props) {
                 {/* 旧版 options 形态支持 allowCustomValue：允许填写尚未上架的模型名。 */}
                 <Combobox
                   id={`${id}-${field.id}-model`}
-                  options={options.map((name) => ({ value: name, label: name }))}
+                  options={options.map((name) => ({
+                    value: name,
+                    label: name,
+                  }))}
                   value={model}
                   allowCustomValue
                   placeholder={t('Select a model')}
@@ -118,7 +122,9 @@ export function ActivityModelRatiosEditor(props: Props) {
                   disabled={props.disabled}
                   aria-invalid={Boolean(ratioError)}
                   aria-describedby={`${id}-help`}
-                  {...props.form.register(`model_ratio_overrides.${index}.ratio`)}
+                  {...props.form.register(
+                    `model_ratio_overrides.${index}.ratio`
+                  )}
                 />
                 {ratioError && (
                   <p role='alert' className='text-destructive text-sm'>

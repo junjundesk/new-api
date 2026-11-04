@@ -213,7 +213,9 @@ export function TokenModelMappingPresetsCard(props: Props) {
 
           {invalidConfig && (
             <Alert variant='destructive'>
-              <AlertTitle>{t('Invalid mapping preset configuration')}</AlertTitle>
+              <AlertTitle>
+                {t('Invalid mapping preset configuration')}
+              </AlertTitle>
               <AlertDescription>
                 {t(
                   'The saved configuration could not be read. Correct TokenModelMappingPresets before editing it here.'
@@ -249,7 +251,9 @@ export function TokenModelMappingPresetsCard(props: Props) {
               <AlertTitle>{t('Could not load available models')}</AlertTitle>
               <AlertDescription>
                 <p>
-                  {t('Retry to select and validate target models for this group.')}
+                  {t(
+                    'Retry to select and validate target models for this group.'
+                  )}
                 </p>
                 <Button
                   type='button'

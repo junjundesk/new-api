@@ -20,12 +20,13 @@ import { Check, Copy, MonitorSmartphone } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+
 import type { UsageLog } from '../data/schema'
 import { parseLogOther } from '../lib/format'
 
@@ -103,9 +104,9 @@ export function LogClientBadge(props: LogClientBadgeProps) {
             type='button'
             tabIndex={0}
             aria-haspopup='dialog'
-            aria-label={
-              t('View client details of {{name}}', { name: client.name })
-            }
+            aria-label={t('View client details of {{name}}', {
+              name: client.name,
+            })}
             className='text-foreground hover:bg-foreground/5 focus-visible:ring-ring inline-flex min-h-7 max-w-full min-w-0 cursor-pointer items-center rounded px-1 text-xs outline-none focus-visible:ring-2'
             onClick={(e) => e.stopPropagation()}
           >

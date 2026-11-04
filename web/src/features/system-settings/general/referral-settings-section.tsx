@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+
+/* eslint-disable react/no-array-index-key -- tier rows are edited in place and have no persisted identifier; index keys are the row identity, content-derived keys would remount inputs and lose focus while typing */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -135,50 +137,54 @@ export function ReferralSettingsSection({
     tiers: initialTiers,
   }
 
-  const { form, handleSubmit, isDirty, isSubmitting } = useSettingsForm<Values>({
-    resolver: zodResolver(schema) as unknown as Parameters<typeof useSettingsForm<Values>>[0]['resolver'],
-    defaultValues: formDefaults,
-    onSubmit: async (data) => {
-      await updateOption.mutateAsync({
-        key: 'referral_setting.enabled',
-        value: String(data.enabled),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.invitee_first_topup_enabled',
-        value: String(data.inviteeEnabled),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.invitee_first_topup_rate_bps',
-        value: String(toBps(data.inviteeRatePercent)),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.invitee_first_topup_max_quota',
-        value: String(data.inviteeMaxQuota),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.inviter_enabled',
-        value: String(data.inviterEnabled),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.inviter_tiers',
-        value: buildTierValue(data.tiers),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.inviter_max_quota',
-        value: String(data.inviterMaxQuota),
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.bonus_duration',
-        value: data.bonusDuration,
-      })
-      await updateOption.mutateAsync({
-        key: 'referral_setting.count_redeem_as_valid',
-        value: String(data.countRedeemAsValid),
-      })
-      form.reset(data)
-      toast.success(t('Referral settings saved'))
-    },
-  })
+  const { form, handleSubmit, isDirty, isSubmitting } = useSettingsForm<Values>(
+    {
+      resolver: zodResolver(schema) as unknown as Parameters<
+        typeof useSettingsForm<Values>
+      >[0]['resolver'],
+      defaultValues: formDefaults,
+      onSubmit: async (data) => {
+        await updateOption.mutateAsync({
+          key: 'referral_setting.enabled',
+          value: String(data.enabled),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.invitee_first_topup_enabled',
+          value: String(data.inviteeEnabled),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.invitee_first_topup_rate_bps',
+          value: String(toBps(data.inviteeRatePercent)),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.invitee_first_topup_max_quota',
+          value: String(data.inviteeMaxQuota),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.inviter_enabled',
+          value: String(data.inviterEnabled),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.inviter_tiers',
+          value: buildTierValue(data.tiers),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.inviter_max_quota',
+          value: String(data.inviterMaxQuota),
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.bonus_duration',
+          value: data.bonusDuration,
+        })
+        await updateOption.mutateAsync({
+          key: 'referral_setting.count_redeem_as_valid',
+          value: String(data.countRedeemAsValid),
+        })
+        form.reset(data)
+        toast.success(t('Referral settings saved'))
+      },
+    }
+  )
 
   const enabled = form.watch('enabled')
   const tiers = form.watch('tiers')
@@ -291,7 +297,9 @@ export function ReferralSettingsSection({
                   render={({ field }) => (
                     <SettingsSwitchItem>
                       <SettingsSwitchContent>
-                        <FormLabel>{t('Invitee first top-up reward')}</FormLabel>
+                        <FormLabel>
+                          {t('Invitee first top-up reward')}
+                        </FormLabel>
                         <FormDescription>
                           {t(
                             'Give the invited user a share of their own first top-up as bonus credit.'
@@ -315,9 +323,7 @@ export function ReferralSettingsSection({
                       name='inviteeRatePercent'
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
-                            {t('Invitee reward rate (%)')}
-                          </FormLabel>
+                          <FormLabel>{t('Invitee reward rate (%)')}</FormLabel>
                           <FormControl>
                             <Input
                               type='number'

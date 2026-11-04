@@ -525,7 +525,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
     !!(adminInfo?.is_model_mapped || other?.is_model_mapped) &&
     !!mappedUpstreamModelName
   const fallback = other?.fallback
-  const fallbackAttempts = props.isAdmin ? adminInfo?.fallback_attempts : undefined
+  const fallbackAttempts = props.isAdmin
+    ? adminInfo?.fallback_attempts
+    : undefined
   const requestSource = other?.request_source
   const requestIp = getRequestIpForDisplay(
     props.log.ip,

@@ -63,9 +63,9 @@ describe('group model descriptions dialog', () => {
     const { onApply } = renderDialog({})
 
     const input = (await screen.findByLabelText('gpt-4o')) as HTMLInputElement
-    expect(
-      (screen.getByLabelText('claude') as HTMLInputElement).value
-    ).toBe('claude 描述')
+    expect((screen.getByLabelText('claude') as HTMLInputElement).value).toBe(
+      'claude 描述'
+    )
 
     fireEvent.change(input, { target: { value: 'vip 专享' } })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))

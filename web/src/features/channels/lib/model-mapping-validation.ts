@@ -57,7 +57,7 @@ export function parseModelsString(modelsStr: string): string[] {
  * Format models array to string
  */
 export function formatModelsArray(models: string[]): string {
-  return Array.from(new Set(models)).join(',')
+  return [...new Set(models)].join(',')
 }
 
 /**
@@ -86,7 +86,7 @@ export function extractMappingSourceModels(modelMapping: string): string[] {
       .map((key) => key.trim())
       .filter(Boolean)
 
-    return Array.from(new Set(keys))
+    return [...new Set(keys)]
   } catch {
     return []
   }
@@ -113,7 +113,7 @@ export function extractRedirectModels(modelMapping: string): string[] {
       .map((value) => value.trim())
       .filter((value): value is string => Boolean(value))
 
-    return Array.from(new Set(values))
+    return [...new Set(values)]
   } catch {
     return []
   }
@@ -180,7 +180,7 @@ export function findMissingModelsInMapping(
     .map((key) => normalizeModelName(key))
     .filter((key) => key && !modelSet.has(key))
 
-  return Array.from(new Set(missingModels))
+  return [...new Set(missingModels)]
 }
 
 /**
@@ -298,9 +298,7 @@ export function categorizeModelsWithRedirect(
   ])
 
   const redirectOnlySet = new Set(
-    Array.from(normalizedRedirectModels).filter(
-      (m) => !normalizedCurrentModels.has(m)
-    )
+    [...normalizedRedirectModels].filter((m) => !normalizedCurrentModels.has(m))
   )
 
   return {

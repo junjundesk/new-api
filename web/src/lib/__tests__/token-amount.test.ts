@@ -60,27 +60,40 @@ describe('parseTokenAmountInput', () => {
     expect(parseTokenAmountInput('1000')).toEqual({ ok: true, value: 1_000 })
     expect(parseTokenAmountInput('1.5K')).toEqual({ ok: true, value: 1_500 })
     expect(parseTokenAmountInput('2m')).toEqual({ ok: true, value: 2_000_000 })
-    expect(parseTokenAmountInput('3B')).toEqual({ ok: true, value: 3_000_000_000 })
+    expect(parseTokenAmountInput('3B')).toEqual({
+      ok: true,
+      value: 3_000_000_000,
+    })
     expect(parseTokenAmountInput('1.5 k')).toEqual({ ok: true, value: 1_500 })
   })
 
   it('accepts Chinese 千/万/亿 suffixes with optional spaces', () => {
-    expect(parseTokenAmountInput('1000万')).toEqual({ ok: true, value: 10_000_000 })
-    expect(parseTokenAmountInput('1.2亿')).toEqual({ ok: true, value: 120_000_000 })
-    expect(parseTokenAmountInput(' 10 万 ')).toEqual({ ok: true, value: 100_000 })
+    expect(parseTokenAmountInput('1000万')).toEqual({
+      ok: true,
+      value: 10_000_000,
+    })
+    expect(parseTokenAmountInput('1.2亿')).toEqual({
+      ok: true,
+      value: 120_000_000,
+    })
+    expect(parseTokenAmountInput(' 10 万 ')).toEqual({
+      ok: true,
+      value: 100_000,
+    })
     expect(parseTokenAmountInput('2千')).toEqual({ ok: true, value: 2_000 })
   })
 
   it('rounds fractional results to whole tokens', () => {
-    expect(parseTokenAmountInput('1.23456万')).toEqual({ ok: true, value: 12_346 })
+    expect(parseTokenAmountInput('1.23456万')).toEqual({
+      ok: true,
+      value: 12_346,
+    })
   })
 
   it('rejects empty, malformed, negative and out-of-range input', () => {
     for (const input of ['', '   ', 'abc', '1.2.3K', '-5', '1e6', '1000万亿']) {
       expect(parseTokenAmountInput(input).ok).toBe(false)
     }
-    expect(
-      parseTokenAmountInput(String(TOKEN_AMOUNT_MAX + 1)).ok
-    ).toBe(false)
+    expect(parseTokenAmountInput(String(TOKEN_AMOUNT_MAX + 1)).ok).toBe(false)
   })
 })

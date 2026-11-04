@@ -95,11 +95,11 @@ import {
 } from '../lib/model-mapping'
 import type { ApiKey } from '../types'
 import { ApiKeyFallbackSection } from './api-key-fallback-section'
-import { ApiKeyModelMappingSection } from './api-key-model-mapping-section'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
+import { ApiKeyModelMappingSection } from './api-key-model-mapping-section'
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
 

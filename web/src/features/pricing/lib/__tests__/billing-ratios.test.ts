@@ -15,6 +15,8 @@ import {
   stripTrailingZeros,
 } from '../price'
 
+const GROUP_RATIOS: Record<string, number> = { default: 2, vip: 0.5 }
+
 const model: PricingModel = {
   id: 1,
   model_name: 'public-model',
@@ -27,7 +29,7 @@ const model: PricingModel = {
   audio_ratio: 4,
   audio_completion_ratio: 5,
   enable_groups: ['default', 'vip', 'hidden'],
-  group_ratio: { default: 2, vip: 0.5 },
+  group_ratio: GROUP_RATIOS,
   billing_ratios: {
     default: { min: 0.8, max: 1.2, source: 'channel_model' },
     vip: { min: 0.9, max: 0.9, source: 'user_group' },
@@ -70,7 +72,7 @@ describe('effective billing price contract', () => {
             false,
             1,
             1,
-            model.group_ratio!
+            GROUP_RATIOS
           )
         )
       ).toBe(price)
@@ -87,9 +89,7 @@ describe('effective billing price contract', () => {
       '$1.6–$2.4'
     )
     expect(
-      compact(
-        formatFixedPrice(fixed, 'default', false, 1, 1, model.group_ratio!)
-      )
+      compact(formatFixedPrice(fixed, 'default', false, 1, 1, GROUP_RATIOS))
     ).toBe('$1.6–$2.4')
   })
   it('uses effective minima for all groups without inventing inaccessible cheaper groups', () => {
@@ -134,7 +134,10 @@ describe('effective billing price contract', () => {
       tokenUnit: 'M',
       billingRatio: getGroupBillingRatio(dynamic, 'default'),
     })
-    expect(compact(summary!.primaryEntries[0].formatted)).toBe('$3.2–$4.8')
+    if (!summary) {
+      throw new Error('expected a dynamic pricing summary')
+    }
+    expect(compact(summary.primaryEntries[0].formatted)).toBe('$3.2–$4.8')
     expect(
       compact(
         formatDynamicUnitPrice(4, {

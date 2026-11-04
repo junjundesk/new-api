@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ArrowRight, Code, Plus, Table, Trash2, X } from 'lucide-react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
@@ -59,7 +59,7 @@ function getDuplicateSources(rows: MappingRow[]): string[] {
     }
   }
 
-  return Array.from(duplicates)
+  return [...duplicates]
 }
 
 function normalizeCandidateList(value: unknown): string[] | null {
@@ -85,70 +85,73 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
   const lastEmittedJsonRef = useRef<string | null>(null)
   const duplicateSources = useMemo(() => getDuplicateSources(rows), [rows])
 
-  const createRowId = () => {
+  const createRowId = useCallback(() => {
     nextRowIdRef.current += 1
     return `mapping-${nextRowIdRef.current}`
-  }
+  }, [])
 
-  const parseJsonToRows = (json: string): boolean => {
-    try {
-      if (!json.trim()) {
-        setRows([])
-        setJsonError(null)
-        return true
-      }
-      const parsed = JSON.parse(json)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setJsonError(t('Model mapping must be a valid JSON object'))
-        return false
-      }
-      const entries = Object.entries(parsed)
-      const invalidValue = entries.find(
-        ([, to]) => normalizeCandidateList(to) === null
-      )
-      if (invalidValue) {
-        setJsonError(
-          t(
-            'Model mapping values must be a model name or an array of model names'
-          )
+  const parseJsonToRows = useCallback(
+    (json: string): boolean => {
+      try {
+        if (!json.trim()) {
+          setRows([])
+          setJsonError(null)
+          return true
+        }
+        const parsed = JSON.parse(json)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          setJsonError(t('Model mapping must be a valid JSON object'))
+          return false
+        }
+        const entries = Object.entries(parsed)
+        const invalidValue = entries.find(
+          ([, to]) => normalizeCandidateList(to) === null
         )
-        return false
-      }
-      setRows((previousRows) => {
-        const remainingRows = [...previousRows]
-        return entries.map(([from, to], index) => {
-          const tos = normalizeCandidateList(to) ?? []
-          const previousRow = previousRows[index]
-          let existingIndex = remainingRows.findIndex(
-            (row) => row.from === from
-          )
-          if (existingIndex < 0 && previousRow) {
-            existingIndex = remainingRows.findIndex(
-              (row) => row.id === previousRow.id
+        if (invalidValue) {
+          setJsonError(
+            t(
+              'Model mapping values must be a model name or an array of model names'
             )
-          }
-          if (existingIndex >= 0) {
-            const [existing] = remainingRows.splice(existingIndex, 1)
+          )
+          return false
+        }
+        setRows((previousRows) => {
+          const remainingRows = [...previousRows]
+          return entries.map(([from, to], index) => {
+            const tos = normalizeCandidateList(to) ?? []
+            const previousRow = previousRows[index]
+            let existingIndex = remainingRows.findIndex(
+              (row) => row.from === from
+            )
+            if (existingIndex < 0 && previousRow) {
+              existingIndex = remainingRows.findIndex(
+                (row) => row.id === previousRow.id
+              )
+            }
+            if (existingIndex >= 0) {
+              const [existing] = remainingRows.splice(existingIndex, 1)
+              return {
+                id: existing.id,
+                from,
+                tos,
+              }
+            }
             return {
-              id: existing.id,
+              id: createRowId(),
               from,
               tos,
             }
-          }
-          return {
-            id: createRowId(),
-            from,
-            tos,
-          }
+          })
         })
-      })
-      setJsonError(null)
-      return true
-    } catch (_error) {
-      setJsonError(t('Model mapping must be valid JSON format'))
-      return false
-    }
-  }
+        setJsonError(null)
+        return true
+      } catch {
+        setJsonError(t('Model mapping must be valid JSON format'))
+        return false
+      }
+    },
+    [t, createRowId]
+  )
 
   // Parse JSON to rows when value changes externally. Values this component
   // just emitted are ignored: re-parsing them would rebuild the rows from JSON,
@@ -161,7 +164,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJsonValue(props.value)
     parseJsonToRows(props.value)
-  }, [props.value])
+  }, [props.value, parseJsonToRows])
 
   const convertRowsToJson = (updatedRows: MappingRow[]): string => {
     if (updatedRows.length === 0) {
@@ -404,6 +407,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                     <div className='space-y-2'>
                       {candidates.map((candidate, index) => (
                         <div
+                          // eslint-disable-next-line react/no-array-index-key -- editable candidate strings have no stable ids; index key keeps input focus
                           key={`${row.id}-${index}`}
                           className='flex items-center gap-2'
                         >

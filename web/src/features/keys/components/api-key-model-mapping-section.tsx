@@ -95,7 +95,9 @@ export function ApiKeyModelMappingSection(
         <Alert variant='destructive'>
           <AlertTitle>{t('Could not load available models')}</AlertTitle>
           <AlertDescription>
-            <p>{t('Retry to select and validate target models for this group.')}</p>
+            <p>
+              {t('Retry to select and validate target models for this group.')}
+            </p>
             <Button
               type='button'
               variant='outline'
@@ -197,7 +199,9 @@ export function ApiKeyModelMappingSection(
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('Replace existing mappings?')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('Replace existing mappings?')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t(
                 'This preset contains source models already configured on this key. Replace these mappings to apply the preset.'

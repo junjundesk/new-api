@@ -60,7 +60,8 @@ export function GroupFilterSelect(props: GroupFilterSelectProps) {
       items={options}
       value={selectedValue}
       onValueChange={(value) => {
-        const next = typeof value === 'string' && value ? value : GROUP_FILTER_ALL_VALUE
+        const next =
+          typeof value === 'string' && value ? value : GROUP_FILTER_ALL_VALUE
         props.onChange(next === GROUP_FILTER_ALL_VALUE ? undefined : next)
       }}
     >

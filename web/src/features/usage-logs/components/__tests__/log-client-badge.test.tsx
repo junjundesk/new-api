@@ -86,7 +86,7 @@ describe('LogClientBadge', () => {
   it('when the log has no client info then renders nothing', () => {
     const { container } = render(<LogClientBadge log={makeLog()} />)
     expect(container.childElementCount).toBe(0)
-  });
+  })
 
   it('when an error log has client info then still renders the chip', () => {
     const log = makeLog({ type: 5, other: codexOther })
@@ -96,7 +96,7 @@ describe('LogClientBadge', () => {
         name: 'View client details of Codex Desktop',
       })
     ).not.toBeNull()
-  });
+  })
 
   it('when client info exists then shows the client chip with an accessible label', () => {
     render(<LogClientBadge log={makeLog({ other: codexOther })} />)
@@ -105,7 +105,7 @@ describe('LogClientBadge', () => {
     })
     expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
     expect(screen.getByText('Codex Desktop 0.158.0')).not.toBeNull()
-  });
+  })
 
   it('when the chip is clicked then the detail popover opens with client fields', async () => {
     const user = userEvent.setup()
@@ -121,10 +121,8 @@ describe('LogClientBadge', () => {
     expect(screen.getByText('desktop')).not.toBeNull()
     expect(screen.getByText('0.158.0')).not.toBeNull()
     expect(screen.getByText('User-Agent')).not.toBeNull()
-    expect(
-      screen.getByText('Codex Desktop/0.158.0 (Windows)')
-    ).not.toBeNull()
-  });
+    expect(screen.getByText('Codex Desktop/0.158.0 (Windows)')).not.toBeNull()
+  })
 
   it('when the trigger is focused then it keeps keyboard operability', () => {
     render(
@@ -146,5 +144,5 @@ describe('LogClientBadge', () => {
     }) as HTMLButtonElement
     trigger.focus()
     expect(document.activeElement).toBe(trigger)
-  });
-});
+  })
+})

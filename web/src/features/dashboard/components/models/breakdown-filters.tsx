@@ -55,9 +55,7 @@ export function BreakdownFilterSelect(props: BreakdownFilterSelectProps) {
     (option) => option.value === props.value
   )
   const triggerLabel =
-    props.value === ''
-      ? props.allLabel
-      : (selectedOption?.label ?? props.value)
+    props.value === '' ? props.allLabel : (selectedOption?.label ?? props.value)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

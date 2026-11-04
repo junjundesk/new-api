@@ -30,9 +30,7 @@ export function ActivityCodes() {
   return (
     <ActivityCodesProvider>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
-          {t('Activity Codes')}
-        </SectionPageLayout.Title>
+        <SectionPageLayout.Title>{t('Activity Codes')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           <ActivityCodesPrimaryButtons />
         </SectionPageLayout.Actions>

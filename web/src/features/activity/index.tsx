@@ -34,7 +34,9 @@ export function ActivityCenter() {
           <Card>
             <CardHeader>
               <div className='space-y-0.5'>
-                <p className='text-sm font-medium'>{t('Redeem an Activity Code')}</p>
+                <p className='text-sm font-medium'>
+                  {t('Redeem an Activity Code')}
+                </p>
                 <p className='text-muted-foreground text-xs'>
                   {t(
                     'Free codes are redeemed instantly. Paid codes ask you to confirm the wallet deduction first.'

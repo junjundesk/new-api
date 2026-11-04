@@ -65,10 +65,12 @@ export function LogFallbackBadge(props: LogFallbackBadgeProps) {
       >
         <div className='flex flex-col gap-2.5'>
           <div className='flex items-center gap-2'>
-            <span className='inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-warning/35 bg-warning/10 px-1.5 text-[11px] font-bold leading-none text-warning'>
+            <span className='border-warning/35 bg-warning/10 text-warning inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1.5 text-[11px] leading-none font-bold'>
               {t('Fallback badge')}
             </span>
-            <span className='text-sm font-semibold'>{t('Fallback request')}</span>
+            <span className='text-sm font-semibold'>
+              {t('Fallback request')}
+            </span>
             {fallback.attempt != null && (
               <span className='text-muted-foreground ml-auto text-xs'>
                 {t('Attempt {{n}}', { n: fallback.attempt })}
@@ -78,17 +80,23 @@ export function LogFallbackBadge(props: LogFallbackBadgeProps) {
 
           <div className='grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs'>
             <span className='text-muted-foreground'>{t('Original model')}</span>
-            <span className='min-w-0 break-all font-medium'>
+            <span className='min-w-0 font-medium break-all'>
               {fallback.from_model || '-'}
               {fallback.from_group ? (
-                <span className='text-muted-foreground'> · {fallback.from_group}</span>
+                <span className='text-muted-foreground'>
+                  {' '}
+                  · {fallback.from_group}
+                </span>
               ) : null}
             </span>
             <span className='text-muted-foreground'>{t('Fallback model')}</span>
-            <span className='min-w-0 break-all font-medium'>
+            <span className='min-w-0 font-medium break-all'>
               {fallback.to_model || '-'}
               {fallback.to_group ? (
-                <span className='text-muted-foreground'> · {fallback.to_group}</span>
+                <span className='text-muted-foreground'>
+                  {' '}
+                  · {fallback.to_group}
+                </span>
               ) : null}
             </span>
             {fallback.failed && (
@@ -112,7 +120,7 @@ export function LogFallbackBadge(props: LogFallbackBadgeProps) {
                 {attempts.map((attempt) => (
                   <div
                     key={`${attempt.index}-${attempt.group}-${attempt.model}`}
-                    className='flex items-start gap-2 rounded bg-muted/40 px-2 py-1 font-mono text-[10px] leading-relaxed'
+                    className='bg-muted/40 flex items-start gap-2 rounded px-2 py-1 font-mono text-[10px] leading-relaxed'
                   >
                     <span className='text-muted-foreground shrink-0'>
                       #{attempt.index}

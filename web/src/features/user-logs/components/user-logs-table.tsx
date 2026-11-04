@@ -31,7 +31,10 @@ import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { getUserLogs } from '../api'
-import { USER_LOG_DEFAULT_RANGE_DAYS, USER_LOG_TYPE_FILTERS } from '../constants'
+import {
+  USER_LOG_DEFAULT_RANGE_DAYS,
+  USER_LOG_TYPE_FILTERS,
+} from '../constants'
 import { useUserLogsColumns } from './user-logs-columns'
 
 const route = getRouteApi('/_authenticated/user-logs/')
@@ -42,11 +45,14 @@ export function UserLogsTable() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const search = route.useSearch()
-  const isAdmin = useAuthStore((state) => (state.auth.user?.role ?? 0) >= ROLE.ADMIN)
+  const isAdmin = useAuthStore(
+    (state) => (state.auth.user?.role ?? 0) >= ROLE.ADMIN
+  )
   const isMobile = useMediaQuery('(max-width: 640px)')
   const columns = useUserLogsColumns(isAdmin)
 
-  const usernameFilter = typeof search.username === 'string' ? search.username : ''
+  const usernameFilter =
+    typeof search.username === 'string' ? search.username : ''
   const [usernameDraft, setUsernameDraft] = useState(usernameFilter)
   useEffect(() => {
     setUsernameDraft(usernameFilter)
@@ -145,10 +151,12 @@ export function UserLogsTable() {
 
   const typeOptions = useMemo(
     () =>
-      USER_LOG_TYPE_FILTERS.filter((type) => type.value !== '0').map((type) => ({
-        label: t(type.label),
-        value: type.value,
-      })),
+      USER_LOG_TYPE_FILTERS.filter((type) => type.value !== '0').map(
+        (type) => ({
+          label: t(type.label),
+          value: type.value,
+        })
+      ),
     [t]
   )
   const hasTimeRange =
@@ -197,7 +205,11 @@ export function UserLogsTable() {
         hasAdditionalFilters: hasTimeRange || usernameFilter !== '',
         onReset: () => {
           setUsernameDraft('')
-          patchSearch({ username: undefined, startTime: undefined, endTime: undefined })
+          patchSearch({
+            username: undefined,
+            startTime: undefined,
+            endTime: undefined,
+          })
         },
         filters: [
           {

@@ -102,7 +102,10 @@ export function getFallbackIssueMessage(issue: FallbackIssue, t: TFunction) {
 export function getFallbackModelsSchema(t: TFunction) {
   return z
     .array(fallbackModelFormSchema)
-    .max(MAX_FALLBACK_MODELS, t('Use at most {{max}} fallback models', { max: MAX_FALLBACK_MODELS }))
+    .max(
+      MAX_FALLBACK_MODELS,
+      t('Use at most {{max}} fallback models', { max: MAX_FALLBACK_MODELS })
+    )
     .superRefine((fallbacks, ctx) => {
       for (const issue of getFallbackIssues(fallbacks)) {
         ctx.addIssue({

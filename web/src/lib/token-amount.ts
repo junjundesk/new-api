@@ -86,9 +86,7 @@ const TOKEN_INPUT_MULTIPLIERS: Record<string, number> = {
   亿: 100_000_000,
 }
 
-export type ParseTokenAmountResult =
-  | { ok: true; value: number }
-  | { ok: false }
+export type ParseTokenAmountResult = { ok: true; value: number } | { ok: false }
 
 /**
  * Parse an editable token total. Accepts plain digits and the K/M/B or

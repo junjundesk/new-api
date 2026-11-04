@@ -116,7 +116,9 @@ export function AffiliateRewardsCard({
             ],
             [
               t('Total Earned'),
-              formatQuota(summary?.history_quota ?? user?.aff_history_quota ?? 0),
+              formatQuota(
+                summary?.history_quota ?? user?.aff_history_quota ?? 0
+              ),
             ],
           ].map(([label, value]) => (
             <div key={label}>
@@ -167,7 +169,10 @@ export function AffiliateRewardsCard({
                 }
               >
                 {t('Withdraw')}
-                <Badge variant='secondary' className='ml-1.5 px-1.5 py-0 text-[10px]'>
+                <Badge
+                  variant='secondary'
+                  className='ml-1.5 px-1.5 py-0 text-[10px]'
+                >
                   {t('Coming soon')}
                 </Badge>
               </TooltipTrigger>

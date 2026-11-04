@@ -114,7 +114,9 @@ export function GroupModelDescriptionsDialog(
   const renderMembers = () => {
     if (isLoading) {
       return (
-        <p className='text-muted-foreground text-sm'>{t('Loading models...')}</p>
+        <p className='text-muted-foreground text-sm'>
+          {t('Loading models...')}
+        </p>
       )
     }
     if (members.length === 0) {

@@ -27,7 +27,7 @@ import { LogCacheRateBadge } from '../log-cache-rate-badge'
 // identity translator that still interpolates {{name}} placeholders. The
 // language stays mutable so a test can cover the project's non-BCP-47 `zhCN`
 // interface code, which `Intl` rejects as an invalid locale.
-var i18nState = { language: 'en' }
+const i18nState = { language: 'en' }
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

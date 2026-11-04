@@ -50,7 +50,7 @@ export function BonusGrantDialog(props: BonusGrantDialogProps) {
   const [sendEmail, setSendEmail] = useState(true)
   const [loading, setLoading] = useState(false)
 
-  const amountValue = parseFloat(amount) || 0
+  const amountValue = Number.parseFloat(amount) || 0
   const quotaValue = parseQuotaFromDollars(amountValue)
   const allUsers = !props.userId
 

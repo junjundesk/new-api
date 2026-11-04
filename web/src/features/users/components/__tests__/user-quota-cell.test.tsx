@@ -125,7 +125,11 @@ describe('user quota cell bonus display', () => {
   })
 
   test('shows bonus alongside a regular balance', async () => {
-    const text = await renderQuotaCell({ used: 1000, remaining: 2000, bonus: 500 })
+    const text = await renderQuotaCell({
+      used: 1000,
+      remaining: 2000,
+      bonus: 500,
+    })
 
     assert.ok(text.includes('Bonus'))
     assert.equal(text.includes('No Quota'), false)

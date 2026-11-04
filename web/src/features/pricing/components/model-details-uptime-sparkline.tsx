@@ -16,7 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, AlertCircle, CheckCircle2 } from 'lucide-react'
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  type LucideIcon,
+} from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -54,6 +59,22 @@ type UptimeSparklineProps = {
   showOverall?: boolean
   emptyLabel?: string
   className?: string
+}
+
+type UptimeStatus = 'operational' | 'minor' | 'degraded' | 'major'
+
+const STATUS_ICONS: Record<UptimeStatus, LucideIcon> = {
+  operational: CheckCircle2,
+  minor: Activity,
+  degraded: AlertCircle,
+  major: AlertCircle,
+}
+
+const STATUS_COLOURS: Record<UptimeStatus, string> = {
+  operational: 'text-emerald-600 dark:text-emerald-400',
+  minor: 'text-emerald-600 dark:text-emerald-400',
+  degraded: 'text-amber-600 dark:text-amber-400',
+  major: 'text-rose-600 dark:text-rose-400',
 }
 
 function heightFor(uptime: number): string {
@@ -149,37 +170,23 @@ export function UptimeStatusRow(props: {
 }) {
   const { t } = useTranslation()
   const summary = useMemo(() => aggregateUptime(props.series), [props.series])
-  const status = useMemo(() => {
+  const status = useMemo<UptimeStatus>(() => {
     if (summary.uptime_pct >= 99.9) return 'operational'
     if (summary.uptime_pct >= 99.0) return 'minor'
     if (summary.uptime_pct >= 95.0) return 'degraded'
     return 'major'
   }, [summary.uptime_pct])
 
-  const StatusIcon =
-    status === 'operational'
-      ? CheckCircle2
-      : status === 'minor'
-        ? Activity
-        : AlertCircle
-
-  const statusColour =
-    status === 'operational'
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : status === 'minor'
-        ? 'text-emerald-600 dark:text-emerald-400'
-        : status === 'degraded'
-          ? 'text-amber-600 dark:text-amber-400'
-          : 'text-rose-600 dark:text-rose-400'
-
-  const statusLabel =
-    status === 'operational'
-      ? t('All systems operational')
-      : status === 'minor'
-        ? t('Minor blips in the last 30 days')
-        : status === 'degraded'
-          ? t('Degraded performance recently')
-          : t('Significant outages detected')
+  const StatusIcon = STATUS_ICONS[status]
+  const statusColour = STATUS_COLOURS[status]
+  let statusLabel = t('Significant outages detected')
+  if (status === 'operational') {
+    statusLabel = t('All systems operational')
+  } else if (status === 'minor') {
+    statusLabel = t('Minor blips in the last 30 days')
+  } else if (status === 'degraded') {
+    statusLabel = t('Degraded performance recently')
+  }
 
   return (
     <div

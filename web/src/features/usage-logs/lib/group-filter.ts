@@ -33,7 +33,9 @@ export function buildGroupFilterOptions(
   groups: readonly string[] | Record<string, unknown> | undefined,
   allLabel: string
 ): GroupFilterOption[] {
-  const names = (Array.isArray(groups) ? [...groups] : Object.keys(groups ?? {}))
+  const names = (
+    Array.isArray(groups) ? [...groups] : Object.keys(groups ?? {})
+  )
     .filter((name) => name.length > 0)
     .sort()
   return [

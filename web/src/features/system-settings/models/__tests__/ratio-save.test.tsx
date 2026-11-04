@@ -7,10 +7,10 @@ import {
   waitFor,
 } from '@testing-library/react'
 import i18next from 'i18next'
+import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import { toast } from 'sonner'
 
 import { useSaveOptions } from '../../hooks/use-save-options'
 
@@ -87,13 +87,16 @@ describe('unified option saving', () => {
     expect(successSpy).toHaveBeenCalledTimes(1)
     expect(errorSpy).not.toHaveBeenCalled()
     await waitFor(() =>
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['system-options'] })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['system-options'],
+      })
     )
     // The options refresh happens once, after every write settled.
     expect(
       invalidateSpy.mock.calls.filter(
         (call) =>
-          JSON.stringify(call[0]) === JSON.stringify({ queryKey: ['system-options'] })
+          JSON.stringify(call[0]) ===
+          JSON.stringify({ queryKey: ['system-options'] })
       )
     ).toHaveLength(1)
   })
@@ -145,7 +148,9 @@ describe('unified option saving', () => {
     expect(successSpy).not.toHaveBeenCalled()
     expect(errorSpy.mock.calls[0]?.[0]).toBe('分组倍率设置失败')
     await waitFor(() =>
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['system-options'] })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['system-options'],
+      })
     )
   })
 })

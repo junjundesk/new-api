@@ -39,11 +39,13 @@ function Fixture(props: {
   return (
     <I18nextProvider i18n={i18n}>
       <form
-        onSubmit={form.handleSubmit((values) =>
-          props.onSubmit(
-            JSON.parse(transformFormDataToUpdatePayload(values, 1).setting!)
-          )
-        )}
+        onSubmit={form.handleSubmit((values) => {
+          const payload = transformFormDataToUpdatePayload(values, 1)
+          if (!payload.setting) {
+            throw new Error('Expected setting payload')
+          }
+          props.onSubmit(JSON.parse(payload.setting))
+        })}
       >
         <ModelGroupRatiosEditor
           form={form}

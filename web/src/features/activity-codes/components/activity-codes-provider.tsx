@@ -31,9 +31,8 @@ type ActivityCodesContextType = {
   triggerRefresh: () => void
 }
 
-const ActivityCodesContext = React.createContext<ActivityCodesContextType | null>(
-  null
-)
+const ActivityCodesContext =
+  React.createContext<ActivityCodesContextType | null>(null)
 
 export function ActivityCodesProvider({
   children,

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
+import type { ApiKey } from '../../types'
 import {
   getApiKeyFormSchema,
   transformApiKeyToFormDefaults,
@@ -31,7 +32,6 @@ import {
   getFallbackModelsSchema,
   normalizeFallbackModels,
 } from '../fallback'
-import type { ApiKey } from '../../types'
 
 const t = ((key: string, options?: Record<string, unknown>) => {
   let text = key
@@ -188,7 +188,8 @@ describe('API key form fallback validation', () => {
     )
 
     expect(result.success).toBe(false)
-    const paths = result.error?.issues.map((issue) => issue.path.join('.')) ?? []
+    const paths =
+      result.error?.issues.map((issue) => issue.path.join('.')) ?? []
     expect(paths).toContain('fallback_models.0.model')
   })
 

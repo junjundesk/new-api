@@ -50,6 +50,8 @@ function formatCompactThroughput(tps: number): string {
   return `${formatCompactNumber(tps)}t`
 }
 
+const STATUS_BAR_HEIGHTS = ['h-2', 'h-2.5', 'h-3']
+
 export const ModelPerfBadge = memo(function ModelPerfBadge(
   props: ModelPerfBadgeProps
 ) {
@@ -69,7 +71,17 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
   const statusBars = [
     ...Array(Math.max(0, 3 - statusRates.length)).fill(null),
     ...statusRates,
-  ].slice(-3)
+  ]
+    .slice(-3)
+    .map((rate, slot) => {
+      const emptyDotClass =
+        slot === 0 ? 'bg-muted-foreground/10' : 'bg-muted-foreground/15'
+      return {
+        key: `status-bar-${slot}`,
+        heightClass: STATUS_BAR_HEIGHTS[slot],
+        dotClass: rate == null ? emptyDotClass : getSuccessRateDotClass(rate),
+      }
+    })
 
   return (
     <div
@@ -102,20 +114,10 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
           {t('Status short')}
         </div>
         <div className='flex h-4 items-center justify-end gap-0.5'>
-          {statusBars.map((rate, index) => (
+          {statusBars.map((bar) => (
             <span
-              key={`${index}-${rate ?? 'empty'}`}
-              className={cn(
-                'w-1 rounded-full',
-                index === 0 && 'h-2',
-                index === 1 && 'h-2.5',
-                index === 2 && 'h-3',
-                rate == null
-                  ? index === 0
-                    ? 'bg-muted-foreground/10'
-                    : 'bg-muted-foreground/15'
-                  : getSuccessRateDotClass(rate)
-              )}
+              key={bar.key}
+              className={cn('w-1 rounded-full', bar.heightClass, bar.dotClass)}
             />
           ))}
         </div>

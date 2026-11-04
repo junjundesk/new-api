@@ -91,10 +91,7 @@ describe('activity model ratios editor', () => {
       screen.getByRole('button', { name: 'Add model ratio override' })
     )
     await user.type(screen.getByRole('combobox', { name: 'Model' }), 'gpt-5')
-    await user.type(
-      screen.getByRole('textbox', { name: 'Model ratio' }),
-      '0'
-    )
+    await user.type(screen.getByRole('textbox', { name: 'Model ratio' }), '0')
     expect(
       screen.getByText('0 means this model is completely free.')
     ).toBeVisible()
@@ -156,7 +153,10 @@ describe('activity model ratios editor', () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
     render(
-      <Fixture onSubmit={onSubmit} initialRows={[{ model: 'gpt-5', ratio: '' }]} />
+      <Fixture
+        onSubmit={onSubmit}
+        initialRows={[{ model: 'gpt-5', ratio: '' }]}
+      />
     )
 
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -164,10 +164,9 @@ describe('activity model ratios editor', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Please enter a ratio'
     )
-    expect(screen.getByRole('textbox', { name: 'Model ratio' })).toHaveAttribute(
-      'aria-invalid',
-      'true'
-    )
+    expect(
+      screen.getByRole('textbox', { name: 'Model ratio' })
+    ).toHaveAttribute('aria-invalid', 'true')
     expect(onSubmit).not.toHaveBeenCalled()
   })
 

@@ -75,12 +75,7 @@ type FallbackRowProps = {
 function FallbackRow(props: FallbackRowProps) {
   const { t } = useTranslation()
   const group = props.value.group.trim()
-  const {
-    data,
-    isFetching,
-    isError,
-    refetch,
-  } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ['fallback-models', group],
     queryFn: () => getFallbackModelOptions(group),
     enabled: !!group,
@@ -89,7 +84,9 @@ function FallbackRow(props: FallbackRowProps) {
   const models = data?.models ?? []
   const savedModel = props.value.model.trim()
   const modelItems =
-    savedModel && !models.includes(savedModel) ? [savedModel, ...models] : models
+    savedModel && !models.includes(savedModel)
+      ? [savedModel, ...models]
+      : models
   const sourceValue = props.value.source_model?.trim() ?? ''
   const sourceItems =
     sourceValue && !props.sourceModels.includes(sourceValue)
@@ -147,9 +144,10 @@ function FallbackRow(props: FallbackRowProps) {
           <Select
             items={props.groupOptions.map((option) => ({
               value: option.value,
-              label: option.ratio != null
-                ? `${option.label} · ${option.ratio}x`
-                : option.label,
+              label:
+                option.ratio != null
+                  ? `${option.label} · ${option.ratio}x`
+                  : option.label,
             }))}
             value={group || null}
             disabled={props.disabled}
@@ -209,7 +207,9 @@ function FallbackRow(props: FallbackRowProps) {
             />
             <ComboboxContent>
               <ComboboxEmpty>
-                {isError ? t('Could not load models') : t('No available model found')}
+                {isError
+                  ? t('Could not load models')
+                  : t('No available model found')}
               </ComboboxEmpty>
               {isError && (
                 <div className='p-2'>
@@ -329,7 +329,7 @@ export function ApiKeyFallbackSection(props: ApiKeyFallbackSectionProps) {
         )}
       </p>
 
-      <div className='flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2.5'>
+      <div className='bg-muted/20 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5'>
         <div className='min-w-0'>
           <p className='text-sm font-medium'>{t('Enable fallback')}</p>
           <p className='text-muted-foreground mt-0.5 text-xs'>
@@ -385,12 +385,11 @@ export function ApiKeyFallbackSection(props: ApiKeyFallbackSectionProps) {
               type='button'
               variant='outline'
               size='sm'
-              disabled={props.disabled || props.value.length >= MAX_FALLBACK_MODELS}
+              disabled={
+                props.disabled || props.value.length >= MAX_FALLBACK_MODELS
+              }
               onClick={() =>
-                props.onChange([
-                  ...props.value,
-                  createFallbackModel(),
-                ])
+                props.onChange([...props.value, createFallbackModel()])
               }
             >
               <Plus data-icon='inline-start' />

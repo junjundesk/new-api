@@ -76,9 +76,7 @@ export function useActivity() {
       try {
         const result = await redeemActivityCode(input)
         if (!result.success || !result.data) {
-          const preview = result.data as unknown as
-            | ActivityPreview
-            | undefined
+          const preview = result.data as unknown as ActivityPreview | undefined
           return {
             ok: false,
             message: result.message || 'Redemption failed',

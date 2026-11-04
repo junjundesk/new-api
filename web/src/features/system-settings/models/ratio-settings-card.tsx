@@ -406,8 +406,7 @@ export function RatioSettingsCard({
       const apiKeyMap: Record<string, string> = {
         GroupSpecialUsableGroup:
           'group_ratio_setting.group_special_usable_group',
-        GroupModelDescriptions:
-          'group_ratio_setting.group_model_descriptions',
+        GroupModelDescriptions: 'group_ratio_setting.group_model_descriptions',
       }
 
       const updates = collectChangedOptionEntries(
