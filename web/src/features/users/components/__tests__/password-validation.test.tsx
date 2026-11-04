@@ -17,9 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { after, afterEach, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
+import { afterAll, afterEach, describe, test } from 'vitest'
 
 const domWindow = new Window()
 for (const key of [
@@ -230,7 +230,7 @@ describe('users drawer password validation', () => {
     queryClient = undefined
   })
 
-  after(() => domWindow.close())
+  afterAll(() => domWindow.close())
 
   test('rejects a password shorter than 8 characters before calling the update API', async () => {
     const updatedPayloads: Array<Record<string, unknown>> = []

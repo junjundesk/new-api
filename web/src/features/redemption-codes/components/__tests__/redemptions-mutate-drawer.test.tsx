@@ -19,16 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
+import { afterAll, afterEach, test } from 'vitest'
 
 import type { Redemption } from '../../types'
-
-// Use Bun's runner at runtime while reusing the Node test types installed here.
-const bunTestModule = 'bun:test'
-const { afterAll, afterEach, test } = (await import(bunTestModule)) as {
-  afterAll: typeof import('node:test').after
-  afterEach: typeof import('node:test').afterEach
-  test: typeof import('node:test').test
-}
 
 const domWindow = new Window()
 const domGlobals = [

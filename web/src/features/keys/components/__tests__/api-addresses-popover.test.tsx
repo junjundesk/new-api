@@ -92,19 +92,25 @@ function renderPopover(status: Record<string, unknown>) {
 
 async function openAddresses() {
   const user = userEvent.setup()
+  // `userEvent.setup()` replaces `navigator.clipboard` with its own stub, so a
+  // spy installed beforehand is unreachable. Re-install after setup.
+  installClipboardSpy()
   await user.click(screen.getByRole('button', { name: 'API Addresses' }))
   const dialog = await screen.findByRole('dialog', { name: 'API Addresses' })
   return { user, dialog }
 }
 
-beforeEach(() => {
-  localStorage.clear()
-  setTestOrigin('https://console.example.com/')
+function installClipboardSpy() {
   writeText = vi.fn(async () => {})
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText },
   })
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  setTestOrigin('https://console.example.com/')
 })
 
 afterEach(() => {
@@ -281,6 +287,7 @@ describe('ApiAddressesPopover', () => {
     })
 
     const user = userEvent.setup()
+    installClipboardSpy()
     await user.tab()
     const trigger = screen.getByRole('button', { name: 'API Addresses' })
     expect(document.activeElement).toBe(trigger)

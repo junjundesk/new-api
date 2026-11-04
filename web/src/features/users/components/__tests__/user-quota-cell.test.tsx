@@ -17,9 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { after, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
+import { afterAll, describe, test } from 'vitest'
 
 const domWindow = new Window()
 const domGlobals = [
@@ -103,7 +103,7 @@ async function renderQuotaCell(props: {
 }
 
 describe('user quota cell bonus display', () => {
-  after(() => {
+  afterAll(() => {
     domWindow.close()
   })
 

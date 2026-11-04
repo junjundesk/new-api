@@ -17,15 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import i18next from 'i18next'
-import { beforeAll, describe, expect, test, vi } from 'vitest'
+import { createInstance } from 'i18next'
+import { I18nextProvider } from 'react-i18next'
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import type { Message } from '../../../types'
 import { PlaygroundMessageEditor } from '../playground-message-editor'
 
 const leavePrompt = 'You have unsaved changes. Are you sure you want to leave?'
+
+// A dedicated instance keeps this file independent of the app-wide i18next
+// singleton, whose `addResourceBundle` only exists after `init()` runs.
+const i18n = createInstance()
 
 const userMessage: Message = {
   key: 'msg-1',
@@ -33,28 +38,41 @@ const userMessage: Message = {
   versions: [{ id: 'v1', content: 'original' }],
 }
 
+afterEach(() => {
+  cleanup()
+})
+
 function renderEditor(options: {
   editText: string
   onCancelEdit?: (open: boolean) => void
 }) {
   return render(
-    <PlaygroundMessageEditor
-      editText={options.editText}
-      message={userMessage}
-      onCancelEdit={options.onCancelEdit}
-      onEditTextChange={() => undefined}
-      originalText='original'
-    />
+    <I18nextProvider i18n={i18n}>
+      <PlaygroundMessageEditor
+        editText={options.editText}
+        message={userMessage}
+        onCancelEdit={options.onCancelEdit}
+        onEditTextChange={() => undefined}
+        originalText='original'
+      />
+    </I18nextProvider>
   )
 }
 
 describe('PlaygroundMessageEditor leave warning', () => {
-  beforeAll(() => {
-    i18next.addResourceBundle('en', 'translation', {
-      Cancel: 'Cancel',
-      Leave: 'Leave',
-      Stay: 'Stay',
-      [leavePrompt]: leavePrompt,
+  beforeAll(async () => {
+    await i18n.init({
+      lng: 'en',
+      resources: {
+        en: {
+          translation: {
+            Cancel: 'Cancel',
+            Leave: 'Leave',
+            Stay: 'Stay',
+            [leavePrompt]: leavePrompt,
+          },
+        },
+      },
     })
   })
 

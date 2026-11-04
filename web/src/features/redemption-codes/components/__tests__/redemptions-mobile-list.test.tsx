@@ -17,10 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { after, test } from 'node:test'
 
 import type { Table } from '@tanstack/react-table'
 import { Window } from 'happy-dom'
+import { afterAll, test } from 'vitest'
 
 import type { Redemption } from '../../types'
 
@@ -122,7 +122,7 @@ function renderList(props?: {
   }
 }
 
-after(() => {
+afterAll(() => {
   domWindow.close()
 })
 

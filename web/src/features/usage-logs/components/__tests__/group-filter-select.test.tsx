@@ -18,10 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import assert from 'node:assert/strict'
-import { after, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
 import type { ReactNode } from 'react'
+import { afterAll, describe, test } from 'vitest'
 
 const domWindow = new Window()
 const domGlobals = [
@@ -103,7 +103,7 @@ async function renderTriggerText(props: HarnessProps): Promise<string> {
 }
 
 describe('log group filter select', () => {
-  after(() => {
+  afterAll(() => {
     domWindow.close()
   })
 

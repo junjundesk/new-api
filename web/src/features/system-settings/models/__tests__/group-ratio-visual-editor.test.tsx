@@ -17,9 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { after, before, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
+import { afterAll, beforeAll, describe, test } from 'vitest'
 
 const domWindow = new Window()
 const domGlobals = [
@@ -82,11 +82,11 @@ function changeInputValue(input: HTMLInputElement, value: string) {
 describe('group pricing visual editor', () => {
   let originalPost: typeof api.post
 
-  before(() => {
+  beforeAll(() => {
     originalPost = api.post
   })
 
-  after(() => {
+  afterAll(() => {
     api.post = originalPost
     domWindow.close()
   })

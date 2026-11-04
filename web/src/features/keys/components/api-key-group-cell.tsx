@@ -39,7 +39,7 @@ import {
 
 import { updateApiKeyGroup } from '../api'
 import {
-  // AutoGroupBadge,
+  AutoGroupBadge,
   GroupRatioBadge,
   type GroupRatio,
 } from './auto-group-visuals'
@@ -107,6 +107,7 @@ function GroupCellContent(props: ApiKeyGroupCellProps) {
         }
       >
         <StatusBadge label={t('Cross-group')} variant='info' copyable={false} />
+        <AutoGroupBadge shouldReduceMotion={props.shouldReduceMotion} />
         <GroupRatioBadge
           ratio={props.ratio}
           isAuto
