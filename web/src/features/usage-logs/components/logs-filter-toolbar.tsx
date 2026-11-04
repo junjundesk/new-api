@@ -85,6 +85,34 @@ export function LogsFilterInput(props: ComponentProps<typeof Input>) {
   )
 }
 
+/**
+ * Filter input that additionally offers the values in `suggestions` through a
+ * native datalist. Free text stays allowed, and Enter still submits the filter
+ * (the datalist only fills the box, it never swallows the key press).
+ */
+export function LogsFilterSuggestInput({
+  suggestions,
+  listId,
+  ...props
+}: ComponentProps<typeof LogsFilterInput> & {
+  suggestions?: readonly string[]
+  listId: string
+}) {
+  const hasSuggestions = (suggestions?.length ?? 0) > 0
+  return (
+    <>
+      <LogsFilterInput {...props} list={hasSuggestions ? listId : undefined} />
+      {hasSuggestions && (
+        <datalist id={listId}>
+          {suggestions?.map((value) => (
+            <option key={value} value={value} />
+          ))}
+        </datalist>
+      )}
+    </>
+  )
+}
+
 export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
   const { t } = useTranslation()
   const [advancedOpen, setAdvancedOpen] = useState(false)

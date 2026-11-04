@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { flexRender, type Cell, type Table } from '@tanstack/react-table'
-import { Database } from 'lucide-react'
+import { Database, ListFilter } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -48,7 +48,7 @@ import {
 } from '../lib/utils'
 import type { LogCategory } from '../types'
 import { StreamTpsCell, TimingMetricsCell } from './timing-metrics-cell'
-import { useUsageLogsContext } from './usage-logs-provider'
+import { useUsageLogsContext, useViewUserLogs } from './usage-logs-provider'
 
 const logTypeRowTint: Record<number, string> = {
   [LOG_TYPE_ENUM.ERROR]:
@@ -242,38 +242,53 @@ function MobileTokensField({ log }: { log: UsageLog }) {
 
 /** Mobile-only User block: own layout so avatar/name always line up on the same baseline. */
 function MobileUserField({ log }: { log: UsageLog }) {
+  const { t } = useTranslation()
   const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
     useUsageLogsContext()
+  const viewUserLogs = useViewUserLogs()
 
   if (!log.username) return null
 
   return (
-    <button
-      type='button'
-      className='bg-muted/20 flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left'
-      onClick={(e) => {
-        e.stopPropagation()
-        setSelectedUserId(log.user_id)
-        setUserInfoDialogOpen(true)
-      }}
-    >
-      <Avatar className='ring-border/60 size-6 shrink-0 ring-1'>
-        <AvatarFallback
-          className={cn(
-            'text-[11px] font-semibold',
-            !sensitiveVisible && 'bg-muted text-muted-foreground'
-          )}
-          style={
-            sensitiveVisible ? getUserAvatarStyle(log.username) : undefined
-          }
-        >
-          {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
-        </AvatarFallback>
-      </Avatar>
-      <span className='text-foreground min-w-0 truncate text-sm'>
-        {sensitiveVisible ? log.username : '••••'}
-      </span>
-    </button>
+    <div className='bg-muted/20 flex min-w-0 items-center gap-0.5 rounded-md py-1.5 pr-1 pl-2'>
+      <button
+        type='button'
+        className='flex min-w-0 flex-1 items-center gap-1.5 text-left'
+        onClick={(e) => {
+          e.stopPropagation()
+          setSelectedUserId(log.user_id)
+          setUserInfoDialogOpen(true)
+        }}
+      >
+        <Avatar className='ring-border/60 size-6 shrink-0 ring-1'>
+          <AvatarFallback
+            className={cn(
+              'text-[11px] font-semibold',
+              !sensitiveVisible && 'bg-muted text-muted-foreground'
+            )}
+            style={
+              sensitiveVisible ? getUserAvatarStyle(log.username) : undefined
+            }
+          >
+            {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
+          </AvatarFallback>
+        </Avatar>
+        <span className='text-foreground min-w-0 truncate text-sm'>
+          {sensitiveVisible ? log.username : '••••'}
+        </span>
+      </button>
+      <button
+        type='button'
+        className='text-muted-foreground/60 hover:text-foreground inline-flex size-6 shrink-0 items-center justify-center rounded-md'
+        aria-label={t('View this user’s logs')}
+        onClick={(e) => {
+          e.stopPropagation()
+          viewUserLogs(log.username)
+        }}
+      >
+        <ListFilter className='size-3.5' aria-hidden='true' />
+      </button>
+    </div>
   )
 }
 

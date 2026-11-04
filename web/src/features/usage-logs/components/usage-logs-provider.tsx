@@ -17,11 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
 import { useIsAdmin } from '@/hooks/use-admin'
 
 import type { ChannelAffinityInfo } from '../types'
+
+const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 export type LogsViewScope = 'all' | 'self'
 
@@ -100,4 +103,28 @@ export function useLogsViewScope() {
     setViewScope,
     isAdminView: canManageScope && viewScope === 'all',
   }
+}
+
+/**
+ * Returns a handler that narrows the common-logs list to one user. Every other
+ * active filter is kept and pagination resets, mirroring the filter bar's
+ * search. The username filter only reaches the API in the all-users scope, so
+ * an admin sitting in "Only Mine" is switched back to that scope first.
+ */
+export function useViewUserLogs() {
+  const { setViewScope } = useUsageLogsContext()
+  const navigate = useNavigate()
+  const searchParams = route.useSearch()
+
+  return useCallback(
+    (username: string) => {
+      setViewScope('all')
+      navigate({
+        to: '/usage-logs/$section',
+        params: { section: 'common' },
+        search: { ...searchParams, username, page: 1 },
+      })
+    },
+    [navigate, searchParams, setViewScope]
+  )
 }

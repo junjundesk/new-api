@@ -37,6 +37,7 @@ import {
 interface GroupFilterSelectProps {
   value?: string
   groups?: readonly string[] | Record<string, unknown>
+  ratios?: Record<string, number | string>
   onChange: (group: string | undefined) => void
 }
 
@@ -44,12 +45,16 @@ export function GroupFilterSelect(props: GroupFilterSelectProps) {
   const { t } = useTranslation()
   const allLabel = t('All Groups')
   const options = useMemo(() => {
-    const base = buildGroupFilterOptions(props.groups, allLabel)
+    const base = buildGroupFilterOptions(
+      props.groups,
+      allLabel,
+      props.ratios
+    )
     if (props.value && !base.some((option) => option.value === props.value)) {
       base.push({ value: props.value, label: props.value })
     }
     return base
-  }, [props.groups, props.value, allLabel])
+  }, [props.groups, props.value, props.ratios, allLabel])
 
   const selectedValue = props.value || GROUP_FILTER_ALL_VALUE
   const selectedLabel =

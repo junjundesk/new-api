@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Globe, Sparkles, KeyRound } from 'lucide-react'
+import { GitBranch, Globe, Sparkles, KeyRound, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -44,6 +44,7 @@ import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
+  formatRatioCompact,
   getRequestIpForDisplay,
   getTieredBillingSummary,
   hasAnyCacheTokens,
@@ -66,19 +67,12 @@ import { LogCostDisplay } from '../log-cost-display'
 import { LogFallbackBadge } from '../log-fallback-badge'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
-import { useUsageLogsContext } from '../usage-logs-provider'
+import { useUsageLogsContext, useViewUserLogs } from '../usage-logs-provider'
 
 interface DetailSegment {
   text: string
   muted?: boolean
   danger?: boolean
-}
-
-function formatRatioCompact(ratio: number | undefined): string {
-  if (ratio == null || !Number.isFinite(ratio)) return '-'
-  return ratio % 1 === 0
-    ? String(ratio)
-    : ratio.toFixed(4).replace(/\.?0+$/, '')
 }
 
 function getGroupRatio(other: LogOtherData | null): number | null {
@@ -506,50 +500,77 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         cell: function UserCell({ row }) {
           const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
             useUsageLogsContext()
+          const viewUserLogs = useViewUserLogs()
           const log = row.original
 
           if (!log.username) return null
 
           return (
-            <button
-              type='button'
-              className='flex items-center gap-1.5 text-left'
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedUserId(log.user_id)
-                setUserInfoDialogOpen(true)
-              }}
-            >
-              <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
-                <AvatarFallback
-                  className={cn(
-                    'text-[11px] font-semibold',
-                    !sensitiveVisible && 'bg-muted text-muted-foreground'
-                  )}
-                  style={
-                    sensitiveVisible
-                      ? getUserAvatarStyle(log.username)
-                      : undefined
-                  }
-                >
-                  {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
-                </AvatarFallback>
-              </Avatar>
+            <div className='flex min-w-0 items-center gap-0.5'>
+              <button
+                type='button'
+                className='flex min-w-0 items-center gap-1.5 text-left'
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedUserId(log.user_id)
+                  setUserInfoDialogOpen(true)
+                }}
+              >
+                <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
+                  <AvatarFallback
+                    className={cn(
+                      'text-[11px] font-semibold',
+                      !sensitiveVisible && 'bg-muted text-muted-foreground'
+                    )}
+                    style={
+                      sensitiveVisible
+                        ? getUserAvatarStyle(log.username)
+                        : undefined
+                    }
+                  >
+                    {sensitiveVisible
+                      ? getUserAvatarFallback(log.username)
+                      : '•'}
+                  </AvatarFallback>
+                </Avatar>
+                <TooltipProvider delay={300}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
+                      }
+                    >
+                      {sensitiveVisible ? log.username : '••••'}
+                    </TooltipTrigger>
+                    {sensitiveVisible && log.username.length > 12 && (
+                      <TooltipContent side='top'>{log.username}</TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              </button>
               <TooltipProvider delay={300}>
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
+                      <button
+                        type='button'
+                        className='text-muted-foreground/60 hover:bg-muted hover:text-foreground focus-visible:ring-ring inline-flex size-5 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none'
+                        aria-label={t('View this user’s logs')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          viewUserLogs(log.username)
+                        }}
+                      />
                     }
                   >
-                    {sensitiveVisible ? log.username : '••••'}
+                    <ScrollText className='size-3.5' aria-hidden='true' />
                   </TooltipTrigger>
-                  {sensitiveVisible && log.username.length > 12 && (
-                    <TooltipContent side='top'>{log.username}</TooltipContent>
-                  )}
+                  <TooltipContent side='top'>
+                    {t('View this user’s logs')}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            </button>
+            </div>
           )
         },
       },

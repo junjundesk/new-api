@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getGroups as getModelGroupNames } from '@/features/users/api'
+import { getGroupModelNames } from '@/features/models/api'
 import { getUserGroups } from '@/lib/api'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
@@ -50,6 +51,7 @@ import { GroupFilterSelect } from './group-filter-select'
 import {
   LogsFilterField,
   LogsFilterInput,
+  LogsFilterSuggestInput,
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
@@ -186,6 +188,18 @@ export function CommonLogsFilterBar<TData>(
   const filters = activeDraft.filters
   const logType = activeDraft.logType
 
+  // Once one group is chosen, the model box suggests the models that group
+  // actually serves, so the operator does not have to recall the catalog.
+  // It follows the pending draft, so picking a group fills the suggestions
+  // before the search is applied.
+  const selectedGroup = filters.group || ''
+  const { data: groupModelNames } = useQuery({
+    queryKey: ['log-group-model-names', selectedGroup, isAdmin],
+    queryFn: () => getGroupModelNames(selectedGroup),
+    enabled: !!selectedGroup,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const handleChange = useCallback(
     (field: keyof CommonLogFilters, value: Date | string | undefined) => {
       setDraft((current) => {
@@ -319,11 +333,21 @@ export function CommonLogsFilterBar<TData>(
       />
     </LogsFilterField>
   )
+  const userGroupRatios = useMemo(() => {
+    const ratios: Record<string, number | string> = {}
+    for (const [name, info] of Object.entries(userGroups?.data ?? {})) {
+      ratios[name] = info.ratio
+    }
+    return ratios
+  }, [userGroups])
+
   const modelFilter = (
     <LogsFilterField>
-      <LogsFilterInput
+      <LogsFilterSuggestInput
+        listId='usage-logs-model-suggestions'
         placeholder={t('Model Name')}
         value={filters.model || ''}
+        suggestions={groupModelNames}
         onChange={(e) => handleChange('model', e.target.value)}
         onKeyDown={handleKeyDown}
       />
@@ -334,6 +358,9 @@ export function CommonLogsFilterBar<TData>(
       <GroupFilterSelect
         value={filters.group}
         groups={isAdmin ? modelGroupNames?.data : userGroups?.data}
+        ratios={
+          isAdmin ? modelGroupNames?.ratios : userGroupRatios
+        }
         onChange={(group) => handleChange('group', group)}
       />
     </LogsFilterField>

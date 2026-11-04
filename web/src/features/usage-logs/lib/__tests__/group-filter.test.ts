@@ -67,4 +67,36 @@ describe('log group filter options', () => {
       [GROUP_FILTER_ALL_VALUE, 'default', 'vip']
     )
   })
+
+  test('shows the billing ratio next to each group that has one', () => {
+    const options = buildGroupFilterOptions(
+      ['vip', 'default', 'k12'],
+      'All Groups',
+      { vip: 1.5, default: 1, k12: 0.8 }
+    )
+
+    assert.deepEqual(
+      options.map((option) => option.label),
+      ['All Groups', 'default · 1x', 'k12 · 0.8x', 'vip · 1.5x']
+    )
+  })
+
+  test('keeps groups without a ratio readable instead of inventing one', () => {
+    const options = buildGroupFilterOptions(
+      ['auto', 'vip'],
+      'All Groups',
+      // The user-facing endpoint reports the auto group as "自动".
+      { auto: '自动', vip: Number.NaN }
+    )
+
+    assert.deepEqual(
+      options.map((option) => option.label),
+      ['All Groups', 'auto · 自动', 'vip']
+    )
+    // The filter value stays the bare group name, never the decorated label.
+    assert.deepEqual(
+      options.map((option) => option.value),
+      [GROUP_FILTER_ALL_VALUE, 'auto', 'vip']
+    )
+  })
 })

@@ -648,47 +648,60 @@ func GetAllLogs(logType int, logGroup string, startTimestamp int64, endTimestamp
 		assignDisplayLogIds(logs, startIdx)
 	}
 
+	if err = fillLogChannelNames(logs); err != nil {
+		return logs, total, err
+	}
+
+	return logs, total, err
+}
+
+// fillLogChannelNames resolves the display name of every channel referenced by
+// the page's logs. The name is admin-facing only (the frontend renders the
+// channel column for admins alone) and is what the log list shows next to the
+// channel id, so both the all-users listing and the admin's self scope need it.
+func fillLogChannelNames(logs []*Log) error {
 	channelIds := types.NewSet[int]()
 	for _, log := range logs {
 		if log.ChannelId != 0 {
 			channelIds.Add(log.ChannelId)
 		}
 	}
+	if channelIds.Len() == 0 {
+		return nil
+	}
 
-	if channelIds.Len() > 0 {
-		var channels []struct {
-			Id   int    `gorm:"column:id"`
-			Name string `gorm:"column:name"`
-		}
-		if common.MemoryCacheEnabled {
-			// Cache get channel
-			for _, channelId := range channelIds.Items() {
-				if cacheChannel, err := CacheGetChannel(channelId); err == nil {
-					channels = append(channels, struct {
-						Id   int    `gorm:"column:id"`
-						Name string `gorm:"column:name"`
-					}{
-						Id:   channelId,
-						Name: cacheChannel.Name,
-					})
-				}
-			}
-		} else {
-			// Bulk query channels from DB
-			if err = DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
-				return logs, total, err
+	var channels []struct {
+		Id   int    `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+	if common.MemoryCacheEnabled {
+		// Cache get channel
+		for _, channelId := range channelIds.Items() {
+			if cacheChannel, err := CacheGetChannel(channelId); err == nil {
+				channels = append(channels, struct {
+					Id   int    `gorm:"column:id"`
+					Name string `gorm:"column:name"`
+				}{
+					Id:   channelId,
+					Name: cacheChannel.Name,
+				})
 			}
 		}
-		channelMap := make(map[int]string, len(channels))
-		for _, channel := range channels {
-			channelMap[channel.Id] = channel.Name
-		}
-		for i := range logs {
-			logs[i].ChannelName = channelMap[logs[i].ChannelId]
+	} else {
+		// Bulk query channels from DB
+		if err := DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
+			return err
 		}
 	}
 
-	return logs, total, err
+	channelMap := make(map[int]string, len(channels))
+	for _, channel := range channels {
+		channelMap[channel.Id] = channel.Name
+	}
+	for i := range logs {
+		logs[i].ChannelName = channelMap[logs[i].ChannelId]
+	}
+	return nil
 }
 
 const logSearchCountLimit = 10000
@@ -736,6 +749,13 @@ func GetUserLogs(userId int, logType int, logGroup string, startTimestamp int64,
 	}
 
 	formatLogs(logs, startIdx, includeAdminInfo)
+	// The channel-name column is an admin view; non-admin callers keep the
+	// blank name they have always received.
+	if includeAdminInfo {
+		if err = fillLogChannelNames(logs); err != nil {
+			return logs, total, err
+		}
+	}
 	return logs, total, err
 }
 

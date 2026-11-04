@@ -251,6 +251,16 @@ export async function getGroupModelMembers(
 }
 
 /**
+ * List the model names reachable in one group, for suggesting filter values.
+ * Unlike the plaza variant below this only needs the names, so it stays usable
+ * from the ordinary user session.
+ */
+export async function getGroupModelNames(group: string): Promise<string[]> {
+  const res = await api.get('/api/user/models', { params: { group } })
+  return (res.data?.data as string[] | undefined) ?? []
+}
+
+/**
  * Get prefill groups
  */
 export async function getPrefillGroups(

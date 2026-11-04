@@ -56,6 +56,17 @@ const PARAM_OVERRIDE_ACTION_MAP: Record<string, string> = {
 }
 
 /**
+ * Render a ratio as a compact multiplier, dropping trailing zeros so
+ * `1` stays "1" and `1.2500` becomes "1.25".
+ */
+export function formatRatioCompact(ratio: number | undefined): string {
+  if (ratio == null || !Number.isFinite(ratio)) return '-'
+  return ratio % 1 === 0
+    ? String(ratio)
+    : ratio.toFixed(4).replace(/\.?0+$/, '')
+}
+
+/**
  * Get localized label for a param override action
  */
 export function getParamOverrideActionLabel(
