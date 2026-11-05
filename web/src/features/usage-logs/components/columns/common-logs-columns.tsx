@@ -16,8 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Globe, Sparkles, KeyRound, ScrollText } from 'lucide-react'
+import {
+  ArrowUpRight,
+  GitBranch,
+  Globe,
+  Sparkles,
+  KeyRound,
+  ScrollText,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -45,6 +53,7 @@ import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
   formatRatioCompact,
+  getLogChannelGroup,
   getRequestIpForDisplay,
   getTieredBillingSummary,
   hasAnyCacheTokens,
@@ -367,16 +376,26 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             other?.admin_info?.is_multi_key === true &&
             typeof multiKeyIndex === 'number' &&
             Number.isFinite(multiKeyIndex)
+          // Following the channel opens its group's channel list, not a
+          // channel-filtered one, so sibling channels stay in view. Hidden
+          // while sensitive values are masked: the link's target exposes the
+          // group, like the token name copy action in the token column.
+          const channelGroup = sensitiveVisible
+            ? getLogChannelGroup(log, other)
+            : ''
+          const channelGroupLinkLabel = t('View channels in group {{group}}', {
+            group: channelGroup,
+          })
 
           return (
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <div className='flex max-w-[160px] flex-col gap-0.5' />
-                  }
-                >
-                  <div className='relative inline-flex w-fit items-center gap-1'>
+                <div className='flex max-w-[160px] flex-col gap-0.5'>
+                  <TooltipTrigger
+                    render={
+                      <div className='relative inline-flex w-fit items-center gap-1' />
+                    }
+                  >
                     <StatusBadge
                       label={channelIdDisplay}
                       autoColor={String(log.channel)}
@@ -448,13 +467,47 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                         <Sparkles className='size-3 fill-current' />
                       </button>
                     )}
-                  </div>
+                  </TooltipTrigger>
                   {log.channel_name && (
-                    <span className='text-muted-foreground/70 truncate [font-family:var(--font-body)] !text-xs'>
-                      {channelName}
-                    </span>
+                    <div className='flex min-w-0 items-center gap-0.5'>
+                      <TooltipTrigger
+                        render={
+                          <span className='text-muted-foreground/70 min-w-0 truncate [font-family:var(--font-body)] !text-xs' />
+                        }
+                      >
+                        {channelName}
+                      </TooltipTrigger>
+                      {channelGroup && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Link
+                                to='/channels'
+                                // An explicit "all statuses" keeps the
+                                // channels page from re-applying a remembered
+                                // status filter that could hide this channel.
+                                search={{
+                                  group: [channelGroup],
+                                  status: ['all'],
+                                }}
+                                aria-label={channelGroupLinkLabel}
+                                className='text-muted-foreground/60 hover:bg-muted hover:text-foreground focus-visible:ring-ring inline-flex size-5 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none'
+                              />
+                            }
+                          >
+                            <ArrowUpRight
+                              className='size-3.5'
+                              aria-hidden='true'
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent side='top'>
+                            {channelGroupLinkLabel}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   )}
-                </TooltipTrigger>
+                </div>
                 <TooltipContent>
                   <div className='space-y-1'>
                     <p>

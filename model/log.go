@@ -57,28 +57,31 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 }
 
 type Log struct {
-	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
-	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
-	Content           string `json:"content"`
-	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
-	TokenName         string `json:"token_name" gorm:"index;default:''"`
-	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
-	Quota             int    `json:"quota" gorm:"default:0"`
-	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
-	UseTime           int    `json:"use_time" gorm:"default:0"`
-	IsStream          bool   `json:"is_stream"`
-	AdminOnly         bool   `json:"-"` // 仅管理员可见：同一请求中被后续尝试取代的中间失败记录
-	ChannelId         int    `json:"channel" gorm:"index"`
-	ChannelName       string `json:"channel_name" gorm:"->"`
-	TokenId           int    `json:"token_id" gorm:"default:0;index"`
-	Group             string `json:"group" gorm:"index"`
-	Ip                string `json:"ip" gorm:"index;default:''"`
-	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
-	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
-	Other             string `json:"other"`
+	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
+	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
+	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
+	Content          string `json:"content"`
+	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	TokenName        string `json:"token_name" gorm:"index;default:''"`
+	ModelName        string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
+	Quota            int    `json:"quota" gorm:"default:0"`
+	PromptTokens     int    `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens int    `json:"completion_tokens" gorm:"default:0"`
+	UseTime          int    `json:"use_time" gorm:"default:0"`
+	IsStream         bool   `json:"is_stream"`
+	AdminOnly        bool   `json:"-"` // 仅管理员可见：同一请求中被后续尝试取代的中间失败记录
+	ChannelId        int    `json:"channel" gorm:"index"`
+	ChannelName      string `json:"channel_name" gorm:"->"`
+	// ChannelGroups are the channel's current groups, resolved on admin reads
+	// only; never stored with the log.
+	ChannelGroups     []string `json:"channel_groups,omitempty" gorm:"-"`
+	TokenId           int      `json:"token_id" gorm:"default:0;index"`
+	Group             string   `json:"group" gorm:"index"`
+	Ip                string   `json:"ip" gorm:"index;default:''"`
+	RequestId         string   `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
+	UpstreamRequestId string   `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
+	Other             string   `json:"other"`
 }
 
 // don't use iota, avoid change log type value
@@ -648,18 +651,22 @@ func GetAllLogs(logType int, logGroup string, startTimestamp int64, endTimestamp
 		assignDisplayLogIds(logs, startIdx)
 	}
 
-	if err = fillLogChannelNames(logs); err != nil {
+	if err = fillLogChannelInfo(logs); err != nil {
 		return logs, total, err
 	}
 
 	return logs, total, err
 }
 
-// fillLogChannelNames resolves the display name of every channel referenced by
-// the page's logs. The name is admin-facing only (the frontend renders the
-// channel column for admins alone) and is what the log list shows next to the
-// channel id, so both the all-users listing and the admin's self scope need it.
-func fillLogChannelNames(logs []*Log) error {
+// fillLogChannelInfo resolves every channel referenced by the page's logs: the
+// display name shown next to the channel id, and the channel's current groups,
+// which the channel column links to so the link always lands on a group whose
+// channel list contains that channel. The group a log records is the token's
+// billing group and may not contain the channel (chain names, "auto", channel
+// tests, pinned channels, or a channel moved since). Both values are
+// admin-facing only (the frontend renders the channel column for admins
+// alone), and both the all-users listing and the admin's self scope need them.
+func fillLogChannelInfo(logs []*Log) error {
 	channelIds := types.NewSet[int]()
 	for _, log := range logs {
 		if log.ChannelId != 0 {
@@ -670,36 +677,33 @@ func fillLogChannelNames(logs []*Log) error {
 		return nil
 	}
 
-	var channels []struct {
-		Id   int    `gorm:"column:id"`
-		Name string `gorm:"column:name"`
-	}
+	channelMap := make(map[int]*Channel, channelIds.Len())
 	if common.MemoryCacheEnabled {
 		// Cache get channel
 		for _, channelId := range channelIds.Items() {
 			if cacheChannel, err := CacheGetChannel(channelId); err == nil {
-				channels = append(channels, struct {
-					Id   int    `gorm:"column:id"`
-					Name string `gorm:"column:name"`
-				}{
-					Id:   channelId,
-					Name: cacheChannel.Name,
-				})
+				channelMap[channelId] = cacheChannel
 			}
 		}
 	} else {
 		// Bulk query channels from DB
-		if err := DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
+		var channels []*Channel
+		if err := DB.Table("channels").Select("id, name, "+commonGroupCol).Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
 			return err
+		}
+		for _, channel := range channels {
+			channelMap[channel.Id] = channel
 		}
 	}
 
-	channelMap := make(map[int]string, len(channels))
-	for _, channel := range channels {
-		channelMap[channel.Id] = channel.Name
-	}
 	for i := range logs {
-		logs[i].ChannelName = channelMap[logs[i].ChannelId]
+		channel, ok := channelMap[logs[i].ChannelId]
+		if !ok {
+			logs[i].ChannelName = ""
+			continue
+		}
+		logs[i].ChannelName = channel.Name
+		logs[i].ChannelGroups = channel.GetGroups()
 	}
 	return nil
 }
@@ -749,10 +753,10 @@ func GetUserLogs(userId int, logType int, logGroup string, startTimestamp int64,
 	}
 
 	formatLogs(logs, startIdx, includeAdminInfo)
-	// The channel-name column is an admin view; non-admin callers keep the
-	// blank name they have always received.
+	// The channel column is an admin view; non-admin callers keep the blank
+	// channel name they have always received and get no channel groups.
 	if includeAdminInfo {
-		if err = fillLogChannelNames(logs); err != nil {
+		if err = fillLogChannelInfo(logs); err != nil {
 			return logs, total, err
 		}
 	}

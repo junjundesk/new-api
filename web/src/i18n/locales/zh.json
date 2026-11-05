@@ -5867,6 +5867,7 @@
     "View all currently available models": "查看当前可用的所有模型",
     "View channel lists and details without secrets.": "查看不含密钥的渠道列表和详情。",
     "View channel secrets": "查看渠道密钥",
+    "View channels in group {{group}}": "查看分组 {{group}} 下的渠道",
     "View client details of {{name}}": "查看 {{name}} 的客户端详情",
     "View detailed information about this user including balance, usage statistics, and invitation details.": "查看此用户的详细信息，包括余额、使用统计和邀请详情。",
     "View details": "查看详情",

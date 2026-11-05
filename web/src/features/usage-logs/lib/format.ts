@@ -188,6 +188,49 @@ export function getRequestIpForDisplay(
 }
 
 /**
+ * Pick the group the channel column links to. It is always one of the
+ * channel's current groups (resolved by the backend on admin reads), so the
+ * linked channel list is guaranteed to contain the channel.
+ *
+ * Among those groups, prefer the one the request selected the channel from.
+ * Consume logs record it as their group (auto and chain tokens are already
+ * resolved to the concrete group). Error logs record the token group instead
+ * ("auto", a chain name, or the original group after a failed fallback), so a
+ * fallback attempt or a channel-affinity hit naming this exact channel comes
+ * first, the latest attempt winning. When no preferred group contains the
+ * channel (channel tests and pinned channels record the caller's group, and
+ * channels move between groups) the channel's first group is used. A log
+ * without a channel, or whose channel is gone or has no group, resolves to an
+ * empty string.
+ */
+export function getLogChannelGroup(
+  log: Pick<UsageLog, 'channel' | 'channel_groups' | 'group'>,
+  other: LogOtherData | null
+): string {
+  const channelGroups = (log.channel_groups ?? []).filter(Boolean)
+  if (!log.channel || channelGroups.length === 0) return ''
+
+  const preferredGroups: string[] = []
+  const attempts = other?.admin_info?.fallback_attempts ?? []
+  for (let index = attempts.length - 1; index >= 0; index--) {
+    const attempt = attempts[index]
+    if (attempt.channel_id === log.channel && attempt.group) {
+      preferredGroups.push(attempt.group)
+    }
+  }
+  const affinity = other?.admin_info?.channel_affinity
+  if (affinity?.channel_id === log.channel && affinity.selected_group) {
+    preferredGroups.push(affinity.selected_group)
+  }
+  preferredGroups.push(log.group || other?.group || '')
+
+  return (
+    preferredGroups.find((group) => channelGroups.includes(group)) ??
+    channelGroups[0]
+  )
+}
+
+/**
  * Format a first-token latency (in seconds) for display.
  *
  * Sub-second latencies are rendered as integer milliseconds so values below

@@ -39,6 +39,8 @@ export const usageLogSchema = z.object({
   is_stream: z.boolean().default(false),
   channel: z.number().default(0),
   channel_name: z.string().nullish().default(''),
+  // The channel's current groups; admin reads only, absent otherwise.
+  channel_groups: z.array(z.string()).optional(),
   token_id: z.number().default(0),
   group: z.string().default(''),
   ip: z.string().default(''),

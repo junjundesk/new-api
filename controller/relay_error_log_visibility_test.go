@@ -18,8 +18,8 @@ import (
 )
 
 // setupProcessChannelErrorDB 提供 processChannelError 依赖的最小环境：日志表
-// （含 admin_only 列）、用户表与错误日志总开关。ErrorLogEnabled 是包级变量，
-// 测试结束后恢复，避免影响其它用例。
+// （含 admin_only 列）、用户表、渠道表（管理员读日志时按渠道补齐名称与分组）
+// 与错误日志总开关。ErrorLogEnabled 是包级变量，测试结束后恢复，避免影响其它用例。
 func setupProcessChannelErrorDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	previousDB := model.DB
@@ -29,7 +29,7 @@ func setupProcessChannelErrorDB(t *testing.T) *gorm.DB {
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Log{}, &model.User{}))
+	require.NoError(t, db.AutoMigrate(&model.Log{}, &model.User{}, &model.Channel{}))
 	model.DB = db
 	model.LOG_DB = db
 	constant.ErrorLogEnabled = true

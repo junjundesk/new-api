@@ -142,13 +142,22 @@ export function ChannelsTable() {
   ) => {
     onColumnFiltersChange((previous) => {
       const next = typeof updater === 'function' ? updater(previous) : updater
+      // Remember the status filter only when it changes. A status that came
+      // in through the URL (e.g. the usage-log group link) must not overwrite
+      // the remembered one just because another filter was touched.
+      const previousStatus = previous.find((f) => f.id === 'status')?.value as
+        | string[]
+        | undefined
       const status = next.find((f) => f.id === 'status')?.value as
         | string[]
         | undefined
-      localStorage.setItem(
-        CHANNELS_STATUS_FILTER_STORAGE_KEY,
-        status?.[0] ?? 'all'
-      )
+      const statusToRemember = status?.[0] ?? 'all'
+      if (statusToRemember !== (previousStatus?.[0] ?? 'all')) {
+        localStorage.setItem(
+          CHANNELS_STATUS_FILTER_STORAGE_KEY,
+          statusToRemember
+        )
+      }
       return next
     })
   }

@@ -5867,6 +5867,7 @@
     "View all currently available models": "View all currently available models",
     "View channel lists and details without secrets.": "View channel lists and details without secrets.",
     "View channel secrets": "View channel secrets",
+    "View channels in group {{group}}": "View channels in group {{group}}",
     "View client details of {{name}}": "查看 {{name}} 的客户端详情",
     "View detailed information about this user including balance, usage statistics, and invitation details.": "View detailed information about this user including balance, usage statistics, and invitation details.",
     "View details": "View details",
