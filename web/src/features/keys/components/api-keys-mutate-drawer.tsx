@@ -72,6 +72,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { getModuleAccessFromStatus } from '@/lib/nav-modules'
 import { cn } from '@/lib/utils'
 
 import {
@@ -102,6 +103,7 @@ import {
 import { ApiKeyModelMappingSection } from './api-key-model-mapping-section'
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
+import { ModelSpecificRatioNoticeDialog } from './dialogs/model-specific-ratio-notice-dialog'
 
 type ApiKeyMutateDrawerProps = {
   open: boolean
@@ -124,6 +126,8 @@ export function ApiKeysMutateDrawer({
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
     null
   )
+  const [ratioNoticeOpen, setRatioNoticeOpen] = useState(false)
+  const [ratioNoticeGroup, setRatioNoticeGroup] = useState<string | null>(null)
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
   // Fetch models
@@ -300,13 +304,18 @@ export function ApiKeysMutateDrawer({
         groups[0]?.value ??
         ''
       form.setValue('group', fallback)
+      // The notice describes a group the form no longer points at.
+      if (ratioNoticeGroup === currentGroup) {
+        setRatioNoticeOpen(false)
+        setRatioNoticeGroup(null)
+      }
       if (currentGroup === 'auto') {
         form.setValue('auto_groups', [])
         form.setValue('auto_groups_mode', 'inherit')
         form.setValue('cross_group_retry', false)
       }
     }
-  }, [groups, form, selectedGroup])
+  }, [groups, form, selectedGroup, ratioNoticeGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
     if (data.model_mappings.length > 0) {
@@ -413,6 +422,7 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const autoGroupsMode = form.watch('auto_groups_mode')
   const unlimitedQuota = form.watch('unlimited_quota')
+  const pricingEnabled = getModuleAccessFromStatus(status, 'pricing').enabled
 
   return (
     <Sheet
@@ -421,6 +431,8 @@ export function ApiKeysMutateDrawer({
         onOpenChange(v)
         if (!v) {
           form.reset()
+          setRatioNoticeOpen(false)
+          setRatioNoticeGroup(null)
         }
       }}
     >
@@ -477,6 +489,18 @@ export function ApiKeysMutateDrawer({
                         options={groups}
                         value={field.value}
                         onValueChange={(group) => {
+                          // Switching to a group whose models carry their own
+                          // billing ratio is a pricing decision, so warn before
+                          // the key is created.
+                          if (group !== field.value && !isUpdate) {
+                            const nextOption = groups.find(
+                              (option) => option.value === group
+                            )
+                            if (nextOption?.hasModelSpecificRatio) {
+                              setRatioNoticeGroup(group)
+                              setRatioNoticeOpen(true)
+                            }
+                          }
                           field.onChange(group)
                           if (group === 'auto') {
                             form.setValue('cross_group_retry', true, {
@@ -910,6 +934,23 @@ export function ApiKeysMutateDrawer({
             {isSubmitting ? t('Saving...') : t('Save changes')}
           </Button>
         </SheetFooter>
+        {/* Nested inside the sheet so the sheet ignores Escape while the
+            notice is open, instead of closing and dropping the form. */}
+        <ModelSpecificRatioNoticeDialog
+          open={ratioNoticeOpen}
+          onOpenChange={setRatioNoticeOpen}
+          groupLabel={
+            groups.find((group) => group.value === ratioNoticeGroup)?.label ??
+            ratioNoticeGroup ??
+            ''
+          }
+          pricingGroup={
+            ratioNoticeGroup?.startsWith('chain:')
+              ? undefined
+              : (ratioNoticeGroup ?? undefined)
+          }
+          showModelSquareLink={pricingEnabled}
+        />
       </SheetContent>
     </Sheet>
   )
