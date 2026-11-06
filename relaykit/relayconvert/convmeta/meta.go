@@ -49,6 +49,32 @@ type Meta interface {
 	ConvOptions() *Options
 }
 
+// ToolBlockState 记录一个 OpenAI tool_call 在 Claude 流中的块状态。
+// 以 OpenAI tool_call.index 为键维护，AnthropicIndex 按工具首次出现顺序分配，
+// 与 tool_call.index 的数值无关。
+type ToolBlockState struct {
+	AnthropicIndex int
+	ID             string
+	Name           string
+	// Started 表示已经发出过 content_block_start。
+	Started bool
+	// Closed 表示该块已经发出过 content_block_stop，后续同 index 的增量忽略。
+	Closed bool
+	// Aborted 表示该工具因上游异常（如无限空白参数）被中止。
+	Aborted bool
+	// PendingArgs 缓存块启动前到达的参数片段，启动时一次性补发。
+	PendingArgs string
+	// BlankArgsLen 记录连续空白参数字符的累计长度，用于识别上游无限输出空白的 bug。
+	BlankArgsLen int
+}
+
+// 流首内联 think 拆分器的三态。
+const (
+	InlineThinkPhaseDetecting = iota
+	InlineThinkPhaseReasoning
+	InlineThinkPhaseText
+)
+
 // ClaudeConvertInfo carries mutable state for OpenAI chat → Claude Messages
 // stream conversion. Moved here from relay/common (which keeps an alias).
 type ClaudeConvertInfo struct {
@@ -58,8 +84,32 @@ type ClaudeConvertInfo struct {
 	FinishReason     string
 	Done             bool
 
+	// LastChunkUsage 记录转换器在 chunk 中看到的上游 usage。
+	// Usage 由宿主/状态式管线维护（聚合后的口径），转换器不覆盖它。
+	LastChunkUsage *dto.Usage
+
+	// ToolCallBaseIndex / ToolCallMaxIndexOffset 为旧版按区间推导块 index 的字段，
+	// 新状态机改用 ToolBlocks + NextBlockIndex，保留字段仅为兼容。
 	ToolCallBaseIndex      int
 	ToolCallMaxIndexOffset int
+
+	// HasSentMessageStart 标记 message_start 是否已发出，finalize 路径依据它补发。
+	HasSentMessageStart bool
+	// MessageId / Model 记录上游最后上报的 id 与 model，供 finalize 补发 message_start。
+	MessageId string
+	Model     string
+	// FinishSeen 表示已收到 finish_reason，但终态事件尚未发出（等待 usage）。
+	FinishSeen bool
+	// NextBlockIndex 是下一个可用的 content block index。
+	NextBlockIndex int
+	// ToolBlocks 按 OpenAI tool_call.index 维护工具块状态。
+	ToolBlocks map[int]*ToolBlockState
+
+	// InlineThinkPhase / InlineThinkBuffer / InlineThinkStripSeparator 是跨 chunk
+	// 内联 think 拆分器的状态。
+	InlineThinkPhase          int
+	InlineThinkBuffer         string
+	InlineThinkStripSeparator bool
 }
 
 const (

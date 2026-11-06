@@ -1,8 +1,10 @@
 package dto
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -35,6 +37,24 @@ type OpenAITextResponseChoice struct {
 	Index        int `json:"index"`
 	Message      `json:"message"`
 	FinishReason string `json:"finish_reason"`
+}
+
+// UnmarshalJSON 显式解码 choice 的 message 字段。
+// Message 带自定义 UnmarshalJSON 后，匿名嵌入会把该方法提升到 choice 上，
+// 导致整个 choice 被当作 Message 解析；这里显式解码以保持 choice 结构。
+func (c *OpenAITextResponseChoice) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Index        int     `json:"index"`
+		Message      Message `json:"message"`
+		FinishReason string  `json:"finish_reason"`
+	}
+	if err := kitutil.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	c.Index = raw.Index
+	c.Message = raw.Message
+	c.FinishReason = raw.FinishReason
+	return nil
 }
 
 type OpenAITextResponse struct {
@@ -88,7 +108,8 @@ type ChatCompletionsStreamResponseChoice struct {
 type ChatCompletionsStreamResponseChoiceDelta struct {
 	Content          *string            `json:"content,omitempty"`
 	ReasoningContent *string            `json:"reasoning_content,omitempty"`
-	Reasoning        *string            `json:"reasoning,omitempty"`
+	Reasoning        json.RawMessage    `json:"reasoning,omitempty"`
+	ReasoningDetails json.RawMessage    `json:"reasoning_details,omitempty"`
 	Role             string             `json:"role,omitempty"`
 	ToolCalls        []ToolCallResponse `json:"tool_calls,omitempty"`
 }
@@ -104,14 +125,60 @@ func (c *ChatCompletionsStreamResponseChoiceDelta) GetContentString() string {
 	return *c.Content
 }
 
-func (c *ChatCompletionsStreamResponseChoiceDelta) GetReasoningContent() string {
-	if c.ReasoningContent == nil && c.Reasoning == nil {
-		return ""
-	}
-	if c.ReasoningContent != nil {
+// ExtractReasoning 依次从 reasoning_content、reasoning（字符串或对象）与 reasoning_details
+// 中提取思考文本，兼容各上游不同的思考字段形态。
+func (c *ChatCompletionsStreamResponseChoiceDelta) ExtractReasoning() string {
+	if c.ReasoningContent != nil && *c.ReasoningContent != "" {
 		return *c.ReasoningContent
 	}
-	return *c.Reasoning
+	if text := extractReasoningText(c.Reasoning); text != "" {
+		return text
+	}
+	return extractReasoningText(c.ReasoningDetails)
+}
+
+// GetReasoningContent 保持旧的字符串用法，等价于 ExtractReasoning。
+func (c *ChatCompletionsStreamResponseChoiceDelta) GetReasoningContent() string {
+	return c.ExtractReasoning()
+}
+
+// extractReasoningText 从 reasoning / reasoning_details 的原始 JSON 中提取文本。
+// 支持字符串、对象（取 text/content/summary）与数组（逐项递归后按空行拼接）。
+func extractReasoningText(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return ""
+	}
+	switch trimmed[0] {
+	case '"':
+		var text string
+		if err := kitutil.Unmarshal(trimmed, &text); err == nil {
+			return text
+		}
+	case '{':
+		var object map[string]json.RawMessage
+		if err := kitutil.Unmarshal(trimmed, &object); err == nil {
+			for _, key := range []string{"text", "content", "summary"} {
+				if value, ok := object[key]; ok {
+					if text := extractReasoningText(value); text != "" {
+						return text
+					}
+				}
+			}
+		}
+	case '[':
+		var items []json.RawMessage
+		if err := kitutil.Unmarshal(trimmed, &items); err == nil {
+			parts := make([]string, 0, len(items))
+			for _, item := range items {
+				if text := extractReasoningText(item); text != "" {
+					parts = append(parts, text)
+				}
+			}
+			return strings.Join(parts, "\n\n")
+		}
+	}
+	return ""
 }
 
 func (c *ChatCompletionsStreamResponseChoiceDelta) SetReasoningContent(s string) {

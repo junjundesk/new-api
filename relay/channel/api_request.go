@@ -487,6 +487,70 @@ func keepUpstreamRedirectResponse(_ *http.Request, _ []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
+// maxRelayRedirects 是出站请求允许跟随的最大重定向跳数。
+const maxRelayRedirects = 3
+
+// relayCheckRedirect 只跟随同一 host（含端口）的重定向，最多 maxRelayRedirects 跳，
+// 跨 host 或超出跳数时返回最后一跳的 3xx 响应。
+//
+// net/http 对 301/302/303 会把非 GET/HEAD 请求降级为 GET 并丢弃 body；
+// 这里统一恢复原始方法与请求体（复用 GetBody 重放），避免 POST 经重定向后
+// 丢失参数或被上游以 405 拒绝。307/308 本身保留方法与 body，这里同样兜底。
+func relayCheckRedirect(req *http.Request, via []*http.Request) error {
+	if req == nil || req.URL == nil || len(via) == 0 {
+		return http.ErrUseLastResponse
+	}
+	// via 已包含此前发出的请求；len(via) > 3 时本次是第 4 跳，停止跟随。
+	if len(via) > maxRelayRedirects {
+		return http.ErrUseLastResponse
+	}
+	prev := via[len(via)-1]
+	if prev == nil || prev.URL == nil || !strings.EqualFold(prev.URL.Host, req.URL.Host) {
+		return http.ErrUseLastResponse
+	}
+	if req.Method != prev.Method {
+		req.Method = prev.Method
+	}
+	// GET/HEAD 没有请求体，直接跟随；其余方法在 301/302/303 被降级后重放 body。
+	if req.Body == nil && prev.GetBody != nil && req.Method != http.MethodGet && req.Method != http.MethodHead {
+		body, err := prev.GetBody()
+		if err != nil {
+			return err
+		}
+		req.Body = body
+		req.GetBody = prev.GetBody
+		req.ContentLength = prev.ContentLength
+		// 301/302/303 会剥掉 Content-Type 等 body 相关头，重放 body 时需要补回。
+		if contentType := prev.Header.Get("Content-Type"); contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+	}
+	return nil
+}
+
+// relayNonStreamTimeout 返回非流式请求的整体超时：RELAY_TIMEOUT（单位秒）
+// 显式设置时优先使用，未设置时默认 600s。流式请求不设整体超时，只保留空闲检测。
+func relayNonStreamTimeout() time.Duration {
+	if common2.RelayTimeout > 0 {
+		return time.Duration(common2.RelayTimeout) * time.Second
+	}
+	return 600 * time.Second
+}
+
+// cancelOnCloseBody 在响应体关闭时释放请求 context，让非流式整体超时
+// 覆盖到 body 读取阶段，而不仅仅覆盖到响应头返回。
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.cancel)
+	return err
+}
+
 func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
 	client, err := service.GetHttpClientWithProxySettings(info.ChannelSetting.Proxy, info.ChannelSetting)
 	if err != nil {
@@ -497,7 +561,19 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	// still reuses its transport and connection pools, including HTTP/2's
 	// transparent stream retries.
 	relayClient := *client
-	relayClient.CheckRedirect = keepUpstreamRedirectResponse
+	if common2.RelayAllowRedirects {
+		relayClient.CheckRedirect = relayCheckRedirect
+	} else {
+		relayClient.CheckRedirect = keepUpstreamRedirectResponse
+	}
+	// 非流式请求加整体超时，避免上游返回 200 后挂起导致请求永不返回。
+	// 超时 context 通过响应体包装在 Close 时释放，因此能覆盖 body 读取阶段。
+	var timeoutCancel context.CancelFunc
+	if !info.IsStream && req != nil {
+		ctx, cancel := context.WithTimeout(req.Context(), relayNonStreamTimeout())
+		req = req.WithContext(ctx)
+		timeoutCancel = cancel
+	}
 	if common2.DebugEnabled && req != nil && req.URL != nil {
 		policy := service.NormalizeHTTPTransportPolicy(info.ChannelSetting)
 		logger.LogDebug(c, fmt.Sprintf(
@@ -531,11 +607,30 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 
 	resp, err := relayClient.Do(req)
 	if err != nil {
+		if timeoutCancel != nil {
+			timeoutCancel()
+		}
 		logger.LogError(c, "do request failed: "+err.Error())
+		// 非流式整体超时按网关超时处理，并保留 channel: 前缀以便上层换渠道重试。
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, types.NewError(err, types.ErrorCodeChannelResponseTimeExceeded,
+				types.ErrOptionWithStatusCode(http.StatusGatewayTimeout),
+				types.ErrOptionWithHideErrMsg("upstream error: response time exceeded"))
+		}
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
 	}
 	if resp == nil {
+		if timeoutCancel != nil {
+			timeoutCancel()
+		}
 		return nil, errors.New("resp is nil")
+	}
+	if timeoutCancel != nil {
+		if resp.Body != nil {
+			resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: timeoutCancel}
+		} else {
+			timeoutCancel()
+		}
 	}
 	if common2.DebugEnabled {
 		policy := service.NormalizeHTTPTransportPolicy(info.ChannelSetting)

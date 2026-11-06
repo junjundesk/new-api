@@ -205,7 +205,8 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 	if resp != nil {
 		httpResp = resp.(*http.Response)
-		info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
+		// 是否流式以客户端请求体为准：客户端没要流式时，即使上游返回 SSE，
+		// 也应交给非流式处理（OpenaiHandler 会把 SSE 聚合为 chat.completion JSON）。
 		if httpResp.StatusCode != http.StatusOK {
 			newAPIError = service.RelayErrorHandler(c.Request.Context(), httpResp, false)
 			// reset status code 重置状态码
@@ -216,6 +217,11 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 	usage, newAPIError := adaptor.DoResponse(c, httpResp, info)
 	if newAPIError != nil {
+		// 上游可能用 2xx 返回错误体；对 Claude 客户端必须给出错误状态码，
+		// 否则 controller 会把它当成功（不重试、不报警）。
+		if newAPIError.StatusCode >= 200 && newAPIError.StatusCode < 300 {
+			newAPIError.StatusCode = http.StatusBadGateway
+		}
 		// reset status code 重置状态码
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError

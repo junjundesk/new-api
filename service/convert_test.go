@@ -101,7 +101,10 @@ func TestStreamResponseConverterFacadesAcceptTypedNilRelayInfo(t *testing.T) {
 
 	claudeResponses := StreamResponseOpenAI2Claude(streamResp, info)
 	require.NotEmpty(t, claudeResponses)
-	assert.Equal(t, "content_block_start", claudeResponses[0].Type)
+	// message_start 由转换状态标志触发，typed-nil info 的首个 chunk 也应发出。
+	assert.Equal(t, "message_start", claudeResponses[0].Type)
+	require.Greater(t, len(claudeResponses), 1)
+	assert.Equal(t, "content_block_start", claudeResponses[1].Type)
 
 	geminiResp := StreamResponseOpenAI2Gemini(streamResp, info)
 	require.NotNil(t, geminiResp)

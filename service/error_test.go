@@ -88,7 +88,9 @@ func TestRelayErrorHandlerTruncatesInvalidJSONBodyInLog(t *testing.T) {
 	newAPIError := RelayErrorHandler(context.Background(), resp, false)
 
 	require.NotNil(t, newAPIError)
-	require.Equal(t, "bad response status code 500", newAPIError.Error())
+	// 非 JSON 错误体的原文现在会截断后带进客户端可见 message（便于定位上游问题），
+	// 日志侧仍按 LocalLogContentLimit 截断。
+	require.Equal(t, fmt.Sprintf("bad response status code 500: %s... [truncated]", strings.Repeat("b", errMessageBodyLimit)), newAPIError.Error())
 	require.Contains(t, logBuffer.String(), "[truncated")
 	require.Contains(t, logBuffer.String(), fmt.Sprintf("original_length=%d", len(body)))
 	require.NotContains(t, logBuffer.String(), strings.Repeat("b", common.LocalLogContentLimit+1))

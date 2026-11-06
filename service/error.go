@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	taskdto "github.com/QuantumNous/new-api/dto"
@@ -84,6 +85,22 @@ func ClaudeErrorWrapperLocal(err error, code string, statusCode int) *dto.Claude
 	return claudeErr
 }
 
+// errMessageBodyLimit 是拼进客户端错误消息时上游原文的最大字节数，
+// 避免把大段 HTML 直接塞进响应体。
+const errMessageBodyLimit = 512
+
+// truncateErrorBody 将上游原文截断到 limit 字节，并保证不切断 UTF-8 字符。
+func truncateErrorBody(body string, limit int) string {
+	if limit <= 0 || len(body) <= limit {
+		return body
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(body[cut]) {
+		cut--
+	}
+	return body[:cut] + "... [truncated]"
+}
+
 func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFail bool) (newApiErr *types.NewAPIError) {
 	newApiErr = types.InitOpenAIError(types.ErrorCodeBadResponseStatusCode, resp.StatusCode)
 
@@ -107,8 +124,15 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		if showBodyWhenFail {
 			newApiErr.Err = buildErrWithBody("")
 		} else {
+			// 完整（受日志预览长度限制）的原文仍然写日志，方便排查
 			logger.LogError(ctx, fmt.Sprintf("bad response status code %d, body: %s", resp.StatusCode, responseBodyPreview))
-			newApiErr.Err = fmt.Errorf("bad response status code %d", resp.StatusCode)
+			// 非 JSON 错误体（HTML 网关页、纯文本限流提示等）不再只回状态码，
+			// 把截断后的原文带进客户端可见的 message，便于定位上游问题。
+			if bodyPreview := truncateErrorBody(responseBodyText, errMessageBodyLimit); bodyPreview != "" {
+				newApiErr.Err = fmt.Errorf("bad response status code %d: %s", resp.StatusCode, bodyPreview)
+			} else {
+				newApiErr.Err = fmt.Errorf("bad response status code %d", resp.StatusCode)
+			}
 		}
 		return
 	}

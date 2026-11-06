@@ -307,10 +307,37 @@ type Message struct {
 	Prefix           *bool           `json:"prefix,omitempty"`
 	ReasoningContent *string         `json:"reasoning_content,omitempty"`
 	Reasoning        *string         `json:"reasoning,omitempty"`
-	ToolCalls        json.RawMessage `json:"tool_calls,omitempty"`
-	ToolCallId       string          `json:"tool_call_id,omitempty"`
-	parsedContent    []MediaContent
+	ReasoningDetails json.RawMessage `json:"reasoning_details,omitempty"`
+	// FunctionCall 接收上游 legacy function_call 形态（没有 tool_calls 的旧式工具调用）。
+	FunctionCall  json.RawMessage `json:"function_call,omitempty"`
+	ToolCalls     json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallId    string          `json:"tool_call_id,omitempty"`
+	parsedContent []MediaContent
 	//parsedStringContent *string
+}
+
+// UnmarshalJSON 容忍上游把 reasoning / reasoning_content 返回为对象
+// （text/content/summary）而不是字符串，非字符串形态会被抽取为文本写入对应字段，
+// 避免整条响应因类型不匹配而解析失败。
+func (m *Message) UnmarshalJSON(data []byte) error {
+	type alias Message
+	aux := struct {
+		*alias
+		ReasoningContent json.RawMessage `json:"reasoning_content"`
+		Reasoning        json.RawMessage `json:"reasoning"`
+		ReasoningDetails json.RawMessage `json:"reasoning_details"`
+	}{alias: (*alias)(m)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	m.ReasoningDetails = aux.ReasoningDetails
+	if text := extractReasoningText(aux.ReasoningContent); text != "" {
+		m.ReasoningContent = &text
+	}
+	if text := extractReasoningText(aux.Reasoning); text != "" {
+		m.Reasoning = &text
+	}
+	return nil
 }
 
 type MediaContent struct {
@@ -424,9 +451,11 @@ func (m *MediaContent) ToFileSource() types.FileSource {
 }
 
 type MessageImageUrl struct {
-	Url      string `json:"url"`
-	Detail   string `json:"detail,omitempty"`
-	MimeType string
+	Url    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+	// MimeType 只用于内部构造 data URL / FileSource，不属于 OpenAI image_url 结构，
+	// 不能出现在发往上游的请求体里（历史上会输出非标准键 "MimeType"）。
+	MimeType string `json:"-"`
 }
 
 func (m *MessageImageUrl) IsRemoteImage() bool {
@@ -457,14 +486,21 @@ const (
 	//ContentTypeAudioUrl   = "audio_url"
 )
 
-func (m *Message) GetReasoningContent() string {
-	if m.ReasoningContent == nil && m.Reasoning == nil {
-		return ""
-	}
-	if m.ReasoningContent != nil {
+// ExtractReasoning 依次从 reasoning_content、reasoning（字符串或对象）与 reasoning_details
+// 中提取思考文本，兼容各上游不同的思考字段形态。
+func (m *Message) ExtractReasoning() string {
+	if m.ReasoningContent != nil && *m.ReasoningContent != "" {
 		return *m.ReasoningContent
 	}
-	return *m.Reasoning
+	if m.Reasoning != nil && *m.Reasoning != "" {
+		return *m.Reasoning
+	}
+	return extractReasoningText(m.ReasoningDetails)
+}
+
+// GetReasoningContent 保持旧的字符串用法，等价于 ExtractReasoning。
+func (m *Message) GetReasoningContent() string {
+	return m.ExtractReasoning()
 }
 
 func (m *Message) GetPrefix() bool {

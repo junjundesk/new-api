@@ -3,6 +3,7 @@ package helper
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/common"
@@ -58,8 +59,8 @@ func resolveMappedModel(info *common.RelayInfo, modelMap model.ChannelModelMappi
 	currentModel := info.OriginModelName
 	visitedModels := map[string]bool{currentModel: true}
 	for {
-		candidates, exists := modelMap[currentModel]
-		if !exists || len(candidates) == 0 {
+		candidates, exists := findModelMappingCandidates(modelMap, currentModel)
+		if !exists {
 			break
 		}
 
@@ -84,6 +85,36 @@ func resolveMappedModel(info *common.RelayInfo, modelMap model.ChannelModelMappi
 		currentModel = mappedModel
 	}
 	return currentModel, currentModel != info.OriginModelName, nil
+}
+
+// findModelMappingCandidates returns the candidates for modelName. An exact
+// source entry wins; otherwise the longest matching trailing-wildcard source
+// ("claude-sonnet-*") is used, so Claude Code's versioned model names resolve
+// through one wildcard entry.
+func findModelMappingCandidates(modelMap model.ChannelModelMapping, modelName string) ([]string, bool) {
+	if candidates, exists := modelMap[modelName]; exists && len(candidates) > 0 {
+		return candidates, true
+	}
+
+	bestPrefixLength := -1
+	var bestCandidates []string
+	for source, candidates := range modelMap {
+		if len(candidates) == 0 || !strings.HasSuffix(source, "*") {
+			continue
+		}
+		prefix := strings.TrimSuffix(source, "*")
+		if !strings.HasPrefix(modelName, prefix) {
+			continue
+		}
+		if len(prefix) > bestPrefixLength {
+			bestPrefixLength = len(prefix)
+			bestCandidates = candidates
+		}
+	}
+	if bestPrefixLength >= 0 {
+		return bestCandidates, true
+	}
+	return nil, false
 }
 
 // selectModelCandidate returns the candidate for the current attempt and

@@ -16,8 +16,7 @@
           "type": "image_url",
           "image_url": {
             "url": "data:image/png;base64,aGVsbG8=",
-            "detail": "auto",
-            "MimeType": "image/png"
+            "detail": "auto"
           }
         }
       ]

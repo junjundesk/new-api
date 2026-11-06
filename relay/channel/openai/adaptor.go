@@ -81,7 +81,7 @@ func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayIn
 	//		println(fmt.Sprintf("failed to save request body to file: %v", err))
 	//	}
 	//}
-	if info.SupportStreamOptions && info.IsStream {
+	if info.SupportStreamOptions && info.IsStream && aiRequest.StreamOptions == nil {
 		aiRequest.StreamOptions = &dto.StreamOptions{
 			IncludeUsage: true,
 		}
@@ -174,7 +174,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&
 			info.RelayMode != relayconstant.RelayModeResponses &&
 			info.RelayMode != relayconstant.RelayModeResponsesCompact {
-			return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+			return relaycommon.BuildChatCompletionsURL(info.ChannelBaseUrl, "/v1/chat/completions"), nil
 		}
 		return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
 	}
@@ -241,17 +241,30 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 	return nil
 }
 
+// shouldInjectStreamOptions 判断是否为流式请求补 stream_options.include_usage。
+// SupportStreamOptions 即渠道级开关（见 streamSupportedChannels）；Custom、OpenRouter
+// 等固定走 chat completions 的渠道尚未登记，但上游普遍支持该参数，这里按开启处理。
+// 请求已带 stream_options 时一律保留，交由调用方决定。
+func shouldInjectStreamOptions(info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) bool {
+	if info == nil || request == nil || !info.IsStream || request.StreamOptions != nil {
+		return false
+	}
+	return info.SupportStreamOptions ||
+		info.ChannelType == constant.ChannelTypeCustom ||
+		info.ChannelType == constant.ChannelTypeOpenRouter
+}
+
 func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
-	// 固定上游格式的渠道同样声明支持 stream_options（见 streamSupportedChannels），
-	// 不能在这里清空，否则流式请求拿不到上游 usage，只能退化为估算。
-	switch info.ChannelType {
-	case constant.ChannelTypeOpenAI, constant.ChannelTypeAzure,
-		constant.ChannelTypeOpenAIChat, constant.ChannelTypeOpenAIResponses:
-	default:
-		request.StreamOptions = nil
+	// 流式请求补上 stream_options.include_usage，上游才会在最后一个 chunk 返回 usage。
+	// 客户端或转换层已设置 stream_options 时保留原值，不再按渠道类型清空（固定上游
+	// 格式的渠道同样声明支持，见 streamSupportedChannels）。
+	if shouldInjectStreamOptions(info, request) {
+		request.StreamOptions = &dto.StreamOptions{
+			IncludeUsage: true,
+		}
 	}
 	if info.ChannelType == constant.ChannelTypeOpenRouter {
 		if len(request.Usage) == 0 {

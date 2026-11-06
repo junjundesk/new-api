@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -189,9 +189,85 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		info.CountBillableToolCall(dto.BuildInCallFunctionCall, name)
 	}
 
+	// 上游中断/超时/panic 时不能补成功终态（message_stop 或 [DONE]），
+	// 否则客户端会把截断的流当成正常完成。
+	if status := info.StreamStatus; isAbnormalStreamEnd(status) {
+		if c.Writer == nil || !c.Writer.Written() {
+			// 还没有写出任何内容，返回可重试错误，让 controller 换渠道重试。
+			return nil, streamEndAPIError(status)
+		}
+		if info.RelayFormat == types.RelayFormatClaude {
+			writeClaudeStreamError(c, streamEndErrorMessage(status))
+			// 标记终态已处理，避免其它收尾路径再补成功事件。
+			info.EnsureClaudeConvertInfo().Done = true
+		}
+		return usage, nil
+	}
+
 	HandleFinalResponse(c, info, lastStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
 
 	return usage, nil
+}
+
+// isAbnormalStreamEnd 判断流是否因为中断而不是正常结束。
+// EOF/[DONE]/HandlerStop 视为正常结束；ScannerErr/Timeout/Panic/PingFail 视为异常。
+func isAbnormalStreamEnd(status *relaycommon.StreamStatus) bool {
+	if status == nil {
+		return false
+	}
+	switch status.EndReason {
+	case relaycommon.StreamEndReasonScannerErr,
+		relaycommon.StreamEndReasonTimeout,
+		relaycommon.StreamEndReasonPanic,
+		relaycommon.StreamEndReasonPingFail:
+		return true
+	}
+	return false
+}
+
+// streamEndErrorMessage 构造给客户端的流中断错误文案。
+func streamEndErrorMessage(status *relaycommon.StreamStatus) string {
+	message := "upstream stream interrupted before completion"
+	if status != nil {
+		switch status.EndReason {
+		case relaycommon.StreamEndReasonTimeout:
+			message = "upstream stream timed out"
+		case relaycommon.StreamEndReasonPanic:
+			message = "upstream stream handler panicked"
+		case relaycommon.StreamEndReasonPingFail:
+			message = "upstream stream connection lost"
+		case relaycommon.StreamEndReasonScannerErr:
+			message = "upstream stream scan failed"
+		}
+		if status.EndError != nil {
+			message += ": " + status.EndError.Error()
+		}
+	}
+	return message
+}
+
+// streamEndAPIError 把异常结束转换为可重试的上游错误。
+func streamEndAPIError(status *relaycommon.StreamStatus) *types.NewAPIError {
+	err := fmt.Errorf("%s", streamEndErrorMessage(status))
+	statusCode := http.StatusBadGateway
+	errorCode := types.ErrorCodeBadResponse
+	if status != nil && status.EndReason == relaycommon.StreamEndReasonTimeout {
+		statusCode = http.StatusGatewayTimeout
+		errorCode = types.ErrorCodeChannelResponseTimeExceeded
+	}
+	// 不带 ErrOptionWithSkipRetry：控制器可以重试或换渠道。
+	return types.NewOpenAIError(err, errorCode, statusCode)
+}
+
+// writeClaudeStreamError 按 Anthropic SSE 格式下发流内错误事件。
+func writeClaudeStreamError(c *gin.Context, message string) {
+	if strings.TrimSpace(message) == "" {
+		message = "upstream stream error"
+	}
+	_ = helper.ClaudeData(c, dto.ClaudeResponse{
+		Type:  "error",
+		Error: &types.ClaudeError{Type: "stream_error", Message: message},
+	})
 }
 
 func collectStreamFunctionCallNames(data string, seen map[string]struct{}, names *[]string) {
@@ -228,29 +304,40 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	logger.LogDebug(c, "upstream response body: %s", responseBody)
-	// Unmarshal to simpleResponse
-	if info.ChannelType == constant.ChannelTypeOpenRouter && info.ChannelOtherSettings.IsOpenRouterEnterprise() {
-		// 尝试解析为 openrouter enterprise
-		var enterpriseResponse openrouter.OpenRouterEnterpriseResponse
-		err = common.Unmarshal(responseBody, &enterpriseResponse)
-		if err != nil {
-			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+
+	// 部分 OpenAI 兼容上游无视 stream:false 直接返回 SSE；客户端没要流式时必须先聚合为
+	// 普通 chat.completion JSON，否则会把 SSE 帧原样发给非流式客户端。
+	if looksLikeSSE(responseBody) {
+		aggregated, aggErr := aggregateChatSSEToJSON(responseBody)
+		if aggErr != nil {
+			return nil, types.NewOpenAIError(aggErr, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
 		}
-		if enterpriseResponse.Success {
-			responseBody = enterpriseResponse.Data
-		} else {
-			logger.LogError(c, fmt.Sprintf("openrouter enterprise response success=false, data: %s", enterpriseResponse.Data))
-			return nil, types.NewOpenAIError(fmt.Errorf("openrouter response success=false"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		responseBody = aggregated
+		if resp.Header != nil {
+			// 聚合后响应体已经是 JSON，避免把上游的 text/event-stream 透传给客户端。
+			resp.Header.Set("Content-Type", "application/json")
+			resp.Header.Del("Transfer-Encoding")
 		}
 	}
 
+	// 兼容两类上游包层：OpenRouter enterprise 的 {"success":true,"data":{...}}
+	// 以及通用的 {"data":{"choices":[...]}}。仅在顶层没有 choices 数组时解包。
+	unwrappedBody, unwrapErr := unwrapChatCompletionBody(c, responseBody)
+	if unwrapErr != nil {
+		return nil, unwrapErr
+	}
+	responseBody = unwrappedBody
+
+	// Unmarshal to simpleResponse
 	err = common.Unmarshal(responseBody, &simpleResponse)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && (oaiError.Type != "" || oaiError.Message != "") {
+		// 上游可能用 HTTP 200 携带错误体，不能沿用 2xx 状态码：否则 controller 会当成功，
+		// 既不重试也不报警。这里按 error.type 映射到 4xx/502。
+		return nil, types.WithOpenAIError(*oaiError, chatCompletionErrorStatusCode(resp.StatusCode, oaiError))
 	}
 
 	for _, choice := range simpleResponse.Choices {
@@ -334,4 +421,69 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &simpleResponse.Usage, nil
+}
+
+// chatCompletionEnvelope 描述上游可能加在 chat.completion 外层的包层。
+type chatCompletionEnvelope struct {
+	Success *bool           `json:"success"`
+	Data    json.RawMessage `json:"data"`
+	Choices json.RawMessage `json:"choices"`
+}
+
+// isJSONArray 判断原始 JSON 是否为数组（含空数组）。
+func isJSONArray(raw json.RawMessage) bool {
+	return strings.HasPrefix(strings.TrimSpace(string(raw)), "[")
+}
+
+// unwrapChatCompletionBody 解包上游包层：
+//   - 兼容 OpenRouter enterprise 的 {"success":true,"data":{...}}；
+//   - 泛化为任意 {"data":{"choices":[...]}} 且顶层没有 choices 数组的响应；
+//   - 保留 success=false 的报错分支。
+func unwrapChatCompletionBody(c *gin.Context, responseBody []byte) ([]byte, *types.NewAPIError) {
+	var envelope chatCompletionEnvelope
+	if err := common.Unmarshal(responseBody, &envelope); err != nil {
+		// 不是 JSON（例如 SSE 或纯文本），交给后续解析处理。
+		return responseBody, nil
+	}
+	if envelope.Success != nil && !*envelope.Success {
+		logger.LogError(c, fmt.Sprintf("upstream response success=false, data: %s", common.LocalLogPreview(string(envelope.Data))))
+		return nil, types.NewOpenAIError(fmt.Errorf("upstream response success=false"), types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+	}
+	if isJSONArray(envelope.Choices) || len(envelope.Data) == 0 {
+		return responseBody, nil
+	}
+
+	var dataPayload struct {
+		Choices json.RawMessage `json:"choices"`
+	}
+	if err := common.Unmarshal(envelope.Data, &dataPayload); err != nil || !isJSONArray(dataPayload.Choices) {
+		return responseBody, nil
+	}
+	return envelope.Data, nil
+}
+
+// chatCompletionErrorStatusCode 计算 HTTP 200 响应体里 error 应使用的状态码。
+// 上游明确返回了非 2xx 时保持原状态码，否则按 error.type 映射，避免 2xx 被当成成功。
+func chatCompletionErrorStatusCode(statusCode int, oaiError *types.OpenAIError) int {
+	if statusCode < 200 || statusCode >= 300 {
+		return statusCode
+	}
+	if oaiError == nil {
+		return http.StatusBadGateway
+	}
+	errorType := strings.ToLower(oaiError.Type)
+	switch {
+	case strings.Contains(errorType, "invalid_request"):
+		return http.StatusBadRequest
+	case strings.Contains(errorType, "authentication"):
+		return http.StatusUnauthorized
+	case strings.Contains(errorType, "permission"), strings.Contains(errorType, "insufficient_quota"):
+		return http.StatusForbidden
+	case strings.Contains(errorType, "not_found"):
+		return http.StatusNotFound
+	case strings.Contains(errorType, "rate_limit"), strings.Contains(errorType, "too_many"):
+		return http.StatusTooManyRequests
+	default:
+		return http.StatusBadGateway
+	}
 }

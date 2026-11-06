@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -21,18 +22,24 @@ import (
 
 // 辅助函数
 func HandleStreamFormat(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
-	info.SendResponseCount++
-
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
+		info.SendResponseCount++
 		return sendStreamData(c, info, data, forceFormat, thinkToContent)
 	case types.RelayFormatClaude:
+		// Claude 转换在解析成功后再计数：只有真正进入转换的 chunk 才应被算作
+		// 已产生的响应（供 fallback / 重试判断），解析失败的脏数据不能占用计数。
 		return handleClaudeFormat(c, data, info)
 	case types.RelayFormatGemini:
+		info.SendResponseCount++
 		return handleGeminiFormat(c, data, info)
 	}
 	return nil
 }
+
+// claudeMessageStartSentKey 记录当前流是否已经下发过 message_start。
+// 收尾补发 message_delta/message_stop 前必须确认它已发出，否则会形成非法事件序列。
+const claudeMessageStartSentKey = "claude_message_start_sent"
 
 func handleClaudeFormat(c *gin.Context, data string, info *relaycommon.RelayInfo) error {
 	var streamResponse dto.ChatCompletionsStreamResponse
@@ -40,6 +47,7 @@ func handleClaudeFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 		return err
 	}
 
+	info.SendResponseCount++
 	if streamResponse.Usage != nil {
 		info.ClaudeConvertInfo.Usage = streamResponse.Usage
 	}
@@ -51,10 +59,77 @@ func handleClaudeFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 	if !ok {
 		return fmt.Errorf("expected Claude stream responses, got %T", result.Value)
 	}
-	for _, resp := range claudeResponses {
-		helper.ClaudeData(c, *resp)
-	}
+	writeClaudeResponses(c, info, claudeResponses)
 	return nil
+}
+
+// writeClaudeResponses 按顺序写出 Claude SSE 事件，并记录 message_start/message_stop 状态。
+func writeClaudeResponses(c *gin.Context, info *relaycommon.RelayInfo, responses []*dto.ClaudeResponse) {
+	for _, resp := range responses {
+		if resp == nil {
+			continue
+		}
+		switch resp.Type {
+		case "message_start":
+			c.Set(claudeMessageStartSentKey, true)
+		case "message_stop":
+			info.EnsureClaudeConvertInfo().Done = true
+		}
+		_ = helper.ClaudeData(c, *resp)
+	}
+}
+
+// claudeMessageStartSent 报告当前流是否已经写出过 message_start。
+func claudeMessageStartSent(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	sent, ok := c.Get(claudeMessageStartSentKey)
+	if !ok {
+		return false
+	}
+	flag, ok := sent.(bool)
+	return ok && flag
+}
+
+// finalizeClaudeStream 在流正常结束后补发缺失的终态事件（message_delta + message_stop）。
+// 转换器自身可能在 finish chunk（带 usage）时已经发过终态，此时 Done 为真，直接返回。
+func finalizeClaudeStream(c *gin.Context, info *relaycommon.RelayInfo) {
+	if info == nil {
+		return
+	}
+	claudeInfo := info.EnsureClaudeConvertInfo()
+	if claudeInfo.Done {
+		return
+	}
+	if !claudeMessageStartSent(c) {
+		// 没有 message_start 的流再补 message_delta/message_stop 会形成非法事件序列，
+		// 此时保持现状，让客户端按空流处理。
+		return
+	}
+
+	streamState, err := relayconvert.NewResponseStreamState(types.RelayFormatOpenAI, types.RelayFormatClaude, relayconvert.ResponseStreamOptions{
+		Model: info.GetUpstreamModelName(),
+	})
+	if err != nil {
+		common.SysLog("error creating Claude stream state for finalize: " + err.Error())
+		return
+	}
+
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	results, err := relayconvert.FinalizeStreamResponse(ctx, info, streamState)
+	if err != nil {
+		common.SysLog("error finalizing Claude stream response: " + err.Error())
+		return
+	}
+	for _, result := range results {
+		if resp, ok := result.Value.(*dto.ClaudeResponse); ok && resp != nil {
+			writeClaudeResponses(c, info, []*dto.ClaudeResponse{resp})
+		}
+	}
 }
 
 func handleGeminiFormat(c *gin.Context, data string, info *relaycommon.RelayInfo) error {
@@ -173,28 +248,32 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 		helper.Done(c)
 
 	case types.RelayFormatClaude:
-		var streamResponse dto.ChatCompletionsStreamResponse
-		if err := common.Unmarshal(common.StringToByteSlice(lastStreamData), &streamResponse); err != nil {
-			common.SysLog("error unmarshalling stream response: " + err.Error())
-			return
+		claudeInfo := info.EnsureClaudeConvertInfo()
+		if usage != nil {
+			claudeInfo.Usage = usage
 		}
 
-		info.ClaudeConvertInfo.Usage = usage
+		if lastStreamData != "" {
+			var streamResponse dto.ChatCompletionsStreamResponse
+			if err := common.Unmarshal(common.StringToByteSlice(lastStreamData), &streamResponse); err != nil {
+				common.SysLog("error unmarshalling stream response: " + err.Error())
+			} else {
+				// 单 chunk 流只有这一次转换机会，这里也计入已产生响应的计数。
+				info.SendResponseCount++
+				result, err := relayconvert.ConvertStreamResponse(c, info, types.RelayFormatClaude, &streamResponse)
+				if err != nil {
+					common.SysLog("error converting Claude stream response: " + err.Error())
+				} else if claudeResponses, ok := result.Value.([]*dto.ClaudeResponse); !ok {
+					common.SysLog(fmt.Sprintf("expected Claude stream responses, got %T", result.Value))
+				} else {
+					writeClaudeResponses(c, info, claudeResponses)
+				}
+			}
+		}
 
-		result, err := relayconvert.ConvertStreamResponse(c, info, types.RelayFormatClaude, &streamResponse)
-		if err != nil {
-			common.SysLog("error converting Claude stream response: " + err.Error())
-			return
-		}
-		claudeResponses, ok := result.Value.([]*dto.ClaudeResponse)
-		if !ok {
-			common.SysLog(fmt.Sprintf("expected Claude stream responses, got %T", result.Value))
-			return
-		}
-		for _, resp := range claudeResponses {
-			_ = helper.ClaudeData(c, *resp)
-		}
-		info.ClaudeConvertInfo.Done = true
+		// finish chunk 不带 usage、或最后一条只是普通内容块时，转换器可能还没有发出终态；
+		// 流结束后统一兜底补发 message_delta + message_stop（幂等，已发过则跳过）。
+		finalizeClaudeStream(c, info)
 
 	case types.RelayFormatGemini:
 		var streamResponse dto.ChatCompletionsStreamResponse

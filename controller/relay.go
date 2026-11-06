@@ -317,6 +317,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if !continueAfterThisAttempt && retryParam.GetRetry() < relayRetryLimit(c) {
 			continueAfterThisAttempt = shouldRetry(c, newAPIError, relayRetryLimit(c)-retryParam.GetRetry())
 		}
+		// 已经向客户端输出内容，或上游已经返回过数据/usage 时不再重试：
+		// 重发会拼接重复内容，并让上游对已经产生的那部分重复计费。
+		if failoverToNextCandidate || continueAfterThisAttempt {
+			if relayAttemptProducedOutput(c, relayInfo) {
+				failoverToNextCandidate = false
+				continueAfterThisAttempt = false
+			}
+		}
 
 		// 模型映射配置了多个候选模型时，先在同一渠道内换下一个候选重试，
 		// 候选全部用尽后再回到常规的渠道级重试。候选进度按渠道记录，
@@ -473,6 +481,10 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
+	// 客户端已断开时重试没有意义，还会放大上游计费。
+	if c != nil && c.Request != nil && c.Request.Context().Err() != nil {
+		return false
+	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		return false
 	}
@@ -499,6 +511,16 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+// relayAttemptProducedOutput 报告本次请求是否已经产生不可回滚的输出：
+// 已向客户端写出字节，或已从上游收到过流式数据（上游可能已经据此计费）。
+// 命中时禁止重试，避免重复输出与重复计费。
+func relayAttemptProducedOutput(c *gin.Context, info *relaycommon.RelayInfo) bool {
+	if c != nil && c.Writer != nil && c.Writer.Written() {
+		return true
+	}
+	return info != nil && (info.SendResponseCount > 0 || info.ReceivedResponseCount > 0)
 }
 
 // tryFailoverChannelBaseURL 在同一渠道内切换到下一个可用 API 地址重试。

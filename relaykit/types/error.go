@@ -210,6 +210,33 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	return result
 }
 
+// mapToClaudeErrorType 把上游/内部错误码归一化为 Anthropic 能识别的 error.type。
+// 未识别的错误码（含空串、<nil>、new_api_error 等）统一归为 api_error，
+// 避免把 insufficient_quota、<nil> 这类非 Anthropic 分类透传给客户端。
+func mapToClaudeErrorType(code string) string {
+	normalized := strings.ToLower(strings.TrimSpace(code))
+	switch {
+	case normalized == "" || normalized == "<nil>" || normalized == "unknown_error":
+		return "api_error"
+	case strings.HasPrefix(normalized, "rate_limit"):
+		return "rate_limit_error"
+	case strings.HasPrefix(normalized, "invalid_request"):
+		return "invalid_request_error"
+	case normalized == "insufficient_quota" || strings.HasPrefix(normalized, "billing"):
+		return "invalid_request_error"
+	case normalized == "api_error",
+		normalized == "authentication_error",
+		normalized == "permission_error",
+		normalized == "not_found_error",
+		normalized == "request_too_large",
+		normalized == "timeout_error",
+		normalized == "overloaded_error":
+		return normalized
+	default:
+		return "api_error"
+	}
+}
+
 func (e *NewAPIError) ToClaudeError() ClaudeError {
 	var result ClaudeError
 	switch e.errorType {
@@ -217,24 +244,32 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 		if openAIError, ok := e.RelayError.(OpenAIError); ok {
 			result = ClaudeError{
 				Message: e.Error(),
-				Type:    fmt.Sprintf("%v", openAIError.Code),
+				Type:    mapToClaudeErrorType(fmt.Sprintf("%v", openAIError.Code)),
 			}
 		}
 	case ErrorTypeClaudeError:
 		if claudeError, ok := e.RelayError.(ClaudeError); ok {
 			result = claudeError
+			// 上游 Claude 错误的 type 通常已是 Anthropic 命名，这里只做兜底归一化
+			result.Type = mapToClaudeErrorType(result.Type)
 		}
 	default:
 		result = ClaudeError{
 			Message: e.Error(),
-			Type:    string(e.errorType),
+			Type:    mapToClaudeErrorType(string(e.errorType)),
 		}
 	}
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = kitutil.MaskSensitiveInfo(result.Message)
 	}
+	if result.Type == "" {
+		result.Type = "api_error"
+	}
 	if result.Message == "" {
-		result.Message = string(e.errorType)
+		result.Message = result.Type
+	}
+	if result.Message == "" {
+		result.Message = "api_error"
 	}
 	return result
 }

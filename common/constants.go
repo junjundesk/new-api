@@ -130,7 +130,13 @@ var AutomaticEnableChannelEnabled = false
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
-var RetryTimes = 0
+// RetryTimes 渠道级重试次数，默认 3（即最多尝试 4 次）；可通过后台「重试次数」设置覆盖。
+var RetryTimes = 3
+
+// RelayAllowRedirects 控制出站请求是否跟随 3xx 重定向，默认开启。
+// 跟随策略由 relay/channel 限定为最多 3 跳且仅同 host（含端口），
+// 可通过环境变量 RELAY_ALLOW_REDIRECTS=false 关闭。
+var RelayAllowRedirects = GetEnvOrDefaultBool("RELAY_ALLOW_REDIRECTS", true)
 
 //var RootUserEmail = ""
 

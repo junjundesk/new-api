@@ -16,22 +16,19 @@ type StatusCodeRange struct {
 
 var AutomaticDisableStatusCodeRanges = []StatusCodeRange{{Start: 401, End: 401}}
 
-// Default behavior matches legacy hardcoded retry rules in controller/relay.go shouldRetry:
-// retry for 1xx, 3xx, 4xx(except 400/408), 5xx(except 504/524), and no retry for 2xx.
+// 默认重试区间：1xx、3xx、401-499（含 408）、全部 5xx（含 504/524），2xx 与 400 不重试。
+// 408（上游超时）和 504/524（网关超时）都是典型的瞬时故障，应当重试；
+// 401/403/404/422 保持既有行为（换渠道重试）。
 var AutomaticRetryStatusCodeRanges = []StatusCodeRange{
 	{Start: 100, End: 199},
 	{Start: 300, End: 399},
-	{Start: 401, End: 407},
-	{Start: 409, End: 499},
-	{Start: 500, End: 503},
-	{Start: 505, End: 523},
-	{Start: 525, End: 599},
+	{Start: 401, End: 499},
+	{Start: 500, End: 599},
 }
 
-var alwaysSkipRetryStatusCodes = map[int]struct{}{
-	504: {},
-	524: {},
-}
+// alwaysSkipRetryStatusCodes 用于按状态码强制排除重试。
+// 504/524 曾经在此名单中，导致网关超时永不重试，现改为交给区间表判断。
+var alwaysSkipRetryStatusCodes = map[int]struct{}{}
 
 var alwaysSkipRetryCodes = map[types.ErrorCode]struct{}{
 	types.ErrorCodeBadResponseBody: {},

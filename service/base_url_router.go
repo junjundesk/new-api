@@ -94,8 +94,12 @@ func InvalidateChannelBaseURLs(channelID int) {
 
 func (r *baseURLRouter) selectBaseURL(channel *model.Channel) string {
 	urls := channel.GetBaseURLs()
-	if len(urls) <= 1 {
-		// 单地址（含无地址）无需选路；路由表由渠道更新/删除时显式清理，
+	if len(urls) == 0 {
+		// 无地址（如测试或尚未配置的渠道）返回空串，交给调用方回退到默认地址。
+		return ""
+	}
+	if len(urls) == 1 {
+		// 单地址无需选路；路由表由渠道更新/删除时显式清理，
 		// 避免每个请求都为单地址渠道争用全局锁。
 		return urls[0]
 	}

@@ -117,11 +117,11 @@ func TestShouldFailoverToNextModelCandidate(t *testing.T) {
 			expected:   false,
 		},
 		{
-			name:       "gateway timeout is in always skip retry",
+			name:       "gateway timeout is retried as a transient failure",
 			statusCode: http.StatusGatewayTimeout,
 			errorCode:  types.ErrorCodeBadResponseStatusCode,
 			message:    "timeout",
-			expected:   false,
+			expected:   true,
 		},
 		{
 			name:       "unauthorized disables the channel instead of failing over",

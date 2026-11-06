@@ -24,17 +24,53 @@ type HasImage interface {
 }
 
 func GetFullRequestURL(baseURL string, requestURL string, channelType int) string {
-	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
+	baseURL = strings.TrimSpace(baseURL)
+	requestURL = strings.TrimSpace(requestURL)
 
 	if strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") {
 		switch channelType {
 		case constant.ChannelTypeOpenAI:
-			fullRequestURL = fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/v1"))
+			requestURL = strings.TrimPrefix(requestURL, "/v1")
 		case constant.ChannelTypeAzure:
-			fullRequestURL = fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/openai/deployments"))
+			requestURL = strings.TrimPrefix(requestURL, "/openai/deployments")
 		}
 	}
-	return fullRequestURL
+	return BuildChatCompletionsURL(baseURL, requestURL)
+}
+
+// collapseDuplicateV1Path 循环折叠路径中重复的 /v1/v1 段。
+// 例如 base_url 已带 /v1 时再拼 /v1/chat/completions 会得到 /v1/v1/chat/completions，
+// 上游通常直接返回 404。
+func collapseDuplicateV1Path(path string) string {
+	for {
+		collapsed := strings.ReplaceAll(path, "/v1/v1", "/v1")
+		if collapsed == path {
+			return path
+		}
+		path = collapsed
+	}
+}
+
+// BuildChatCompletionsURL 拼接 OpenAI 兼容上游的请求地址。
+// 会去掉首尾空白与 base 尾部斜杠、折叠重复的 /v1 段；若 base 已以 /v1 结尾
+// 且 endpoint 以 /v1 开头，则两者之间只保留一个 /v1。endpoint 为空时返回规范化后的 base。
+func BuildChatCompletionsURL(base, endpoint string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return collapseDuplicateV1Path(base)
+	}
+
+	base = collapseDuplicateV1Path(base)
+	endpoint = collapseDuplicateV1Path(endpoint)
+	if !strings.HasPrefix(endpoint, "/") {
+		endpoint = "/" + endpoint
+	}
+	// base 已带 /v1 时去掉 endpoint 开头的 /v1，避免重复
+	if strings.HasSuffix(base, "/v1") && (endpoint == "/v1" || strings.HasPrefix(endpoint, "/v1/")) {
+		endpoint = strings.TrimPrefix(endpoint, "/v1")
+	}
+	return collapseDuplicateV1Path(base + endpoint)
 }
 
 func SanitizeURLForLog(rawURL string) string {

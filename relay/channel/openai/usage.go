@@ -48,6 +48,37 @@ func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, res
 			}
 		}
 	}
+
+	// 渠道类型无关的通用回退：自建或第三方 OpenAI 兼容网关常用
+	// input_tokens_details.cached_tokens / prompt_cache_hit_tokens 上报缓存。
+	applyGenericCacheUsageFallback(usage)
+}
+
+// applyGenericCacheUsageFallback 按标准位置逐级回填缓存用量，显式 0 视为未上报并继续向后查找。
+// cache_read: prompt_tokens_details.cached_tokens → input_tokens_details.cached_tokens → prompt_cache_hit_tokens；
+// cache_creation: prompt_tokens_details.cached_creation_tokens/cache_write_tokens → input_tokens_details 同名字段。
+func applyGenericCacheUsageFallback(usage *dto.Usage) {
+	if usage.PromptTokensDetails.CachedTokens == 0 && usage.InputTokensDetails != nil {
+		if cachedTokens := usage.InputTokensDetails.CachedTokens; cachedTokens > 0 {
+			usage.PromptTokensDetails.CachedTokens = cachedTokens
+		}
+	}
+	if usage.PromptTokensDetails.CachedTokens == 0 && usage.PromptCacheHitTokens > 0 {
+		usage.PromptTokensDetails.CachedTokens = usage.PromptCacheHitTokens
+	}
+
+	if usage.InputTokensDetails == nil {
+		return
+	}
+	// 只有两级都未上报 cache_creation 时才回填，避免覆盖渠道特例已搬移的结果。
+	if usage.PromptTokensDetails.CachedCreationTokens == 0 && usage.PromptTokensDetails.CacheWriteTokens == 0 {
+		if cachedCreationTokens := usage.InputTokensDetails.CachedCreationTokens; cachedCreationTokens > 0 {
+			usage.PromptTokensDetails.CachedCreationTokens = cachedCreationTokens
+		}
+		if cacheWriteTokens := usage.InputTokensDetails.CacheWriteTokens; cacheWriteTokens > 0 {
+			usage.PromptTokensDetails.CacheWriteTokens = cacheWriteTokens
+		}
+	}
 }
 
 func extractCachedTokensFromBody(body []byte) (int, bool) {

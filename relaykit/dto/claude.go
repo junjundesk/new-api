@@ -21,6 +21,7 @@ type ClaudeMediaMessage struct {
 	Source       *ClaudeMessageSource `json:"source,omitempty"`
 	Usage        *ClaudeUsage         `json:"usage,omitempty"`
 	StopReason   *string              `json:"stop_reason,omitempty"`
+	StopSequence *string              `json:"stop_sequence,omitempty"`
 	PartialJson  *string              `json:"partial_json,omitempty"`
 	Role         string               `json:"role,omitempty"`
 	Thinking     *string              `json:"thinking,omitempty"`
@@ -33,6 +34,20 @@ type ClaudeMediaMessage struct {
 	Input     any    `json:"input,omitempty"`
 	Content   any    `json:"content,omitempty"`
 	ToolUseId string `json:"tool_use_id,omitempty"`
+}
+
+// MarshalJSON 保证 message_delta 的 delta 固定输出 stop_sequence（无匹配停止序列时为 null），
+// 其余 content block / delta 结构保持原有字段集，避免污染普通文本与工具块。
+func (m ClaudeMediaMessage) MarshalJSON() ([]byte, error) {
+	type alias ClaudeMediaMessage
+	if m.StopReason == nil {
+		return kitutil.Marshal((*alias)(&m))
+	}
+	type deltaWire struct {
+		*alias
+		StopSequence *string `json:"stop_sequence"`
+	}
+	return kitutil.Marshal(deltaWire{alias: (*alias)(&m), StopSequence: m.StopSequence})
 }
 
 func (c *ClaudeMediaMessage) SetText(s string) {
@@ -489,6 +504,25 @@ type ClaudeErrorWithStatusCode struct {
 }
 
 type ClaudeResponse struct {
+	Id           string               `json:"id"`
+	Type         string               `json:"type"`
+	Role         string               `json:"role,omitempty"`
+	Content      []ClaudeMediaMessage `json:"content"`
+	Completion   string               `json:"completion,omitempty"`
+	StopReason   string               `json:"stop_reason,omitempty"`
+	StopSequence *string              `json:"stop_sequence"`
+	Model        string               `json:"model,omitempty"`
+	Error        any                  `json:"error,omitempty"`
+	Usage        *ClaudeUsage         `json:"usage,omitempty"`
+	Index        *int                 `json:"index,omitempty"`
+	ContentBlock *ClaudeMediaMessage  `json:"content_block,omitempty"`
+	Delta        *ClaudeMediaMessage  `json:"delta,omitempty"`
+	Message      *ClaudeMediaMessage  `json:"message,omitempty"`
+}
+
+// claudeResponseStreamEvent 是流式事件的线格式：保持历史字段集，
+// 避免 message_start、content_block_* 等事件多出 id / content / stop_sequence。
+type claudeResponseStreamEvent struct {
 	Id           string               `json:"id,omitempty"`
 	Type         string               `json:"type"`
 	Role         string               `json:"role,omitempty"`
@@ -502,6 +536,42 @@ type ClaudeResponse struct {
 	ContentBlock *ClaudeMediaMessage  `json:"content_block,omitempty"`
 	Delta        *ClaudeMediaMessage  `json:"delta,omitempty"`
 	Message      *ClaudeMediaMessage  `json:"message,omitempty"`
+}
+
+// MarshalJSON 让非流式 message 信封始终包含 id / content / stop_sequence，
+// 流式事件走精简视图；同时在返回 Claude 客户端前去掉内部计费明细 billing_usage。
+func (c ClaudeResponse) MarshalJSON() ([]byte, error) {
+	if c.Usage != nil {
+		c.Usage = c.Usage.CloneForWire()
+	}
+	if c.Message != nil && c.Message.Usage != nil {
+		message := *c.Message
+		message.Usage = message.Usage.CloneForWire()
+		c.Message = &message
+	}
+	if c.Type == "message" {
+		if c.Content == nil {
+			// Anthropic Message 的 content 必须是数组，空响应输出 [] 而不是 null。
+			c.Content = make([]ClaudeMediaMessage, 0)
+		}
+		type alias ClaudeResponse
+		return kitutil.Marshal((*alias)(&c))
+	}
+	return kitutil.Marshal(claudeResponseStreamEvent{
+		Id:           c.Id,
+		Type:         c.Type,
+		Role:         c.Role,
+		Content:      c.Content,
+		Completion:   c.Completion,
+		StopReason:   c.StopReason,
+		Model:        c.Model,
+		Error:        c.Error,
+		Usage:        c.Usage,
+		Index:        c.Index,
+		ContentBlock: c.ContentBlock,
+		Delta:        c.Delta,
+		Message:      c.Message,
+	})
 }
 
 // set index
@@ -560,10 +630,21 @@ type ClaudeUsage struct {
 	OutputTokens             int                       `json:"output_tokens"`
 	CacheCreation            *ClaudeCacheCreationUsage `json:"cache_creation,omitempty"`
 	// claude cache 1h
-	ClaudeCacheCreation5mTokens int                  `json:"claude_cache_creation_5_m_tokens"`
-	ClaudeCacheCreation1hTokens int                  `json:"claude_cache_creation_1_h_tokens"`
+	ClaudeCacheCreation5mTokens int                  `json:"claude_cache_creation_5_m_tokens,omitempty"`
+	ClaudeCacheCreation1hTokens int                  `json:"claude_cache_creation_1_h_tokens,omitempty"`
 	ServerToolUse               *ClaudeServerToolUse `json:"server_tool_use,omitempty"`
 	BillingUsage                *BillingUsage        `json:"billing_usage,omitempty"`
+}
+
+// CloneForWire 返回去掉内部计费明细的 usage 副本。
+// billing_usage 不属于 Anthropic 协议字段，只在内部计费链路使用，不应回给 Claude 客户端。
+func (u *ClaudeUsage) CloneForWire() *ClaudeUsage {
+	if u == nil {
+		return nil
+	}
+	clone := *u
+	clone.BillingUsage = nil
+	return &clone
 }
 
 type ClaudeCacheCreationUsage struct {
