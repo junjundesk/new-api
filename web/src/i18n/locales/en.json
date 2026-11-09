@@ -6076,6 +6076,26 @@
     "Public model name": "Public model name",
     "Upstream model: {{model}}": "Upstream model: {{model}}",
     "Clients request this name; the request is forwarded to {{model}}.": "Clients request this name; the request is forwarded to {{model}}.",
-    "This name is already mapped to another upstream model": "This name is already mapped to another upstream model"
+    "This name is already mapped to another upstream model": "This name is already mapped to another upstream model",
+    "Log Database": "Log Database",
+    "Usage logs can be stored in a dedicated database via LOG_SQL_DSN or LOG_SQLITE_PATH to keep the main database small.": "Usage logs can be stored in a dedicated database via LOG_SQL_DSN or LOG_SQLITE_PATH to keep the main database small.",
+    "Usage logs currently share the main database. Set LOG_SQL_DSN or LOG_SQLITE_PATH and restart to separate them.": "Usage logs currently share the main database. Set LOG_SQL_DSN or LOG_SQLITE_PATH and restart to separate them.",
+    "Log database type": "Log database type",
+    "Legacy logs in main database": "Legacy logs in main database",
+    "Migration status": "Migration status",
+    "Not completed": "Not completed",
+    "Delete migrated rows from the main database": "Delete migrated rows from the main database",
+    "Migrating...": "Migrating...",
+    "Migrate legacy logs": "Migrate legacy logs",
+    "Removing...": "Removing...",
+    "Remove legacy log table": "Remove legacy log table",
+    "Remove legacy log table?": "Remove legacy log table?",
+    "The logs table in the main database will be dropped to free space. Migrated logs remain in the log database.": "The logs table in the main database will be dropped to free space. Migrated logs remain in the log database.",
+    "Log migration progress": "Log migration progress",
+    "{{count}} legacy log entries migrated.": "{{count}} legacy log entries migrated.",
+    "Log migration failed": "Log migration failed",
+    "Log migration task started.": "Log migration task started.",
+    "Failed to remove legacy logs": "Failed to remove legacy logs",
+    "Legacy log table removed from the main database.": "Legacy log table removed from the main database."
   }
 }

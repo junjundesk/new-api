@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -179,7 +180,7 @@ func InitDB() (err error) {
 	db, dbType, err := chooseDB("SQL_DSN", false)
 	if err == nil {
 		common.SetMainDatabaseType(dbType)
-		if os.Getenv("LOG_SQL_DSN") == "" {
+		if !logDatabaseConfigured() {
 			common.SetLogDatabaseType(dbType)
 		}
 		initCol()
@@ -216,14 +217,52 @@ func InitDB() (err error) {
 	return err
 }
 
+// logDatabaseConfigured reports whether usage logs are configured to live in a
+// database separate from the primary one (LOG_SQL_DSN or LOG_SQLITE_PATH).
+func logDatabaseConfigured() bool {
+	return os.Getenv("LOG_SQL_DSN") != "" || os.Getenv("LOG_SQLITE_PATH") != ""
+}
+
+// sqliteFilePath strips the "file:" scheme and query parameters from a SQLite
+// DSN and returns an absolute file path for comparison.
+func sqliteFilePath(dsn string) string {
+	path := strings.TrimPrefix(dsn, "file:")
+	if idx := strings.Index(path, "?"); idx >= 0 {
+		path = path[:idx]
+	}
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+	}
+	return filepath.Clean(path)
+}
+
+// openLogSQLite opens a dedicated SQLite file for usage logs. It refuses to
+// reuse the primary SQLite file because that would not separate anything.
+func openLogSQLite(dsn string) (*gorm.DB, error) {
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) && strings.EqualFold(sqliteFilePath(dsn), sqliteFilePath(common.SQLitePath)) {
+		return nil, fmt.Errorf("LOG_SQLITE_PATH must point to a different file than SQLITE_PATH")
+	}
+	if !strings.Contains(dsn, "?") {
+		dsn += "?_busy_timeout=30000"
+	}
+	common.SysLog("using SQLite as log database: " + sqliteFilePath(dsn))
+	return gorm.Open(sqlite.Open(dsn), newGormConfig(true))
+}
+
 func InitLogDB() (err error) {
-	if os.Getenv("LOG_SQL_DSN") == "" {
+	if !logDatabaseConfigured() {
 		LOG_DB = DB
 		common.SetLogDatabaseType(common.MainDatabaseType())
 		initCol()
 		return
 	}
-	db, dbType, err := chooseDB("LOG_SQL_DSN", true)
+	var db *gorm.DB
+	dbType := common.DatabaseTypeSQLite
+	if os.Getenv("LOG_SQL_DSN") != "" {
+		db, dbType, err = chooseDB("LOG_SQL_DSN", true)
+	} else {
+		db, err = openLogSQLite(os.Getenv("LOG_SQLITE_PATH"))
+	}
 	if err == nil {
 		common.SetLogDatabaseType(dbType)
 		initCol()
@@ -257,6 +296,18 @@ func InitLogDB() (err error) {
 	return err
 }
 
+// mainLogTableMigration returns the Log model when the primary database should
+// keep managing the logs table: always when logs share the primary database,
+// and for a separated log database only while a legacy logs table still exists
+// (so it stays schema-compatible as the migration source). A fresh deployment
+// with a separated log database never creates logs in the primary database.
+func mainLogTableMigration() []interface{} {
+	if !logDatabaseConfigured() || DB.Migrator().HasTable(&Log{}) {
+		return []interface{}{&Log{}}
+	}
+	return nil
+}
+
 func migrateDB() error {
 	// Migrate price_amount column from float/double to decimal for existing tables
 	migrateSubscriptionPlanPriceAmount()
@@ -277,7 +328,6 @@ func migrateDB() error {
 		&Option{},
 		&Redemption{},
 		&Ability{},
-		&Log{},
 		&Midjourney{},
 		&TopUp{},
 		&QuotaData{},
@@ -311,6 +361,11 @@ func migrateDB() error {
 	)
 	if err != nil {
 		return err
+	}
+	if logModels := mainLogTableMigration(); len(logModels) > 0 {
+		if err := DB.AutoMigrate(logModels...); err != nil {
+			return err
+		}
 	}
 	if err := InitializeUserAuthVersions(); err != nil {
 		return err
@@ -349,7 +404,6 @@ func migrateDBFast() error {
 		{&Option{}, "Option"},
 		{&Redemption{}, "Redemption"},
 		{&Ability{}, "Ability"},
-		{&Log{}, "Log"},
 		{&Midjourney{}, "Midjourney"},
 		{&TopUp{}, "TopUp"},
 		{&QuotaData{}, "QuotaData"},
@@ -378,6 +432,12 @@ func migrateDBFast() error {
 		{&ActivityCode{}, "ActivityCode"},
 		{&ActivityGrant{}, "ActivityGrant"},
 		{&AssistantUsageDaily{}, "AssistantUsageDaily"},
+	}
+	for _, logModel := range mainLogTableMigration() {
+		migrations = append(migrations, struct {
+			model interface{}
+			name  string
+		}{logModel, "Log"})
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -425,7 +485,10 @@ func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	return LOG_DB.AutoMigrate(&Log{})
+	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	return reserveLogIdsAboveLegacy()
 }
 
 func migrateClickHouseLogDB() error {

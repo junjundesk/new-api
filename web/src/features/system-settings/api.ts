@@ -22,6 +22,8 @@ import type {
   ConfirmPaymentComplianceResponse,
   FetchUpstreamRatiosRequest,
   LogCleanupTask,
+  LogMigrationStatusResponse,
+  LogMigrationTask,
   SystemOptionsResponse,
   SystemTaskListResponse,
   SystemTaskResponse,
@@ -66,6 +68,43 @@ export async function getCurrentLogCleanupTask() {
     {
       params: { type: 'log_cleanup' },
     }
+  )
+  return res.data
+}
+
+export async function getLogMigrationStatus() {
+  const res = await api.get<LogMigrationStatusResponse>(
+    '/api/system-task/log-migration/status'
+  )
+  return res.data
+}
+
+export async function startLogMigrationTask(deleteSource: boolean) {
+  const res = await api.post<SystemTaskResponse<LogMigrationTask>>(
+    '/api/system-task/log-migration',
+    { delete_source: deleteSource }
+  )
+  return res.data
+}
+
+export async function getCurrentLogMigrationTask() {
+  const res = await api.get<SystemTaskResponse<LogMigrationTask | null>>(
+    '/api/system-task/current',
+    { params: { type: 'log_migration' } }
+  )
+  return res.data
+}
+
+export async function getLogMigrationTask(taskId: string) {
+  const res = await api.get<SystemTaskResponse<LogMigrationTask>>(
+    `/api/system-task/${taskId}`
+  )
+  return res.data
+}
+
+export async function reclaimLegacyLogs() {
+  const res = await api.post<{ success: boolean; message: string }>(
+    '/api/system-task/legacy-log-reclaim'
   )
   return res.data
 }

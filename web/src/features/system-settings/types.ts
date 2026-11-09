@@ -94,6 +94,43 @@ export type LogCleanupTask = SystemTask<
   LogCleanupTaskResult
 >
 
+export type LogMigrationTaskPayload = {
+  batch_size: number
+  delete_source: boolean
+}
+
+export type LogMigrationTaskState = {
+  cursor_id: number
+  total: number
+  processed: number
+  progress: number
+  remaining: number
+}
+
+export type LogMigrationTaskResult = {
+  migrated_count: number
+}
+
+export type LogMigrationTask = SystemTask<
+  LogMigrationTaskPayload,
+  LogMigrationTaskState,
+  LogMigrationTaskResult
+>
+
+export type LogMigrationStatus = {
+  separated: boolean
+  log_db_type: string
+  legacy_table: boolean
+  legacy_count: number
+  completed: boolean
+}
+
+export type LogMigrationStatusResponse = {
+  success: boolean
+  message: string
+  data?: LogMigrationStatus
+}
+
 export type SystemTaskResponse<TTask = SystemTask | null> = {
   success: boolean
   message: string

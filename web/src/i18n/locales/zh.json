@@ -6076,6 +6076,26 @@
     "Public model name": "对外模型名称",
     "Upstream model: {{model}}": "上游模型：{{model}}",
     "Clients request this name; the request is forwarded to {{model}}.": "客户端使用该名称发起请求，实际转发到 {{model}}。",
-    "This name is already mapped to another upstream model": "该名称已映射到其他上游模型"
+    "This name is already mapped to another upstream model": "该名称已映射到其他上游模型",
+    "Log Database": "日志数据库",
+    "Usage logs can be stored in a dedicated database via LOG_SQL_DSN or LOG_SQLITE_PATH to keep the main database small.": "可通过 LOG_SQL_DSN 或 LOG_SQLITE_PATH 将使用日志存入独立数据库，避免主数据库过大。",
+    "Usage logs currently share the main database. Set LOG_SQL_DSN or LOG_SQLITE_PATH and restart to separate them.": "使用日志当前与主数据库共用。设置 LOG_SQL_DSN 或 LOG_SQLITE_PATH 并重启后即可分离。",
+    "Log database type": "日志数据库类型",
+    "Legacy logs in main database": "主数据库中的旧日志",
+    "Migration status": "迁移状态",
+    "Not completed": "未完成",
+    "Delete migrated rows from the main database": "迁移后从主数据库删除已迁移的记录",
+    "Migrating...": "迁移中...",
+    "Migrate legacy logs": "迁移旧日志",
+    "Removing...": "删除中...",
+    "Remove legacy log table": "删除旧日志表",
+    "Remove legacy log table?": "删除旧日志表？",
+    "The logs table in the main database will be dropped to free space. Migrated logs remain in the log database.": "将删除主数据库中的 logs 表以释放空间，已迁移的日志仍保留在日志数据库中。",
+    "Log migration progress": "日志迁移进度",
+    "{{count}} legacy log entries migrated.": "已迁移 {{count}} 条旧日志。",
+    "Log migration failed": "日志迁移失败",
+    "Log migration task started.": "日志迁移任务已启动。",
+    "Failed to remove legacy logs": "删除旧日志失败",
+    "Legacy log table removed from the main database.": "已从主数据库删除旧日志表。"
   }
 }

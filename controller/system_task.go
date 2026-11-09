@@ -115,3 +115,52 @@ func GetSystemTask(c *gin.Context) {
 		"data":    task.ToResponse(),
 	})
 }
+
+func CreateLogMigrationSystemTask(c *gin.Context) {
+	var req struct {
+		BatchSize    int  `json:"batch_size"`
+		DeleteSource bool `json:"delete_source"`
+	}
+	if c.Request.ContentLength > 0 {
+		if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+
+	task, err := service.StartLogMigrationTask(req.BatchSize, req.DeleteSource)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    task.ToResponse(),
+	})
+}
+
+func GetLogMigrationStatus(c *gin.Context) {
+	status, err := service.GetLogMigrationStatus(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    status,
+	})
+}
+
+func ReclaimLegacyLogs(c *gin.Context) {
+	if err := service.ReclaimLegacyLogs(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+	})
+}

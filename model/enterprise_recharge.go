@@ -349,14 +349,19 @@ func backfillAdminRechargeRecordQuotaUnits() error {
 // ClickHouse 时）。先扫描审计日志补齐缺失记录，再为旧记录补全额度列；两步各自
 // 完成后写入标记，后续启动跳过。
 func BackfillAdminRechargeRecords() error {
-	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+	// 日志库已分离但旧日志尚未迁移完成时，历史审计日志仍在主库中。
+	logSource := LOG_DB
+	if HasLegacyLogTable() && !IsLogMigrationCompleted() {
+		logSource = DB
+	}
+	if logSource == LOG_DB && common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return nil
 	}
 
 	var flag Option
 	if err := DB.Where("key = ?", adminRechargeBackfillFlag).First(&flag).Error; err != nil || flag.Value != "true" {
 		var logs []*Log
-		if err := LOG_DB.Model(&Log{}).
+		if err := logSource.Model(&Log{}).
 			Where("type = ? AND content LIKE ?", LogTypeManage, "Increased user quota by%").
 			Find(&logs).Error; err != nil {
 			return err
