@@ -31,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getGroupModelNames } from '../../api'
 import type { UserChannelChainItemRow } from '../../lib/user-channel-chain'
 import type { ApiKeyGroupOption } from '../api-key-group-combobox'
+import { GROUP_COMBOBOX_POPUP_WIDTH_CLASSES } from '../api-key-group-combobox-classes'
 import { ChannelChainModelsEditor } from '../channel-chain-models-editor'
 
 vi.mock('react-i18next', () => ({
@@ -239,5 +240,54 @@ describe('ChannelChainModelsEditor', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'The model list is too large.'
     )
+  })
+
+  it('sizes the group cell to its own content on desktop', () => {
+    const { container } = renderEditor({
+      initialItems: [{ id: 'row-1', group: 'vip', models: [] }],
+    })
+
+    const row = getRows(container)[0]
+    expect(row.classList.contains('sm:flex-row')).toBe(true)
+
+    const groupCell = row.querySelector<HTMLElement>(
+      '[data-channel-chain-group-cell]'
+    )
+    expect(groupCell).not.toBeNull()
+    const groupClasses = (groupCell as HTMLElement).classList
+    // Wide screens: shrink to the selected group label instead of a fixed
+    // share of the row, but never wider than half of it.
+    expect(groupClasses.contains('w-full')).toBe(true)
+    expect(groupClasses.contains('sm:w-auto')).toBe(true)
+    expect(groupClasses.contains('sm:min-w-[8rem]')).toBe(true)
+    expect(groupClasses.contains('sm:max-w-[50%]')).toBe(true)
+  })
+
+  it('widens the compact group menu to its content instead of the trigger', async () => {
+    renderEditor({
+      initialItems: [{ id: 'row-1', group: 'vip', models: [] }],
+    })
+
+    const trigger = screen.getByRole('combobox', {
+      name: 'Group for model row',
+    })
+    fireEvent.click(trigger)
+
+    const popup = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>(
+        '[data-slot="popover-content"]'
+      )
+      if (!element) throw new Error('group menu is not rendered yet')
+      return element
+    })
+
+    for (const className of GROUP_COMBOBOX_POPUP_WIDTH_CLASSES.contentAdaptive.split(
+      ' '
+    )) {
+      expect(popup.classList.contains(className)).toBe(true)
+    }
+    expect(
+      popup.classList.contains(GROUP_COMBOBOX_POPUP_WIDTH_CLASSES.anchored)
+    ).toBe(false)
   })
 })

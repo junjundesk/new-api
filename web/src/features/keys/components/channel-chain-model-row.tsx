@@ -97,7 +97,13 @@ export function ChannelChainModelRow(props: ChannelChainModelRowProps) {
       className='flex flex-col gap-2 rounded-lg border p-2 sm:flex-row sm:items-start'
     >
       <div className='flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-start'>
-        <div className='w-full min-w-0 sm:w-[42%]'>
+        {/* The group cell sizes to the selected group label (capped at half
+            the row) so long group names stay readable, while the model picker
+            keeps the remaining space and stacks below on narrow screens. */}
+        <div
+          data-channel-chain-group-cell=''
+          className='w-full min-w-0 sm:w-auto sm:max-w-[50%] sm:min-w-[8rem] sm:shrink-0'
+        >
           <ApiKeyGroupCombobox
             options={props.groupOptions}
             value={props.row.group || undefined}
