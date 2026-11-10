@@ -47,6 +47,13 @@ const (
 	ContextKeyAutoGroupRetryIndex ContextKey = "auto_group_retry_index"
 	ContextKeyChannelChain        ContextKey = "channel_chain"
 
+	// ContextKeyChannelChainDefinition keeps the request-scoped channel chain
+	// snapshot so auth and downstream consumers do not re-read it from DB.
+	ContextKeyChannelChainDefinition ContextKey = "channel_chain_definition"
+	// ContextKeyChannelChainGroups caches the ordered candidate groups resolved
+	// for the current request model; models-type chains filter rows here.
+	ContextKeyChannelChainGroups ContextKey = "channel_chain_groups"
+
 	/* user related keys */
 	ContextKeyUserId      ContextKey = "id"
 	ContextKeyUserSetting ContextKey = "user_setting"

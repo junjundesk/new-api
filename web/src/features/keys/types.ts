@@ -149,9 +149,25 @@ export interface TokenAutoGroupsConfig {
   max_count: number
 }
 
+// ============================================================================
+// Channel Chain Types
+// ============================================================================
+
+export const userChannelChainTypeSchema = z.enum(['groups', 'models'])
+
+export type UserChannelChainType = z.infer<typeof userChannelChainTypeSchema>
+
+export interface UserChannelChainItem {
+  group: string
+  models: string[]
+}
+
 export interface ChannelChain {
   id: string
   name: string
+  // Older responses may omit the type; callers normalize it to "groups".
+  type: UserChannelChainType
+  items: UserChannelChainItem[]
   groups: string[]
 }
 
@@ -159,13 +175,16 @@ export interface ChannelChainsResponse {
   chains: ChannelChain[]
   max_chains: number
   max_groups_per_chain: number
+  max_models_per_item: number
+  max_items_bytes: number
   token_usage: Record<string, number>
 }
 
-export interface ChannelChainInput {
-  name: string
-  groups: string[]
-}
+// A groups chain keeps the legacy {name, groups} payload so older servers keep
+// working; a models chain must declare its type so the server can lock it.
+export type ChannelChainInput =
+  | { name: string; groups: string[] }
+  | { name: string; type: 'models'; items: UserChannelChainItem[] }
 
 // ============================================================================
 // Dialog Types

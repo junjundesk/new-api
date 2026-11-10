@@ -100,6 +100,16 @@ export async function getFallbackModelOptions(
   return res.data.data
 }
 
+// Get the enabled models of one concrete pricing group. Used by the model-based
+// chain editor; the keys module cannot import the models feature API.
+export async function getGroupModelNames(group: string): Promise<string[]> {
+  const res = await api.get('/api/user/models', { params: { group } })
+  if (!res.data?.success || !Array.isArray(res.data.data)) {
+    throw new Error(res.data?.message || 'Failed to load group models')
+  }
+  return res.data.data as string[]
+}
+
 // Get the current user's channel chains.
 export async function getChannelChains(): Promise<
   ApiResponse<ChannelChainsResponse>

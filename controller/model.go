@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -213,10 +212,11 @@ func applyTokenModelMappings(apiModels []dto.OpenAIModels, mappings []setting.To
 }
 
 type modelListGroups struct {
-	userGroup   string
-	tokenGroup  string
-	ownerGroups []string
-	ownerModels []string
+	userGroup             string
+	tokenGroup            string
+	ownerGroups           []string
+	ownerModels           []string
+	ownerModelsRestricted bool
 }
 
 func getModelListGroups(c *gin.Context) (modelListGroups, error) {
@@ -238,37 +238,40 @@ func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 		}, nil
 	}
 
-	if chainId, ok := model.ParseUserChannelChain(tokenGroup); ok {
-		groups := make([]string, 0)
-		if value, ok := common.GetContextKey(c, constant.ContextKeyChannelChain); ok {
-			if groupNames, ok := value.([]string); ok {
-				groups = groupNames
-			}
+	if strings.HasPrefix(tokenGroup, "chain:") {
+		chainId, ok := model.ParseUserChannelChain(tokenGroup)
+		if !ok {
+			return modelListGroups{}, fmt.Errorf("invalid group chain")
 		}
-		if len(groups) == 0 {
-			chain, err := model.GetUserChannelChain(c.GetInt("id"), chainId)
+		chain, cached := service.GetRequestChannelChain(c)
+		if cached && (chain.ChainId != chainId || chain.UserId != c.GetInt("id")) {
+			cached = false
+		}
+		if !cached {
+			var err error
+			chain, err = model.GetUserChannelChain(c.GetInt("id"), chainId)
 			if err != nil {
 				return modelListGroups{}, err
 			}
-			groups = chain.GetGroupList()
-		}
-		modelSet := make(map[string]struct{})
-		for _, group := range groups {
-			for _, modelName := range model.GetGroupEnabledModels(group) {
-				if modelName != "" {
-					modelSet[modelName] = struct{}{}
+			if userGroup == "" {
+				userGroup, err = model.GetUserGroup(c.GetInt("id"), false)
+				if err != nil {
+					return modelListGroups{}, err
 				}
 			}
+			if err := service.ValidateUserChannelChain(chain, userGroup, false); err != nil {
+				return modelListGroups{}, err
+			}
 		}
-		ownerModels := make([]string, 0, len(modelSet))
-		for modelName := range modelSet {
-			ownerModels = append(ownerModels, modelName)
+		ownerModels, err := service.GetUserChannelChainModels(chain)
+		if err != nil {
+			return modelListGroups{}, err
 		}
-		sort.Strings(ownerModels)
 		return modelListGroups{
-			userGroup:   userGroup,
-			tokenGroup:  tokenGroup,
-			ownerModels: ownerModels,
+			userGroup:             userGroup,
+			tokenGroup:            tokenGroup,
+			ownerModels:           ownerModels,
+			ownerModelsRestricted: true,
 		}, nil
 	}
 
@@ -317,7 +320,7 @@ func ListModels(c *gin.Context, modelType int) {
 		}
 	}
 	models := groups.ownerModels
-	if len(models) == 0 {
+	if !groups.ownerModelsRestricted {
 		models = service.GetGroupsEnabledModels(ownerGroups)
 	}
 	for _, modelName := range models {

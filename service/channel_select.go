@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -113,7 +114,25 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
 	if param.PinnedChannel != nil {
-		return param.PinnedChannel, selectGroup, nil
+		if !IsRequestChannelChain(param.Ctx) {
+			return param.PinnedChannel, selectGroup, nil
+		}
+		// A chain attempt can be pinned to the channel that was just selected
+		// (model candidate failover or base-URL failover). The real billing
+		// group is the one stored by the chain selection, not "chain:<id>".
+		// Reuse the pin only when that group is still one of the candidate rows
+		// filtered for this request model and the channel serves it.
+		selectedGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyAutoGroup)
+		if selectedGroup != "" {
+			candidates, isChain, chainErr := GetRequestChannelChainGroups(param.Ctx, param.ModelName)
+			if isChain && chainErr == nil && slices.Contains(candidates, selectedGroup) &&
+				model.IsChannelEnabledForGroupModelOrMapping(selectedGroup, param.ModelName, param.PinnedChannel.Id) {
+				return param.PinnedChannel, selectedGroup, nil
+			}
+		}
+		// No chain selection happened yet in this request: drop the pin instead
+		// of bypassing the chain and its billing group.
+		param.ClearPinnedChannel()
 	}
 
 	if chainChannel, chainGroup, chainErr, isChain := getChannelChainSelection(param); isChain {

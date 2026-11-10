@@ -41,6 +41,7 @@ func GetUserGroups(c *gin.Context) {
 				"ratio":                    service.GetUserGroupRatioWithActivity(userGroup, groupName, activityOverrides),
 				"desc":                     desc,
 				"has_model_specific_ratio": modelSpecificGroups[groupName],
+				"chain_selectable":         service.IsUserSelectableGroup(userGroup, groupName),
 			}
 		}
 	}
@@ -49,6 +50,7 @@ func GetUserGroups(c *gin.Context) {
 			"ratio":                    "自动",
 			"desc":                     setting.GetUsableGroupDescription("auto"),
 			"has_model_specific_ratio": false,
+			"chain_selectable":         false,
 		}
 	}
 	chains, err := model.GetUserChannelChains(userId)
@@ -57,6 +59,14 @@ func GetUserGroups(c *gin.Context) {
 		return
 	}
 	for _, chain := range chains {
+		chainItems, err := chain.GetItems()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if chainItems == nil {
+			chainItems = []model.UserChannelChainItem{}
+		}
 		chainGroups := chain.GetGroupList()
 		hasModelSpecificRatio := false
 		for _, groupName := range chainGroups {
@@ -68,6 +78,9 @@ func GetUserGroups(c *gin.Context) {
 		usableGroups["chain:"+chain.ChainId] = map[string]interface{}{
 			"custom_chain":             true,
 			"chain_groups":             chainGroups,
+			"chain_type":               chain.GetType(),
+			"chain_items":              chainItems,
+			"chain_selectable":         false,
 			"desc":                     chain.Name,
 			"ratio":                    "自动",
 			"has_model_specific_ratio": hasModelSpecificRatio,

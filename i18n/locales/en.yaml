@@ -51,6 +51,12 @@ token.db_error: "Invalid token, database query error, please contact administrat
 token.auto_groups_too_many: "A token can select at most {{.Max}} Auto groups"
 token.auto_groups_duplicate: "Auto group {{.Group}} is duplicated"
 token.auto_groups_invalid: "Auto group {{.Group}} is unavailable or unauthorized"
+token.model_chain_fallback_unsupported: "Model-based group chains do not support cross-model fallback. Disable fallback before selecting this chain; your draft will be kept."
+
+# Group chain routing messages
+channel_chain.model_not_available: "The requested model {{.Model}} is unavailable in this model-based group chain"
+channel_chain.specific_channel_unsupported: "Model-based group chains do not support a specific channel override"
+channel_chain.playground_group_unsupported: "Model-based group chains do not support a playground group override"
 
 # Redemption messages
 redemption.name_length: "Redemption code name length must be between 1-20"

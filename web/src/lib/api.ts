@@ -64,6 +64,9 @@ export async function getUserGroups(): Promise<{
       ratio: number | string
       custom_chain?: boolean
       chain_groups?: string[]
+      chain_type?: string
+      chain_items?: Array<{ group: string; models: string[] }>
+      chain_selectable?: boolean
       has_model_specific_ratio?: boolean
     }
   >

@@ -94,6 +94,7 @@ import {
   getModelMappingIssueMessage,
   getModelMappingIssues,
 } from '../lib/model-mapping'
+import { normalizeChannelChainType } from '../lib/user-channel-chain'
 import type { ApiKey } from '../types'
 import { ApiKeyFallbackSection } from './api-key-fallback-section'
 import {
@@ -175,16 +176,33 @@ export function ApiKeysMutateDrawer({
   const models = modelsData?.data || []
   const groups = useMemo<ApiKeyGroupOption[]>(
     () =>
-      Object.entries(groupsData?.data || {}).map(([key, info]) => ({
-        value: key,
-        label: info.custom_chain ? info.desc || key : key,
-        desc: info.custom_chain
-          ? (info.chain_groups || []).join(' -> ')
-          : info.desc || key,
-        ratio: info.ratio,
-        hasModelSpecificRatio: info.has_model_specific_ratio === true,
-      })),
-    [groupsData]
+      Object.entries(groupsData?.data || {}).map(([key, info]) => {
+        const chainType = info.custom_chain
+          ? normalizeChannelChainType(info.chain_type)
+          : undefined
+        const chainItems = info.chain_items ?? []
+        let desc = info.desc || key
+        if (info.custom_chain) {
+          desc =
+            chainType === 'models'
+              ? t('{{count}} model rows', { count: chainItems.length })
+              : (info.chain_groups || []).join(' -> ')
+        }
+        return {
+          value: key,
+          label: info.custom_chain ? info.desc || key : key,
+          desc,
+          ratio: info.ratio,
+          hasModelSpecificRatio: info.has_model_specific_ratio === true,
+          chainType,
+          chainModelCount:
+            chainType === 'models'
+              ? new Set(chainItems.flatMap((item) => item.models)).size
+              : undefined,
+          chainGroupCount: info.chain_groups?.length,
+        }
+      }),
+    [groupsData, t]
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')
   const fallbackGroupOptions = useMemo(
@@ -286,6 +304,9 @@ export function ApiKeysMutateDrawer({
     isUpdate && currentRow ? `update:${currentRow.id}` : 'create'
   const isFormInitialized = initializedTarget === formTarget
   const selectedGroup = form.watch('group')
+  const selectedGroupIsModelChain =
+    groups.find((group) => group.value === selectedGroup)?.chainType ===
+    'models'
 
   const mappingOptionsQuery = useQuery({
     queryKey: ['token-model-mapping-options', selectedGroup || ''],
@@ -489,6 +510,20 @@ export function ApiKeysMutateDrawer({
                         options={groups}
                         value={field.value}
                         onValueChange={(group) => {
+                          const isModelChain =
+                            groups.find((option) => option.value === group)
+                              ?.chainType === 'models'
+                          if (
+                            isModelChain &&
+                            form.getValues('fallback_enabled')
+                          ) {
+                            toast.error(
+                              t(
+                                'Model-based group chains do not support cross-model fallback. Disable fallback before selecting this chain; your draft will be kept.'
+                              )
+                            )
+                            return
+                          }
                           // Switching to a group whose models carry their own
                           // billing ratio is a pricing decision, so warn before
                           // the key is created.
@@ -726,18 +761,33 @@ export function ApiKeysMutateDrawer({
                   <FormItem>
                     <ApiKeyFallbackSection
                       enabled={!!form.watch('fallback_enabled')}
-                      onEnabledChange={(enabled) =>
+                      onEnabledChange={(enabled) => {
+                        if (enabled && selectedGroupIsModelChain) {
+                          toast.error(
+                            t(
+                              'Model-based group chains do not support cross-model fallback. Disable fallback before selecting this chain; your draft will be kept.'
+                            )
+                          )
+                          return
+                        }
                         form.setValue('fallback_enabled', enabled, {
                           shouldDirty: true,
                           shouldValidate: true,
                         })
-                      }
+                      }}
                       value={field.value}
                       onChange={field.onChange}
                       groupOptions={fallbackGroupOptions}
                       sourceModels={mappingOptionsQuery.data?.models ?? []}
                       disabled={isSubmitting}
                       showValidation={form.formState.submitCount > 0}
+                      enableBlockedReason={
+                        selectedGroupIsModelChain
+                          ? t(
+                              'This model-based chain cannot be combined with cross-model fallback. Turn off fallback to keep this group.'
+                            )
+                          : undefined
+                      }
                     />
                     <FormMessage />
                   </FormItem>

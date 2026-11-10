@@ -303,6 +303,7 @@ export type ApiKeyFallbackSectionProps = {
   sourceModels: string[]
   disabled?: boolean
   showValidation?: boolean
+  enableBlockedReason?: string
 }
 
 export function ApiKeyFallbackSection(props: ApiKeyFallbackSectionProps) {
@@ -339,10 +340,18 @@ export function ApiKeyFallbackSection(props: ApiKeyFallbackSectionProps) {
         <Switch
           aria-label={t('Enable fallback')}
           checked={props.enabled}
-          disabled={props.disabled}
+          disabled={
+            props.disabled || (!!props.enableBlockedReason && !props.enabled)
+          }
           onCheckedChange={props.onEnabledChange}
         />
       </div>
+
+      {props.enableBlockedReason && (
+        <p role='status' className='text-warning text-xs'>
+          {props.enableBlockedReason}
+        </p>
+      )}
 
       {props.enabled && (
         <>

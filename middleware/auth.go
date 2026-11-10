@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -513,12 +514,14 @@ func TokenAuth() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusForbidden, "分组链为空，请重新配置")
 					return
 				}
-				if err := service.ValidateUserChannelChainGroups(userGroup, groups); err != nil {
+				if err := service.ValidateUserChannelChain(chain, userGroup, false); err != nil {
 					common.SysError(fmt.Sprintf("invalid group chain %s for user %d: %v", chainId, token.UserId, err))
 					abortWithOpenAiMessage(c, http.StatusForbidden, "分组链不可用")
 					return
 				}
-				common.SetContextKey(c, constant.ContextKeyChannelChain, groups)
+				// Store the snapshot once; the fallback gate and downstream
+				// selection read it instead of loading the chain again.
+				service.SetRequestChannelChain(c, chain)
 				userGroup = tokenGroup
 			} else {
 				// check common.UserUsableGroups[userGroup]
@@ -569,16 +572,39 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		c.Set("token_model_limit_enabled", false)
 	}
 	tokenGroup := token.Group
+	isModelChannelChain := false
 	if chainId, ok := model.ParseUserChannelChain(tokenGroup); ok {
-		chain, err := model.GetUserChannelChain(token.UserId, chainId)
-		if err != nil {
-			common.SysError(fmt.Sprintf("failed to load channel chain %s for user %d: %v", chainId, token.UserId, err))
-			return fmt.Errorf("group chain %s not found", chainId)
+		// Reuse the snapshot loaded by TokenAuth; only non-auth callers (or a
+		// snapshot that belongs to another token/chain) load here.
+		chain, cached := service.GetRequestChannelChain(c)
+		if cached && (chain.ChainId != chainId || chain.UserId != token.UserId) {
+			cached = false
 		}
-		groups := chain.GetGroupList()
-		if len(groups) > 0 {
-			common.SetContextKey(c, constant.ContextKeyChannelChain, groups)
+		if !cached {
+			var err error
+			chain, err = model.GetUserChannelChain(token.UserId, chainId)
+			if err != nil {
+				common.SysError(fmt.Sprintf("failed to load channel chain %s for user %d: %v", chainId, token.UserId, err))
+				return fmt.Errorf("group chain %s not found", chainId)
+			}
+			// TokenAuth validates the chain before caching its snapshot. A
+			// standalone caller (or a request context without the snapshot) must
+			// not turn an unvalidated DB row into routing authority.
+			userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+			if userGroup == "" {
+				if loadedGroup, groupErr := model.GetUserGroup(token.UserId, false); groupErr != nil {
+					common.SysError(fmt.Sprintf("failed to load user group for token %d: %v", token.Id, groupErr))
+				} else {
+					userGroup = loadedGroup
+				}
+			}
+			if err := service.ValidateUserChannelChain(chain, userGroup, false); err != nil {
+				common.SysError(fmt.Sprintf("invalid group chain %s for user %d: %v", chainId, token.UserId, err))
+				return fmt.Errorf("group chain %s is unavailable", chainId)
+			}
+			service.SetRequestChannelChain(c, chain)
 		}
+		isModelChannelChain = chain.GetType() == model.UserChannelChainTypeModels
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, tokenGroup)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
@@ -590,13 +616,19 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 			common.SetContextKey(c, constant.ContextKeyTokenModelMappings, mappings)
 		}
 	}
-	if token.FallbackEnabled && token.FallbackModels != "" {
+	if token.FallbackEnabled && token.FallbackModels != "" && !isModelChannelChain {
 		fallbacks, err := token.GetFallbackModels()
 		if err != nil {
 			common.SysError(fmt.Sprintf("failed to parse fallback models for token %d: %v", token.Id, err))
 		} else if len(fallbacks) > 0 {
 			common.SetContextKey(c, constant.ContextKeyTokenFallbackModels, fallbacks)
 		}
+	}
+	if isModelChannelChain {
+		// A models-type chain already routes a request across groups by model;
+		// a token-level cross-model fallback would escape that contract. Clear
+		// any pre-existing context so a legacy/DB-dirty token cannot use it.
+		common.SetContextKey(c, constant.ContextKeyTokenFallbackModels, []setting.TokenFallbackModel(nil))
 	}
 	if tokenGroup == "auto" && token.AutoGroups != "" {
 		autoGroups, err := token.GetAutoGroups()
@@ -609,6 +641,10 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		}
 	}
 	if len(parts) > 1 {
+		if isModelChannelChain {
+			abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgChannelChainSpecificChannelUnsupported))
+			return fmt.Errorf("model-type channel chain does not support a specific channel")
+		}
 		if model.IsAdmin(token.UserId) {
 			c.Set("specific_channel_id", parts[1])
 		} else {

@@ -36,7 +36,8 @@ import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { API_KEY_STATUSES } from '../constants'
-import type { ApiKey } from '../types'
+import { normalizeChannelChainType } from '../lib/user-channel-chain'
+import type { ApiKey, UserChannelChainItem } from '../types'
 import { ApiKeyGroupCell } from './api-key-group-cell'
 import { ApiKeyTimestampCell } from './api-key-timestamp-cell'
 import {
@@ -60,12 +61,21 @@ type GroupMeta = {
   label?: string
   isChain?: boolean
   chainGroups?: string[]
+  chainType?: 'groups' | 'models'
+  chainItems?: UserChannelChainItem[]
 }
 
 type GroupOption = {
   value: string
   label: string
   ratio?: number | string
+  chainType?: 'groups' | 'models'
+  chainModelCount?: number
+  chainGroupCount?: number
+}
+
+function countModels(items: UserChannelChainItem[]): number {
+  return new Set(items.flatMap((item) => item.models)).size
 }
 
 function useGroupData(): {
@@ -85,16 +95,27 @@ function useGroupData(): {
           typeof info.ratio === 'number' || typeof info.ratio === 'string'
             ? info.ratio
             : undefined
+        const chainType = info.custom_chain
+          ? normalizeChannelChainType(info.chain_type)
+          : undefined
+        const chainItems = info.chain_items ?? []
+        const chainModelCount =
+          chainType === 'models' ? countModels(chainItems) : undefined
         meta[group] = {
           ratio,
           label: info.custom_chain ? info.desc : undefined,
           isChain: info.custom_chain,
           chainGroups: info.chain_groups,
+          chainType,
+          chainItems,
         }
         options.push({
           value: group,
           label: info.custom_chain ? info.desc || group : group,
           ratio,
+          chainType,
+          chainModelCount,
+          chainGroupCount: info.chain_groups?.length,
         })
       }
       return { meta, options }
@@ -244,6 +265,9 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
             label={groupMeta[group]?.label}
             isChain={groupMeta[group]?.isChain}
             chainGroups={groupMeta[group]?.chainGroups}
+            chainType={groupMeta[group]?.chainType}
+            chainItems={groupMeta[group]?.chainItems}
+            fallbackEnabled={apiKey.fallback_enabled}
             crossGroupRetry={apiKey.cross_group_retry}
             shouldReduceMotion={shouldReduceMotion}
             options={groupOptions}

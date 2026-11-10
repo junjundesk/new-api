@@ -17,36 +17,33 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Dialog } from '@/components/dialog'
-import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { getUserGroups } from '@/lib/api'
 
+import { deleteChannelChain, getChannelChains } from '../api'
 import {
-  createChannelChain,
-  deleteChannelChain,
-  getChannelChains,
-  updateChannelChain,
-} from '../api'
+  DEFAULT_MAX_ITEMS_BYTES,
+  DEFAULT_MAX_MODELS_PER_ITEM,
+  DEFAULT_USER_CHANNEL_CHAIN_LIMITS,
+  type UserChannelChainLimits,
+} from '../lib/user-channel-chain'
 import type { ChannelChain } from '../types'
-import { GroupRatioBadge } from './auto-group-visuals'
+import {
+  ChannelChainEditor,
+  type ChannelChainEditorHandle,
+} from './channel-chain-editor'
+import { ChannelChainList } from './channel-chain-list'
 
 type ChannelChainsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-type ChainDraft = {
-  chainId?: string
-  name: string
-  groups: string[]
 }
 
 type GroupChainOption = {
@@ -55,118 +52,90 @@ type GroupChainOption = {
   ratio?: number | string
 }
 
-export function ChannelChainsDialog({
-  open,
-  onOpenChange,
-}: ChannelChainsDialogProps) {
+export function ChannelChainsDialog(props: ChannelChainsDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [editing, setEditing] = useState<ChainDraft | null>(null)
+  const editorRef = useRef<ChannelChainEditorHandle | null>(null)
+  const [editing, setEditing] = useState<'create' | ChannelChain | null>(null)
   const [deleting, setDeleting] = useState<ChannelChain | null>(null)
   const [saving, setSaving] = useState(false)
   const [deletingChain, setDeletingChain] = useState(false)
 
-  const { data: chainsData, isLoading } = useQuery({
+  const chainsQuery = useQuery({
     queryKey: ['channel-chains'],
-    queryFn: getChannelChains,
-    enabled: open,
+    queryFn: async () => {
+      const result = await getChannelChains()
+      // The management API reports business failures as HTTP 200 with
+      // success: false; React Query only surfaces thrown errors as isError.
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to load group chains')
+      }
+      return result
+    },
+    enabled: props.open,
     staleTime: 0,
   })
-  const { data: groupsData } = useQuery({
+  const groupsQuery = useQuery({
     queryKey: ['user-groups'],
-    queryFn: getUserGroups,
-    enabled: open,
+    queryFn: async () => {
+      const result = await getUserGroups()
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to load user groups')
+      }
+      return result
+    },
+    enabled: props.open,
     staleTime: 0,
   })
 
-  const chains = chainsData?.data?.chains ?? []
-  const maxChains = chainsData?.data?.max_chains ?? 10
-  const maxGroupsPerChain = chainsData?.data?.max_groups_per_chain ?? 10
-  const tokenUsage = chainsData?.data?.token_usage ?? {}
-  const groupOptions = useMemo<GroupChainOption[]>(
-    () =>
-      Object.entries(groupsData?.data ?? {}).flatMap(([group, info]) => {
-        if (
-          info.custom_chain ||
-          group === 'auto' ||
-          group.startsWith('chain:')
-        ) {
-          return []
-        }
-        const ratio =
-          typeof info.ratio === 'number' || typeof info.ratio === 'string'
-            ? info.ratio
-            : undefined
-        let label = group
-        if (typeof ratio === 'number') {
-          label = `${group} (${ratio}x)`
-        } else if (ratio) {
-          label = `${group} (${t('Auto')})`
-        }
-        return [{ label, value: group, ratio }]
-      }),
-    [groupsData, t]
-  )
-  const ratioByGroup = useMemo(() => {
-    const map = new Map<string, number | string | undefined>()
-    for (const [group, info] of Object.entries(groupsData?.data ?? {})) {
-      map.set(
-        group,
-        typeof info.ratio === 'number' || typeof info.ratio === 'string'
-          ? info.ratio
-          : undefined
-      )
-    }
-    return map
-  }, [groupsData])
-  const availableGroupOptions = useMemo(
-    () =>
-      groupOptions.filter((option) => !editing?.groups.includes(option.value)),
-    [groupOptions, editing]
-  )
+  const response = chainsQuery.data?.data
+  const chains = response?.chains ?? []
+  const maxChains =
+    response?.max_chains ?? DEFAULT_USER_CHANNEL_CHAIN_LIMITS.maxChains
+  const maxGroupsPerChain =
+    response?.max_groups_per_chain ??
+    DEFAULT_USER_CHANNEL_CHAIN_LIMITS.maxGroupsPerChain
+  const tokenUsage = response?.token_usage ?? {}
+  const limits: UserChannelChainLimits = {
+    maxChains,
+    maxGroupsPerChain,
+    maxModelsPerItem:
+      response?.max_models_per_item ?? DEFAULT_MAX_MODELS_PER_ITEM,
+    maxItemsBytes: response?.max_items_bytes ?? DEFAULT_MAX_ITEMS_BYTES,
+  }
 
-  const invalidate = async () => {
-    await Promise.all([
+  const groupOptions = useMemo<GroupChainOption[]>(() => {
+    const entries = Object.entries(groupsQuery.data?.data ?? {})
+    return entries.flatMap(([group, info]) => {
+      if (info.custom_chain) return []
+      if (group === 'auto' || group.startsWith('chain:')) return []
+      // The backend marks groups that may be used inside a chain; older
+      // responses do not carry the flag, so only an explicit false excludes.
+      if (info.chain_selectable === false) return []
+      let label = group
+      if (typeof info.ratio === 'number') {
+        label = `${group} (${info.ratio}x)`
+      } else if (typeof info.ratio === 'string') {
+        label = `${group} (${t('Auto')})`
+      }
+      return [{ value: group, label, ratio: info.ratio }]
+    })
+  }, [groupsQuery.data, t])
+
+  const invalidate = () =>
+    Promise.all([
       queryClient.invalidateQueries({ queryKey: ['channel-chains'] }),
       queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
       queryClient.invalidateQueries({ queryKey: ['keys'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['token-model-mapping-options'],
+      }),
+      queryClient.invalidateQueries({ queryKey: ['group-models'] }),
     ])
-  }
 
   const closeEditor = () => {
     setEditing(null)
     setSaving(false)
-  }
-
-  const handleSave = async () => {
-    if (!editing) return
-    const name = editing.name.trim()
-    if (!name) {
-      toast.error(t('Please enter a chain name'))
-      return
-    }
-    if (editing.groups.length === 0) {
-      toast.error(t('Select at least one group for the chain'))
-      return
-    }
-    setSaving(true)
-    try {
-      const payload = { name, groups: editing.groups }
-      const result = editing.chainId
-        ? await updateChannelChain(editing.chainId, payload)
-        : await createChannelChain(payload)
-      if (result.success) {
-        toast.success(t('Group chain saved'))
-        await invalidate()
-        closeEditor()
-      } else {
-        toast.error(result.message || t('An unexpected error occurred'))
-      }
-    } catch {
-      toast.error(t('An unexpected error occurred'))
-    } finally {
-      setSaving(false)
-    }
   }
 
   const handleDelete = async () => {
@@ -176,14 +145,16 @@ export function ChannelChainsDialog({
       const result = await deleteChannelChain(deleting.id)
       if (result.success) {
         const resetCount = result.data?.reset_tokens ?? 0
-        toast.success(
-          resetCount > 0
-            ? t(
-                'Group chain deleted. {{count}} API key(s) switched to follow your account group.',
-                { count: resetCount }
-              )
-            : t('Group chain deleted')
-        )
+        if (resetCount > 0) {
+          toast.success(
+            t(
+              'Group chain deleted. {{count}} API key(s) switched to follow your account group.',
+              { count: resetCount }
+            )
+          )
+        } else {
+          toast.success(t('Group chain deleted'))
+        }
         await invalidate()
         setDeleting(null)
       } else {
@@ -196,234 +167,101 @@ export function ChannelChainsDialog({
     }
   }
 
-  const moveGroup = (index: number, direction: -1 | 1) => {
-    if (!editing) return
-    const target = index + direction
-    if (target < 0 || target >= editing.groups.length) return
-    const groups = [...editing.groups]
-    ;[groups[index], groups[target]] = [groups[target], groups[index]]
-    setEditing({ ...editing, groups })
+  let description = t(
+    'Chain your selectable pricing groups in a custom order and use the chain as an API key group.'
+  )
+  if (editing) {
+    if (editing === 'create') {
+      description = t(
+        'Group-based chains try each group in order; model-based chains route each requested model to its own ordered groups.'
+      )
+    } else if (editing.type === 'models') {
+      description = t(
+        'Pick one group per model row; requests for a model use its row order.'
+      )
+    } else {
+      description = t(
+        'Pick pricing groups and order them; requests fall back group by group.'
+      )
+    }
   }
 
   let body: React.ReactNode
-  if (isLoading) {
+  if (chainsQuery.isLoading) {
     body = (
-      <div className='text-muted-foreground py-8 text-center text-sm'>
+      <div
+        className='text-muted-foreground py-8 text-center text-sm'
+        role='status'
+      >
         {t('Loading...')}
+      </div>
+    )
+  } else if (chainsQuery.isError) {
+    body = (
+      <div className='flex flex-col items-center gap-2 py-8 text-center text-sm'>
+        <p className='text-destructive'>{t('Failed to load group chains')}</p>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          onClick={() => chainsQuery.refetch()}
+        >
+          {t('Retry')}
+        </Button>
       </div>
     )
   } else if (editing) {
     body = (
-      <div className='space-y-4'>
-        <div className='space-y-1.5'>
-          <label className='text-sm font-medium' htmlFor='channel-chain-name'>
-            {t('Chain name')}
-          </label>
-          <Input
-            id='channel-chain-name'
-            value={editing.name}
-            onChange={(event) =>
-              setEditing({ ...editing, name: event.target.value })
-            }
-            placeholder={t('e.g., primary -> backup')}
-          />
-        </div>
-        <div className='space-y-1.5'>
-          <label className='text-sm font-medium' htmlFor='channel-chain-groups'>
-            {t('Groups')}
-          </label>
-          <MultiSelect
-            id='channel-chain-groups'
-            options={availableGroupOptions}
-            selected={[]}
-            onChange={(values) => {
-              const added = values.filter(
-                (group) => !editing.groups.includes(group)
-              )
-              setEditing({
-                ...editing,
-                groups: [...editing.groups, ...added],
-              })
-            }}
-            placeholder={t('Add a group to the chain')}
-            disabled={editing.groups.length >= maxGroupsPerChain}
-            maxVisibleChips={3}
-          />
-          <p className='text-muted-foreground text-xs'>
-            {t('Groups: {{used}}/{{max}}', {
-              used: editing.groups.length,
-              max: maxGroupsPerChain,
-            })}
-          </p>
-        </div>
-        <div className='space-y-2'>
-          {editing.groups.map((group, index) => (
-            <div
-              key={group}
-              className='border-muted bg-muted/40 flex items-center justify-between gap-2 rounded-lg border px-3 py-2'
-            >
-              <div className='flex min-w-0 items-center gap-2'>
-                <span className='text-muted-foreground font-mono text-xs'>
-                  {index + 1}
-                </span>
-                <span className='min-w-0 truncate text-sm font-medium'>
-                  {group}
-                </span>
-                <GroupRatioBadge ratio={ratioByGroup.get(group)} />
-              </div>
-              <div className='flex shrink-0 items-center gap-1'>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='size-7'
-                  disabled={index === 0}
-                  aria-label={t('Move up')}
-                  onClick={() => moveGroup(index, -1)}
-                >
-                  <ArrowUp className='size-3.5' />
-                </Button>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='size-7'
-                  disabled={index === editing.groups.length - 1}
-                  aria-label={t('Move down')}
-                  onClick={() => moveGroup(index, 1)}
-                >
-                  <ArrowDown className='size-3.5' />
-                </Button>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='text-destructive size-7'
-                  aria-label={t('Remove')}
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      groups: editing.groups.filter((_, i) => i !== index),
-                    })
-                  }
-                >
-                  <X className='size-3.5' />
-                </Button>
-              </div>
-            </div>
-          ))}
-          {editing.groups.length === 0 && (
-            <div className='text-muted-foreground border-muted rounded-lg border border-dashed p-4 text-center text-sm'>
-              {t('Select at least one group for the chain')}
-            </div>
-          )}
-        </div>
-      </div>
+      <ChannelChainEditor
+        key={editing === 'create' ? 'create' : editing.id}
+        ref={editorRef}
+        mode={editing === 'create' ? 'create' : 'edit'}
+        chain={editing === 'create' ? undefined : editing}
+        open={props.open}
+        groupOptions={groupOptions}
+        groupOptionsReady={groupsQuery.isSuccess}
+        limits={limits}
+        onSaved={() => {
+          setSaving(false)
+          closeEditor()
+          void invalidate()
+        }}
+        onCancel={closeEditor}
+        onSubmittingChange={setSaving}
+      />
     )
   } else {
     body = (
       <div className='space-y-4'>
-        <div className='bg-muted/50 text-muted-foreground flex items-start gap-3 rounded-lg p-3 text-xs leading-relaxed'>
-          <div className='space-y-1'>
-            <p>
-              {t(
-                'A group chain routes each request through the pricing groups in the order you set: when a group is unavailable, the next one is tried automatically.'
-              )}
-            </p>
-            <p>
-              {t(
-                'Create a chain, then select it as the group of an API key. Renaming or reordering a chain takes effect immediately without touching the key.'
-              )}
-            </p>
-          </div>
+        <div className='bg-muted/50 text-muted-foreground space-y-1 rounded-lg p-3 text-xs leading-relaxed'>
+          <p>
+            {t(
+              'A group chain routes each request through the pricing groups in the order you set: when a group is unavailable, the next one is tried automatically.'
+            )}
+          </p>
+          <p>
+            {t(
+              'Create a chain, then select it as the group of an API key. Renaming or reordering a chain takes effect immediately without touching the key.'
+            )}
+          </p>
+          <p>
+            {t(
+              'Model-based chains store one group and its model list per row, so a key bound to the chain routes each requested model to that row.'
+            )}
+          </p>
         </div>
-
-        {chains.length === 0 ? (
-          <div className='text-muted-foreground border-muted flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm'>
-            <Plus className='size-6' />
-            {t('You have not created any group chains yet.')}
-          </div>
-        ) : (
-          <div className='space-y-2'>
-            {chains.map((chain) => (
-              <div
-                key={chain.id}
-                className='border-muted flex flex-col gap-2 rounded-lg border p-3'
-              >
-                <div className='flex items-center justify-between gap-2'>
-                  <div className='flex min-w-0 items-center gap-2'>
-                    <span className='truncate text-sm font-medium'>
-                      {chain.name}
-                    </span>
-                    <span className='text-muted-foreground shrink-0 text-xs'>
-                      {t('Bound API keys: {{count}}', {
-                        count: tokenUsage[`chain:${chain.id}`] ?? 0,
-                      })}
-                    </span>
-                  </div>
-                  <div className='flex shrink-0 items-center gap-1'>
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      className='size-7'
-                      aria-label={t('Edit group chain')}
-                      onClick={() =>
-                        setEditing({
-                          chainId: chain.id,
-                          name: chain.name,
-                          groups: [...chain.groups],
-                        })
-                      }
-                    >
-                      <Pencil className='size-3.5' />
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      className='text-destructive size-7'
-                      aria-label={t('Delete chain')}
-                      onClick={() => setDeleting(chain)}
-                    >
-                      <Trash2 className='size-3.5' />
-                    </Button>
-                  </div>
-                </div>
-                {chain.groups.length === 0 ? (
-                  <span className='text-warning text-xs'>
-                    {t('This chain has no groups left. Edit it or delete it.')}
-                  </span>
-                ) : (
-                  <div className='flex flex-wrap items-center gap-1.5'>
-                    {chain.groups.map((group, index) => (
-                      <span key={group} className='flex items-center gap-1.5'>
-                        {index > 0 && (
-                          <span className='text-muted-foreground text-xs'>
-                            →
-                          </span>
-                        )}
-                        <span className='bg-muted text-muted-foreground inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-xs'>
-                          <span className='min-w-0 truncate'>{group}</span>
-                          <GroupRatioBadge ratio={ratioByGroup.get(group)} />
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className='text-muted-foreground flex items-center justify-between text-xs'>
-          <span>
-            {t('Chains: {{used}}/{{max}}', {
-              used: chains.length,
-              max: maxChains,
-            })}
-          </span>
-        </div>
+        <ChannelChainList
+          chains={chains}
+          tokenUsage={tokenUsage}
+          onEdit={setEditing}
+          onDelete={setDeleting}
+        />
+        <p className='text-muted-foreground text-xs'>
+          {t('Chains: {{used}}/{{max}}', {
+            used: chains.length,
+            max: maxChains,
+          })}
+        </p>
       </div>
     )
   }
@@ -431,33 +269,36 @@ export function ChannelChainsDialog({
   return (
     <>
       <Dialog
-        open={open}
+        open={props.open}
         onOpenChange={(next) => {
           if (!next) {
-            setEditing(null)
+            // Never drop the dialog while a save request is still in flight.
+            if (saving) return
+            closeEditor()
           }
-          onOpenChange(next)
+          props.onOpenChange(next)
         }}
         title={editing ? t('Edit group chain') : t('Model Group Chains')}
-        description={
-          editing
-            ? t(
-                'Pick pricing groups and order them; requests fall back group by group.'
-              )
-            : t(
-                'Chain your selectable pricing groups in a custom order and use the chain as an API key group.'
-              )
-        }
-        contentClassName='sm:max-w-[560px]'
+        description={description}
+        contentClassName='sm:max-w-[620px]'
         contentHeight='auto'
         bodyClassName='space-y-4'
         footer={
           editing ? (
             <div className='flex w-full justify-end gap-2'>
-              <Button variant='outline' onClick={closeEditor}>
+              <Button
+                variant='outline'
+                type='button'
+                onClick={closeEditor}
+                disabled={saving}
+              >
                 {t('Cancel')}
               </Button>
-              <Button type='button' onClick={handleSave} disabled={saving}>
+              <Button
+                type='button'
+                onClick={() => editorRef.current?.submit()}
+                disabled={saving}
+              >
                 {saving ? t('Saving...') : t('Save chain')}
               </Button>
             </div>
@@ -467,16 +308,33 @@ export function ChannelChainsDialog({
                 type='button'
                 size='sm'
                 disabled={chains.length >= maxChains}
-                onClick={() => setEditing({ name: '', groups: [] })}
+                onClick={() => setEditing('create')}
               >
-                <Plus className='h-4 w-4' />
+                <Plus aria-hidden='true' className='size-4' />
                 {t('New chain')}
               </Button>
             </div>
           )
         }
       >
-        {body}
+        <div className='space-y-3'>
+          {groupsQuery.isError ? (
+            <div className='border-destructive/40 bg-destructive/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2 text-xs'>
+              <span className='text-destructive'>
+                {t('Failed to load user groups')}
+              </span>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => groupsQuery.refetch()}
+              >
+                {t('Retry')}
+              </Button>
+            </div>
+          ) : null}
+          {body}
+        </div>
       </Dialog>
 
       <ConfirmDialog

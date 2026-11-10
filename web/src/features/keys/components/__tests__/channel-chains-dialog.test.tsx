@@ -272,7 +272,7 @@ describe('Channel chains dialog', () => {
     assert.equal(document.body.textContent?.includes('2x'), true)
 
     const nameInput = document.querySelector<HTMLInputElement>(
-      '#channel-chain-name'
+      'input[maxlength="64"]'
     )
     assert.ok(nameInput)
     await changeInput(nameInput, 'Primary')
@@ -287,5 +287,69 @@ describe('Channel chains dialog', () => {
       name: 'Primary',
       groups: ['vip'],
     })
+  })
+
+  test('shows a load error instead of an empty list and retries', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    const baseGet = apiClient.get
+    let chainsFail = true
+    apiClient.get = async (url, data) => {
+      if (url === '/api/user/self/channel_chains' && chainsFail) {
+        return {
+          data: { success: false, message: 'chain storage unavailable' },
+        }
+      }
+      return baseGet(url, data)
+    }
+
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <I18nextProvider i18n={i18n}>
+            <ChannelChainsDialog open onOpenChange={() => undefined} />
+          </I18nextProvider>
+        </QueryClientProvider>
+      )
+    )
+
+    await act(async () =>
+      waitForCondition(
+        () =>
+          document.body.textContent?.includes('Failed to load group chains') ===
+          true,
+        'chains load error was not rendered'
+      )
+    )
+    // A business failure must not masquerade as an empty chain list.
+    assert.equal(
+      document.body.textContent?.includes(
+        'You have not created any group chains yet.'
+      ),
+      false
+    )
+
+    chainsFail = false
+    await act(async () => findButton('Retry')?.click())
+    await act(async () =>
+      waitForCondition(
+        () =>
+          document.body.textContent?.includes(
+            'You have not created any group chains yet.'
+          ) === true,
+        'chains did not reload after retry'
+      )
+    )
+    assert.equal(
+      document.body.textContent?.includes('Failed to load group chains'),
+      false
+    )
   })
 })

@@ -211,18 +211,19 @@ func validateTokenChannelChain(c *gin.Context, token *model.Token) bool {
 		common.ApiErrorI18n(c, i18n.MsgNotFound)
 		return false
 	}
-	groups := chain.GetGroupList()
-	if len(groups) == 0 {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return false
-	}
 	userGroup, err := model.GetUserGroup(userId, false)
 	if err != nil {
 		common.ApiError(c, err)
 		return false
 	}
-	if err := service.ValidateUserChannelChainGroups(userGroup, groups); err != nil {
+	if err := service.ValidateUserChannelChain(chain, userGroup, false); err != nil {
 		common.ApiError(c, err)
+		return false
+	}
+	// Check the final state before fallback validation can take its unchanged-list shortcut.
+	// All create, full-update and group-only paths call this guard.
+	if chain.GetType() == model.UserChannelChainTypeModels && token.FallbackEnabled {
+		common.ApiErrorI18n(c, i18n.MsgTokenModelChainFallbackUnsupported)
 		return false
 	}
 	token.CrossGroupRetry = false
@@ -256,11 +257,10 @@ func getTokenGroupModels(c *gin.Context, tokenGroup string, autoGroups []string)
 		if err != nil {
 			return nil, err
 		}
-		for _, group := range chain.GetGroupList() {
-			if service.GroupInUserUsableGroups(userGroup, group) {
-				groups = append(groups, group)
-			}
+		if err := service.ValidateUserChannelChain(chain, userGroup, false); err != nil {
+			return nil, err
 		}
+		return service.GetUserChannelChainModels(chain)
 	default:
 		if service.GroupInUserUsableGroups(userGroup, tokenGroup) {
 			groups = []string{tokenGroup}

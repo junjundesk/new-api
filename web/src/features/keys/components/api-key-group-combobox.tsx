@@ -50,6 +50,34 @@ export type ApiKeyGroupOption = {
   desc?: string
   ratio?: number | string
   hasModelSpecificRatio?: boolean
+  chainType?: 'groups' | 'models'
+  chainModelCount?: number
+  chainGroupCount?: number
+}
+
+type ChainTypeBadgeProps = {
+  type?: 'groups' | 'models'
+  modelCount?: number
+  groupCount?: number
+}
+
+function ChainTypeBadge(props: ChainTypeBadgeProps) {
+  const { t } = useTranslation()
+
+  if (!props.type) return null
+  const label =
+    props.type === 'models'
+      ? t('{{count}} models', { count: props.modelCount ?? 0 })
+      : t('{{count}} groups', { count: props.groupCount ?? 0 })
+
+  return (
+    <Badge
+      variant='outline'
+      className='text-muted-foreground h-[18px] shrink-0 px-1.5 text-[10px] leading-none font-medium'
+    >
+      {label}
+    </Badge>
+  )
 }
 
 function ModelSpecificRatioBadge() {
@@ -73,6 +101,8 @@ type ApiKeyGroupComboboxProps = {
   onValueChange: (value: string) => void
   placeholder?: string
   disabled?: boolean
+  ariaLabel?: string
+  compact?: boolean
 }
 
 export function ApiKeyGroupCombobox({
@@ -81,6 +111,8 @@ export function ApiKeyGroupCombobox({
   onValueChange,
   placeholder,
   disabled,
+  ariaLabel,
+  compact,
 }: ApiKeyGroupComboboxProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -118,11 +150,15 @@ export function ApiKeyGroupCombobox({
             type='button'
             variant='outline'
             role='combobox'
+            aria-label={ariaLabel || placeholder || t('Select a group')}
             aria-expanded={open}
             data-auto-group-effect={isAutoSelected ? 'trigger' : undefined}
             disabled={disabled}
             className={cn(
-              'border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 relative h-auto min-h-14 w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px] sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3',
+              'border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 relative h-auto w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px]',
+              compact
+                ? 'min-h-9 gap-1.5 rounded-md px-2 py-1'
+                : 'min-h-14 gap-2 sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3',
               isAutoSelected &&
                 cn(
                   AUTO_GROUP_FRAME_CLASS_NAME,
@@ -144,14 +180,19 @@ export function ApiKeyGroupCombobox({
               {selectedOption?.hasModelSpecificRatio && (
                 <ModelSpecificRatioBadge />
               )}
+              <ChainTypeBadge
+                type={selectedOption?.chainType}
+                modelCount={selectedOption?.chainModelCount}
+                groupCount={selectedOption?.chainGroupCount}
+              />
             </span>
-            {selectedOption?.desc && (
+            {!compact && selectedOption?.desc && (
               <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
                 {selectedOption.desc}
               </span>
             )}
           </span>
-          <span className='hidden sm:block'>
+          <span className={compact ? 'hidden' : 'hidden sm:block'}>
             <GroupRatioBadge
               ratio={selectedOption?.ratio}
               isAuto={isAutoSelected}
@@ -217,6 +258,11 @@ export function ApiKeyGroupCombobox({
                         {option.hasModelSpecificRatio && (
                           <ModelSpecificRatioBadge />
                         )}
+                        <ChainTypeBadge
+                          type={option.chainType}
+                          modelCount={option.chainModelCount}
+                          groupCount={option.chainGroupCount}
+                        />
                       </span>
                       {option.desc && (
                         <span className='text-muted-foreground block truncate text-xs'>

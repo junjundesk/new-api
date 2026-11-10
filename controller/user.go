@@ -713,6 +713,29 @@ func GetUserModels(c *gin.Context) {
 	}
 	groups := service.GetUserUsableGroupsWithActivity(user.Id, user.Group)
 	group := c.Query("group")
+	if strings.HasPrefix(group, "chain:") {
+		chainId, ok := model.ParseUserChannelChain(group)
+		if !ok {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		chain, err := model.GetUserChannelChain(user.Id, chainId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if err := service.ValidateUserChannelChain(chain, user.Group, false); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		models, err := service.GetUserChannelChainModels(chain)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		common.ApiSuccess(c, models)
+		return
+	}
 	var groupsToQuery []string
 	switch {
 	case group == "":

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,28 +10,64 @@ import (
 	"github.com/QuantumNous/new-api/model"
 )
 
-func getRequestChannelChain(param *RetryParam) ([]string, bool) {
-	if value, ok := common.GetContextKey(param.Ctx, constant.ContextKeyChannelChain); ok {
-		if groups, ok := value.([]string); ok && len(groups) > 0 {
-			return groups, true
-		}
+// requestChannelChainGroups resolves the ordered candidate groups for the
+// current request. The chain snapshot loaded by auth is preferred; the legacy
+// context key and a direct DB load keep non-auth callers working.
+func requestChannelChainGroups(param *RetryParam) ([]string, bool, error) {
+	if groups, isChain, err := GetRequestChannelChainGroups(param.Ctx, param.ModelName); isChain {
+		return groups, true, err
 	}
-	if strings.HasPrefix(param.TokenGroup, "chain:") {
-		userId := common.GetContextKeyInt(param.Ctx, constant.ContextKeyUserId)
-		if userId == 0 {
-			userId = param.Ctx.GetInt("id")
-		}
-		if groups, err := ResolveChannelChainGroups(userId, param.TokenGroup); err == nil && len(groups) > 0 {
-			return groups, true
-		}
+	if !strings.HasPrefix(param.TokenGroup, "chain:") {
+		return nil, false, nil
 	}
-	return nil, false
+	chainId, ok := model.ParseUserChannelChain(param.TokenGroup)
+	if !ok {
+		// A "chain:" prefix with no id is a malformed token group: it must stay a
+		// chain request and fail closed instead of selecting an ordinary group.
+		return nil, true, fmt.Errorf("invalid channel chain token group %q", param.TokenGroup)
+	}
+	userId := common.GetContextKeyInt(param.Ctx, constant.ContextKeyUserId)
+	if userId == 0 {
+		userId = param.Ctx.GetInt("id")
+	}
+	if userId == 0 {
+		return nil, true, fmt.Errorf("failed to load channel chain %s: missing user context", chainId)
+	}
+	chain, err := model.GetUserChannelChain(userId, chainId)
+	if err != nil {
+		return nil, true, fmt.Errorf("failed to load channel chain %s: %w", chainId, err)
+	}
+	// TokenAuth validates before caching a snapshot; a direct DB load (non-auth
+	// caller or a request context that lost the snapshot) must not turn an
+	// unvalidated row into routing authority.
+	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
+	if userGroup == "" {
+		loadedGroup, err := model.GetUserGroup(userId, false)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to load user group for chain %s: %w", chainId, err)
+		}
+		userGroup = loadedGroup
+	}
+	if err := ValidateUserChannelChain(chain, userGroup, false); err != nil {
+		return nil, true, fmt.Errorf("channel chain %s is unavailable: %w", chainId, err)
+	}
+	SetRequestChannelChain(param.Ctx, chain)
+	groups, err := resolveChannelChainGroupsForModel(chain, param.ModelName)
+	if err != nil {
+		return nil, true, err
+	}
+	return groups, true, nil
 }
 
 func getChannelChainSelection(param *RetryParam) (*model.Channel, string, error, bool) {
-	groups, ok := getRequestChannelChain(param)
-	if !ok {
+	groups, isChain, err := requestChannelChainGroups(param)
+	if !isChain {
 		return nil, "", nil, false
+	}
+	if err != nil {
+		// A models-type chain that cannot serve this model must fail closed;
+		// never fall through to an ordinary group selection.
+		return nil, param.TokenGroup, err, true
 	}
 
 	used := make(map[int]struct{})

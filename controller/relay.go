@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	taskdto "github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -278,11 +279,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		RequestPath: c.Request.URL.Path,
 		Retry:       common.GetPointer(0),
 	}
+	retryLimit := relayRetryLimit(c, relayInfo)
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 
 	baseURLChannelID := 0
-	for ; retryParam.GetRetry() <= relayRetryLimit(c); retryParam.IncreaseRetry() {
+	for ; retryParam.GetRetry() <= retryLimit; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
 		attemptStart := time.Now()
 		result := runRelayAttempt(c, relayFormat, relayInfo, retryParam, relayAttemptOptions{})
@@ -314,8 +316,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		// 只保留该请求最终结果，被后续尝试取代的中间失败对用户隐藏。
 		failoverToNextCandidate := helper.ShouldFailoverToNextModelCandidate(c, relayInfo, newAPIError)
 		continueAfterThisAttempt := failoverToNextCandidate
-		if !continueAfterThisAttempt && retryParam.GetRetry() < relayRetryLimit(c) {
-			continueAfterThisAttempt = shouldRetry(c, newAPIError, relayRetryLimit(c)-retryParam.GetRetry())
+		if !continueAfterThisAttempt && retryParam.GetRetry() < retryLimit {
+			continueAfterThisAttempt = shouldRetry(c, newAPIError, retryLimit-retryParam.GetRetry())
 		}
 		// 已经向客户端输出内容，或上游已经返回过数据/usage 时不再重试：
 		// 重发会拼接重复内容，并让上游对已经产生的那部分重复计费。
@@ -390,14 +392,21 @@ func addUsedChannel(c *gin.Context, channelId int) {
 	c.Set("use_channel", useChannel)
 }
 
-func relayRetryLimit(c *gin.Context) int {
+// relayRetryLimit bounds retries for the current request. A channel chain needs
+// one full retry budget per candidate group; for a models-type chain the
+// candidates are only the rows that provide the request model (mapping already
+// applied, matching the selection path).
+func relayRetryLimit(c *gin.Context, info *relaycommon.RelayInfo) int {
 	maxRetry := common.RetryTimes
-	if value, ok := common.GetContextKey(c, constant.ContextKeyChannelChain); ok {
-		if groups, ok := value.([]string); ok && len(groups) > 0 {
-			chainLimit := len(groups) * (common.RetryTimes + 1)
-			if chainLimit > maxRetry {
-				maxRetry = chainLimit
-			}
+	modelName := ""
+	if info != nil {
+		modelName = info.OriginModelName
+	}
+	groups, isChain, err := service.GetRequestChannelChainGroups(c, modelName)
+	if isChain && err == nil && len(groups) > 0 {
+		chainLimit := len(groups) * (common.RetryTimes + 1)
+		if chainLimit > maxRetry {
+			maxRetry = chainLimit
 		}
 	}
 	return maxRetry
@@ -452,6 +461,9 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
 	if err != nil {
+		if errors.Is(err, service.ErrChannelChainModelNotAvailable) {
+			return nil, types.NewError(fmt.Errorf("%s", i18n.T(c, i18n.MsgChannelChainModelNotAvailable, map[string]any{"Model": info.OriginModelName})), types.ErrorCodeModelNotFound, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
@@ -737,8 +749,9 @@ func RelayTask(c *gin.Context) {
 		RequestPath: c.Request.URL.Path,
 		Retry:       common.GetPointer(0),
 	}
+	retryLimit := relayRetryLimit(c, relayInfo)
 
-	for ; retryParam.GetRetry() <= relayRetryLimit(c); retryParam.IncreaseRetry() {
+	for ; retryParam.GetRetry() <= retryLimit; retryParam.IncreaseRetry() {
 		var channel *model.Channel
 
 		if lockedCh, ok := relayInfo.LockedChannel.(*model.Channel); ok && lockedCh != nil {
@@ -786,8 +799,8 @@ func RelayTask(c *gin.Context) {
 			apiErr := types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
 			failoverToNextCandidate := helper.ShouldFailoverToNextModelCandidate(c, relayInfo, apiErr)
 			continueAfterThisAttempt := failoverToNextCandidate
-			if !continueAfterThisAttempt && retryParam.GetRetry() < relayRetryLimit(c) {
-				continueAfterThisAttempt = shouldRetryTaskRelay(c, channel.Id, taskErr, relayRetryLimit(c)-retryParam.GetRetry())
+			if !continueAfterThisAttempt && retryParam.GetRetry() < retryLimit {
+				continueAfterThisAttempt = shouldRetryTaskRelay(c, channel.Id, taskErr, retryLimit-retryParam.GetRetry())
 			}
 
 			processChannelError(c,
@@ -805,7 +818,7 @@ func RelayTask(c *gin.Context) {
 		}
 		retryParam.ClearPinnedChannel()
 
-		if !shouldRetryTaskRelay(c, channel.Id, taskErr, relayRetryLimit(c)-retryParam.GetRetry()) {
+		if !shouldRetryTaskRelay(c, channel.Id, taskErr, retryLimit-retryParam.GetRetry()) {
 			break
 		}
 	}

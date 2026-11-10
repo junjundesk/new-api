@@ -42,23 +42,31 @@ const (
 
 // Token related messages
 const (
-	MsgTokenNameTooLong          = "token.name_too_long"
-	MsgTokenNameInvalid          = "token.name_invalid"
-	MsgTokenQuotaNegative        = "token.quota_negative"
-	MsgTokenQuotaExceedMax       = "token.quota_exceed_max"
-	MsgTokenGenerateFailed       = "token.generate_failed"
-	MsgTokenGetInfoFailed        = "token.get_info_failed"
-	MsgTokenExpiredCannotEnable  = "token.expired_cannot_enable"
-	MsgTokenExhaustedCannotEable = "token.exhausted_cannot_enable"
-	MsgTokenInvalid              = "token.invalid"
-	MsgTokenNotProvided          = "token.not_provided"
-	MsgTokenExpired              = "token.expired"
-	MsgTokenExhausted            = "token.exhausted"
-	MsgTokenStatusUnavailable    = "token.status_unavailable"
-	MsgTokenDbError              = "token.db_error"
-	MsgTokenAutoGroupsTooMany    = "token.auto_groups_too_many"
-	MsgTokenAutoGroupsDuplicate  = "token.auto_groups_duplicate"
-	MsgTokenAutoGroupsInvalid    = "token.auto_groups_invalid"
+	MsgTokenNameTooLong                   = "token.name_too_long"
+	MsgTokenNameInvalid                   = "token.name_invalid"
+	MsgTokenQuotaNegative                 = "token.quota_negative"
+	MsgTokenQuotaExceedMax                = "token.quota_exceed_max"
+	MsgTokenGenerateFailed                = "token.generate_failed"
+	MsgTokenGetInfoFailed                 = "token.get_info_failed"
+	MsgTokenExpiredCannotEnable           = "token.expired_cannot_enable"
+	MsgTokenExhaustedCannotEable          = "token.exhausted_cannot_enable"
+	MsgTokenInvalid                       = "token.invalid"
+	MsgTokenNotProvided                   = "token.not_provided"
+	MsgTokenExpired                       = "token.expired"
+	MsgTokenExhausted                     = "token.exhausted"
+	MsgTokenStatusUnavailable             = "token.status_unavailable"
+	MsgTokenDbError                       = "token.db_error"
+	MsgTokenAutoGroupsTooMany             = "token.auto_groups_too_many"
+	MsgTokenAutoGroupsDuplicate           = "token.auto_groups_duplicate"
+	MsgTokenAutoGroupsInvalid             = "token.auto_groups_invalid"
+	MsgTokenModelChainFallbackUnsupported = "token.model_chain_fallback_unsupported"
+)
+
+// Group chain routing messages
+const (
+	MsgChannelChainModelNotAvailable          = "channel_chain.model_not_available"
+	MsgChannelChainSpecificChannelUnsupported = "channel_chain.specific_channel_unsupported"
+	MsgChannelChainPlaygroundGroupUnsupported = "channel_chain.playground_group_unsupported"
 )
 
 // Redemption related messages

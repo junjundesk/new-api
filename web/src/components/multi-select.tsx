@@ -60,6 +60,12 @@ interface MultiSelectProps {
   emptyText?: string
   /** Optional `id` to wire labels/aria-describedby to the input. */
   id?: string
+  /**
+   * Stable accessible name for the input. Placeholders describe transient state
+   * (loading, empty, errors), so controls that need a constant label pass one
+   * explicitly instead of relying on the placeholder.
+   */
+  ariaLabel?: string
   /** Disable the entire control. */
   disabled?: boolean
   /**
@@ -346,7 +352,7 @@ export function MultiSelect(props: MultiSelectProps) {
               : undefined
           }
           onKeyDown={handleKeyDown}
-          aria-label={placeholder}
+          aria-label={props.ariaLabel ?? placeholder}
         />
       </ComboboxChips>
 
