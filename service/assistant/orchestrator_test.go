@@ -3,6 +3,8 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -17,11 +19,13 @@ type fakeResponsesClient struct {
 	chatDeltas  [][]string
 	calls       int
 	chatCalls   int
+	lastTools   []map[string]any
 }
 
 func (f *fakeResponsesClient) CreateResponse(ctx context.Context, input []json.RawMessage, tools []map[string]any, onDelta func(string) error) (*ResponsesResult, error) {
 	index := f.calls
 	f.calls++
+	f.lastTools = tools
 	if index >= len(f.responses) {
 		return &ResponsesResult{Status: "completed"}, nil
 	}
@@ -169,7 +173,7 @@ func TestOrchestratorHidesToolsOutsideProfileSet(t *testing.T) {
 	assert.Nil(t, start.Arguments)
 }
 
-func TestOrchestratorRunsMultipleToolRoundsWithoutCap(t *testing.T) {
+func TestOrchestratorRunsMultipleToolRounds(t *testing.T) {
 	toolItem := rawToolCall(t, "call_1", "get_account_summary", map[string]any{})
 	client := &fakeResponsesClient{responses: []*ResponsesResult{
 		{Status: "completed", Output: []json.RawMessage{toolItem}},
@@ -288,4 +292,107 @@ func TestOrchestratorAccumulatesUsageAcrossToolRounds(t *testing.T) {
 	assert.Equal(t, 5, usage.OutputTokens)
 	assert.Equal(t, 35, usage.TotalTokens)
 	assert.Equal(t, 20, orchestrator.ContextTokens(), "context size is the latest request input, not the summed usage")
+}
+
+func TestMarshalToolOutputShortensLargeListsInsteadOfDroppingThem(t *testing.T) {
+	items := make([]map[string]any, 0, 400)
+	for index := 0; index < 400; index++ {
+		items = append(items, map[string]any{"id": index, "name": strings.Repeat("channel-name-", 12)})
+	}
+	output, err := marshalToolOutput(ToolResult{OK: true, Data: map[string]any{
+		"status_code": 200,
+		"data":        map[string]any{"items": items, "total": 400},
+	}})
+	require.NoError(t, err)
+	require.LessOrEqual(t, len(output), maxToolResultBytes)
+
+	var decoded struct {
+		OK        bool   `json:"ok"`
+		Truncated bool   `json:"truncated"`
+		Note      string `json:"note"`
+		Data      struct {
+			StatusCode int `json:"status_code"`
+			Data       struct {
+				Items []map[string]any `json:"items"`
+				Total int              `json:"total"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal([]byte(output), &decoded))
+	assert.True(t, decoded.OK)
+	assert.True(t, decoded.Truncated)
+	kept := len(decoded.Data.Data.Items)
+	require.Greater(t, kept, 100, "most of the budget should be used for rows")
+	require.Less(t, kept, 400)
+	assert.EqualValues(t, 0, decoded.Data.Data.Items[0]["id"], "rows are kept from the start, in order")
+	assert.EqualValues(t, kept-1, decoded.Data.Data.Items[kept-1]["id"])
+	assert.Equal(t, 400, decoded.Data.Data.Total, "fields next to the list survive")
+	assert.Equal(t, 200, decoded.Data.StatusCode)
+	assert.Contains(t, decoded.Note, fmt.Sprintf("first %d of 400", kept))
+
+	// A small result is passed through untouched.
+	small, err := marshalToolOutput(ToolResult{OK: true, Data: map[string]any{"items": []int{1, 2}}})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"ok":true,"data":{"items":[1,2]}}`, small)
+
+	// Nothing to shorten: the model is told so instead of receiving a fragment.
+	blob, err := marshalToolOutput(ToolResult{OK: true, Data: map[string]any{"text": strings.Repeat("x", maxToolResultBytes)}})
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(blob), maxToolResultBytes)
+	assert.Contains(t, blob, `"truncated":true`)
+	assert.NotContains(t, blob, "xxxx")
+}
+
+func TestOrchestratorStopsAfterToolRoundLimit(t *testing.T) {
+	toolItem := rawToolCall(t, "call_1", "get_account_summary", map[string]any{})
+	looping := make([]*ResponsesResult, 0, maxToolRounds+5)
+	for index := 0; index < maxToolRounds+5; index++ {
+		looping = append(looping, &ResponsesResult{Status: "completed", Output: []json.RawMessage{toolItem}})
+	}
+	client := &fakeResponsesClient{responses: looping}
+	executor := &fakeToolExecutor{definitions: []map[string]any{{"type": "function", "name": "get_account_summary"}}, result: ToolResult{OK: true}}
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
+
+	_, err := orchestrator.Run(context.Background(), 1, nil, "hi")
+	var incomplete *IncompleteError
+	require.ErrorAs(t, err, &incomplete)
+	assert.Equal(t, "tool_round_limit", incomplete.Reason)
+	assert.Len(t, executor.executed, maxToolRounds, "no tool runs after the limit")
+	assert.Equal(t, maxToolRounds+1, client.calls, "the model gets one final tool-free request to answer")
+	assert.Nil(t, client.lastTools, "the final request offers no tools")
+}
+
+func TestOrchestratorAnswersAfterToolRoundLimit(t *testing.T) {
+	toolItem := rawToolCall(t, "call_1", "get_account_summary", map[string]any{})
+	responses := make([]*ResponsesResult, 0, maxToolRounds+1)
+	for index := 0; index < maxToolRounds; index++ {
+		responses = append(responses, &ResponsesResult{Status: "completed", Output: []json.RawMessage{toolItem}})
+	}
+	responses = append(responses, &ResponsesResult{Status: "completed", Output: []json.RawMessage{rawMessage(t, "summary")}})
+	client := &fakeResponsesClient{responses: responses}
+	executor := &fakeToolExecutor{definitions: []map[string]any{{"type": "function", "name": "get_account_summary"}}, result: ToolResult{OK: true}}
+	orchestrator := NewOrchestrator(testConfig(), client, executor, func(event Event) error { return nil }, nil)
+
+	_, err := orchestrator.Run(context.Background(), 1, nil, "hi")
+	require.NoError(t, err)
+	assert.Len(t, executor.executed, maxToolRounds)
+}
+
+func TestInstructionsDescribeToolsUnitsAndCurrentTime(t *testing.T) {
+	admin := buildInstructions(Config{AdminScope: true, SystemPrompt: "site rule"})
+	for _, expected := range []string{
+		"execute_operation", "batch_operation", "admin_db_query", "list_users",
+		"internal quota units", "quota_per_unit", "Current time:", "(unix ",
+		"Additional site instructions:\nsite rule",
+	} {
+		assert.Contains(t, admin, expected)
+	}
+
+	user := buildInstructions(Config{})
+	assert.Contains(t, user, "execute_operation")
+	assert.Contains(t, user, "Current time:")
+	for _, adminOnly := range []string{"batch_operation", "admin_db_query", "list_users"} {
+		assert.NotContains(t, user, adminOnly)
+	}
+	assert.NotContains(t, user, "Additional site instructions")
 }

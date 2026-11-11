@@ -3,12 +3,20 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
+	assistantops "github.com/QuantumNous/new-api/service/assistant/ops"
 )
 
 const maxToolResultBytes = 32 << 10
+
+// maxToolRounds bounds the model/tool round trips of one turn. A normal task
+// needs a handful; the bound only stops a model that keeps calling tools
+// without converging. After the last round the model is asked once more
+// without tools so the user still gets an answer.
+const maxToolRounds = 40
 
 // Orchestrator runs one assistant turn: it calls the model, executes any
 // requested tools, feeds the results back, and streams text deltas through
@@ -77,7 +85,10 @@ func (o *Orchestrator) runResponses(ctx context.Context, userID int, history []C
 		return err
 	}
 	tools := o.executor.Definitions()
-	for {
+	for round := 0; ; round++ {
+		if round >= maxToolRounds {
+			tools = nil
+		}
 		result, err := o.client.CreateResponse(ctx, input, tools, o.onDelta)
 		if err != nil {
 			return err
@@ -89,6 +100,9 @@ func (o *Orchestrator) runResponses(ctx context.Context, userID int, history []C
 				return &IncompleteError{Reason: result.IncompleteReason}
 			}
 			return nil
+		}
+		if tools == nil {
+			return &IncompleteError{Reason: "tool_round_limit"}
 		}
 		input = append(input, result.Output...)
 		for _, call := range calls {
@@ -116,7 +130,10 @@ func (o *Orchestrator) runChat(ctx context.Context, userID int, history []ChatMe
 		return err
 	}
 	tools := chatToolDefinitions(o.executor.Definitions())
-	for {
+	for round := 0; ; round++ {
+		if round >= maxToolRounds {
+			tools = nil
+		}
 		result, err := o.client.CreateChatCompletion(ctx, messages, tools, o.onDelta)
 		if err != nil {
 			return err
@@ -127,6 +144,9 @@ func (o *Orchestrator) runChat(ctx context.Context, userID int, history []ChatMe
 				return &IncompleteError{Reason: "max_output_tokens"}
 			}
 			return nil
+		}
+		if tools == nil {
+			return &IncompleteError{Reason: "tool_round_limit"}
 		}
 		assistantCalls := make([]map[string]any, 0, len(result.ToolCalls))
 		for _, call := range result.ToolCalls {
@@ -166,12 +186,16 @@ func (o *Orchestrator) runChat(ctx context.Context, userID int, history []ChatMe
 
 func (o *Orchestrator) executeTool(ctx context.Context, userID int, call ToolCall) ToolResult {
 	var arguments any
-	if call.Arguments != "" {
+	if presenter, ok := o.executor.(toolArgumentPresenter); ok {
+		arguments = presenter.DisplayArguments(call)
+	} else if call.Arguments != "" {
 		if err := common.Unmarshal([]byte(call.Arguments), &arguments); err != nil {
-			arguments = map[string]any{"raw": call.Arguments}
+			// Unparseable arguments may still carry a credential; never echo them.
+			arguments = map[string]any{"raw": redactedPlaceholder}
+		} else {
+			arguments = redactOperationValue(assistantops.Operation{}, arguments)
 		}
 	}
-	arguments = redactValue(arguments, []string{"password", "original_password", "access_token", "refresh_token", "api_key", "secret", "private_key", "key"})
 	displayName := call.Name
 	if resolver, ok := o.executor.(toolNameResolver); ok {
 		displayName = resolver.DisplayToolName(call.Name)
@@ -233,7 +257,7 @@ func buildChatMessages(cfg Config, history []ChatMessage, message string) ([]map
 	messages := make([]map[string]any, 0, len(trimmed)+2)
 	messages = append(messages, map[string]any{
 		"role":    "system",
-		"content": buildInstructions(cfg.SystemPrompt, cfg.AdminScope),
+		"content": buildInstructions(cfg),
 	})
 	for _, entry := range trimmed {
 		messages = append(messages, map[string]any{
@@ -305,6 +329,9 @@ func chatToolDefinitions(definitions []map[string]any) []map[string]any {
 	return result
 }
 
+// marshalToolOutput renders a tool result for the model. A result that does
+// not fit is not thrown away: its largest list is shortened until it fits, and
+// a note says how many rows were kept and how to get the rest.
 func marshalToolOutput(result ToolResult) (string, error) {
 	payload, err := common.Marshal(result)
 	if err != nil {
@@ -313,14 +340,77 @@ func marshalToolOutput(result ToolResult) (string, error) {
 	if len(payload) <= maxToolResultBytes {
 		return string(payload), nil
 	}
-	truncated, err := common.Marshal(ToolResult{
+	if shortened, ok := shortenToolResult(result, payload); ok {
+		return shortened, nil
+	}
+	fallback, err := common.Marshal(ToolResult{
 		OK:        result.OK,
 		Error:     result.Error,
 		Truncated: true,
-		Data:      map[string]any{"message": "Tool result was too large and has been truncated."},
+		Note:      "The result was too large to return and contains no list that could be shortened. Request fewer fields or a narrower filter.",
 	})
 	if err != nil {
 		return "", err
 	}
-	return string(truncated), nil
+	return string(fallback), nil
+}
+
+// shortenToolResult keeps as many leading elements of the largest list in the
+// result as fit into maxToolResultBytes.
+func shortenToolResult(result ToolResult, payload []byte) (string, bool) {
+	var generic map[string]any
+	if err := common.Unmarshal(payload, &generic); err != nil {
+		return "", false
+	}
+	holder, key, list := largestList(generic["data"], 0)
+	if holder == nil || len(list) < 2 {
+		return "", false
+	}
+	render := func(keep int) (string, bool) {
+		holder[key] = list[:keep]
+		generic["truncated"] = true
+		generic["note"] = fmt.Sprintf("Result too large: only the first %d of %d rows in %q are included. Ask for a smaller page (limit/page_size), more specific filters, or fewer columns, then page through the rest.", keep, len(list), key)
+		out, err := common.Marshal(generic)
+		if err != nil || len(out) > maxToolResultBytes {
+			return "", false
+		}
+		return string(out), true
+	}
+	// Binary search the largest prefix that fits.
+	low, high := 1, len(list)-1
+	best, found := "", false
+	for low <= high {
+		middle := (low + high) / 2
+		if out, ok := render(middle); ok {
+			best, found = out, true
+			low = middle + 1
+		} else {
+			high = middle - 1
+		}
+	}
+	return best, found
+}
+
+// largestList finds the list with the most elements inside a decoded JSON
+// value and returns the object that holds it together with its key.
+func largestList(value any, depth int) (map[string]any, string, []any) {
+	object, ok := value.(map[string]any)
+	if !ok || depth > 4 {
+		return nil, "", nil
+	}
+	var holder map[string]any
+	var key string
+	var list []any
+	for name, item := range object {
+		candidateHolder, candidateKey, candidate := object, name, []any(nil)
+		if items, isList := item.([]any); isList {
+			candidate = items
+		} else {
+			candidateHolder, candidateKey, candidate = largestList(item, depth+1)
+		}
+		if len(candidate) > len(list) {
+			holder, key, list = candidateHolder, candidateKey, candidate
+		}
+	}
+	return holder, key, list
 }

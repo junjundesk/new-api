@@ -8,7 +8,11 @@ import (
 
 type listUsersArguments struct {
 	Keyword string `json:"keyword"`
+	Group   string `json:"group"`
+	Role    *int   `json:"role"`
+	Status  *int   `json:"status"`
 	Limit   *int   `json:"limit"`
+	Offset  *int   `json:"offset"`
 }
 
 // listUsers is admin-only and provides user ids for the user-scoped admin
@@ -26,7 +30,14 @@ func (e *DefaultToolExecutor) listUsers(rawArguments string) ToolResult {
 	if err != nil {
 		return toolError(err)
 	}
-	users, total, err := model.SearchUsers(keyword, "", nil, nil, 0, limit)
+	offset, err := normalizeOffset(args.Offset)
+	if err != nil {
+		return toolError(err)
+	}
+	if args.Status != nil && *args.Status != 1 && *args.Status != 2 && *args.Status != -1 {
+		return toolErrorf("status must be 1 (enabled), 2 (disabled), or -1 (soft-deleted)")
+	}
+	users, total, err := model.SearchUsers(keyword, strings.TrimSpace(args.Group), args.Role, args.Status, offset, limit)
 	if err != nil {
 		return toolError(err)
 	}
@@ -45,13 +56,10 @@ func (e *DefaultToolExecutor) listUsers(rawArguments string) ToolResult {
 			"quota":         user.Quota,
 			"used_quota":    user.UsedQuota,
 			"request_count": user.RequestCount,
+			"quota_display": DisplayQuota(int64(user.Quota)),
 			"created_at":    user.CreatedAt,
+			"deleted":       user.DeletedAt.Valid,
 		})
 	}
-	return ToolResult{OK: true, Data: map[string]any{
-		"total":     total,
-		"returned":  len(items),
-		"truncated": total > int64(len(items)),
-		"items":     items,
-	}}
+	return ToolResult{OK: true, Data: pagedResult(map[string]any{"items": items}, total, offset, len(items))}
 }

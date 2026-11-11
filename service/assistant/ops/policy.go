@@ -9,47 +9,57 @@ import (
 // classifyRoute applies the static policy. It is intentionally centralized so
 // every newly registered /api route must be reviewed by the catalog test.
 func classifyRoute(method, path string) Operation {
+	id := method + " " + path
 	op := Operation{
-		ID:          method + " " + path,
+		ID:          id,
 		Method:      method,
 		Path:        path,
 		Domain:      domainFor(path),
 		Risk:        riskFor(method, path),
-		Summary:     summaryFor(method, path),
-		Description: descriptionFor(method, path),
+		Summary:     defaultSummary(method, path),
+		Description: "Dashboard API operation " + id + ". Parameters are validated by the existing endpoint.",
 		BodyAllowed: method != "GET" && method != "HEAD" && method != "DELETE",
 		PathParams:  pathParams(path),
 	}
-	op.RedactFields = redactFieldsFor(method, path)
 
 	if reason := exclusionFor(method, path); reason != "" {
 		op.ExcludedReason = reason
 		return op
 	}
 
-	op.BodyFields, op.BodyNotes = bodySpecFor(method, path)
+	if doc, ok := operationDocs[id]; ok {
+		if doc.Summary != "" {
+			op.Summary = doc.Summary
+		}
+		if doc.Description != "" {
+			op.Description = doc.Description
+		}
+		op.BodyFields = doc.Body
+		op.BodyNotes = doc.Notes
+		op.QueryFields = doc.Query
+	}
 
-	scope, minRole := scopeFor(method, path)
-	op.Scope = scope
-	op.MinRole = minRole
-	op.Batchable = method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE"
-	if strings.Contains(path, "/user/:id") {
-		op.Batchable = true
-		op.BatchTarget = "id"
-	}
-	if method == "POST" && path == "/api/user/:id/bonus/:grant_id/revoke" {
-		op.Batchable = false
-		op.BatchTarget = ""
-	}
-	if method == "POST" && path == "/api/user/manage" {
-		op.Batchable = true
-		op.BatchTarget = "body:id"
-	}
-	if method == "PUT" && path == "/api/user/" {
-		op.Batchable = true
-		op.BatchTarget = "body:id"
-	}
+	op.Scope, op.MinRole = scopeFor(method, path)
+	op.BatchTarget = batchTargetFor(method, path)
+	op.Batchable = op.BatchTarget != ""
 	return op
+}
+
+// batchTargetFor names where batch_operation writes each target user id: a
+// path parameter name, or "body:<field>". Only operations that address exactly
+// one user per call can be fanned out over users.
+func batchTargetFor(method, path string) string {
+	switch method + " " + path {
+	case "POST /api/user/:id/bonus/:grant_id/revoke":
+		// grant_id differs per user, so one shared parameter set cannot apply.
+		return ""
+	case "POST /api/user/manage", "PUT /api/user/":
+		return "body:id"
+	}
+	if strings.Contains(path, "/user/:id") || strings.Contains(path, "/users/:id") {
+		return "id"
+	}
+	return ""
 }
 
 func exclusionFor(method, path string) string {
@@ -65,7 +75,8 @@ func exclusionFor(method, path string) string {
 	if strings.HasPrefix(path, "/api/oauth") || strings.HasPrefix(path, "/api/user/oauth") ||
 		strings.Contains(path, "/oauth/") || strings.Contains(path, "/passkey") ||
 		strings.Contains(path, "/2fa") ||
-		path == "/api/user/token" || path == "/api/user/reset" || path == "/api/verification" {
+		path == "/api/user/token" || path == "/api/user/reset" || path == "/api/verification" ||
+		path == "/api/reset_password" || path == "/api/verify" {
 		return "authentication-or-security-flow"
 	}
 	if strings.HasPrefix(path, "/api/log/token") || strings.HasPrefix(path, "/api/usage") {
@@ -77,12 +88,20 @@ func exclusionFor(method, path string) string {
 		strings.Contains(path, "/pay") || strings.Contains(path, "/amount") {
 		return "payment-external-flow"
 	}
-	if path == "/api/token/:id/key" || path == "/api/channel/:id/key" || path == "/api/user/token" {
+	if path == "/api/token/:id/key" || path == "/api/token/batch/keys" || path == "/api/channel/:id/key" {
 		return "secret-view"
 	}
 	if strings.Contains(path, "/ollama/pull/stream") || strings.Contains(path, "/performance/logs") ||
 		strings.Contains(path, "/deployments/:id/logs") {
 		return "stream-or-log-file"
+	}
+	if path == "/api/log/search" || path == "/api/log/self/search" {
+		return "deprecated"
+	}
+	if method == "DELETE" && path == "/api/user/self" {
+		// Deleting the signed-in account ends the session the assistant runs
+		// in and cannot be undone from chat; it stays a deliberate UI action.
+		return "account-deletion"
 	}
 	if path == "/api/notice" || path == "/api/about" || path == "/api/status" ||
 		path == "/api/uptime/status" || path == "/api/ratio_config" || path == "/api/home_page_content" ||
@@ -113,42 +132,75 @@ func scopeFor(method, path string) (string, int) {
 	return ScopeAdmin, common.RoleAdminUser
 }
 
+// isUserOperation lists the routes guarded by UserAuth (or public-with-login)
+// that only ever act on the caller's own account.
 func isUserOperation(method, path string) bool {
-	if path == "/api/user/topup" {
+	switch path {
+	case "/api/user/topup":
 		return method == "POST"
-	}
-	if path == "/api/user/topup/info" || path == "/api/user/topup/self" {
+	case "/api/models":
+		return method == "GET"
+	case "/api/user/topup/info", "/api/user/topup/self", "/api/user/aff_transfer",
+		"/api/task/self", "/api/mj/self", "/api/data/flow/self",
+		"/api/pricing", "/api/rankings":
 		return true
 	}
 	userPrefixes := []string{
 		"/api/user/self", "/api/user/sessions", "/api/user/aff",
 		"/api/user/referral", "/api/user/setting", "/api/user/checkin",
-		"/api/user/groups", "/api/user/models", "/api/token",
-		"/api/log/self", "/api/data/self", "/api/data/user-breakdown/self",
-		"/api/subscription/plans", "/api/subscription/self",
-		"/api/activity/offers", "/api/activity/grants", "/api/activity/verify",
-		"/api/activity/redeem",
+		"/api/user/groups", "/api/user/models", "/api/user/activity/",
+		"/api/token", "/api/log/self", "/api/data/self", "/api/data/user-breakdown/self",
+		"/api/subscription/plans", "/api/subscription/self", "/api/perf-metrics",
 	}
 	for _, prefix := range userPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
-	if path == "/api/user/self/bonus" || path == "/api/user/self/channel_chains" {
-		return true
-	}
-	if path == "/api/models" && method == "GET" {
-		return true
-	}
 	return false
+}
+
+// GET routes that are not reads: they call upstream providers (spending
+// channel quota) or rewrite stored state.
+var sideEffectGets = map[string]bool{
+	"/api/channel/test":               true,
+	"/api/channel/test/:id":           true,
+	"/api/channel/update_balance":     true,
+	"/api/channel/update_balance/:id": true,
+}
+
+// POST routes that only compute or preview and store nothing.
+var readOnlyPosts = map[string]bool{
+	"/api/deployments/price-estimation": true,
+	"/api/user/activity/verify":         true,
+}
+
+// Non-DELETE routes whose effect is deletion, irreversible, or site-wide.
+var destructiveWrites = map[string]bool{
+	"POST /api/channel/batch":                  true, // deletes the listed channels
+	"POST /api/token/batch":                    true, // deletes the listed API keys
+	"POST /api/user/manage":                    true, // can delete, demote, or override quota
+	"POST /api/user/bonus/grant_all":           true, // touches every user
+	"PUT /api/option/":                         true, // site-wide configuration
+	"POST /api/option/rest_model_ratio":        true, // resets model ratios
+	"POST /api/system-task/legacy-log-reclaim": true,
 }
 
 func riskFor(method, path string) Risk {
 	if method == "GET" || method == "HEAD" {
+		if sideEffectGets[path] {
+			return RiskWrite
+		}
+		return RiskRead
+	}
+	if method == "DELETE" || destructiveWrites[method+" "+path] {
+		return RiskDestructive
+	}
+	if method == "POST" && readOnlyPosts[path] {
 		return RiskRead
 	}
 	lower := strings.ToLower(path)
-	for _, token := range []string{"delete", "batch", "reset", "revoke", "invalidate", "clear", "cleanup", "disable", "remove"} {
+	for _, token := range []string{"delete", "reset", "revoke", "invalidate", "clear", "cleanup", "remove"} {
 		if strings.Contains(lower, token) {
 			return RiskDestructive
 		}
@@ -165,69 +217,40 @@ func domainFor(path string) string {
 	return parts[0]
 }
 
-func summaryFor(method, path string) string {
-	switch method + " " + path {
-	case "GET /api/user/:id/bonus":
-		return "List user bonus grants"
-	case "POST /api/user/:id/bonus":
-		return "Grant bonus to one user"
-	case "POST /api/user/bonus/grant_all":
-		return "Grant bonus to all users"
-	case "POST /api/user/:id/bonus/:grant_id/revoke":
-		return "Revoke a user bonus grant"
+// defaultSummary derives a readable label from the route shape for operations
+// without a hand-written entry in operationDocs.
+func defaultSummary(method, path string) string {
+	segments := strings.Split(strings.Trim(strings.TrimPrefix(path, "/api"), "/"), "/")
+	words := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if segment != "" && !strings.HasPrefix(segment, ":") {
+			words = append(words, strings.NewReplacer("_", " ", "-", " ").Replace(segment))
+		}
 	}
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	resource := parts[len(parts)-1]
-	if strings.HasPrefix(resource, ":") && len(parts) >= 2 {
-		resource = parts[len(parts)-2]
+	subject := strings.Join(words, " ")
+	last := segments[len(segments)-1]
+	collection := strings.HasSuffix(path, "/")
+	verb := method
+	switch method {
+	case "GET":
+		verb = "Get"
+		if collection {
+			verb = "List"
+		}
+	case "POST":
+		verb = "Run"
+		if collection {
+			verb = "Create"
+		}
+	case "PUT", "PATCH":
+		verb = "Update"
+	case "DELETE":
+		verb = "Delete"
 	}
-	action := map[string]string{
-		"GET": "Read", "POST": "Create/Operate", "PUT": "Update", "PATCH": "Update", "DELETE": "Delete",
-	}[method]
-	if action == "" {
-		action = method
+	if strings.HasPrefix(last, ":") {
+		return verb + " " + subject + " by " + strings.TrimPrefix(last, ":")
 	}
-	return action + " " + resource
-}
-
-func descriptionFor(method, path string) string {
-	switch method + " " + path {
-	case "GET /api/user/:id/bonus":
-		return "List every bonus grant for one user (active, used, expired, revoked) plus the active balance summary."
-	case "POST /api/user/:id/bonus":
-		return "Grant bonus quota to one user. amount is quota units, not currency; expire_input controls the expiry."
-	case "POST /api/user/bonus/grant_all":
-		return "Grant bonus quota to every non-deleted user. The same expiry applies to each grant."
-	case "POST /api/user/:id/bonus/:grant_id/revoke":
-		return "Revoke one active bonus grant. The unconsumed amount leaves the user's bonus balance; amounts already consumed are not refunded."
-	}
-	return "Dashboard API operation " + method + " " + path + ". Parameters are validated by the existing endpoint."
-}
-
-// bodySpecFor documents request body fields for operations whose JSON body is
-// not self-explanatory. Field names match the controller request structs.
-func bodySpecFor(method, path string) ([]BodyField, string) {
-	switch method + " " + path {
-	case "POST /api/user/:id/bonus":
-		return []BodyField{
-			{Name: "amount", Type: "integer", Required: true, Description: "Bonus quota to grant, in internal quota units (not currency). Must be greater than 0.", Example: 500000},
-			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration. A bare number means hours (\"1\" = 1 hour); units may be combined (\"1天\" = 24 hours, \"1天2小时\" = 26 hours). Empty or omitted means the grant never expires.", Example: "24"},
-			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on the grant.", Example: "活动赠金"},
-			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
-		}, "The target user id comes from the path, not the body; all_users is rejected here. amount is quota units, not dollars. expire_input empty means permanent."
-	case "POST /api/user/bonus/grant_all":
-		return []BodyField{
-			{Name: "amount", Type: "integer", Required: true, Description: "Bonus quota granted to each user, in internal quota units (not currency). Must be greater than 0.", Example: 500000},
-			{Name: "expire_input", Type: "string", Required: false, Description: "Expiry duration applied to every grant. A bare number means hours (\"1\" = 1 hour); units may be combined. Empty or omitted means the grants never expire.", Example: "24"},
-			{Name: "remark", Type: "string", Required: false, Description: "Optional admin note stored on each grant.", Example: "活动赠金"},
-			{Name: "send_email", Type: "boolean", Required: false, Description: "Send the arrival notification email. Defaults to true.", Example: true},
-		}, "This endpoint always targets every non-deleted user; user_id is rejected here. Use POST /api/user/:id/bonus for one user."
-	case "POST /api/user/:id/bonus/:grant_id/revoke":
-		return []BodyField{
-			{Name: "remark", Type: "string", Required: false, Description: "Optional reason stored on the revoked grant.", Example: "expiry was entered incorrectly"},
-		}, "Only an active grant can be revoked. The unconsumed amount is removed from the user's bonus balance; already consumed amounts are not refunded. Use GET /api/user/:id/bonus to find grant_id."
-	}
-	return nil, ""
+	return verb + " " + subject
 }
 
 func pathParams(path string) []string {
@@ -241,10 +264,61 @@ func pathParams(path string) []string {
 	return params
 }
 
-func redactFieldsFor(method, path string) []string {
-	fields := []string{"password", "original_password", "access_token", "refresh_token", "api_key", "secret", "private_key", "key"}
-	if strings.Contains(path, "/token") {
-		fields = append(fields, "key")
+// Field-name fragments that mark a value as a credential. Matching is by
+// substring so a newly added secret field is hidden by default.
+var secretFieldFragments = []string{"password", "secret", "access_token", "refresh_token", "gotify_token", "key"}
+
+// Names that contain a secret fragment but hold plain metadata.
+var plainFieldNames = map[string]bool{
+	"multi_key_mode": true, "key_mode": true, "is_multi_key": true, "multi_key_size": true,
+	"multi_key_polling_index": true, "multi_key_status_list": true, "multi_key_disabled_reason": true,
+	"multi_key_disabled_time": true, "key_index": true, "batch_add_set_key_prefix_2_name": true,
+	"description_key": true, "benefit_key": true, "label_key": true, "active_key": true,
+	"ref_key": true, "public_key": true, "keyword": true, "masked_key": true,
+}
+
+// IsSecretField reports whether a request/response field of this operation
+// must be hidden from the model, the transcript, and confirmation cards.
+func (op Operation) IsSecretField(name string) bool {
+	lower := strings.ToLower(name)
+	if plainFieldNames[lower] {
+		return false
 	}
-	return fields
+	// A bare "token" is a credential value (for example the key search filter).
+	if lower == "token" {
+		return true
+	}
+	// Site options and authorization roles use "key" as the entry name.
+	if lower == "key" && (op.Domain == "option" || op.Domain == "authz") {
+		return false
+	}
+	for _, fragment := range secretFieldFragments {
+		if strings.Contains(lower, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+// Operations whose successful response payload is itself a secret.
+var secretResultNotes = map[string]string{
+	"POST /api/redemption/": "Redemption codes were created. Code values are not shown in chat; copy them from the Redemption Codes page.",
+}
+
+// SecretResultNote returns the text that replaces the response payload of an
+// operation whose result must not reach the model, or "" for normal results.
+func (op Operation) SecretResultNote() string {
+	return secretResultNotes[op.ID]
+}
+
+// IsSecretOptionKey mirrors the option list endpoint, which never returns
+// options whose name marks them as credentials.
+func IsSecretOptionKey(key string) bool {
+	lower := strings.ToLower(key)
+	for _, suffix := range []string{"token", "secret", "key", "password"} {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
 }

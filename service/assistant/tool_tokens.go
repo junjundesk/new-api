@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"context"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,7 +19,7 @@ type setKeyStatusArguments struct {
 	Enabled *bool `json:"enabled"`
 }
 
-func (e *DefaultToolExecutor) createAPIKey(targetUserID int, rawArguments string, audit AuditFunc) ToolResult {
+func (e *DefaultToolExecutor) createAPIKey(ctx context.Context, targetUserID int, rawArguments string, audit AuditFunc) ToolResult {
 	args := createKeyArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -35,6 +36,21 @@ func (e *DefaultToolExecutor) createAPIKey(targetUserID int, rawArguments string
 		}
 		expiredTime = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
 	}
+	username, _ := model.GetUsernameById(targetUserID, false)
+	// Arguments are validated above, so the approver only sees a request that
+	// can run, with the key name and owner spelled out.
+	confirmParams := map[string]any{"name": name, "user_id": targetUserID, "username": username, "quota": "unlimited", "expires": "never"}
+	if args.ExpiresInDays != nil {
+		confirmParams["expires"] = time.Unix(expiredTime, 0).UTC().Format(time.RFC3339)
+	}
+	if err := e.askConfirmation(ctx, ConfirmationRequest{
+		OperationID: "create_api_key",
+		Risk:        "write",
+		Summary:     "Create an API key",
+		Params:      confirmParams,
+	}); err != nil {
+		return toolError(err)
+	}
 	token := &model.Token{
 		Name:           name,
 		UnlimitedQuota: true,
@@ -44,7 +60,6 @@ func (e *DefaultToolExecutor) createAPIKey(targetUserID int, rawArguments string
 	if err := service.InsertUserToken(targetUserID, token); err != nil {
 		return toolError(err)
 	}
-	username, _ := model.GetUsernameById(targetUserID, false)
 	if audit != nil {
 		audit("token.create", map[string]any{
 			"id":              token.Id,
@@ -76,7 +91,7 @@ func (e *DefaultToolExecutor) createAPIKey(targetUserID int, rawArguments string
 	}}
 }
 
-func (e *DefaultToolExecutor) setAPIKeyStatus(actorUserID int, rawArguments string, audit AuditFunc) ToolResult {
+func (e *DefaultToolExecutor) setAPIKeyStatus(ctx context.Context, actorUserID int, rawArguments string, audit AuditFunc) ToolResult {
 	args := setKeyStatusArguments{}
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
@@ -108,6 +123,26 @@ func (e *DefaultToolExecutor) setAPIKeyStatus(actorUserID int, rawArguments stri
 		}
 		nextStatus = common.TokenStatusEnabled
 	}
+	username, _ := model.GetUsernameById(token.UserId, false)
+	summary := "Disable an API key"
+	if *args.Enabled {
+		summary = "Enable an API key"
+	}
+	if err := e.askConfirmation(ctx, ConfirmationRequest{
+		OperationID: "set_api_key_status",
+		Risk:        "write",
+		Summary:     summary,
+		Params: map[string]any{
+			"id":         token.Id,
+			"name":       token.Name,
+			"masked_key": "sk-" + token.GetMaskedKey(),
+			"user_id":    token.UserId,
+			"username":   username,
+			"enabled":    *args.Enabled,
+		},
+	}); err != nil {
+		return toolError(err)
+	}
 	token.Status = nextStatus
 	if err := token.SelectUpdate(); err != nil {
 		return toolError(err)
@@ -116,7 +151,6 @@ func (e *DefaultToolExecutor) setAPIKeyStatus(actorUserID int, rawArguments stri
 	if *args.Enabled {
 		action = "token.enable"
 	}
-	username, _ := model.GetUsernameById(token.UserId, false)
 	if audit != nil {
 		audit(action, map[string]any{
 			"id":              token.Id,

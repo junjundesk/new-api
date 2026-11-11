@@ -21,6 +21,19 @@ import (
 
 func TestAssistantChatStreamsTextOverSSE(t *testing.T) {
 	setupAssistantOptionsTest(t)
+	// A finished run records the user's daily token usage, so the chat
+	// handler needs a database.
+	originalDB := model.DB
+	db, err := gorm.Open(sqlite.Open("file:assistant_chat_sse?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = db
+	require.NoError(t, db.AutoMigrate(&model.AssistantUsageDaily{}))
+	t.Cleanup(func() {
+		model.DB = originalDB
+		if sqlDB, closeErr := db.DB(); closeErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/responses", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")

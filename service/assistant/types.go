@@ -90,6 +90,9 @@ type ToolResult struct {
 	Data      any    `json:"data,omitempty"`
 	Error     string `json:"error,omitempty"`
 	Truncated bool   `json:"truncated,omitempty"`
+	// Note tells the model what was cut from an oversized result and how to
+	// fetch the rest.
+	Note string `json:"note,omitempty"`
 }
 
 // Event is one SSE event sent to the browser.
@@ -135,6 +138,12 @@ type ToolExecutor interface {
 // profile to a neutral display name in the client transcript.
 type toolNameResolver interface {
 	DisplayToolName(name string) string
+}
+
+// toolArgumentPresenter lets an executor decide how the arguments of one call
+// appear in the client transcript, hiding credentials with tool-aware rules.
+type toolArgumentPresenter interface {
+	DisplayArguments(call ToolCall) any
 }
 
 // UpstreamError describes a non-2xx or failed upstream call. Message is

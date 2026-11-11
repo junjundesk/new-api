@@ -82,6 +82,11 @@ func confirmationDecisionKey(id string) string {
 
 // Ask sends a confirmation event and waits for the user's decision.
 func (b *ConfirmationBroker) Ask(ctx context.Context, actorID int, profile string, request ConfirmationRequest, emit EmitFunc) (bool, error) {
+	if emit == nil {
+		// Without a channel to the user nobody can approve; the wait still
+		// ends in a clean expiry or cancellation instead of a nil call.
+		emit = func(Event) error { return nil }
+	}
 	id, err := newConfirmationID()
 	if err != nil {
 		return false, err
@@ -112,18 +117,16 @@ func (b *ConfirmationBroker) Ask(ctx context.Context, actorID int, profile strin
 		}
 	}()
 
-	if emit != nil {
-		if err := emit(Event{
-			Type:           "confirmation_required",
-			ConfirmationID: id,
-			Operation:      request.OperationID,
-			Risk:           request.Risk,
-			Summary:        request.Summary,
-			Params:         request.Params,
-			ExpiresAt:      expiresAt.Unix(),
-		}); err != nil {
-			return false, err
-		}
+	if err := emit(Event{
+		Type:           "confirmation_required",
+		ConfirmationID: id,
+		Operation:      request.OperationID,
+		Risk:           request.Risk,
+		Summary:        request.Summary,
+		Params:         request.Params,
+		ExpiresAt:      expiresAt.Unix(),
+	}); err != nil {
+		return false, err
 	}
 
 	timer := time.NewTimer(ConfirmationTTL)
@@ -138,18 +141,14 @@ func (b *ConfirmationBroker) Ask(ctx context.Context, actorID int, profile strin
 	for {
 		select {
 		case approved := <-pending.decision:
-			if emit != nil {
-				_ = emit(Event{Type: "confirmation_resolved", ConfirmationID: id, Status: confirmationStatus(approved)})
-			}
+			_ = emit(Event{Type: "confirmation_resolved", ConfirmationID: id, Status: confirmationStatus(approved)})
 			return approved, nil
 		case <-tickerCh:
 			decision, ok := readRedisDecision(ctx, id)
 			if !ok {
 				continue
 			}
-			if emit != nil {
-				_ = emit(Event{Type: "confirmation_resolved", ConfirmationID: id, Status: confirmationStatus(decision)})
-			}
+			_ = emit(Event{Type: "confirmation_resolved", ConfirmationID: id, Status: confirmationStatus(decision)})
 			return decision, nil
 		case <-ctx.Done():
 			_ = emit(Event{Type: "confirmation_resolved", ConfirmationID: id, Status: "expired"})

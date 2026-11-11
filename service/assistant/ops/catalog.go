@@ -101,13 +101,19 @@ func Visible(op Operation, profile string, role int) bool {
 	return false
 }
 
-func List(profile string, role int, domain, query string, limit int) []Operation {
+// List returns one page of the operations a profile/role may discover, plus
+// the total number of matches so callers can page with offset.
+func List(profile string, role int, domain, query string, offset, limit int) ([]Operation, int) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	query = strings.ToLower(strings.TrimSpace(query))
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	result := make([]Operation, 0, limit)
+	total := 0
 	for _, op := range All() {
 		if !Visible(op, profile, role) {
 			continue
@@ -115,18 +121,38 @@ func List(profile string, role int, domain, query string, limit int) []Operation
 		if domain != "" && strings.ToLower(op.Domain) != domain {
 			continue
 		}
-		if query != "" {
-			haystack := strings.ToLower(op.ID + " " + op.Summary + " " + op.Description)
-			if !strings.Contains(haystack, query) {
-				continue
-			}
+		if query != "" && !strings.Contains(searchText(op), query) {
+			continue
 		}
-		result = append(result, op)
-		if len(result) >= limit {
-			break
+		total++
+		if total > offset && len(result) < limit {
+			result = append(result, op)
 		}
 	}
-	return result
+	return result, total
+}
+
+// Domains counts the visible operations per domain so the model can narrow a
+// catalog that does not fit into one page.
+func Domains(profile string, role int) map[string]int {
+	counts := map[string]int{}
+	for _, op := range All() {
+		if Visible(op, profile, role) {
+			counts[op.Domain]++
+		}
+	}
+	return counts
+}
+
+func searchText(op Operation) string {
+	parts := []string{op.ID, op.Summary, op.Description, op.BodyNotes}
+	for _, field := range op.BodyFields {
+		parts = append(parts, field.Name)
+	}
+	for _, field := range op.QueryFields {
+		parts = append(parts, field.Name)
+	}
+	return strings.ToLower(strings.Join(parts, " "))
 }
 
 func operationError(format string, args ...any) error {

@@ -36,6 +36,9 @@ func IsInternal(ctx context.Context) bool {
 	return ok
 }
 
+// Risk drives the confirmation policy. read runs without confirmation; write
+// changes state or spends money; destructive deletes data, is hard to undo, or
+// affects the whole site (site options, all users).
 type Risk string
 
 const (
@@ -50,8 +53,9 @@ const (
 	ScopeRoot  = "root"
 )
 
-// BodyField documents one JSON request body property of an operation. It is
-// returned by get_operation so the model does not have to guess field names.
+// BodyField documents one request parameter of an operation: a JSON body
+// property or a query string parameter. It is returned by get_operation so the
+// model does not have to guess names and units.
 type BodyField struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
@@ -75,9 +79,9 @@ type Operation struct {
 	BodyAllowed    bool        `json:"body_allowed"`
 	BodyFields     []BodyField `json:"body_fields,omitempty"`
 	BodyNotes      string      `json:"body_notes,omitempty"`
+	QueryFields    []BodyField `json:"query_fields,omitempty"`
 	Batchable      bool        `json:"batchable,omitempty"`
 	BatchTarget    string      `json:"batch_target,omitempty"`
-	RedactFields   []string    `json:"-"`
 	ExcludedReason string      `json:"-"`
 }
 

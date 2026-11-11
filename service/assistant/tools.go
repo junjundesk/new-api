@@ -44,12 +44,18 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 		createKeyRequired = append(createKeyRequired, "user_id")
 	}
 
+	maxDays := e.maxLookbackDays()
+	offsetProperty := map[string]any{
+		"type":        "integer",
+		"minimum":     0,
+		"description": "Rows to skip. Use next_offset from the previous page.",
+	}
 	accountSummaryProperties := map[string]any{}
 	usageSummaryProperties := map[string]any{
 		"days": map[string]any{
 			"type":        "integer",
 			"minimum":     1,
-			"maximum":     31,
+			"maximum":     maxDays,
 			"description": "Number of days to look back. Defaults to 7.",
 		},
 		"group_by": map[string]any{
@@ -68,7 +74,7 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 		"days": map[string]any{
 			"type":        "integer",
 			"minimum":     1,
-			"maximum":     31,
+			"maximum":     maxDays,
 			"description": "Number of days to look back. Defaults to 7.",
 		},
 		"model": map[string]any{
@@ -87,6 +93,7 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 			"maximum":     20,
 			"description": "Maximum number of logs. Defaults to 10.",
 		},
+		"offset": offsetProperty,
 	}
 	listKeyProperties := map[string]any{
 		"limit": map[string]any{
@@ -95,6 +102,7 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 			"maximum":     50,
 			"description": "Maximum number of keys. Defaults to 50.",
 		},
+		"offset": offsetProperty,
 	}
 	createKeyProperties := map[string]any{
 		"name": map[string]any{
@@ -124,8 +132,8 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 
 	accountDescription := "Get the current user's quota balance, lifetime usage, request count, account group, and today's usage."
 	usageDescription := "Summarize consumption for a recent period, grouped by model, group, or API key name."
-	logsDescription := "List recent consumption logs. Returns time, model, API key name, quota, token counts, and content."
-	keysDescription := "List API keys with masked key values, status, quota, and today's usage."
+	logsDescription := "List recent consumption logs, newest first. Returns time, model, API key name, quota, token counts, and content. Page with offset; next_offset is returned while more rows exist."
+	keysDescription := "List API keys with masked key values, status, quota, and today's usage. Page with offset."
 	createDescription := "Create a new API key. The key inherits the owner's account group and has unlimited key quota. The full key is never returned; the UI can reveal it on explicit user action."
 	statusDescription := "Enable or disable one API key. This is reversible and does not delete the key."
 
@@ -157,8 +165,8 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 		}
 		accountDescription = "Get an account summary. Pass user_id to inspect one user, or omit it for platform-wide totals (user count, quota, usage, requests)."
 		usageDescription = "Summarize consumption for a recent period. Pass user_id to scope one user, or omit it for all users; group_by also supports user."
-		logsDescription = "List consumption logs. Pass user_id for one user, or omit it for all users; each row includes the username."
-		keysDescription = "List API keys with masked values. Pass user_id for one user, or omit it for all users; each row includes its owner."
+		logsDescription = "List consumption logs, newest first. Pass user_id for one user, or omit it for all users; each row includes the username. Page with offset; next_offset is returned while more rows exist."
+		keysDescription = "List API keys with masked values. Pass user_id for one user, or omit it for all users; each row includes its owner. Page with offset."
 		createDescription = "Create a new API key for user_id. The key inherits that user's group and has unlimited key quota. The full key is never returned."
 	}
 
@@ -173,13 +181,27 @@ func (e *DefaultToolExecutor) Definitions() []map[string]any {
 	if e.adminScope {
 		definitions = append(definitions, functionTool(
 			"list_users",
-			"Search users by username, display name, or email. Returns id, username, display name, role, status, group, quota, used quota, and request count.",
+			"Search users by username, display name, email, or numeric id. Returns id, username, display name, role, status, group, quota, used quota, request count, and a deleted flag. Soft-deleted users are included and marked deleted=true; other tools cannot target them. Page with offset.",
 			objectSchema(map[string]any{
 				"keyword": map[string]any{
 					"type":        "string",
 					"maxLength":   100,
 					"description": "Optional search keyword.",
 				},
+				"group": map[string]any{
+					"type":        "string",
+					"maxLength":   64,
+					"description": "Exact user group.",
+				},
+				"role": map[string]any{
+					"type":        "integer",
+					"description": "1 common user, 10 admin, 100 root.",
+				},
+				"status": map[string]any{
+					"type":        "integer",
+					"description": "1 enabled, 2 disabled, -1 soft-deleted only. Omit for every user.",
+				},
+				"offset": offsetProperty,
 				"limit": map[string]any{
 					"type":        "integer",
 					"minimum":     1,
@@ -267,15 +289,9 @@ func (e *DefaultToolExecutor) Execute(ctx context.Context, userID int, call Tool
 		if err != nil {
 			return toolError(err)
 		}
-		if err := e.askConfirmation(ctx, ConfirmationRequest{OperationID: "create_api_key", Risk: "write", Summary: "Create an API key"}); err != nil {
-			return toolError(err)
-		}
-		return e.createAPIKey(targetUserID, call.Arguments, audit)
+		return e.createAPIKey(ctx, targetUserID, call.Arguments, audit)
 	case "set_api_key_status":
-		if err := e.askConfirmation(ctx, ConfirmationRequest{OperationID: "set_api_key_status", Risk: "write", Summary: "Enable or disable an API key"}); err != nil {
-			return toolError(err)
-		}
-		return e.setAPIKeyStatus(userID, call.Arguments, audit)
+		return e.setAPIKeyStatus(ctx, userID, call.Arguments, audit)
 	case "list_users":
 		if !e.adminScope {
 			return toolErrorf("unknown tool: %s", call.Name)
@@ -307,9 +323,18 @@ func (e *DefaultToolExecutor) resolveTargetUser(actorID int, rawArguments string
 	}
 	user, err := model.GetUserById(*args.UserID, false)
 	if err != nil || user == nil {
-		return 0, fmt.Errorf("user not found: %d", *args.UserID)
+		return 0, fmt.Errorf("user %d does not exist or is deleted; use list_users to find the user", *args.UserID)
 	}
 	return user.Id, nil
+}
+
+// maxLookbackDays bounds the days argument of the usage tools. Administrators
+// get a longer window for monthly and quarterly reviews.
+func (e *DefaultToolExecutor) maxLookbackDays() int {
+	if e.adminScope {
+		return 90
+	}
+	return 31
 }
 
 func functionTool(name, description string, parameters map[string]any) map[string]any {

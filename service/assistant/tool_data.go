@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -20,11 +21,16 @@ type usageLogsArguments struct {
 	Model     string `json:"model"`
 	TokenName string `json:"token_name"`
 	Limit     *int   `json:"limit"`
+	Offset    *int   `json:"offset"`
 }
 
 type listKeysArguments struct {
-	Limit *int `json:"limit"`
+	Limit  *int `json:"limit"`
+	Offset *int `json:"offset"`
 }
+
+// maxLogContentRunes bounds the log content echoed to the model.
+const maxLogContentRunes = 500
 
 // getAccountSummary returns one user's summary. targetUserID == 0 is only used
 // by the admin profile and reports platform-wide totals.
@@ -96,7 +102,7 @@ func (e *DefaultToolExecutor) getUsageSummary(targetUserID int, rawArguments str
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
 	}
-	days, err := normalizeDays(args.Days)
+	days, err := normalizeDays(args.Days, e.maxLookbackDays())
 	if err != nil {
 		return toolError(err)
 	}
@@ -175,11 +181,15 @@ func (e *DefaultToolExecutor) listUsageLogs(targetUserID int, rawArguments strin
 	if err := decodeArguments(rawArguments, &args); err != nil {
 		return toolErrorf("invalid arguments: %v", err)
 	}
-	days, err := normalizeDays(args.Days)
+	days, err := normalizeDays(args.Days, e.maxLookbackDays())
 	if err != nil {
 		return toolError(err)
 	}
 	limit, err := normalizeLimit(args.Limit, 10, 20)
+	if err != nil {
+		return toolError(err)
+	}
+	offset, err := normalizeOffset(args.Offset)
 	if err != nil {
 		return toolError(err)
 	}
@@ -199,9 +209,9 @@ func (e *DefaultToolExecutor) listUsageLogs(targetUserID int, rawArguments strin
 	var logs []*model.Log
 	var total int64
 	if targetUserID == 0 {
-		logs, total, err = model.GetAllLogs(model.LogTypeConsume, "", start, end, modelName, "", tokenName, 0, limit, 0, "", "", "")
+		logs, total, err = model.GetAllLogs(model.LogTypeConsume, "", start, end, modelName, "", tokenName, offset, limit, 0, "", "", "")
 	} else {
-		logs, total, err = model.GetUserLogs(targetUserID, model.LogTypeConsume, "", start, end, modelName, tokenName, 0, limit, "", "", "", false)
+		logs, total, err = model.GetUserLogs(targetUserID, model.LogTypeConsume, "", start, end, modelName, tokenName, offset, limit, "", "", "", false)
 	}
 	if err != nil {
 		return toolError(err)
@@ -209,8 +219,9 @@ func (e *DefaultToolExecutor) listUsageLogs(targetUserID int, rawArguments strin
 	items := make([]map[string]any, 0, len(logs))
 	for _, entry := range logs {
 		content := entry.Content
-		if len(content) > 500 {
-			content = content[:500]
+		if utf8.RuneCountInString(content) > maxLogContentRunes {
+			// Cut on a rune boundary so multi-byte text stays valid UTF-8.
+			content = string([]rune(content)[:maxLogContentRunes]) + "…"
 		}
 		items = append(items, map[string]any{
 			"created_at":        entry.CreatedAt,
@@ -229,17 +240,14 @@ func (e *DefaultToolExecutor) listUsageLogs(targetUserID int, rawArguments strin
 			"content":           content,
 		})
 	}
-	return ToolResult{OK: true, Data: map[string]any{
+	return ToolResult{OK: true, Data: pagedResult(map[string]any{
 		"scope":        scopeLabel(targetUserID),
 		"user_id":      targetUserID,
 		"period_start": start,
 		"period_end":   end,
 		"days":         days,
-		"total":        total,
-		"returned":     len(items),
-		"truncated":    total > int64(len(items)),
 		"items":        items,
-	}}
+	}, total, offset, len(items))}
 }
 
 // listAPIKeys lists one user's keys, or all users' keys when targetUserID is 0.
@@ -252,11 +260,15 @@ func (e *DefaultToolExecutor) listAPIKeys(targetUserID int, rawArguments string)
 	if err != nil {
 		return toolError(err)
 	}
+	offset, err := normalizeOffset(args.Offset)
+	if err != nil {
+		return toolError(err)
+	}
 	var tokens []*model.Token
 	var total int64
 	todayUsed := map[int]int64{}
 	if targetUserID == 0 {
-		tokens, err = model.GetAllTokens(0, limit)
+		tokens, err = model.GetAllTokens(offset, limit)
 		if err != nil {
 			return toolError(err)
 		}
@@ -280,7 +292,7 @@ func (e *DefaultToolExecutor) listAPIKeys(targetUserID int, rawArguments string)
 			}
 		}
 	} else {
-		tokens, err = model.GetAllUserTokens(targetUserID, 0, limit)
+		tokens, err = model.GetAllUserTokens(targetUserID, offset, limit)
 		if err != nil {
 			return toolError(err)
 		}
@@ -325,14 +337,25 @@ func (e *DefaultToolExecutor) listAPIKeys(targetUserID int, rawArguments string)
 			"model_limits_enabled": token.ModelLimitsEnabled,
 		})
 	}
-	return ToolResult{OK: true, Data: map[string]any{
-		"scope":     scopeLabel(targetUserID),
-		"user_id":   targetUserID,
-		"total":     total,
-		"returned":  len(items),
-		"truncated": total > int64(len(items)),
-		"items":     items,
-	}}
+	return ToolResult{OK: true, Data: pagedResult(map[string]any{
+		"scope":   scopeLabel(targetUserID),
+		"user_id": targetUserID,
+		"items":   items,
+	}, total, offset, len(items))}
+}
+
+// pagedResult adds the paging fields shared by every list tool. truncated
+// means more rows exist beyond this page; next_offset is where they start.
+func pagedResult(data map[string]any, total int64, offset, returned int) map[string]any {
+	next := offset + returned
+	data["total"] = total
+	data["offset"] = offset
+	data["returned"] = returned
+	data["truncated"] = int64(next) < total
+	if int64(next) < total {
+		data["next_offset"] = next
+	}
+	return data
 }
 
 func scopeLabel(targetUserID int) string {
@@ -351,15 +374,28 @@ func consumeTotalsMap(totals model.UserConsumeTotals) map[string]any {
 	}
 }
 
-func normalizeDays(value *int) (int, error) {
+func normalizeDays(value *int, maxDays int) (int, error) {
 	days := 7
 	if value != nil {
 		days = *value
 	}
-	if days < 1 || days > 31 {
-		return 0, fmt.Errorf("days must be between 1 and 31")
+	if days < 1 || days > maxDays {
+		return 0, fmt.Errorf("days must be between 1 and %d", maxDays)
 	}
 	return days, nil
+}
+
+// maxListOffset keeps deep paging from turning into an unbounded table scan.
+const maxListOffset = 100000
+
+func normalizeOffset(value *int) (int, error) {
+	if value == nil {
+		return 0, nil
+	}
+	if *value < 0 || *value > maxListOffset {
+		return 0, fmt.Errorf("offset must be between 0 and %d", maxListOffset)
+	}
+	return *value, nil
 }
 
 func normalizeLimit(value *int, fallback, maxValue int) (int, error) {

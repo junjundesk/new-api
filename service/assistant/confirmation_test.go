@@ -50,3 +50,12 @@ func TestConfirmationBrokerApproveAndDeny(t *testing.T) {
 		return false
 	}, time.Second, 10*time.Millisecond)
 }
+
+func TestConfirmationBrokerWithoutEmitterEndsCleanly(t *testing.T) {
+	broker := NewConfirmationBroker()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	approved, err := broker.Ask(ctx, 7, "admin", ConfirmationRequest{OperationID: "PUT /api/option/"}, nil)
+	assert.False(t, approved)
+	assert.ErrorIs(t, err, context.Canceled)
+}

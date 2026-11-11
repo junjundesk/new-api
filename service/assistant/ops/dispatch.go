@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +25,7 @@ func Invoke(ctx context.Context, actor Actor, op Operation, pathParams, query ma
 	if engine == nil {
 		return Result{Success: false, Message: "assistant operation engine is not initialized"}
 	}
-	path, err := renderPath(op, pathParams)
+	path, err := RenderPath(op, pathParams)
 	if err != nil {
 		return Result{Success: false, Message: err.Error()}
 	}
@@ -30,7 +33,13 @@ func Invoke(ctx context.Context, actor Actor, op Operation, pathParams, query ma
 	if len(query) > 0 {
 		values := url.Values{}
 		for key, value := range query {
-			values.Set(key, fmt.Sprint(value))
+			if list, ok := value.([]any); ok {
+				for _, item := range list {
+					values.Add(key, paramText(item))
+				}
+				continue
+			}
+			values.Set(key, paramText(value))
 		}
 		target += "?" + values.Encode()
 	}
@@ -51,7 +60,11 @@ func Invoke(ctx context.Context, actor Actor, op Operation, pathParams, query ma
 		request.Header.Set("Content-Type", "application/json")
 	}
 	if actor.IP != "" {
-		request.RemoteAddr = actor.IP
+		// RemoteAddr must be host:port, otherwise gin's ClientIP() is empty.
+		request.RemoteAddr = net.JoinHostPort(actor.IP, "0")
+	}
+	if actor.UserAgent != "" {
+		request.Header.Set("User-Agent", actor.UserAgent)
 	}
 	request.Header.Set("X-Assistant-Internal", "true")
 	request = request.WithContext(WithActor(request.Context(), actor))
@@ -64,14 +77,17 @@ func Invoke(ctx context.Context, actor Actor, op Operation, pathParams, query ma
 	return normalizeResult(recorder)
 }
 
-func renderPath(op Operation, params map[string]any) (string, error) {
+// RenderPath substitutes the path parameters of an operation. It fails on a
+// missing or unsafe value, so callers can validate before asking the user to
+// confirm a write.
+func RenderPath(op Operation, params map[string]any) (string, error) {
 	path := op.Path
 	for _, name := range op.PathParams {
 		value, ok := params[name]
-		if !ok || value == nil || fmt.Sprint(value) == "" {
+		if !ok || value == nil || paramText(value) == "" {
 			return "", fmt.Errorf("missing path parameter: %s", name)
 		}
-		text := fmt.Sprint(value)
+		text := paramText(value)
 		if text == "." || text == ".." || strings.ContainsAny(text, "/?#") {
 			return "", fmt.Errorf("path parameter %s contains invalid characters", name)
 		}
@@ -80,17 +96,42 @@ func renderPath(op Operation, params map[string]any) (string, error) {
 	return path, nil
 }
 
+// paramText renders one path or query parameter. JSON numbers arrive as
+// float64, and the default formatting turns ids and unix timestamps into
+// scientific notation (1.73e+09), which the endpoints cannot parse.
+func paramText(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case float64:
+		if typed == math.Trunc(typed) && math.Abs(typed) < 1e18 {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case json.Number:
+		return typed.String()
+	default:
+		return fmt.Sprint(value)
+	}
+}
+
 func normalizeResult(recorder *cappedRecorder) Result {
 	body := recorder.Bytes()
 	status := recorder.StatusCode()
 	result := Result{StatusCode: status, Success: status >= 200 && status < 300, Truncated: recorder.Truncated()}
+	if result.Truncated {
+		// A cut-off JSON document cannot be parsed, so do not hand the model a
+		// 256KB fragment; tell it how to get a response that fits.
+		result.Message = "response exceeded the size limit; request fewer rows with page_size or narrower filters"
+		return result
+	}
 	envelope := struct {
-		Success bool            `json:"success"`
+		Success *bool           `json:"success"`
 		Message string          `json:"message"`
 		Data    json.RawMessage `json:"data"`
 	}{}
-	if err := common.Unmarshal(body, &envelope); err == nil && (envelope.Success || envelope.Message != "" || len(envelope.Data) > 0) {
-		result.Success = envelope.Success
+	if err := common.Unmarshal(body, &envelope); err == nil && envelope.Success != nil {
+		result.Success = *envelope.Success
 		result.Message = envelope.Message
 		if len(envelope.Data) > 0 {
 			var data any
