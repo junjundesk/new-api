@@ -796,7 +796,7 @@ var operationDocs = map[string]operationDoc{
 		Description: "Set how the caller is warned about low quota and which notifications they receive.",
 		Body: []BodyField{
 			{Name: "notify_type", Type: "string", Required: true, Description: "One of email, webhook, bark, gotify."},
-			{Name: "quota_warning_threshold", Type: "number", Required: true, Description: "Warn when the balance drops below this many internal quota units."},
+			{Name: "quota_warning_threshold", Type: "number", Required: true, Description: "Warn when the balance drops to or below this many internal quota units."},
 			{Name: "notification_email", Type: "string", Description: "Address for email notifications. Defaults to the account email."},
 			{Name: "operational_notify_enabled", Type: "boolean", Description: "Receive operational emails from the site."},
 			{Name: "accept_unset_model_ratio_model", Type: "boolean", Description: "Allow calling models that have no configured price."},

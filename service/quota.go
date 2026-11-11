@@ -509,7 +509,7 @@ func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preCon
 		//noMoreQuota := userCache.Quota-(quota+preConsumedQuota) <= 0
 		quotaTooLow := false
 		consumeQuota := quota + preConsumedQuota
-		if relayInfo.UserQuota-consumeQuota < threshold {
+		if relayInfo.UserQuota-consumeQuota <= threshold {
 			quotaTooLow = true
 		}
 		if quotaTooLow {
@@ -563,7 +563,7 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 
 		usedAfter := relayInfo.SubscriptionAmountUsedAfterPreConsume + relayInfo.SubscriptionPostDelta
 		remaining := relayInfo.SubscriptionAmountTotal - usedAfter
-		if remaining >= int64(threshold) {
+		if remaining > int64(threshold) {
 			return
 		}
 
@@ -630,7 +630,7 @@ func checkAndSendBonusQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 			common.SysError(fmt.Sprintf("failed to query remaining bonus for user %d: %s", relayInfo.UserId, err.Error()))
 			return
 		}
-		if remaining >= int64(threshold) {
+		if remaining > int64(threshold) {
 			return
 		}
 

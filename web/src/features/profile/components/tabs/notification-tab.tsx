@@ -27,6 +27,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { getCurrencyLabel } from '@/lib/currency'
+import {
+  getEditableQuotaStep,
+  parseQuotaFromDollars,
+  quotaUnitsToEditableAmount,
+} from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 
 import { updateUserSettings } from '../../api'
@@ -68,6 +74,10 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
+  // 阈值以内部额度单位存储，输入框按当前展示货币的余额金额填写。
+  const [thresholdAmount, setThresholdAmount] = useState(() =>
+    String(quotaUnitsToEditableAmount(DEFAULT_QUOTA_WARNING_THRESHOLD))
+  )
   const [settings, setSettings] = useState<UserSettings>({
     notify_type: 'email',
     quota_warning_threshold: DEFAULT_QUOTA_WARNING_THRESHOLD,
@@ -95,6 +105,13 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   useEffect(() => {
     if (profile?.setting) {
       const parsed = parseUserSettings(profile.setting)
+      setThresholdAmount(
+        String(
+          quotaUnitsToEditableAmount(
+            parsed.quota_warning_threshold ?? DEFAULT_QUOTA_WARNING_THRESHOLD
+          )
+        )
+      )
       setSettings({
         notify_type: normalizeNotifyType(parsed.notify_type),
         quota_warning_threshold:
@@ -176,19 +193,29 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
       {/* Warning Threshold */}
       <div className='space-y-1.5'>
-        <Label htmlFor='threshold'>{t('Quota Warning Threshold')}</Label>
+        <Label htmlFor='threshold'>
+          {t('Balance Warning Threshold ({{currency}})', {
+            currency: getCurrencyLabel(),
+          })}
+        </Label>
         <Input
           id='threshold'
           type='number'
           className='h-9'
-          value={settings.quota_warning_threshold}
-          onChange={(e) =>
-            updateField('quota_warning_threshold', Number(e.target.value))
-          }
+          min={0}
+          step={getEditableQuotaStep()}
+          value={thresholdAmount}
+          onChange={(e) => {
+            setThresholdAmount(e.target.value)
+            updateField(
+              'quota_warning_threshold',
+              parseQuotaFromDollars(Number(e.target.value))
+            )
+          }}
           placeholder={t('Enter threshold')}
         />
         <p className='text-muted-foreground text-xs'>
-          {t('Get notified when balance falls below this value')}
+          {t('Get notified when balance falls to or below this amount')}
         </p>
       </div>
 
