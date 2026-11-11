@@ -67,51 +67,40 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-describe('invite sidebar entries', () => {
-  // Sites that saved their sidebar settings before these entries existed have
-  // no "referral" key; the entries must still appear after an upgrade.
-  test('a configuration saved before the entries existed still shows both', async () => {
+describe('invite sidebar entry', () => {
+  // Sites that saved their sidebar settings before the entry existed have no
+  // "referral" key; the entry must still appear after an upgrade.
+  test('a configuration saved before the entry existed still shows it', async () => {
     const legacy =
       '{"personal":{"enabled":true,"topup":true,"personal":true},"admin":{"enabled":true,"user":true}}'
 
     const urls = await sidebarUrls(legacy)
 
     expect(urls).toContain('/referral')
-    expect(urls).toContain('/referral-management')
     expect(parseSidebarModulesAdmin(legacy).personal.referral).toBe(true)
-    expect(parseSidebarModulesAdmin(legacy).admin.referral).toBe(true)
   })
 
-  test('the personal entry sits between Wallet and Activity Center', async () => {
+  test('the entry sits between Wallet and Activity Center', async () => {
     const urls = await sidebarUrls('')
 
     expect(urls.indexOf('/referral')).toBe(urls.indexOf('/wallet') + 1)
     expect(urls.indexOf('/activity')).toBe(urls.indexOf('/referral') + 1)
-    expect(urls.indexOf('/referral-management')).toBe(
-      urls.indexOf('/users') + 1
-    )
   })
 
-  test.each([
-    [
-      'the personal switch',
-      '{"personal":{"enabled":true,"referral":false}}',
-      '/referral',
-      '/referral-management',
-    ],
-    [
-      'the admin switch',
-      '{"admin":{"enabled":true,"referral":false}}',
-      '/referral-management',
-      '/referral',
-    ],
-  ])(
-    'turning off %s hides only that entry',
-    async (_name, config, hidden, kept) => {
-      const urls = await sidebarUrls(config)
+  // Admin invite management is opened from the invite page to save sidebar
+  // space, so admins get no second sidebar entry and no separate switch.
+  test('admins get no separate invite management sidebar entry', async () => {
+    const urls = await sidebarUrls('')
 
-      expect(urls).not.toContain(hidden)
-      expect(urls).toContain(kept)
-    }
-  )
+    expect(urls).not.toContain('/referral-management')
+    expect(parseSidebarModulesAdmin('').admin.referral).toBeUndefined()
+  })
+
+  test('turning off the personal switch hides the entry', async () => {
+    const urls = await sidebarUrls(
+      '{"personal":{"enabled":true,"referral":false}}'
+    )
+
+    expect(urls).not.toContain('/referral')
+  })
 })

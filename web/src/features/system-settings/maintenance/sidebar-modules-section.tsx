@@ -150,10 +150,6 @@ export function SidebarModulesSection({
         title: t('Users'),
         description: t('Administer user accounts and roles.'),
       },
-      referral: {
-        title: t('Invite Management'),
-        description: t('Review inviters and bind users to an inviter.'),
-      },
       email: {
         title: t('Email Center'),
         description: t('Manage outgoing email and notification settings.'),

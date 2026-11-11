@@ -24,9 +24,18 @@ import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
+
 import { Referral } from '../index'
 import { ReferralManagement } from '../management'
 
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: (props: { to: string; children?: React.ReactNode }) => (
+    <a href={props.to}>{props.children}</a>
+  ),
+}))
 vi.mock('../api', () => ({
   getMyInvitees: vi.fn(),
   getInviters: vi.fn(),
@@ -140,6 +149,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  useAuthStore.getState().auth.reset()
   if (!originalGetAnimations) {
     Reflect.deleteProperty(Element.prototype, 'getAnimations')
   }
@@ -196,6 +206,26 @@ describe('invite rewards page', () => {
     await userEvent.click(transfer)
 
     expect(await screen.findByRole('dialog')).toBeVisible()
+  })
+
+  it.each([
+    ['an admin', ROLE.ADMIN, true],
+    ['a regular user', ROLE.USER, false],
+  ])('%s sees the invite management entry: %s', async (_who, role, shown) => {
+    useAuthStore.getState().auth.setUser({ id: 9, username: 'someone', role })
+    mockedSummary.mockResolvedValue({
+      success: true,
+      data: { enabled: true, claimable_quota: 0, tiers: [] },
+    })
+    renderPage(<Referral />)
+    expect(await screen.findByText('bo***nd')).toBeVisible()
+
+    const entry = screen.queryByRole('link', { name: 'Invite Management' })
+    if (shown) {
+      expect(entry).toHaveAttribute('href', '/referral-management')
+    } else {
+      expect(entry).toBeNull()
+    }
   })
 
   it('keeps the transfer action disabled when nothing is claimable', async () => {
@@ -272,6 +302,16 @@ describe('invite management page', () => {
     expect(await within(dialog).findByText('dave_friend')).toBeVisible()
     expect(within(dialog).getByText('#5')).toBeVisible()
     expect(mockedInviterInvitees.mock.calls[0]).toEqual([2, 1, 10])
+  })
+
+  it('links back to the invite rewards page', async () => {
+    renderPage(<ReferralManagement />)
+    await screen.findByText('alice')
+
+    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute(
+      'href',
+      '/referral'
+    )
   })
 
   it('opens the bind dialog asking for both the user and the inviter', async () => {

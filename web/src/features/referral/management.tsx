@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -145,6 +146,9 @@ export function ReferralManagement() {
           {t('Invite Management')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
+          <Button variant='outline' render={<Link to='/referral' />}>
+            {t('Back')}
+          </Button>
           <Button onClick={() => setBindOpen(true)}>{t('Bind Inviter')}</Button>
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>

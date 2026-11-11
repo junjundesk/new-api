@@ -38,7 +38,6 @@ import {
   Sparkles,
   Ticket,
   User,
-  UserPlus,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -142,6 +141,8 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Invite Rewards'),
             url: '/referral',
+            // The admin invite page is reached from this page, not the sidebar.
+            activeUrls: ['/referral-management'],
             icon: Share2,
           },
           {
@@ -180,11 +181,6 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
-          },
-          {
-            title: t('Invite Management'),
-            url: '/referral-management',
-            icon: UserPlus,
           },
           {
             title: t('Email Center'),

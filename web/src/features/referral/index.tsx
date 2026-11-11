@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -30,6 +31,8 @@ import { getReferralCharges } from '@/features/wallet/api'
 import { TransferDialog } from '@/features/wallet/components/dialogs/transfer-dialog'
 import { useAffiliate } from '@/features/wallet/hooks'
 import { formatQuota } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getMyInvitees } from './api'
 import { ChargesTable } from './components/charges-table'
@@ -47,6 +50,9 @@ export function Referral() {
   const { t } = useTranslation()
   const affiliate = useAffiliate()
   const summary = affiliate.summary
+  const isAdmin = useAuthStore(
+    (state) => (state.auth.user?.role ?? 0) >= ROLE.ADMIN
+  )
   const [transferOpen, setTransferOpen] = useState(false)
   const [inviteePage, setInviteePage] = useState(1)
   const [chargePage, setChargePage] = useState(1)
@@ -104,6 +110,14 @@ export function Referral() {
       <SectionPageLayout>
         <SectionPageLayout.Title>{t('Invite Rewards')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
+          {isAdmin ? (
+            <Button
+              variant='outline'
+              render={<Link to='/referral-management' />}
+            >
+              {t('Invite Management')}
+            </Button>
+          ) : null}
           <Button
             onClick={() => setTransferOpen(true)}
             disabled={claimable <= 0 || transferBlocked}

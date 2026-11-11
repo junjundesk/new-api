@@ -269,7 +269,6 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
-			"referral":   true,
 			"setting":    false, // 管理员不能访问系统设置
 		}
 	} else if userRole == common.RoleRootUser {
@@ -281,7 +280,6 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
-			"referral":   true,
 			"setting":    true,
 		}
 	}

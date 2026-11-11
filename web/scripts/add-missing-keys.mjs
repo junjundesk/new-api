@@ -44,10 +44,6 @@ const NEW_KEYS = {
     en: 'Invite link, invited users and referral rewards.',
     zh: '邀请链接、已邀请用户和返利收益。',
   },
-  'Review inviters and bind users to an inviter.': {
-    en: 'Review inviters and bind users to an inviter.',
-    zh: '查看邀请人，并为用户绑定邀请人。',
-  },
   'Invited users': {
     en: 'Invited users',
     zh: '已邀请用户',
