@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import { Share2, TrendingUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -32,6 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { formatRate } from '@/features/referral/lib/format'
 import { formatQuota } from '@/lib/format'
 
 import type { ReferralSummary, UserWalletData } from '../types'
@@ -43,18 +45,6 @@ interface AffiliateRewardsCardProps {
   onTransfer: () => void
   complianceConfirmed?: boolean
   loading?: boolean
-}
-
-// formatRate renders a basis-point rate as a percentage without losing the
-// sub-percent precision the backend stores (150 bps -> 1.5%).
-function formatRate(rateBps: number): string {
-  if (!rateBps) {
-    return '0%'
-  }
-  if (rateBps % 100 === 0) {
-    return `${rateBps / 100}%`
-  }
-  return `${(rateBps / 100).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}%`
 }
 
 export function AffiliateRewardsCard({
@@ -215,6 +205,13 @@ export function AffiliateRewardsCard({
             ) : null}
           </div>
         ) : null}
+
+        <Link
+          to='/referral'
+          className='text-primary text-xs font-medium underline-offset-4 hover:underline lg:col-span-3'
+        >
+          {t('View invited users and reward history')}
+        </Link>
 
         {!complianceConfirmed || summary?.compliance_confirmed === false ? (
           <p className='text-muted-foreground text-xs lg:col-span-3'>

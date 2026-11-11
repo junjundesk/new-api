@@ -230,6 +230,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
       cell: ({ row }) => {
         const user = row.original
         const affCount = user.aff_count || 0
+        const validInviteCount = user.valid_invite_count || 0
         const affHistoryQuota = user.aff_history_quota || 0
         const inviterId = user.inviter_id || 0
         const inviterUsername = user.inviter_username?.trim()
@@ -243,7 +244,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
               <TooltipTrigger
                 render={
                   <StatusBadge
-                    label={`${t('Invited')}: ${affCount}`}
+                    label={`${t('Invited')}: ${affCount}/${validInviteCount}`}
                     variant='neutral'
                     copyable={false}
                     className='cursor-help'
@@ -251,7 +252,12 @@ export function useUsersColumns(): ColumnDef<User>[] {
                 }
               />
               <TooltipContent>
-                <p className='text-xs'>{t('Number of users invited')}</p>
+                <p className='text-xs'>
+                  {t('Invited: {{registered}} · Valid: {{valid}}', {
+                    registered: affCount,
+                    valid: validInviteCount,
+                  })}
+                </p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>

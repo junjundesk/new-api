@@ -97,6 +97,85 @@ func GetReferralCharges(c *gin.Context) {
 	})
 }
 
+// referralPage reads the shared page/page_size query of the referral lists.
+func referralPage(c *gin.Context) (page int, pageSize int) {
+	page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	return page, pageSize
+}
+
+// GetReferralInvitees returns one page of the users the caller invited. The
+// invitee is another account, so only a masked username leaves the server.
+func GetReferralInvitees(c *gin.Context) {
+	page, pageSize := referralPage(c)
+	invitees, total, err := model.ListReferralInvitees(c.GetInt("id"), (page-1)*pageSize, pageSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	for i := range invitees {
+		invitees[i].Username = common.MaskUsername(invitees[i].Username)
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     invitees,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// AdminListReferralInviters returns the inviter overview for the admin invite
+// page: site-wide totals plus one page of inviters with their invite counts.
+func AdminListReferralInviters(c *gin.Context) {
+	page, pageSize := referralPage(c)
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	inviters, total, err := model.ListReferralInviters(keyword, (page-1)*pageSize, pageSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	overview, err := model.GetReferralOverview()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     inviters,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"overview":  overview,
+	})
+}
+
+// AdminListReferralInvitees returns one page of the users invited by the given
+// inviter, with full usernames for the admin view.
+func AdminListReferralInvitees(c *gin.Context) {
+	inviterId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || inviterId <= 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	page, pageSize := referralPage(c)
+	invitees, total, err := model.ListReferralInvitees(inviterId, (page-1)*pageSize, pageSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     invitees,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
 // referralSettingPrefix is the option key prefix registered by
 // operation_setting.ReferralSetting.
 const referralSettingPrefix = "referral_setting."

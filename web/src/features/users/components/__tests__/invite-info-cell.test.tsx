@@ -64,7 +64,6 @@ await i18n.use(initReactI18next).init({
     en: {
       translation: {
         Invited: 'Invited',
-        'Number of users invited': 'Number of users invited',
         Revenue: 'Revenue',
         'Total invitation revenue': 'Total invitation revenue',
         'Inviter ID': 'Inviter ID',
@@ -156,5 +155,13 @@ describe('user invite info cell', () => {
 
     assert.ok(text.includes('No Inviter'))
     assert.equal(text.includes('Inviter ID:'), false)
+  })
+
+  test('shows the live invited and valid invite counts', async () => {
+    const text = await renderInviteInfoCell(
+      buildUser({ aff_count: 5, valid_invite_count: 2 })
+    )
+
+    assert.ok(text.includes('Invited: 5/2'))
   })
 })

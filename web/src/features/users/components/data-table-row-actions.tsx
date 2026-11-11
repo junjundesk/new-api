@@ -29,6 +29,7 @@ import {
   Link2,
   CreditCard,
   Gift,
+  UserPlus,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -60,6 +61,7 @@ import {
 import { getUserActionMessage } from '../lib'
 import type { User, ManageUserAction } from '../types'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
+import { UserInviterDialog } from './user-inviter-dialog'
 import { useUsers } from './users-provider'
 
 interface DataTableRowActionsProps {
@@ -75,6 +77,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
   const [bonusDialogOpen, setBonusDialogOpen] = useState(false)
+  const [inviterDialogOpen, setInviterDialogOpen] = useState(false)
 
   const handleEdit = () => {
     setCurrentRow(user)
@@ -237,6 +240,18 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuShortcut>
         </DropdownMenuItem>
 
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            setInviterDialogOpen(true)
+          }}
+        >
+          {t('Bind Inviter')}
+          <DropdownMenuShortcut>
+            <UserPlus size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
@@ -322,6 +337,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         onOpenChange={setBonusDialogOpen}
         userId={user.id}
         username={user.username}
+        onSuccess={triggerRefresh}
+      />
+
+      <UserInviterDialog
+        open={inviterDialogOpen}
+        onOpenChange={setInviterDialogOpen}
+        userIds={[user.id]}
         onSuccess={triggerRefresh}
       />
     </div>

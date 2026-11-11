@@ -16,29 +16,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
-import { Search, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
-import { useDebounce } from '@/hooks'
-import { cn } from '@/lib/utils'
 
-import { bindUserInviter, searchUsers } from '../api'
+import { bindUserInviter } from '../api'
 import type { User } from '../types'
-
-const SEARCH_PAGE_SIZE = 20
-const SEARCH_DEBOUNCE_MS = 300
+import { UserSearchPicker } from './user-search-picker'
 
 interface UserInviterDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /**
+   * Users whose inviter is being set. When empty the dialog also asks which
+   * user to bind, so it can be opened without a prior selection.
+   */
   userIds: number[]
   onSuccess: () => void
 }
@@ -50,45 +45,35 @@ interface UserInviterDialogProps {
  */
 export function UserInviterDialog(props: UserInviterDialogProps) {
   const { t } = useTranslation()
-  const [keyword, setKeyword] = useState('')
   const [selected, setSelected] = useState<User | null>(null)
+  const [target, setTarget] = useState<User | null>(null)
+  const [session, setSession] = useState(0)
   const [isBinding, setIsBinding] = useState(false)
-  const debouncedKeyword = useDebounce(keyword.trim(), SEARCH_DEBOUNCE_MS)
-
-  const searchQuery = useQuery({
-    queryKey: ['users', 'inviter-candidates', debouncedKeyword],
-    queryFn: () =>
-      searchUsers({
-        keyword: debouncedKeyword,
-        p: 1,
-        page_size: SEARCH_PAGE_SIZE,
-      }),
-    enabled: props.open && debouncedKeyword.length > 0,
-    staleTime: 30_000,
-    retry: false,
-  })
+  const pickTarget = props.userIds.length === 0
 
   // Every opening starts from a clean slate so a previous selection cannot be
-  // submitted against a different set of users.
+  // submitted against a different set of users. The session key remounts the
+  // pickers, which clears their search text as well.
   useEffect(() => {
     if (props.open) {
-      setKeyword('')
       setSelected(null)
+      setTarget(null)
+      setSession((value) => value + 1)
     }
   }, [props.open])
 
-  const targetIds = useMemo(() => new Set(props.userIds), [props.userIds])
-  const candidates = (searchQuery.data?.data?.items ?? []).filter(
-    (user) => !user.DeletedAt && !targetIds.has(user.id)
-  )
+  let targetIds = props.userIds
+  if (pickTarget) {
+    targetIds = target ? [target.id] : []
+  }
 
   const handleBind = async () => {
-    if (!selected || props.userIds.length === 0) return
+    if (!selected || targetIds.length === 0) return
 
     setIsBinding(true)
     try {
       const result = await bindUserInviter({
-        user_ids: props.userIds,
+        user_ids: targetIds,
         inviter_id: selected.id,
       })
       if (!result.success) {
@@ -97,7 +82,7 @@ export function UserInviterDialog(props: UserInviterDialogProps) {
       }
       toast.success(
         t('Bound {{count}} user(s) to inviter {{username}}', {
-          count: result.data?.updated ?? props.userIds.length,
+          count: result.data?.updated ?? targetIds.length,
           username: selected.username,
         })
       )
@@ -112,56 +97,21 @@ export function UserInviterDialog(props: UserInviterDialogProps) {
     }
   }
 
-  let resultContent: React.ReactNode
-  if (searchQuery.isLoading) {
-    resultContent = (
-      <div className='text-muted-foreground flex items-center justify-center gap-2 px-2 py-3 text-xs'>
-        <Spinner className='size-3' />
-        {t('Searching...')}
-      </div>
-    )
-  } else if (candidates.length === 0) {
-    resultContent = (
-      <div className='text-muted-foreground px-2 py-3 text-center text-xs'>
-        {t('No users found')}
-      </div>
-    )
-  } else {
-    resultContent = candidates.map((user) => {
-      const checked = selected?.id === user.id
-      const label =
-        user.display_name && user.display_name !== user.username
-          ? `${user.username} (${user.display_name})`
-          : user.username
-      return (
-        <button
-          key={user.id}
-          type='button'
-          aria-pressed={checked}
-          onClick={() => setSelected(user)}
-          className={cn(
-            'hover:bg-accent flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs',
-            checked && 'bg-accent/60'
-          )}
-        >
-          <span className='min-w-0 truncate'>{label}</span>
-          <span className='text-muted-foreground shrink-0 font-mono'>
-            #{user.id}
-          </span>
-        </button>
-      )
-    })
-  }
-
   return (
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
       title={t('Bind Inviter')}
-      description={t(
-        'Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.',
-        { count: props.userIds.length }
-      )}
+      description={
+        pickTarget
+          ? t(
+              'Pick a user and the inviter to bind them to. An existing inviter binding is overwritten and no invitation reward is granted retroactively.'
+            )
+          : t(
+              'Set the inviter for {{count}} selected user(s). Existing inviter bindings will be overwritten and no invitation reward is granted retroactively.',
+              { count: props.userIds.length }
+            )
+      }
       contentHeight='auto'
       bodyClassName='space-y-3'
       footer={
@@ -175,51 +125,38 @@ export function UserInviterDialog(props: UserInviterDialogProps) {
           </Button>
           <Button
             onClick={handleBind}
-            disabled={!selected || props.userIds.length === 0 || isBinding}
+            disabled={!selected || targetIds.length === 0 || isBinding}
           >
             {isBinding ? t('Binding...') : t('Bind Inviter')}
           </Button>
         </>
       }
     >
-      <div className='grid gap-2'>
-        <div className='relative'>
-          <Search
-            className='text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2'
-            aria-hidden='true'
-          />
-          <Input
-            aria-label={t('Search users')}
-            placeholder={t('Search by username, email or ID')}
-            className='pl-8'
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
+      {pickTarget ? (
+        <div className='grid gap-1.5'>
+          <span className='text-sm font-medium'>{t('Invited user')}</span>
+          <UserSearchPicker
+            key={`target-${session}`}
+            label={t('Search invited user')}
+            selected={target}
+            onSelect={setTarget}
+            excludeIds={selected ? [selected.id] : []}
+            enabled={props.open}
           />
         </div>
-
-        {selected && (
-          <div className='flex flex-wrap gap-1'>
-            <Badge variant='secondary' className='gap-1'>
-              <span className='max-w-48 truncate'>{selected.username}</span>
-              <button
-                type='button'
-                aria-label={t('Remove {{username}}', {
-                  username: selected.username,
-                })}
-                className='hover:text-destructive cursor-pointer'
-                onClick={() => setSelected(null)}
-              >
-                <X className='size-3' aria-hidden='true' />
-              </button>
-            </Badge>
-          </div>
-        )}
-
-        {debouncedKeyword.length > 0 && (
-          <div className='max-h-56 overflow-y-auto rounded-md border'>
-            {resultContent}
-          </div>
-        )}
+      ) : null}
+      <div className='grid gap-1.5'>
+        {pickTarget ? (
+          <span className='text-sm font-medium'>{t('Inviter')}</span>
+        ) : null}
+        <UserSearchPicker
+          key={`inviter-${session}`}
+          label={t('Search users')}
+          selected={selected}
+          onSelect={setSelected}
+          excludeIds={targetIds}
+          enabled={props.open}
+        />
       </div>
     </Dialog>
   )

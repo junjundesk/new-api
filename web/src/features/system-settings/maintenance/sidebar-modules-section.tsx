@@ -124,6 +124,10 @@ export function SidebarModulesSection({
         title: t('Wallet'),
         description: t('Top up balance and view billing history.'),
       },
+      referral: {
+        title: t('Invite Rewards'),
+        description: t('Invite link, invited users and referral rewards.'),
+      },
       personal: {
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
@@ -145,6 +149,10 @@ export function SidebarModulesSection({
       user: {
         title: t('Users'),
         description: t('Administer user accounts and roles.'),
+      },
+      referral: {
+        title: t('Invite Management'),
+        description: t('Review inviters and bind users to an inviter.'),
       },
       email: {
         title: t('Email Center'),

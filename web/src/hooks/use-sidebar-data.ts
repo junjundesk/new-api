@@ -33,10 +33,12 @@ import {
   Radio,
   ServerCog,
   Settings,
+  Share2,
   ShieldCheck,
   Sparkles,
   Ticket,
   User,
+  UserPlus,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -138,6 +140,11 @@ export function useSidebarData(): SidebarData {
             icon: Wallet,
           },
           {
+            title: t('Invite Rewards'),
+            url: '/referral',
+            icon: Share2,
+          },
+          {
             title: t('Activity Center'),
             url: '/activity',
             icon: Gift,
@@ -173,6 +180,11 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: t('Invite Management'),
+            url: '/referral-management',
+            icon: UserPlus,
           },
           {
             title: t('Email Center'),

@@ -102,6 +102,7 @@ type User struct {
 	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
 	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
 	InviterUsername  string                     `json:"inviter_username,omitempty" gorm:"-:all"` // 管理员列表展示的邀请人用户名，不落库
+	ValidInviteCount int                        `json:"valid_invite_count" gorm:"-:all"`         // 管理员列表展示的有效邀请数，不落库
 	BonusQuota       int64                      `json:"bonus_quota,omitempty" gorm:"-:all"`      // 管理员视图展示的赠金余额，不落库
 	DeletedAt        gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
@@ -253,6 +254,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	defaultConfig["personal"] = map[string]interface{}{
 		"enabled":  true,
 		"topup":    true,
+		"referral": true,
 		"activity": true,
 		"personal": true,
 	}
@@ -267,6 +269,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
+			"referral":   true,
 			"setting":    false, // 管理员不能访问系统设置
 		}
 	} else if userRole == common.RoleRootUser {
@@ -278,6 +281,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
+			"referral":   true,
 			"setting":    true,
 		}
 	}

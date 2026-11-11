@@ -352,6 +352,10 @@ func GetAllUsers(c *gin.Context) {
 	if err := model.AttachActiveBonus(users); err != nil {
 		common.SysLog("failed to attach bonus quota to user list: " + err.Error())
 	}
+	// 邀请数按当前邀请关系实时统计，同样只用于展示。
+	if err := model.AttachInviteCounts(users); err != nil {
+		common.SysLog("failed to attach invite counts to user list: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -385,6 +389,10 @@ func SearchUsers(c *gin.Context) {
 	// 赠金余额仅用于展示，查询失败不影响搜索结果本身。
 	if err := model.AttachActiveBonus(users); err != nil {
 		common.SysLog("failed to attach bonus quota to user search: " + err.Error())
+	}
+	// 邀请数按当前邀请关系实时统计，同样只用于展示。
+	if err := model.AttachInviteCounts(users); err != nil {
+		common.SysLog("failed to attach invite counts to user search: " + err.Error())
 	}
 
 	pageInfo.SetTotal(int(total))
@@ -661,6 +669,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 	defaultConfig["personal"] = map[string]interface{}{
 		"enabled":  true,
 		"topup":    true,
+		"referral": true,
 		"activity": true,
 		"personal": true,
 	}
@@ -675,6 +684,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
+			"referral":   true,
 			"setting":    false, // 管理员不能访问系统设置
 		}
 	} else if userRole == common.RoleRootUser {
@@ -686,6 +696,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"redemption": true,
 			"activity":   true,
 			"user":       true,
+			"referral":   true,
 			"setting":    true,
 		}
 	}

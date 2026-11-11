@@ -72,7 +72,7 @@ function buildUserItem(
   }
 }
 
-function renderDialog() {
+function renderDialog(userIds: number[] = [1, 2]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -84,7 +84,7 @@ function renderDialog() {
         <UserInviterDialog
           open
           onOpenChange={onOpenChange}
-          userIds={[1, 2]}
+          userIds={userIds}
           onSuccess={onSuccess}
         />
       </I18nextProvider>
@@ -195,5 +195,47 @@ describe('user inviter dialog', () => {
     await waitFor(() => expect(mockedBind.mock.calls.length).toBe(1))
     expect(callbacks.onSuccess).not.toHaveBeenCalled()
     expect(callbacks.onOpenChange).not.toHaveBeenCalledWith(false)
+  })
+
+  it('asks for the invited user when opened without a selection', async () => {
+    mockedSearchUsers.mockResolvedValue({
+      success: true,
+      data: {
+        items: [buildUserItem(3, 'alice'), buildUserItem(7, 'bob')],
+        total: 2,
+        page: 1,
+        page_size: 20,
+      },
+    })
+    mockedBind.mockResolvedValue({ success: true, data: { updated: 1 } })
+    const user = userEvent.setup()
+    renderDialog([])
+    const bindButton = await screen.findByRole('button', {
+      name: 'Bind Inviter',
+    })
+
+    await user.type(screen.getByLabelText('Search invited user'), 'bo')
+    await user.click(await screen.findByText('bob'))
+    expect(bindButton).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Search users'), 'ali')
+    // Both result lists offer alice; the inviter list is the second one, and
+    // it no longer offers the invited user as their own inviter.
+    await waitFor(() => expect(screen.getAllByText('alice')).toHaveLength(2))
+    await user.click(screen.getAllByText('alice')[1])
+    // Each side excludes the other side's pick, so a user can never be bound
+    // to themselves: only the two chosen rows remain.
+    expect(
+      screen.getAllByRole('button', { pressed: true }).map((b) => b.textContent)
+    ).toEqual(['bob#7', 'alice#3'])
+    expect(screen.queryAllByRole('button', { pressed: false })).toHaveLength(0)
+    await waitFor(() => expect(bindButton).toBeEnabled())
+    await user.click(bindButton)
+
+    await waitFor(() => expect(mockedBind.mock.calls.length).toBe(1))
+    expect(mockedBind.mock.calls[0][0]).toEqual({
+      user_ids: [7],
+      inviter_id: 3,
+    })
   })
 })

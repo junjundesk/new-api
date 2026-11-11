@@ -136,6 +136,20 @@ func MaskEmail(email string) string {
 	return "***@" + email[atIndex+1:]
 }
 
+// MaskUsername hides the middle of a username before it is shown to another
+// user (for example an inviter looking at the accounts they invited). Short
+// names keep only the first character so the mask never reveals most of them.
+func MaskUsername(username string) string {
+	runes := []rune(username)
+	if len(runes) == 0 {
+		return "***"
+	}
+	if len(runes) <= 4 {
+		return string(runes[:1]) + "***"
+	}
+	return string(runes[:2]) + "***" + string(runes[len(runes)-2:])
+}
+
 // MaskSensitiveInfo moved to the conversion kit (kitutil) because the types
 // package error formatting depends on it; host callers keep this name.
 func MaskSensitiveInfo(str string) string {

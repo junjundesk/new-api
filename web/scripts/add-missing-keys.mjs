@@ -27,6 +27,151 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const LOCALES = ['en', 'zh']
 
 const NEW_KEYS = {
+  // Invite rewards page, invite management page and the single-user bind entry
+  'Invite Rewards': {
+    en: 'Invite Rewards',
+    zh: '邀请返利',
+  },
+  'Invite Management': {
+    en: 'Invite Management',
+    zh: '邀请管理',
+  },
+  'Invite link': {
+    en: 'Invite link',
+    zh: '邀请链接',
+  },
+  'Invite link, invited users and referral rewards.': {
+    en: 'Invite link, invited users and referral rewards.',
+    zh: '邀请链接、已邀请用户和返利收益。',
+  },
+  'Review inviters and bind users to an inviter.': {
+    en: 'Review inviters and bind users to an inviter.',
+    zh: '查看邀请人，并为用户绑定邀请人。',
+  },
+  'Invited users': {
+    en: 'Invited users',
+    zh: '已邀请用户',
+  },
+  'Invited user': {
+    en: 'Invited user',
+    zh: '被邀请用户',
+  },
+  'Inviters': {
+    en: 'Inviters',
+    zh: '邀请人',
+  },
+  'Invited at least one user': {
+    en: 'Invited at least one user',
+    zh: '至少邀请过 1 位用户',
+  },
+  'Invited: {{registered}} · Valid: {{valid}}': {
+    en: 'Invited: {{registered}} · Valid: {{valid}}',
+    zh: '已邀请：{{registered}} · 有效：{{valid}}',
+  },
+  'Users invited by {{username}}': {
+    en: 'Users invited by {{username}}',
+    zh: '{{username}} 邀请的用户',
+  },
+  'View invited users': {
+    en: 'View invited users',
+    zh: '查看被邀请人',
+  },
+  'View invited users and reward history': {
+    en: 'View invited users and reward history',
+    zh: '查看已邀请用户和返利记录',
+  },
+  'No invited users yet': {
+    en: 'No invited users yet',
+    zh: '还没有邀请到用户',
+  },
+  'No inviters found': {
+    en: 'No inviters found',
+    zh: '没有找到邀请人',
+  },
+  'No reward records yet': {
+    en: 'No reward records yet',
+    zh: '还没有返利记录',
+  },
+  'Registered at': {
+    en: 'Registered at',
+    zh: '注册时间',
+  },
+  'Registered only': {
+    en: 'Registered only',
+    zh: '仅注册',
+  },
+  'Registered through your link': {
+    en: 'Registered through your link',
+    zh: '通过你的链接注册',
+  },
+  'Valid invite': {
+    en: 'Valid invite',
+    zh: '有效邀请',
+  },
+  'Reward generated': {
+    en: 'Reward generated',
+    zh: '带来的返利',
+  },
+  'Reward history': {
+    en: 'Reward history',
+    zh: '返利记录',
+  },
+  'Reward rate': {
+    en: 'Reward rate',
+    zh: '返利比例',
+  },
+  'Reward': {
+    en: 'Reward',
+    zh: '返利',
+  },
+  'Top-up amount': {
+    en: 'Top-up amount',
+    zh: '充值金额',
+  },
+  'Topped up': {
+    en: 'Topped up',
+    zh: '已充值',
+  },
+  'Topped up or redeemed a code': {
+    en: 'Topped up or redeemed a code',
+    zh: '已充值或已兑换兑换码',
+  },
+  'Credited': {
+    en: 'Credited',
+    zh: '已到账',
+  },
+  'Current tier': {
+    en: 'Current tier',
+    zh: '当前档位',
+  },
+  '{{count}} valid invitees': {
+    en: '{{count}} valid invitees',
+    zh: '有效邀请 {{count}} 人',
+  },
+  'Commission recorded': {
+    en: 'Commission recorded',
+    zh: '累计返佣',
+  },
+  'Deleted user': {
+    en: 'Deleted user',
+    zh: '已删除用户',
+  },
+  'Search inviters': {
+    en: 'Search inviters',
+    zh: '搜索邀请人',
+  },
+  'Search by inviter ID or username': {
+    en: 'Search by inviter ID or username',
+    zh: '按邀请人 ID 或用户名搜索',
+  },
+  'Search invited user': {
+    en: 'Search invited user',
+    zh: '搜索被邀请用户',
+  },
+  'Pick a user and the inviter to bind them to. An existing inviter binding is overwritten and no invitation reward is granted retroactively.': {
+    en: 'Pick a user and the inviter to bind them to. An existing inviter binding is overwritten and no invitation reward is granted retroactively.',
+    zh: '选择一位用户和要绑定的邀请人。已有的邀请关系会被覆盖，且不会补发邀请奖励。',
+  },
   'Limit type': {
     en: 'Limit type',
     zh: '限流类型',
