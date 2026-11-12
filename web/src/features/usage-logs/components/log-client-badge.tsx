@@ -107,7 +107,8 @@ export function LogClientBadge(props: LogClientBadgeProps) {
             aria-label={t('View client details of {{name}}', {
               name: client.name,
             })}
-            className='text-foreground hover:bg-foreground/5 focus-visible:ring-ring inline-flex min-h-7 max-w-full min-w-0 cursor-pointer items-center rounded px-1 text-xs outline-none focus-visible:ring-2'
+            title={label}
+            className='text-foreground hover:bg-foreground/5 focus-visible:ring-ring inline-flex min-h-7 max-w-[calc(150px*var(--log-scale,1))] min-w-0 cursor-pointer items-center rounded px-1 text-xs outline-none focus-visible:ring-2'
             onClick={(e) => e.stopPropagation()}
           >
             <span className='inline-flex min-w-0 items-center gap-1.5'>

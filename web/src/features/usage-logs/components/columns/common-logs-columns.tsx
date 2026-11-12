@@ -325,7 +325,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               variant={config.color as StatusBadgeProps['variant']}
               size='sm'
               copyable={false}
-              className='-ml-1.5 !text-xs [&_span]:!text-xs'
+              className='-ml-1.5 !text-[length:min(0.75rem,var(--log-font,13px))] [&_span]:!text-[length:min(0.75rem,var(--log-font,13px))]'
             />
             {log.type === 2 || log.type === 5 ? (
               <LogClientBadge log={log} />
@@ -390,7 +390,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           return (
             <TooltipProvider>
               <Tooltip>
-                <div className='flex max-w-[160px] flex-col gap-0.5'>
+                <div className='flex max-w-[calc(160px*var(--log-scale,1))] flex-col gap-0.5'>
                   <TooltipTrigger
                     render={
                       <div className='relative inline-flex w-fit items-center gap-1' />
@@ -472,7 +472,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     <div className='flex min-w-0 items-center gap-0.5'>
                       <TooltipTrigger
                         render={
-                          <span className='text-muted-foreground/70 min-w-0 truncate [font-family:var(--font-body)] !text-xs' />
+                          <span className='text-muted-foreground/70 min-w-0 truncate [font-family:var(--font-body)] !text-[length:min(0.75rem,var(--log-font,13px))]' />
                         }
                       >
                         {channelName}
@@ -590,7 +590,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                   <Tooltip>
                     <TooltipTrigger
                       render={
-                        <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
+                        <span className='text-muted-foreground max-w-[calc(100px*var(--log-scale,1))] truncate text-sm hover:underline' />
                       }
                     >
                       {sensitiveVisible ? log.username : '••••'}
@@ -650,7 +650,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           // 两行堆叠：IP 一行，归属地一行小字。负外边距抵掉多出来的一行，
           // 让单元格高度不超过原来单行的高度，行高保持不变。
           return (
-            <span className='-my-1 inline-flex max-w-[180px] flex-col items-start leading-none'>
+            <span className='-my-1 inline-flex max-w-[calc(180px*var(--log-scale,1))] flex-col items-start leading-none'>
               <span className='inline-flex items-center gap-1 font-mono break-all'>
                 <Globe
                   className='size-3 shrink-0 text-amber-500'
@@ -658,7 +658,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 />
                 {requestIp}
               </span>
-              <IpLocationLabel ip={requestIp} className='mt-px' />
+              <IpLocationLabel ip={requestIp} className='mt-px max-w-full' />
             </span>
           )
         },
@@ -686,7 +686,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       const groupRatio = getGroupRatio(other)
 
       return (
-        <div className='flex max-w-[200px] flex-col gap-0.5'>
+        <div className='flex max-w-[calc(200px*var(--log-scale,1))] flex-col gap-0.5'>
           <div className='flex max-w-full items-center gap-1'>
             <TooltipProvider delay={300}>
               <Tooltip>
@@ -918,7 +918,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           <>
             <button
               type='button'
-              className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
+              className='group flex max-w-[calc(200px*var(--log-scale,1))] items-center gap-1 text-left text-xs'
               onClick={() => setDialogOpen(true)}
               title={t('Click to view full details')}
             >

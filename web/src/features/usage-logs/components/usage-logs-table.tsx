@@ -38,6 +38,7 @@ import {
   LOG_TYPE_ENUM,
 } from '../constants'
 import type { UsageLog } from '../data/schema'
+import { useFitTableDensity } from '../hooks/use-fit-table-density'
 import { getPageCacheRate } from '../lib/cache-rate'
 import { useColumnsByCategory } from '../lib/columns'
 import { parseLogOther } from '../lib/format'
@@ -124,7 +125,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     ],
   })
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: [
       'logs',
       logCategory,
@@ -188,59 +189,77 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     ensurePageInRange,
   })
 
-  return (
-    <DataTablePage
-      table={table}
-      columns={columns as ColumnDef<Record<string, unknown>>[]}
-      isLoading={isLoadingData}
-      isFetching={isFetching}
-      emptyTitle={t('No Logs Found')}
-      emptyDescription={t(
-        'No usage logs available. Logs will appear here once API calls are made.'
-      )}
-      skeletonKeyPrefix='usage-log-skeleton'
-      applyHeaderSize
-      tableClassName={cn(
-        '[&_[data-slot=table]]:text-[13px] [&_[data-slot=table]_td]:text-[13px] [&_[data-slot=table]_td_*]:text-[13px] [&_[data-slot=table]_th]:text-[13px] [&_[data-slot=table]_th_*]:text-[13px]'
-      )}
-      mobile={
-        <UsageLogsMobileList
-          table={table}
-          isLoading={isLoadingData}
-          logCategory={logCategory}
-        />
-      }
-      toolbar={
-        isCommon ? (
-          <CommonLogsFilterBar table={table} pageCacheRate={pageCacheRate} />
-        ) : (
-          <TaskLogsFilterBar table={table} logCategory={logCategory} />
-        )
-      }
-      renderRow={(row) => {
-        const logType = (row.original as Record<string, unknown>).type as
-          | number
-          | undefined
-        let tintClass =
-          isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
-        if (isCommon && canManageScope) {
-          const other = parseLogOther(
-            ((row.original as Record<string, unknown>).other as string) ?? ''
-          )
-          if (other?.admin_info?.quota_saturation) {
-            tintClass = quotaSaturationRowTint
-          }
-        }
+  const visibleColumnIds = table
+    .getVisibleLeafColumns()
+    .map((column) => column.id)
+    .join(',')
+  // `contents` keeps the wrapper out of the page's flex layout; it only
+  // carries the density variables down to the table.
+  const densityRef = useFitTableDensity<HTMLDivElement>(
+    isCommon && !isMobile,
+    `${visibleColumnIds}|${dataUpdatedAt}|${isLoadingData}`
+  )
 
-        return (
-          <DataTableRow
-            key={row.id}
-            row={row}
-            className={cn('transition-colors', tintClass)}
-            getColumnClassName={() => (isCommon ? 'py-2' : 'py-3.5')}
+  return (
+    <div ref={densityRef} className='contents'>
+      <DataTablePage
+        table={table}
+        columns={columns as ColumnDef<Record<string, unknown>>[]}
+        isLoading={isLoadingData}
+        isFetching={isFetching}
+        emptyTitle={t('No Logs Found')}
+        emptyDescription={t(
+          'No usage logs available. Logs will appear here once API calls are made.'
+        )}
+        skeletonKeyPrefix='usage-log-skeleton'
+        applyHeaderSize
+        tableClassName={cn(
+          '[&_[data-slot=table]]:text-[length:var(--log-font,13px)] [&_[data-slot=table]_td]:text-[length:var(--log-font,13px)] [&_[data-slot=table]_td_*]:text-[length:var(--log-font,13px)] [&_[data-slot=table]_th]:text-[length:var(--log-font,13px)] [&_[data-slot=table]_th_*]:text-[length:var(--log-font,13px)]',
+          // Common logs size to their content so the density fit can work: the
+          // shared column-size min-width and per-column widths would keep the
+          // table overflowing at any font size.
+          isCommon &&
+            '[&_[data-slot=table]]:min-w-full! [&_[data-slot=table]_col]:w-auto! [&_[data-slot=table]_th]:w-auto! [&_[data-slot=table]_td]:px-[var(--log-cell-px,0.5rem)] [&_[data-slot=table]_th]:px-[var(--log-cell-px,0.5rem)]'
+        )}
+        mobile={
+          <UsageLogsMobileList
+            table={table}
+            isLoading={isLoadingData}
+            logCategory={logCategory}
           />
-        )
-      }}
-    />
+        }
+        toolbar={
+          isCommon ? (
+            <CommonLogsFilterBar table={table} pageCacheRate={pageCacheRate} />
+          ) : (
+            <TaskLogsFilterBar table={table} logCategory={logCategory} />
+          )
+        }
+        renderRow={(row) => {
+          const logType = (row.original as Record<string, unknown>).type as
+            | number
+            | undefined
+          let tintClass =
+            isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
+          if (isCommon && canManageScope) {
+            const other = parseLogOther(
+              ((row.original as Record<string, unknown>).other as string) ?? ''
+            )
+            if (other?.admin_info?.quota_saturation) {
+              tintClass = quotaSaturationRowTint
+            }
+          }
+
+          return (
+            <DataTableRow
+              key={row.id}
+              row={row}
+              className={cn('transition-colors', tintClass)}
+              getColumnClassName={() => (isCommon ? 'py-2' : 'py-3.5')}
+            />
+          )
+        }}
+      />
+    </div>
   )
 }

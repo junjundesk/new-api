@@ -124,6 +124,25 @@ describe('LogClientBadge', () => {
     expect(screen.getByText('Codex Desktop/0.158.0 (Windows)')).not.toBeNull()
   })
 
+  it('when the client label is truncated then the full label stays available as a title', () => {
+    const longOther = JSON.stringify({
+      client: {
+        name: 'Codex Desktop',
+        category: 'coding',
+        version: '0.166.0-alpha.5.1',
+        source: 'User-Agent',
+        confidence: 'identified',
+      },
+    })
+    render(<LogClientBadge log={makeLog({ other: longOther })} />)
+    const trigger = screen.getByRole('button', {
+      name: 'View client details of Codex Desktop',
+    })
+    expect(trigger.getAttribute('title')).toBe(
+      'Codex Desktop 0.166.0-alpha.5.1'
+    )
+  })
+
   it('when the trigger is focused then it keeps keyboard operability', () => {
     render(
       <LogClientBadge
