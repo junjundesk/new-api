@@ -23,6 +23,9 @@ import (
 // 兜底成 Go-http-client/1.1，会被上游识别为非官方客户端；这里对齐官方 CLI 的标识。
 const defaultUserAgent = "claude-cli/2.1.321 (external, claude-desktop-3p, agent-sdk/0.3.321)"
 
+// claudeCodeBeta 是 Claude Code 客户端必带的 beta 标识，仅限 Claude Code 的上游会校验。
+const claudeCodeBeta = "claude-code-20250219"
+
 type Adaptor struct {
 }
 
@@ -83,6 +86,10 @@ func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relayc
 	if anthropicBeta != "" {
 		req.Set("anthropic-beta", anthropicBeta)
 	}
+	// 部分上游（如仅限 Claude Code 的渠道）会校验 x-app，必须保留客户端原始请求头。
+	if xApp := c.Request.Header.Get("x-app"); xApp != "" {
+		req.Set("x-app", xApp)
+	}
 	model_setting.GetClaudeSettings().WriteHeaders(info.OriginModelName, req)
 }
 
@@ -94,8 +101,20 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 		anthropicVersion = "2023-06-01"
 	}
 	req.Set("anthropic-version", anthropicVersion)
-	if info.ChannelType == constant.ChannelTypeAnthropic && req.Get("User-Agent") == "" {
-		req.Set("User-Agent", defaultUserAgent)
+	if info.ChannelType == constant.ChannelTypeAnthropic {
+		if req.Get("User-Agent") == "" {
+			req.Set("User-Agent", defaultUserAgent)
+		}
+		// 仅限 Claude Code 的上游会同时校验 x-app 与 anthropic-beta；渠道测试没有真实
+		// 客户端请求头，这里补齐 Claude Code 客户端会发送的值，避免测试被上游误判。
+		if info.IsChannelTest {
+			if req.Get("x-app") == "" {
+				req.Set("x-app", "cli")
+			}
+			if req.Get("anthropic-beta") == "" {
+				req.Set("anthropic-beta", claudeCodeBeta)
+			}
+		}
 	}
 	CommonClaudeHeadersOperation(c, req, info)
 	return nil

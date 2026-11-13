@@ -46,8 +46,15 @@ func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) s
 	if normalized != "" {
 		return normalized
 	}
-	if channel != nil && channel.Type == constant.ChannelTypeCodex {
-		return string(constant.EndpointTypeOpenAIResponse)
+	if channel != nil {
+		switch channel.Type {
+		case constant.ChannelTypeCodex:
+			return string(constant.EndpointTypeOpenAIResponse)
+		case constant.ChannelTypeAnthropic:
+			// Claude 渠道默认走原生 /v1/messages：仅限 Claude Code 的上游会校验
+			// Claude Code 客户端指纹，OpenAI 兼容入口无法表达 system / metadata。
+			return string(constant.EndpointTypeAnthropic)
+		}
 	}
 	return normalized
 }
@@ -695,6 +702,14 @@ func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {
 	return message
 }
 
+// 仅限 Claude Code 的上游会校验 Claude Code 客户端指纹，测试请求需要与真实流量一致：
+// metadata.user_id 固定为 user_<64 位十六进制>_account_<UUID>_session_<UUID>，
+// system 必须是包含 Claude Code 身份声明的文本块数组。
+const (
+	claudeCodeTestSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude."
+	claudeCodeTestUserID       = "user_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_account_0123abcd-4567-489a-8bcd-ef0123456789_session_fedcba98-7654-4321-8fed-cba987654321"
+)
+
 func buildTestRequest(model string, endpointType string, channel *model.Channel, isStream bool) dto.Request {
 	testResponsesInput := json.RawMessage(`[{"role":"user","content":"hi"}]`)
 
@@ -741,6 +756,14 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				Model:     model,
 				Stream:    lo.ToPtr(isStream),
 				MaxTokens: lo.ToPtr(uint(16)),
+				Metadata:  json.RawMessage(`{"user_id":"` + claudeCodeTestUserID + `"}`),
+				System: []dto.ClaudeMediaMessage{
+					{
+						Type:         "text",
+						Text:         lo.ToPtr(claudeCodeTestSystemPrompt),
+						CacheControl: json.RawMessage(`{"type":"ephemeral"}`),
+					},
+				},
 				Messages: []dto.ClaudeMessage{
 					{
 						Role:    "user",

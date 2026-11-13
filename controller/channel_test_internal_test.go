@@ -331,3 +331,26 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
 }
+
+func TestAnthropicChannelTestUsesClaudeCodeFingerprint(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeAnthropic}
+
+	require.Equal(t, string(constant.EndpointTypeAnthropic), normalizeChannelTestEndpoint(channel, ""))
+	require.Equal(t, string(constant.EndpointTypeOpenAI), normalizeChannelTestEndpoint(channel, string(constant.EndpointTypeOpenAI)))
+
+	request := buildTestRequest("claude-opus-5-5", string(constant.EndpointTypeAnthropic), channel, false)
+	claudeRequest, ok := request.(*dto.ClaudeRequest)
+	require.True(t, ok)
+
+	// 仅限 Claude Code 的上游按该格式校验 metadata.user_id。
+	require.Regexp(t,
+		`^\{"user_id":"user_[0-9a-f]{64}_account_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_session_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"\}$`,
+		string(claudeRequest.Metadata))
+
+	system, ok := claudeRequest.System.([]dto.ClaudeMediaMessage)
+	require.True(t, ok)
+	require.Len(t, system, 1)
+	assert.Equal(t, "text", system[0].Type)
+	require.NotNil(t, system[0].Text)
+	assert.Equal(t, claudeCodeTestSystemPrompt, *system[0].Text)
+}
