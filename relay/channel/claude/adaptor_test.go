@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,7 @@ func TestSetupRequestHeaderClaudeCodeHeaders(t *testing.T) {
 		name          string
 		channelType   int
 		isChannelTest bool
+		compat        bool
 		clientHeaders map[string]string
 		wantXApp      string
 		wantBeta      string
@@ -45,6 +47,18 @@ func TestSetupRequestHeaderClaudeCodeHeaders(t *testing.T) {
 			wantUserAgent: defaultUserAgent,
 		},
 		{
+			name:        "claude code compat mode forces upstream fingerprint",
+			channelType: constant.ChannelTypeAnthropic,
+			compat:      true,
+			clientHeaders: map[string]string{
+				"user-agent":     "pi/1.5.0 (win32; node/v25.2.1; x64)",
+				"anthropic-beta": "interleaved-thinking-2025-05-14",
+			},
+			wantXApp:      "cli",
+			wantBeta:      "interleaved-thinking-2025-05-14," + claudeCodeBeta,
+			wantUserAgent: defaultUserAgent,
+		},
+		{
 			name:          "other channel types get no claude code defaults",
 			channelType:   constant.ChannelTypeOpenAI,
 			isChannelTest: true,
@@ -64,8 +78,9 @@ func TestSetupRequestHeaderClaudeCodeHeaders(t *testing.T) {
 			info := &relaycommon.RelayInfo{
 				IsChannelTest: test.isChannelTest,
 				ChannelMeta: &relaycommon.ChannelMeta{
-					ChannelType: test.channelType,
-					ApiKey:      "test-key",
+					ChannelType:    test.channelType,
+					ApiKey:         "test-key",
+					ChannelSetting: dto.ChannelSettings{ClaudeCodeCompat: test.compat},
 				},
 			}
 

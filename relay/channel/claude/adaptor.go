@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -35,6 +36,9 @@ func (a *Adaptor) ConvertGeminiRequest(*gin.Context, *relaycommon.RelayInfo, *dt
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
+	if info.ChannelSetting.ClaudeCodeCompat {
+		applyClaudeCodeCompat(request, info)
+	}
 	return request, nil
 }
 
@@ -117,6 +121,21 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 		}
 	}
 	CommonClaudeHeadersOperation(c, req, info)
+	if info.ChannelSetting.ClaudeCodeCompat {
+		// 仅接受 Claude Code 的上游会校验 UA / x-app / anthropic-beta，
+		// 这里无条件对齐 Claude Code 客户端，避免非 Claude Code 客户端被拒绝。
+		req.Set("User-Agent", defaultUserAgent)
+		if req.Get("x-app") == "" {
+			req.Set("x-app", "cli")
+		}
+		if anthropicBeta := req.Get("anthropic-beta"); !strings.Contains(anthropicBeta, claudeCodeBeta) {
+			if anthropicBeta == "" {
+				req.Set("anthropic-beta", claudeCodeBeta)
+			} else {
+				req.Set("anthropic-beta", anthropicBeta+","+claudeCodeBeta)
+			}
+		}
+	}
 	return nil
 }
 
@@ -127,6 +146,11 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	result, err := relayconvert.ConvertRequest(c, info, types.RelayFormatClaude, request)
 	if err != nil {
 		return nil, err
+	}
+	if info.ChannelSetting.ClaudeCodeCompat {
+		if claudeRequest, ok := result.Value.(*dto.ClaudeRequest); ok {
+			applyClaudeCodeCompat(claudeRequest, info)
+		}
 	}
 	return result.Value, nil
 }

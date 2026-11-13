@@ -24,6 +24,9 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool                `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string              `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool                `json:"system_prompt_override,omitempty"`
+	// ClaudeCodeCompat 为仅接受 Claude Code 流量的上游补齐客户端指纹
+	// （UA / x-app / anthropic-beta / metadata.user_id / system）。
+	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty"`
 	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
 	// Accepted values: "", "auto" (default), "http1".
 	HTTPProtocol string `json:"http_protocol,omitempty"`
