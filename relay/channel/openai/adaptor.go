@@ -36,6 +36,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// defaultUserAgent 是官方 OpenAI 渠道的出站 User-Agent 默认值。
+// 客户端 UA 不会被透传（见 channel.SetupApiRequestHeader），未显式配置时 net/http
+// 会兜底成 Go-http-client/1.1；这里对齐 Codex Desktop 的标识。
+const defaultUserAgent = "Codex Desktop/0.166.0-alpha.5.1 (Windows 10.0.22631; x86_64) unknown (Codex Desktop; 26.1027.51404)"
+
 type Adaptor struct {
 	ChannelType    int
 	ResponseFormat string
@@ -188,6 +193,9 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 	}
 	if info.ChannelType == constant.ChannelTypeOpenAI && "" != info.Organization {
 		header.Set("OpenAI-Organization", info.Organization)
+	}
+	if info.ChannelType == constant.ChannelTypeOpenAI && header.Get("User-Agent") == "" {
+		header.Set("User-Agent", defaultUserAgent)
 	}
 	// 检查 Header Override 是否已设置 Authorization，如果已设置则跳过默认设置
 	// 这样可以避免在 Header Override 应用时被覆盖（虽然 Header Override 会在之后应用，但这里作为额外保护）

@@ -16,7 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useSyncExternalStore } from 'react'
+
 import { useStatus } from '@/hooks/use-status'
+import { getServerVersion, subscribeServerVersion } from '@/lib/server-version'
 
 import { SettingsPage } from '../components/settings-page'
 import type { OperationsSettings } from '../types'
@@ -80,6 +83,12 @@ const defaultOperationsSettings: OperationsSettings = {
 
 export function OperationsSettings() {
   const { status } = useStatus()
+  // 版本号来自管理员响应的 X-New-Api-Version 头，匿名 /api/status 不再返回。
+  const serverVersion = useSyncExternalStore(
+    subscribeServerVersion,
+    getServerVersion,
+    () => null
+  )
 
   return (
     <SettingsPage
@@ -89,7 +98,7 @@ export function OperationsSettings() {
       getSectionContent={getOperationsSectionContent}
       getSectionMeta={getOperationsSectionMeta}
       extraArgs={[
-        status?.version as string | undefined,
+        serverVersion,
         status?.start_time as number | null | undefined,
       ]}
       loadingMessage='Loading maintenance settings...'

@@ -26,6 +26,7 @@ import {
   refreshAuthentication,
 } from '@/lib/auth-session'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
+import { captureServerVersion } from '@/lib/server-version'
 import { useAuthStore } from '@/stores/auth-store'
 
 declare module 'axios' {
@@ -79,6 +80,9 @@ function redirectToSignIn(): void {
 
 api.interceptors.response.use(
   (response) => {
+    // 版本号只在管理员响应头中下发，这里统一收集供管理员页面展示。
+    captureServerVersion(response.headers)
+
     if (response.config.acceptAuthRotation && response.data?.success === true) {
       applyAuthRotation(response.data.data)
     }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -16,6 +17,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// defaultUserAgent 是 Anthropic 官方渠道的出站 User-Agent 默认值。
+// 客户端 UA 不会被透传（见 channel.SetupApiRequestHeader），未显式配置时由 net/http
+// 兜底成 Go-http-client/1.1，会被上游识别为非官方客户端；这里对齐官方 CLI 的标识。
+const defaultUserAgent = "claude-cli/2.1.321 (external, claude-desktop-3p, agent-sdk/0.3.321)"
 
 type Adaptor struct {
 }
@@ -88,6 +94,9 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 		anthropicVersion = "2023-06-01"
 	}
 	req.Set("anthropic-version", anthropicVersion)
+	if info.ChannelType == constant.ChannelTypeAnthropic && req.Get("User-Agent") == "" {
+		req.Set("User-Agent", defaultUserAgent)
+	}
 	CommonClaudeHeadersOperation(c, req, info)
 	return nil
 }

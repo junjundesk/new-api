@@ -73,6 +73,8 @@ func authHelper(c *gin.Context, minRole int) {
 	// handler 内手动埋点者会设置 ContextKeyAuditLogged，finishAdminAudit 据此跳过。
 	var auditWriter *auditResponseWriter
 	if minRole >= common.RoleAdminUser {
+		// 版本号仅对管理员身份的响应下发，不向普通用户/匿名访客暴露部署版本。
+		c.Header("X-New-Api-Version", common.Version)
 		auditWriter = beginAdminAudit(c)
 	}
 
@@ -116,6 +118,9 @@ func authenticateInternalActor(c *gin.Context, actor assistantops.Actor, minRole
 		}
 	}
 	setDashboardAuthContext(c, user, identity, false)
+	if minRole >= common.RoleAdminUser {
+		c.Header("X-New-Api-Version", common.Version)
+	}
 	c.Next()
 }
 

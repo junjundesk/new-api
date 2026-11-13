@@ -21,6 +21,7 @@ import axios from 'axios'
 import { t } from 'i18next'
 
 import { publishAuthSessionEvent } from '@/lib/auth-session-sync'
+import { resetServerVersion } from '@/lib/server-version'
 import {
   useAuthStore,
   type AuthBootstrapState,
@@ -189,6 +190,8 @@ export function clearAuthentication(
   const sid = useAuthStore.getState().auth.session?.sid
   authEpoch += 1
   useAuthStore.getState().auth.reset(bootstrapState)
+  // 版本号只对管理员下发，登出/降权后不再保留。
+  resetServerVersion()
   if (synchronizeTabs && sid) {
     publishAuthSessionEvent('signed_out', sid)
   }

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -26,6 +27,12 @@ import {
 } from '@/components/ui/sidebar'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { ROLE } from '@/lib/roles'
+import {
+  getServerVersion,
+  subscribeServerVersion,
+} from '@/lib/server-version'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
 type SystemBrandProps = {
@@ -49,11 +56,20 @@ export function SystemBrand(props: SystemBrandProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
   const { logo } = useSystemConfig()
+  const role = useAuthStore((state) => state.auth.user?.role)
+  const serverVersion = useSyncExternalStore(
+    subscribeServerVersion,
+    getServerVersion,
+    () => null
+  )
 
   const variant = props.variant ?? 'sidebar'
   const name = status?.system_name || props.defaultName || 'New API'
-  const version =
-    status?.version || props.defaultVersion || t('Unknown version')
+  // 部署版本只对管理员展示；普通用户与访客既能不展示也不持有该信息。
+  const isAdmin = typeof role === 'number' && role >= ROLE.ADMIN
+  const version = isAdmin
+    ? serverVersion || props.defaultVersion || t('Unknown version')
+    : null
 
   if (variant === 'inline') {
     return (
@@ -94,7 +110,7 @@ export function SystemBrand(props: SystemBrandProps) {
           </div>
           <div className='grid flex-1 text-start text-sm leading-tight group-data-[collapsible=icon]:hidden'>
             <span className='truncate font-semibold'>{name}</span>
-            <span className='truncate text-xs'>{version}</span>
+            {version ? <span className='truncate text-xs'>{version}</span> : null}
           </div>
         </SidebarMenuButton>
       </SidebarMenuItem>
