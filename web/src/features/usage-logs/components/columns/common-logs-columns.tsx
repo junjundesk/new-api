@@ -43,6 +43,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { OriginalPrice } from '@/features/pricing/components/original-price'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
@@ -80,6 +81,8 @@ import { useUsageLogsContext, useViewUserLogs } from '../usage-logs-provider'
 
 interface DetailSegment {
   text: string
+  /** Pre-ratio price text, rendered struck through in front of `text`. */
+  original?: string
   muted?: boolean
   danger?: boolean
 }
@@ -174,51 +177,78 @@ function buildTypeDetailSegments(
     const text = prices.join(' / ')
     return showUnit ? `${text}/M` : text
   }
+  const ratio = getGroupRatio(other)
+  const hasRatio = ratio != null && ratio !== 1
+  const applyRatio = (price: number) => (hasRatio ? price * ratio : price)
+  // Pair the ratio-applied price list with its 1x original so the cell can show
+  // the base price crossed out next to what the user is actually charged.
+  const buildPriceList = (prices: number[], showUnit: boolean) => {
+    const text = formatPriceList(
+      prices.map((price) => formatPriceCompact(applyRatio(price))),
+      showUnit
+    )
+    if (!hasRatio) return { text }
+    return {
+      text,
+      original: formatPriceList(prices.map(formatPriceCompact), showUnit),
+    }
+  }
   const isTieredExpr = other.billing_mode === 'tiered_expr'
   const tieredSummary = getTieredBillingSummary(other)
   if (isTieredExpr) {
     if (tieredSummary) {
-      const baseEntries = tieredSummary.priceEntries
+      const basePrices = tieredSummary.priceEntries
         .filter((entry) => ['inputPrice', 'outputPrice'].includes(entry.field))
-        .map((entry) => formatPriceCompact(entry.price))
-      if (baseEntries.length > 0) {
+        .map((entry) => entry.price)
+      if (basePrices.length > 0) {
         const tierLabel = tieredSummary.tier.label || t('Default')
+        const priceList = buildPriceList(basePrices, true)
         segments.push({
-          text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
+          text: `${tierLabel} · ${priceList.text}`,
+          original: priceList.original,
         })
       }
 
-      const cacheEntries = tieredSummary.priceEntries
+      const cachePrices = tieredSummary.priceEntries
         .filter((entry) =>
           ['cacheReadPrice', 'cacheCreatePrice', 'cacheCreate1hPrice'].includes(
             entry.field
           )
         )
-        .map((entry) => {
-          return formatPriceCompact(entry.price)
-        })
-      if (cacheEntries.length > 0) {
+        .map((entry) => entry.price)
+      if (cachePrices.length > 0) {
+        const priceList = buildPriceList(cachePrices, false)
         segments.push({
-          text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+          text: `${t('Cache')} ${priceList.text}`,
+          original: priceList.original,
           muted: true,
         })
       }
 
-      const otherEntries = tieredSummary.priceEntries
-        .filter(
-          (entry) =>
-            ![
-              'inputPrice',
-              'outputPrice',
-              'cacheReadPrice',
-              'cacheCreatePrice',
-              'cacheCreate1hPrice',
-            ].includes(entry.field)
-        )
-        .map((entry) => `${t(entry.shortLabel)} ${formatPrice(entry.price)}`)
+      const otherEntries = tieredSummary.priceEntries.filter(
+        (entry) =>
+          ![
+            'inputPrice',
+            'outputPrice',
+            'cacheReadPrice',
+            'cacheCreatePrice',
+            'cacheCreate1hPrice',
+          ].includes(entry.field)
+      )
       if (otherEntries.length > 0) {
+        const formatEntry = (
+          entry: (typeof otherEntries)[number],
+          price: number
+        ) => `${t(entry.shortLabel)} ${formatPrice(price)}`
         segments.push({
-          text: otherEntries.join(' · '),
+          text: otherEntries
+            .map((entry) => formatEntry(entry, applyRatio(entry.price)))
+            .join(' · '),
+          original: hasRatio
+            ? otherEntries
+                .map((entry) => formatEntry(entry, entry.price))
+                .join(' · ')
+            : undefined,
           muted: true,
         })
       }
@@ -233,37 +263,42 @@ function buildTypeDetailSegments(
     const isPerCall = isPerCallBilling(modelPrice)
     if (isPerCall && modelPrice != null) {
       segments.push({
-        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
+        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(applyRatio(modelPrice), priceOpts)}`,
+        original: hasRatio
+          ? formatBillingCurrencyFromUSD(modelPrice, priceOpts)
+          : undefined,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
-      const baseEntries = [formatPriceCompact(inputPriceUSD)]
+      const basePrices = [inputPriceUSD]
       if (other.completion_ratio != null) {
-        baseEntries.push(
-          formatPriceCompact(inputPriceUSD * other.completion_ratio)
-        )
+        basePrices.push(inputPriceUSD * other.completion_ratio)
       }
+      const basePriceList = buildPriceList(basePrices, true)
       segments.push({
-        text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
+        text: `${t('Standard')} · ${basePriceList.text}`,
+        original: basePriceList.original,
       })
 
       if (hasAnyCacheTokens(other)) {
-        const cacheEntries = [
+        const cachePrices = [
           other.cache_ratio != null && other.cache_ratio !== 1
-            ? formatPriceCompact(inputPriceUSD * other.cache_ratio)
+            ? inputPriceUSD * other.cache_ratio
             : null,
           other.cache_creation_ratio != null && other.cache_creation_ratio !== 1
-            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio)
+            ? inputPriceUSD * other.cache_creation_ratio
             : null,
           other.cache_creation_ratio_1h != null &&
           other.cache_creation_ratio_1h !== 0
-            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
+            ? inputPriceUSD * other.cache_creation_ratio_1h
             : null,
-        ].filter(Boolean) as string[]
+        ].filter((price): price is number => price != null)
 
-        if (cacheEntries.length > 0) {
+        if (cachePrices.length > 0) {
+          const cachePriceList = buildPriceList(cachePrices, false)
           segments.push({
-            text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+            text: `${t('Cache')} ${cachePriceList.text}`,
+            original: cachePriceList.original,
             muted: true,
           })
         }
@@ -898,6 +933,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 primaryTextClass
               )}
             >
+              {primary.original ? (
+                <OriginalPrice
+                  value={primary.original}
+                  className='mr-1 text-xs'
+                />
+              ) : null}
               {primary.text}
               {hasMore && (
                 <span className='text-muted-foreground/40 ml-0.5'>
