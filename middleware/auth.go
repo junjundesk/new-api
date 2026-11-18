@@ -529,20 +529,24 @@ func TokenAuth() func(c *gin.Context) {
 				service.SetRequestChannelChain(c, chain)
 				userGroup = tokenGroup
 			} else {
-				// check common.UserUsableGroups[userGroup]
-				// 活动码授权会把目标分组临时并入可用分组：静态分组未命中时再查一次活动授权
-				// （查询结果会缓存到请求上下文，供限流与计费复用）。
-				if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-					if service.GetRequestActivityView(c, userCache.Id, tokenGroup) == nil {
-						abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
-						return
+				// 管理员令牌可以调用未启用的分组：管理侧需要直接用 API 验证任意分组，
+				// 因此不套用普通用户的可用分组与分组倍率校验。
+				if userCache.Role < common.RoleAdminUser {
+					// check common.UserUsableGroups[userGroup]
+					// 活动码授权会把目标分组临时并入可用分组：静态分组未命中时再查一次活动授权
+					// （查询结果会缓存到请求上下文，供限流与计费复用）。
+					if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
+						if service.GetRequestActivityView(c, userCache.Id, tokenGroup) == nil {
+							abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
+							return
+						}
 					}
-				}
-				// check group in common.GroupRatio
-				if !ratio_setting.ContainsGroupRatio(tokenGroup) {
-					if tokenGroup != "auto" {
-						abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
-						return
+					// check group in common.GroupRatio
+					if !ratio_setting.ContainsGroupRatio(tokenGroup) {
+						if tokenGroup != "auto" {
+							abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
+							return
+						}
 					}
 				}
 				userGroup = tokenGroup
