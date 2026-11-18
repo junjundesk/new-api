@@ -123,7 +123,11 @@ describe('usage log details cell price display', () => {
 
     const preview = container.querySelector('button')
     assert.ok(preview)
-    assert.equal(preview.textContent, '$2 / $4/MStandard · $4 / $8/M')
+    assert.equal(preview.textContent, 'Standard · $4 / $8/M$2 / $4/M')
+    assert.equal(
+      original.parentElement?.lastElementChild?.getAttribute('data-slot'),
+      'original-price'
+    )
 
     await unmount()
   })
@@ -155,7 +159,7 @@ describe('usage log details cell price display', () => {
     assert.equal(original.textContent, '$2/M')
     assert.equal(
       container.querySelector('button')?.textContent,
-      '$2/MStandard · $6/M'
+      'Standard · $6/M$2/M'
     )
 
     await unmount()

@@ -927,24 +927,26 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         let detailPreview = <span className='text-muted-foreground/40'>—</span>
         if (primary) {
           detailPreview = (
-            <span
-              className={cn(
-                'truncate leading-snug group-hover:underline',
-                primaryTextClass
-              )}
-            >
+            <span className='flex min-w-0 flex-col gap-0.5'>
+              <span
+                className={cn(
+                  'truncate leading-snug group-hover:underline',
+                  primaryTextClass
+                )}
+              >
+                {primary.text}
+                {hasMore && (
+                  <span className='text-muted-foreground/40 ml-0.5'>
+                    +{segments.length - 1}
+                  </span>
+                )}
+              </span>
               {primary.original ? (
                 <OriginalPrice
                   value={primary.original}
-                  className='mr-1 text-xs'
+                  className='block truncate text-xs leading-snug'
                 />
               ) : null}
-              {primary.text}
-              {hasMore && (
-                <span className='text-muted-foreground/40 ml-0.5'>
-                  +{segments.length - 1}
-                </span>
-              )}
             </span>
           )
         } else if (log.content) {
