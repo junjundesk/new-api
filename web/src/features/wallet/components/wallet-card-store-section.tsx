@@ -28,6 +28,20 @@ export function WalletCardStoreSection(props: { store: WalletCardStore }) {
   const url = parseCardStoreUrl(props.store.url)
   const mixedContent =
     url?.protocol === 'http:' && window.location.protocol === 'https:'
+  // A scripted frame with its real origin must never be mounted on the wallet's own origin.
+  const sameOrigin = url?.origin === window.location.origin
+  let checkoutHint = t(
+    'If the store cannot load or complete checkout here, open it in a new tab.'
+  )
+  if (mixedContent) {
+    checkoutHint = t(
+      'An HTTPS wallet cannot embed an HTTP store. Open the store separately.'
+    )
+  } else if (sameOrigin) {
+    checkoutHint = t(
+      'This store shares the wallet origin. Open it in a new tab to keep checkout separate.'
+    )
+  }
   const money = (quota: number) =>
     formatQuotaWithCurrency(quota, { abbreviate: false, digitsSmall: 6 })
   return (
@@ -58,24 +72,20 @@ export function WalletCardStoreSection(props: { store: WalletCardStore }) {
       )}
       {url ? (
         <>
-          {!mixedContent && (
+          {/* eslint-disable react/iframe-missing-sandbox -- The store needs its own origin for checkout storage; wallet-origin URLs take the standalone link below. */}
+          {!mixedContent && !sameOrigin && (
             <iframe
               title={t('Card store checkout')}
               src={url.href}
-              sandbox='allow-forms allow-scripts'
+              sandbox='allow-forms allow-scripts allow-same-origin'
               referrerPolicy='no-referrer'
               loading='lazy'
               className='h-[min(65vh,36rem)] w-full rounded-md border'
             />
           )}
+          {/* eslint-enable react/iframe-missing-sandbox */}
           <p className='text-muted-foreground text-sm'>
-            {mixedContent
-              ? t(
-                  'An HTTPS wallet cannot embed an HTTP store. Open the store separately.'
-                )
-              : t(
-                  'If the store cannot load or complete checkout here, open it in a new tab.'
-                )}{' '}
+            {checkoutHint}{' '}
             <a
               className='text-primary underline'
               href={url.href}

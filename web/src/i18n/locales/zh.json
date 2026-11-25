@@ -15,6 +15,7 @@
     "Manage code tiers and bonuses": "管理卡密档位和赠金",
     "No redemption code tiers configured yet.": "暂无卡密档位，请联系管理员。",
     "Open card store": "打开卡网",
+    "This store shares the wallet origin. Open it in a new tab to keep checkout separate.": "卡网与钱包同源，不在钱包内嵌入。请在新窗口打开卡网购卡。",
     "Redemption code tiers": "卡密档位",
     "Replace wallet gateway checkout with redemption code purchases. Existing orders and subscriptions are unaffected.": "开启后，钱包余额充值改为卡网购卡兑换，不影响已有订单回调或订阅购买。",
     "Use a public storefront URL, not a management or signed URL. HTTPS is recommended for embedded checkout.": "请填写可公开访问的购卡页面，不要填写管理地址或签名链接；内嵌网页建议使用 HTTPS。",

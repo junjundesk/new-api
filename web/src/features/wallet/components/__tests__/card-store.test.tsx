@@ -59,18 +59,16 @@ afterEach(() => {
 })
 
 test('card mode replaces gateway checkout, shows face value and bonus separately and keeps code redemption usable', async () => {
-  useSystemConfigStore
-    .getState()
-    .setConfig({
-      currency: {
-        displayInCurrency: true,
-        quotaDisplayType: 'USD',
-        quotaPerUnit: 100,
-        usdExchangeRate: 1,
-        customCurrencySymbol: '¤',
-        customCurrencyExchangeRate: 1,
-      },
-    })
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      displayInCurrency: true,
+      quotaDisplayType: 'USD',
+      quotaPerUnit: 100,
+      usdExchangeRate: 1,
+      customCurrencySymbol: '¤',
+      customCurrencyExchangeRate: 1,
+    },
+  })
   const redeem = vi.fn(),
     user = userEvent.setup()
   const props = {
@@ -104,8 +102,10 @@ test('card mode replaces gateway checkout, shows face value and bonus separately
   const frame = screen.getByTitle('Card store checkout')
   expect(frame).toHaveAttribute('src', store.url)
   expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer')
-  expect(frame.getAttribute('sandbox')?.split(' ')).not.toContain(
-    'allow-same-origin'
+  // Checkout scripts need the store's real origin for its cookies and sessionStorage.
+  const permissions = new Set(frame.getAttribute('sandbox')?.split(/\s+/))
+  expect(permissions).toEqual(
+    new Set(['allow-forms', 'allow-scripts', 'allow-same-origin'])
   )
   expect(screen.getByRole('link', { name: 'Open card store' })).toHaveAttribute(
     'rel',
@@ -117,6 +117,29 @@ test('card mode replaces gateway checkout, shows face value and bonus separately
   expect(screen.queryByTitle('Card store checkout')).toBeNull()
   expect(screen.getByLabelText('Custom Amount')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Get one here' })).toBeVisible()
+})
+
+test('switching to a wallet-origin store removes the scripted frame and keeps the standalone checkout link', () => {
+  const origin = window.location.origin
+  const section = (url: string) => (
+    <I18nextProvider i18n={i18n}>
+      <WalletCardStoreSection store={{ url, tiers: [] }} />
+    </I18nextProvider>
+  )
+  const { rerender } = render(section(store.url))
+  expect(screen.getByTitle('Card store checkout')).toBeInTheDocument()
+  const sameOrigin = new URL('/cards?shop=4', origin).href
+  rerender(section(sameOrigin))
+  expect(screen.queryByTitle('Card store checkout')).toBeNull()
+  const link = screen.getByRole('link', { name: 'Open card store' })
+  expect(link).toHaveAttribute('href', sameOrigin)
+  expect(link).toHaveAttribute('target', '_blank')
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  rerender(section(store.url))
+  expect(screen.getByTitle('Card store checkout')).toHaveAttribute(
+    'src',
+    store.url
+  )
 })
 
 test('an HTTP store on an HTTPS wallet offers an external checkout instead of mixed content, and unsafe URLs are not navigable', () => {
