@@ -105,7 +105,7 @@ func numberFromOther(other map[string]interface{}, key string) int {
 			return int(value)
 		}
 	case float64:
-		if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) && value < math.MaxInt32 {
+		if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) && value < common.MaxQuota {
 			return int(value)
 		}
 	}

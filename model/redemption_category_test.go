@@ -36,11 +36,8 @@ func TestCategoryBatchUsesLiveBonusAndKeepsPreviousGrants(t *testing.T) {
 	assert.ErrorIs(t, DeleteRedemptionCategory(category.Id), ErrRedemptionCategoryInUse)
 
 	for i, scenario := range []struct{ rate, wantBonus int }{{200, 200}, {325, 325}, {0, 0}} {
-		var rules []RedemptionBonusRule
-		if scenario.rate > 0 {
-			rules = append(rules, RedemptionBonusRule{CategoryId: category.Id, BonusRateBps: scenario.rate})
-		}
-		_, err := ReplaceRedemptionBonusRules(rules)
+		// A 0% rule is kept as a placeholder and must not create an empty bonus grant.
+		_, err := ReplaceRedemptionBonusRules([]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: scenario.rate}})
 		require.NoError(t, err)
 		receipt, err := Redeem(keys[i], userId)
 		require.NoError(t, err)
@@ -100,8 +97,7 @@ func TestRedemptionCategoryRejectsInvalidIssuanceAndRollsBackFailedCredit(t *tes
 		want  error
 	}{
 		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: -1}}, ErrRedemptionBonusRate},
-		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 0}}, ErrRedemptionBonusRate},
-		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: common.MaxQuota}}, ErrRedemptionBonusRate},
+		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: MaxRedemptionBonusRateBps + 1}}, ErrRedemptionBonusRate},
 		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 100}, {CategoryId: category.Id, BonusRateBps: 200}}, ErrRedemptionBonusRuleConflict},
 		{[]RedemptionBonusRule{{CategoryId: category.Id + 1, BonusRateBps: 100}}, ErrRedemptionCategory},
 	} {

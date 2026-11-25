@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -68,8 +67,8 @@ const (
 	ActivityCodeMaxRpm = 100000
 	// ActivityCodeMaxConcurrency 是活动码并发上限的允许最大值。
 	ActivityCodeMaxConcurrency = 100000
-	// ActivityCodeMaxPriceQuota 与用户余额列的 32 位存储保持一致。
-	ActivityCodeMaxPriceQuota = math.MaxInt32
+	// ActivityCodeMaxPriceQuota 与用户余额的额度上限保持一致。
+	ActivityCodeMaxPriceQuota = common.MaxQuota - 1
 	// ActivityCodeMaxDurationSeconds 限制单次授权的有效期长度。
 	ActivityCodeMaxDurationSeconds = 10 * 365 * 24 * 3600
 	// ActivityCodeMaxModelRatioOverrides 是指定模型倍率的条目上限，避免超大 JSON 落库。

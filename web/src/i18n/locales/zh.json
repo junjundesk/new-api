@@ -801,7 +801,6 @@
     "Bonus quota granted to new users ({{formattedQuota}})": "新用户注册赠送的赠金额度（{{formattedQuota}}）",
     "Bonus rate": "赠金比例",
     "Bonus rate (%)": "赠金比例（%）",
-    "Bonus rate must be greater than 0": "赠金比例须大于 0",
     "Bonus rules": "赠金规则",
     "Bonus rules saved": "赠金规则已保存",
     "Border radius": "圆角",

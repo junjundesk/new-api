@@ -61,7 +61,7 @@ channel_chain.playground_group_unsupported: "按模型分组链不支持在操�
 
 # Redemption messages
 redemption.quota_invalid: "请输入大于零且在钱包额度范围内的面额。"
-redemption.bonus_rate_invalid: "赠金比例须大于零，且赠金额度须在支持范围内。"
+redemption.bonus_rate_invalid: "赠金比例须大于或等于零，且赠金额度须在支持范围内。"
 redemption.bonus_rule_conflict: "每个分类只能设置一条赠金规则。"
 redemption.category_missing: "兑换码分类不存在。"
 redemption.category_duplicate: "该分类名称已存在。"

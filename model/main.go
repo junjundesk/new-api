@@ -315,6 +315,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := migrateUserQuotaColumnsToBigint(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -391,6 +394,9 @@ func migrateDB() error {
 }
 
 func migrateDBFast() error {
+	if err := migrateUserQuotaColumnsToBigint(); err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 
@@ -546,7 +552,7 @@ CREATE TABLE IF NOT EXISTS logs (
 	username String DEFAULT '',
 	token_name String DEFAULT '',
 	model_name String DEFAULT '',
-	quota Int32 DEFAULT 0,
+	quota Int64 DEFAULT 0,
 	prompt_tokens Int32 DEFAULT 0,
 	completion_tokens Int32 DEFAULT 0,
 	use_time Int32 DEFAULT 0,
@@ -568,7 +574,18 @@ ORDER BY (created_at, request_id)%s`, clickHouseLogTTLClause(ttlDays))
 // migrateClickHouseLogColumns 为已存在的 ClickHouse 日志表补齐新增列。
 // CREATE TABLE IF NOT EXISTS 不会改动旧表结构，必须显式 ADD COLUMN。
 func migrateClickHouseLogColumns() error {
-	return LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS admin_only UInt8 DEFAULT 0").Error
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS admin_only UInt8 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	// 旧表的 quota 为 Int32，额度上限放宽到 2^53-1 后需要 Int64；只在仍为 Int32 时改一次。
+	var quotaType string
+	if err := LOG_DB.Raw("SELECT type FROM system.columns WHERE database = currentDatabase() AND table = 'logs' AND name = 'quota'").Scan(&quotaType).Error; err != nil {
+		return err
+	}
+	if quotaType != "Int32" {
+		return nil
+	}
+	return LOG_DB.Exec("ALTER TABLE logs MODIFY COLUMN quota Int64 DEFAULT 0").Error
 }
 
 func syncClickHouseLogTTL(ttlDays int) error {
@@ -734,6 +751,57 @@ func migrateTokenModelLimitsToText() error {
 		}
 		common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to text", tableName, columnName))
 	}
+	return nil
+}
+
+// userQuotaColumns are the wallet columns older releases created as 32-bit int.
+var userQuotaColumns = []string{"quota", "used_quota", "aff_quota", "aff_history"}
+
+// migrateUserQuotaColumnsToBigint widens the wallet columns so balances may
+// exceed the int32 range. SQLite INTEGER is already 64-bit, so it is skipped.
+// Safe to run repeatedly: only columns still reported as 32-bit are altered.
+func migrateUserQuotaColumnsToBigint() error {
+	var typeQuery, narrowType string
+	switch {
+	case common.UsingMainDatabase(common.DatabaseTypeMySQL):
+		typeQuery = `SELECT COLUMN_NAME AS name, DATA_TYPE AS data_type FROM information_schema.columns
+			WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN ?`
+		narrowType = "int"
+	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
+		typeQuery = `SELECT column_name AS name, data_type FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = ? AND column_name IN ?`
+		narrowType = "integer"
+	default:
+		return nil
+	}
+	if !DB.Migrator().HasTable("users") {
+		return nil
+	}
+	var columns []struct {
+		Name     string
+		DataType string
+	}
+	if err := DB.Raw(typeQuery, "users", userQuotaColumns).Scan(&columns).Error; err != nil {
+		return fmt.Errorf("failed to query users quota column types: %w", err)
+	}
+	var clauses []string
+	for _, column := range columns {
+		if strings.ToLower(column.DataType) != narrowType {
+			continue
+		}
+		if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+			clauses = append(clauses, fmt.Sprintf("MODIFY COLUMN `%s` bigint DEFAULT 0", column.Name))
+		} else {
+			clauses = append(clauses, fmt.Sprintf(`ALTER COLUMN "%s" TYPE bigint`, column.Name))
+		}
+	}
+	if len(clauses) == 0 {
+		return nil
+	}
+	if err := DB.Exec("ALTER TABLE users " + strings.Join(clauses, ", ")).Error; err != nil {
+		return fmt.Errorf("failed to widen users quota columns to bigint: %w", err)
+	}
+	common.SysLog(fmt.Sprintf("Successfully widened %d users quota columns to bigint", len(clauses)))
 	return nil
 }
 

@@ -71,7 +71,8 @@ export function RedemptionBonusRulesDialog(props: BonusRulesDialogProps) {
               ),
             percent: z
               .number(t('Enter a valid bonus rate'))
-              .gt(0, t('Bonus rate must be greater than 0'))
+              .min(0, t('Enter a valid bonus rate'))
+              .max(1000, t('Enter a valid bonus rate'))
               .multipleOf(0.01, t('Use up to two decimal places')),
           })
           .refine(
@@ -226,6 +227,7 @@ export function RedemptionBonusRulesDialog(props: BonusRulesDialogProps) {
                     <InputGroupInput
                       type='number'
                       min={0}
+                      max={1000}
                       step='0.01'
                       inputMode='decimal'
                       aria-label={t('Bonus rate')}

@@ -16,11 +16,15 @@ type RedemptionCategory struct {
 }
 
 // RedemptionBonusRule grants a percentage of the face value as bonus when a code of the category is redeemed.
+// A 0% rule is a placeholder that grants nothing.
 type RedemptionBonusRule struct {
 	Id           int `json:"id"`
 	CategoryId   int `json:"category_id" gorm:"uniqueIndex;not null"`
 	BonusRateBps int `json:"bonus_rate_bps" gorm:"not null"` // 100 basis points = 1%.
 }
+
+// MaxRedemptionBonusRateBps caps a bonus rule at 1000% of the face value.
+const MaxRedemptionBonusRateBps = 100_000
 
 var (
 	ErrRedemptionName              = errors.New("invalid redemption name")
@@ -44,7 +48,7 @@ func (rule *RedemptionBonusRule) bonusQuota(quota int) (int, error) {
 	if quota <= 0 || quota >= common.MaxQuota {
 		return 0, ErrRedemptionQuota
 	}
-	if rule.BonusRateBps <= 0 || rule.BonusRateBps > common.MaxQuota {
+	if rule.BonusRateBps < 0 || rule.BonusRateBps > MaxRedemptionBonusRateBps {
 		return 0, ErrRedemptionBonusRate
 	}
 	bonus, err := common.QuotaRoundStrict(float64(quota) * float64(rule.BonusRateBps) / 10000)

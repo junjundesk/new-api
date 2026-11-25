@@ -445,7 +445,7 @@ func payReferralChargeTx(tx *gorm.DB, row *ReferralCharge, expireTime int64, exp
 			}
 			return referralSettleCanceled, err
 		}
-		// aff_quota and aff_history are 32-bit columns. A payout that does not
+		// aff_quota and aff_history are capped at MaxQuota. A payout that does not
 		// fit yet is deferred rather than canceled: the ceiling is a floor on
 		// what the user holds, so moving quota to the main balance frees room
 		// and the commission pays on a later tick.

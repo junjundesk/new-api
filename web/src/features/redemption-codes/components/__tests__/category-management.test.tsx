@@ -192,6 +192,11 @@ test('bonus rules preview face value plus bonus and save the whole edited rule s
   ).toBe(true)
   const percents = dialog.getAllByLabelText('Bonus rate')
   await user.clear(percents[1] as HTMLElement)
+  await user.type(percents[1] as HTMLElement, '0')
+  expect(previews()[1]).toBe(
+    `${formatQuota(100000000)}+${formatQuota(0)}=${formatQuota(100000000)}`
+  )
+  await user.clear(percents[1] as HTMLElement)
   await user.type(percents[1] as HTMLElement, '12.5')
   expect(previews()).toEqual([
     `${formatQuota(50000000)}+${formatQuota(1000000)}=${formatQuota(51000000)}`,
