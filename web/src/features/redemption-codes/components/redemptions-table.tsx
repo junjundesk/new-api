@@ -58,7 +58,7 @@ function isDisabledRedemptionRow(redemption: Redemption) {
 export function RedemptionsTable() {
   const { t } = useTranslation()
   const columns = useRedemptionsColumns()
-  const { refreshTrigger, setOpen } = useRedemptions()
+  const { categoryId, refreshTrigger, setOpen } = useRedemptions()
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const {
@@ -86,6 +86,7 @@ export function RedemptionsTable() {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
       'redemptions',
+      categoryId,
       pagination.pageIndex + 1,
       pagination.pageSize,
       globalFilter,
@@ -101,8 +102,9 @@ export function RedemptionsTable() {
       }
 
       const result =
-        hasFilter || hasStatusFilter
+        hasFilter || hasStatusFilter || categoryId !== undefined
           ? await searchRedemptions({
+              category_id: categoryId,
               ...params,
               keyword: globalFilter,
               status: statusFilterValue,
@@ -135,6 +137,12 @@ export function RedemptionsTable() {
     data: redemptions,
     columns,
     enableRowSelection: true,
+    getRowId: (row) => String(row.id),
+    initialColumnVisibility: {
+      created_time: false,
+      expired_time: false,
+      used_user_id: false,
+    },
     columnFilters,
     globalFilter,
     pagination,

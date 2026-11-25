@@ -72,6 +72,11 @@ const (
 // Redemption related messages
 const (
 	MsgRedemptionNameLength        = "redemption.name_length"
+	MsgRedemptionQuotaInvalid      = "redemption.quota_invalid"
+	MsgRedemptionBonusRateInvalid  = "redemption.bonus_rate_invalid"
+	MsgRedemptionCategoryMissing   = "redemption.category_missing"
+	MsgRedemptionCategoryDuplicate = "redemption.category_duplicate"
+	MsgRedemptionCategoryInUse     = "redemption.category_in_use"
 	MsgRedemptionCountPositive     = "redemption.count_positive"
 	MsgRedemptionCountMax          = "redemption.count_max"
 	MsgRedemptionCreateFailed      = "redemption.create_failed"

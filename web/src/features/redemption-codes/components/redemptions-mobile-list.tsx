@@ -82,7 +82,7 @@ interface RedemptionsMobileListProps {
 
 export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
   const { t } = useTranslation()
-  const { setOpen } = useRedemptions()
+  const { setOpen, categories, categoryId } = useRedemptions()
   const rows = props.table.getRowModel().rows
 
   if (props.isLoading) return <RedemptionsMobileSkeleton />
@@ -125,6 +125,9 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
           redemption.status
         )
         const statusConfig = REDEMPTION_STATUSES[redemption.status]
+        const categoryName =
+          categories.find((category) => category.id === redemption.category_id)
+            ?.name ?? t('Uncategorized')
         const maskedKey = `${redemption.key.slice(0, 8)}******${redemption.key.slice(-8)}`
 
         return (
@@ -142,9 +145,12 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
                 <div className='truncate text-sm font-semibold'>
                   {redemption.name}
                 </div>
-                <div className='text-muted-foreground text-[11px]'>
-                  {t('Redemption Code')}
-                </div>
+                {categoryId === undefined &&
+                  categoryName !== redemption.name && (
+                    <div className='text-muted-foreground text-xs'>
+                      {categoryName}
+                    </div>
+                  )}
               </div>
               {expired ? (
                 <StatusBadge
@@ -201,6 +207,16 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
                     : formatTimestampToDate(redemption.expired_time)}
                 </span>
               </div>
+              {!!redemption.bonus_quota && (
+                <div className='col-span-2 flex justify-between gap-2'>
+                  <span className='text-muted-foreground'>
+                    {t('Bonus granted')}
+                  </span>
+                  <span className='font-medium tabular-nums'>
+                    {formatQuota(redemption.bonus_quota)}
+                  </span>
+                </div>
+              )}
               {redemption.used_user_id > 0 && (
                 <div className='col-span-2 flex min-w-0 items-center justify-between gap-2'>
                   <span className='text-muted-foreground'>

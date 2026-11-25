@@ -133,10 +133,15 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
-function drawerTree(currentRow?: Redemption) {
+function drawerTree(currentRow?: Redemption, categoryId?: number) {
   return (
     <I18nextProvider i18n={i18n}>
-      <RedemptionsProvider>
+      <RedemptionsProvider
+        categoryId={categoryId}
+        categories={[
+          { id: 7, name: 'Standard', quota: 50000000, bonus_rate_bps: 200 },
+        ]}
+      >
         <RedemptionsMutateDrawer
           open
           currentRow={currentRow}
@@ -153,7 +158,8 @@ async function renderDrawer(
   currency: CurrencyFixture = {
     quotaDisplayType: 'USD',
     usdExchangeRate: 1,
-  }
+  },
+  categoryId?: number
 ): Promise<void> {
   useSystemConfigStore.getState().setConfig({
     currency: {
@@ -171,7 +177,7 @@ async function renderDrawer(
   const root = createRoot(host)
   renderedDrawer = { host, root }
 
-  await act(async () => root.render(drawerTree(currentRow)))
+  await act(async () => root.render(drawerTree(currentRow, categoryId)))
 }
 
 async function rerenderDrawer(currentRow: Redemption): Promise<void> {
@@ -256,12 +262,12 @@ async function submitForm(): Promise<void> {
   )
 }
 
-async function waitForLoadedForm(): Promise<void> {
+async function waitForLoadedForm(action = 'Save changes'): Promise<void> {
   await act(async () =>
     waitForCondition(() => {
       const saveButton = getSaveButton()
       return (
-        saveButton.textContent?.includes('Save changes') === true &&
+        saveButton.textContent?.includes(action) === true &&
         !saveButton.disabled
       )
     }, 'redemption drawer did not finish loading')
@@ -443,7 +449,7 @@ test('redemption drawer keeps Never as an unlimited expiration', async () => {
   }
 
   await renderDrawer()
-  await waitForLoadedForm()
+  await waitForLoadedForm('Generate codes')
 
   const neverButton = [
     ...document.querySelectorAll<HTMLButtonElement>('button'),
@@ -460,4 +466,39 @@ test('redemption drawer keeps Never as an unlimited expiration', async () => {
   )
 
   assert.equal(creations[0]?.expired_time, 0)
+})
+
+test('generating a batch in a category uses its denomination and copies just the returned keys, one per line', async () => {
+  const creations: unknown[] = []
+  apiClient.post = async (_url, data) => {
+    creations.push(data)
+    return { data: { success: true, data: ['code-one', 'code-two'] } }
+  }
+  await renderDrawer(undefined, undefined, 7)
+  await waitForLoadedForm('Generate codes')
+  assert.equal(getControlByLabel<HTMLSelectElement>('Category').value, '7')
+  assert.ok(document.body.textContent?.includes('2%'))
+  await changeInput(getControlByLabel<HTMLInputElement>('Quantity'), '2')
+  await submitForm()
+  const result = document.querySelector<HTMLTextAreaElement>(
+    'textarea[aria-label="Generated codes"]'
+  )
+  assert.ok(result?.readOnly)
+  assert.equal(result.value, 'code-one\ncode-two')
+  assert.deepEqual(creations, [
+    {
+      category_id: 7,
+      name: 'Standard',
+      quota: 50000000,
+      count: 2,
+      expired_time: 0,
+    },
+  ])
+  const copy = [...document.querySelectorAll('button')].find(
+    (button) => button.textContent?.trim() === 'Copy all codes'
+  )
+  assert.ok(copy)
+  await act(async () => copy.click())
+  assert.equal(await navigator.clipboard.readText(), 'code-one\ncode-two')
+  assert.equal(document.querySelector('button[form="redemption-form"]'), null)
 })

@@ -27,6 +27,7 @@ import { useAuthStore } from '@/stores/auth-store'
 const redemptionsSearchSchema = z.object({
   page: z.number().optional().catch(1),
   pageSize: z.number().optional().catch(10),
+  category_id: z.number().int().nonnegative().optional().catch(undefined),
   filter: z.string().optional().catch(''),
   status: z.array(z.enum(REDEMPTION_FILTER_VALUES)).optional().catch([]),
 })

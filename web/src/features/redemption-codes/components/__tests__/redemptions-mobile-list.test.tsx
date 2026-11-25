@@ -108,7 +108,16 @@ function renderList(props?: {
       await act(async () =>
         root.render(
           <I18nextProvider i18n={i18n}>
-            <RedemptionsProvider>
+            <RedemptionsProvider
+              categories={[
+                {
+                  id: 4,
+                  name: 'Weekend tier',
+                  quota: 500000,
+                  bonus_rate_bps: 0,
+                },
+              ]}
+            >
               <RedemptionsMobileList
                 table={props?.table ?? emptyTable()}
                 isLoading={false}
@@ -173,6 +182,8 @@ test('mobile redemption card shows expiration and redemption details', async () 
       id: 1,
       user_id: 1,
       name: 'Spring promotion',
+      category_id: 4,
+      bonus_quota: 10000,
       key: '12345678901234567890123456789012',
       status: 3,
       quota: 500000,
@@ -185,6 +196,8 @@ test('mobile redemption card shows expiration and redemption details', async () 
   await rendered.render()
 
   assert.equal(rendered.host.textContent?.includes('Spring promotion'), true)
+  assert.equal(rendered.host.textContent?.includes('Weekend tier'), true)
+  assert.equal(rendered.host.textContent?.includes('Bonus granted'), true)
   assert.equal(rendered.host.textContent?.includes('Quota'), true)
   assert.equal(rendered.host.textContent?.includes('Expires'), true)
   assert.equal(rendered.host.textContent?.includes('Redeemed By'), true)

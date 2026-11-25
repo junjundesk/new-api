@@ -59,6 +59,11 @@ channel_chain.specific_channel_unsupported: "Model-based group chains do not sup
 channel_chain.playground_group_unsupported: "Model-based group chains do not support a playground group override"
 
 # Redemption messages
+redemption.quota_invalid: "Enter a positive face value within the wallet limit."
+redemption.bonus_rate_invalid: "Enter a non-negative bonus rate that fits the supported quota range."
+redemption.category_missing: "Redemption category not found."
+redemption.category_duplicate: "A category with this name already exists."
+redemption.category_in_use: "This category still contains redemption codes. Only empty categories can be deleted."
 redemption.name_length: "Redemption code name length must be between 1-20"
 redemption.count_positive: "Redemption code count must be greater than 0"
 redemption.count_max: "Maximum 100 redemption codes can be generated at once"

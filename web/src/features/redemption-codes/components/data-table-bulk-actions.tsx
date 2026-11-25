@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Table } from '@tanstack/react-table'
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -25,23 +24,15 @@ import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-ta
 
 import type { Redemption } from '../types'
 
-type DataTableBulkActionsProps<TData> = {
-  table: Table<TData>
+type DataTableBulkActionsProps = {
+  table: Table<Redemption>
 }
 
-export function DataTableBulkActions<TData>({
-  table,
-}: DataTableBulkActionsProps<TData>) {
+export function DataTableBulkActions({ table }: DataTableBulkActionsProps) {
   const { t } = useTranslation()
   const selectedRows = table.getSelectedRowModel().rows
 
-  const contentToCopy = useMemo(() => {
-    const selectedCodes = selectedRows.map((row) => {
-      const redemption = row.original as Redemption
-      return `${redemption.name}\t${redemption.key}`
-    })
-    return selectedCodes.join('\n')
-  }, [selectedRows])
+  const contentToCopy = selectedRows.map((row) => row.original.key).join('\n')
 
   return (
     <BulkActionsToolbar table={table} entityName={t('redemption code')}>

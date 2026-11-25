@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 
 import type {
   Redemption,
+  RedemptionCategory,
   ApiResponse,
   GetRedemptionsParams,
   GetRedemptionsResponse,
@@ -47,11 +48,47 @@ export async function searchRedemptions(
   const { keyword = '', status = '', p = 1, page_size = 10 } = params
   const queryParams = new URLSearchParams()
   queryParams.set('keyword', keyword)
+  if (params.category_id !== undefined) {
+    queryParams.set('category_id', String(params.category_id))
+  }
   if (status) queryParams.set('status', status)
   queryParams.set('p', String(p))
   queryParams.set('page_size', String(page_size))
   const res = await api.get(`/api/redemption/search?${queryParams.toString()}`)
   return res.data
+}
+
+export async function getRedemptionCategories(): Promise<RedemptionCategory[]> {
+  const res = await api.get<ApiResponse<RedemptionCategory[]>>(
+    '/api/redemption/categories'
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function saveRedemptionCategory(
+  category: Omit<RedemptionCategory, 'id'> & { id?: number }
+) {
+  const url = '/api/redemption/categories'
+  const config = { skipBusinessError: true }
+  const res =
+    category.id === undefined
+      ? await api.post<ApiResponse<RedemptionCategory>>(url, category, config)
+      : await api.put<ApiResponse<RedemptionCategory>>(
+          `${url}/${category.id}`,
+          category,
+          config
+        )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function deleteRedemptionCategory(id: number) {
+  const res = await api.delete<ApiResponse>(
+    `/api/redemption/categories/${id}`,
+    { skipBusinessError: true }
+  )
+  if (!res.data.success) throw new Error(res.data.message)
 }
 
 // Get single redemption code by ID
@@ -94,7 +131,11 @@ export async function deleteRedemption(id: number): Promise<ApiResponse> {
 }
 
 // Delete invalid redemption codes (used, disabled, expired)
-export async function deleteInvalidRedemptions(): Promise<ApiResponse<number>> {
-  const res = await api.delete('/api/redemption/invalid')
+export async function deleteInvalidRedemptions(
+  categoryId?: number
+): Promise<ApiResponse<number>> {
+  const res = await api.delete('/api/redemption/invalid', {
+    params: { category_id: categoryId },
+  })
   return res.data
 }

@@ -88,7 +88,7 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rows, total, err := SearchRedemptions(tt.keyword, tt.status, tt.startIdx, tt.num)
+			rows, total, err := SearchRedemptions(tt.keyword, tt.status, nil, tt.startIdx, tt.num)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantTotal, total)
 			gotIds := make([]int, 0, len(rows))
@@ -128,9 +128,10 @@ func setupRedeemFixture(t *testing.T, quota int) (userId int, key string) {
 func TestRedeemCreditsQuotaExactlyOnce(t *testing.T) {
 	userId, key := setupRedeemFixture(t, 500)
 
-	quota, err := Redeem(key, userId)
+	credited, err := Redeem(key, userId)
 	require.NoError(t, err)
-	assert.Equal(t, 500, quota)
+	assert.Equal(t, 500, credited.Quota)
+	assert.Zero(t, credited.BonusQuota)
 
 	var user User
 	require.NoError(t, DB.First(&user, "id = ?", userId).Error)

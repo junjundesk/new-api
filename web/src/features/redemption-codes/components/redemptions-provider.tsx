@@ -20,9 +20,15 @@ import React, { useState } from 'react'
 
 import useDialogState from '@/hooks/use-dialog'
 
-import type { Redemption, RedemptionsDialogType } from '../types'
+import type {
+  Redemption,
+  RedemptionCategory,
+  RedemptionsDialogType,
+} from '../types'
 
 type RedemptionsContextType = {
+  categories: RedemptionCategory[]
+  categoryId?: number
   open: RedemptionsDialogType | null
   setOpen: (str: RedemptionsDialogType | null) => void
   currentRow: Redemption | null
@@ -37,8 +43,12 @@ const RedemptionsContext = React.createContext<RedemptionsContextType | null>(
 
 export function RedemptionsProvider({
   children,
+  categories = [],
+  categoryId,
 }: {
   children: React.ReactNode
+  categories?: RedemptionCategory[]
+  categoryId?: number
 }) {
   const [open, setOpen] = useDialogState<RedemptionsDialogType>(null)
   const [currentRow, setCurrentRow] = useState<Redemption | null>(null)
@@ -49,6 +59,8 @@ export function RedemptionsProvider({
   return (
     <RedemptionsContext
       value={{
+        categories,
+        categoryId,
         open,
         setOpen,
         currentRow,

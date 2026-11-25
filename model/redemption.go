@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
-
 	"gorm.io/gorm"
 )
 
@@ -18,6 +19,8 @@ type Redemption struct {
 	Status       int            `json:"status" gorm:"default:1"`
 	Name         string         `json:"name" gorm:"index"`
 	Quota        int            `json:"quota" gorm:"default:100"`
+	CategoryId   int            `json:"category_id" gorm:"index;not null;default:0"` // 0 includes codes issued before categories existed.
+	BonusQuota   int            `json:"bonus_quota" gorm:"not null;default:0"`       // Actual grant at redemption time.
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
@@ -26,209 +29,199 @@ type Redemption struct {
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
 }
 
-func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	// 开始事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+func SearchRedemptions(keyword, status string, categoryId *int, startIdx, num int) (redemptions []*Redemption, total int64, err error) {
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		query := tx.Model(&Redemption{})
+		if categoryId != nil {
+			query = query.Where("category_id = ?", *categoryId)
 		}
-	}()
-
-	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 提交事务
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return redemptions, total, nil
-}
-
-func SearchRedemptions(keyword string, status string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+		if keyword != "" {
+			if id, err := strconv.Atoi(keyword); err == nil {
+				query = query.Where("(id = ? OR name LIKE ?)", id, keyword+"%")
+			} else {
+				query = query.Where("name LIKE ?", keyword+"%")
+			}
 		}
-	}()
-
-	query := tx.Model(&Redemption{})
-
-	if keyword != "" {
-		if id, err := strconv.Atoi(keyword); err == nil {
-			query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
-		} else {
-			query = query.Where("name LIKE ?", keyword+"%")
-		}
-	}
-
-	if status != "" {
-		now := common.GetTimestamp()
 		switch status {
 		case "expired":
-			query = query.Where(
-				"status = ? AND expired_time != 0 AND expired_time < ?",
-				common.RedemptionCodeStatusEnabled,
-				now,
-			)
+			query = query.Where("status = ? AND expired_time != 0 AND expired_time < ?", common.RedemptionCodeStatusEnabled, common.GetTimestamp())
 		case strconv.Itoa(common.RedemptionCodeStatusEnabled):
-			query = query.Where(
-				"status = ? AND (expired_time = 0 OR expired_time >= ?)",
-				common.RedemptionCodeStatusEnabled,
-				now,
-			)
-		case strconv.Itoa(common.RedemptionCodeStatusDisabled):
-			query = query.Where("status = ?", common.RedemptionCodeStatusDisabled)
-		case strconv.Itoa(common.RedemptionCodeStatusUsed):
-			query = query.Where("status = ?", common.RedemptionCodeStatusUsed)
+			query = query.Where("status = ? AND (expired_time = 0 OR expired_time >= ?)", common.RedemptionCodeStatusEnabled, common.GetTimestamp())
+		case strconv.Itoa(common.RedemptionCodeStatusDisabled), strconv.Itoa(common.RedemptionCodeStatusUsed):
+			query = query.Where("status = ?", status)
 		}
-	}
-
-	// Get total count
-	err = query.Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// Get paginated data
-	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return redemptions, total, nil
+		if err := query.Count(&total).Error; err != nil {
+			return err
+		}
+		return query.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
+	})
+	return
 }
 
 func GetRedemptionById(id int) (*Redemption, error) {
-	if id == 0 {
-		return nil, errors.New("id 为空！")
-	}
-	redemption := Redemption{Id: id}
-	var err error = nil
-	err = DB.First(&redemption, "id = ?", id).Error
+	var redemption Redemption
+	err := DB.First(&redemption, "id = ?", id).Error
 	return &redemption, err
 }
 
-func Redeem(key string, userId int) (quota int, err error) {
-	if key == "" {
-		return 0, errors.New("未提供兑换码")
+// applyDenomination resolves the tier on the server so every code issued for it has the same face value.
+func (redemption *Redemption) applyDenomination(tx *gorm.DB) error {
+	redemption.Name = strings.TrimSpace(redemption.Name)
+	if redemption.CategoryId != 0 {
+		category, err := getRedemptionCategoryForUpdate(tx, redemption.CategoryId)
+		if err != nil {
+			return err
+		}
+		redemption.Quota = category.Quota
+		if redemption.Name == "" {
+			redemption.Name = category.Name
+		}
 	}
-	if userId == 0 {
-		return 0, errors.New("无效的 user id")
+	if redemption.Name == "" || utf8.RuneCountInString(redemption.Name) > 20 {
+		return ErrRedemptionName
+	}
+	if redemption.Quota <= 0 || redemption.Quota >= common.MaxQuota {
+		return ErrRedemptionQuota
+	}
+	return nil
+}
+
+func (redemption *Redemption) IssueBatch() ([]string, error) {
+	if redemption.Count < 1 || redemption.Count > 100 {
+		return nil, errors.New("invalid redemption batch size")
+	}
+	keys := make([]string, redemption.Count)
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := redemption.applyDenomination(tx); err != nil {
+			return err
+		}
+		now := common.GetTimestamp()
+		codes := make([]Redemption, redemption.Count)
+		for i := range codes {
+			keys[i] = common.GetUUID()
+			codes[i] = Redemption{
+				UserId:      redemption.UserId,
+				Key:         keys[i],
+				Name:        redemption.Name,
+				Quota:       redemption.Quota,
+				CategoryId:  redemption.CategoryId,
+				CreatedTime: now,
+				ExpiredTime: redemption.ExpiredTime,
+			}
+		}
+		// Keep each statement below SQLite's parameter limit, including on older installations.
+		return tx.CreateInBatches(&codes, 50).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+func UpdateRedemptionDetails(id int, categoryId *int, name string, quota int, expiredTime int64, status *int) (*Redemption, error) {
+	var redemption Redemption
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where("id = ?", id).First(&redemption).Error; err != nil {
+			return err
+		}
+		if redemption.Status == common.RedemptionCodeStatusUsed {
+			return ErrRedemptionAlreadyUsed
+		}
+		if status != nil {
+			if *status != common.RedemptionCodeStatusEnabled && *status != common.RedemptionCodeStatusDisabled {
+				return errors.New("invalid redemption status")
+			}
+			return tx.Model(&redemption).Update("status", *status).Error
+		}
+		if categoryId != nil {
+			redemption.CategoryId = *categoryId
+		}
+		redemption.Name, redemption.Quota, redemption.ExpiredTime = name, quota, expiredTime
+		if err := redemption.applyDenomination(tx); err != nil {
+			return err
+		}
+		return tx.Model(&redemption).Select("name", "quota", "category_id", "expired_time").Updates(&redemption).Error
+	})
+	return &redemption, err
+}
+
+func Redeem(key string, userId int) (*Redemption, error) {
+	if key == "" || userId <= 0 {
+		return nil, ErrRedeemFailed
 	}
 	redemption := &Redemption{}
-
-	keyCol := "`key`"
-	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		keyCol = `"key"`
-	}
 	common.RandomSleep()
-	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := lockForUpdate(tx).Where(keyCol+" = ?", key).First(redemption).Error
-		if err != nil {
-			return errors.New("无效的兑换码")
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(redemption).Error; err != nil {
+			return err
 		}
 		if redemption.Status != common.RedemptionCodeStatusEnabled {
-			return errors.New("该兑换码已被使用")
+			return ErrRedemptionAlreadyUsed
 		}
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
 		}
-		// Compare-and-swap on status: only the transaction that flips
-		// enabled -> used may credit quota, so a concurrent redeem of the
-		// same code loses here even without a row lock (e.g. on SQLite).
-		result := tx.Model(&Redemption{}).
-			Where("id = ? AND status = ?", redemption.Id, common.RedemptionCodeStatusEnabled).
+		bonus := 0
+		if redemption.CategoryId != 0 {
+			category, err := getRedemptionCategoryForUpdate(tx, redemption.CategoryId)
+			if err != nil {
+				return err
+			}
+			bonus, err = category.bonusQuota(redemption.Quota)
+			if err != nil {
+				return err
+			}
+		}
+		// Only the transaction that claims the code may credit either balance.
+		result := tx.Model(redemption).Where("status = ?", common.RedemptionCodeStatusEnabled).
 			Updates(map[string]interface{}{
 				"redeemed_time": common.GetTimestamp(),
 				"status":        common.RedemptionCodeStatusUsed,
 				"used_user_id":  userId,
+				"bonus_quota":   bonus,
 			})
 		if result.Error != nil {
 			return result.Error
 		}
-		if result.RowsAffected == 0 {
-			return errors.New("该兑换码已被使用")
+		if result.RowsAffected != 1 {
+			return ErrRedemptionAlreadyUsed
 		}
-		if err := tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error; err != nil {
+		if err := creditTopUpQuota(tx, userId, redemption.Quota, nil); err != nil {
 			return err
 		}
-		// Referral rewards are recorded against this code's id, so a repeated
-		// redeem attempt can never pay an invitee twice.
+		if bonus > 0 {
+			if _, err := grantBonusTx(tx, userId, int64(bonus), 0, BonusSourceRedemption, fmt.Sprintf("兑换码 #%d", redemption.Id)); err != nil {
+				return err
+			}
+		}
 		return RecordReferralRedemption(tx, userId, redemption.Id, int64(redemption.Quota))
 	})
 	if err != nil {
 		common.SysError("redemption failed: " + err.Error())
-		return 0, ErrRedeemFailed
+		return nil, ErrRedeemFailed
 	}
 	syncCreditUserQuotaCache(userId, redemption.Quota, "redemption")
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
-	return redemption.Quota, nil
-}
-
-func (redemption *Redemption) Insert() error {
-	var err error
-	err = DB.Create(redemption).Error
-	return err
-}
-
-func (redemption *Redemption) SelectUpdate() error {
-	// This can update zero values
-	return DB.Model(redemption).Select("redeemed_time", "status").Updates(redemption).Error
-}
-
-// Update Make sure your token's fields is completed, because this will update non-zero values
-func (redemption *Redemption) Update() error {
-	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
-	return err
-}
-
-func (redemption *Redemption) Delete() error {
-	var err error
-	err = DB.Delete(redemption).Error
-	return err
-}
-
-func DeleteRedemptionById(id int) (err error) {
-	if id == 0 {
-		return errors.New("id 为空！")
+	message := fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id)
+	if redemption.BonusQuota > 0 {
+		message += fmt.Sprintf("，额外赠金 %s", logger.LogQuota(redemption.BonusQuota))
 	}
-	redemption := Redemption{Id: id}
-	err = DB.Where(redemption).First(&redemption).Error
+	RecordLog(userId, LogTypeTopup, message)
+	return redemption, nil
+}
+
+func DeleteRedemptionById(id int) error {
+	redemption, err := GetRedemptionById(id)
 	if err != nil {
 		return err
 	}
-	return redemption.Delete()
+	return DB.Delete(redemption).Error
 }
 
-func DeleteInvalidRedemptions() (int64, error) {
-	now := common.GetTimestamp()
-	result := DB.Where("status IN ? OR (status = ? AND expired_time != 0 AND expired_time < ?)", []int{common.RedemptionCodeStatusUsed, common.RedemptionCodeStatusDisabled}, common.RedemptionCodeStatusEnabled, now).Delete(&Redemption{})
+func DeleteInvalidRedemptions(categoryId *int) (int64, error) {
+	query := DB.Where("(status IN ? OR (status = ? AND expired_time != 0 AND expired_time < ?))", []int{common.RedemptionCodeStatusUsed, common.RedemptionCodeStatusDisabled}, common.RedemptionCodeStatusEnabled, common.GetTimestamp())
+	if categoryId != nil {
+		query = query.Where("category_id = ?", *categoryId)
+	}
+	result := query.Delete(&Redemption{})
 	return result.RowsAffected, result.Error
 }

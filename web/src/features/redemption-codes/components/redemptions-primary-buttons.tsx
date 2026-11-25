@@ -30,7 +30,7 @@ import { useRedemptions } from './redemptions-provider'
 
 export function RedemptionsPrimaryButtons() {
   const { t } = useTranslation()
-  const { setOpen, triggerRefresh } = useRedemptions()
+  const { categoryId, setOpen, triggerRefresh } = useRedemptions()
   const [showDeleteInvalidConfirm, setShowDeleteInvalidConfirm] =
     useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -38,7 +38,7 @@ export function RedemptionsPrimaryButtons() {
   const handleDeleteInvalid = async () => {
     setIsDeleting(true)
     try {
-      const result = await deleteInvalidRedemptions()
+      const result = await deleteInvalidRedemptions(categoryId)
       if (result.success) {
         const count = result.data || 0
         toast.success(
@@ -62,14 +62,17 @@ export function RedemptionsPrimaryButtons() {
         <Button
           size='sm'
           variant='outline'
+          className='max-sm:size-8 max-sm:px-0'
+          aria-label={t('Delete Invalid')}
+          title={t('Delete Invalid')}
           onClick={() => setShowDeleteInvalidConfirm(true)}
         >
           <Trash2 className='text-destructive h-4 w-4' />
-          {t('Delete Invalid')}
+          <span className='hidden sm:inline'>{t('Delete Invalid')}</span>
         </Button>
         <Button size='sm' onClick={() => setOpen('create')}>
           <Plus className='h-4 w-4' />
-          {t('Create Code')}
+          {t('Generate codes')}
         </Button>
       </div>
 
@@ -83,10 +86,13 @@ export function RedemptionsPrimaryButtons() {
         title={t('Delete Invalid Redemption Codes?')}
         desc={
           <>
-            {t('This will delete all')} <strong>{t('used')}</strong>,{' '}
-            <strong>{t('disabled')}</strong>
-            {t(', and')} <strong>{t('expired')}</strong>{' '}
-            {t('redemption codes.')}
+            {categoryId === undefined
+              ? t(
+                  'This deletes used, disabled and expired codes in all categories.'
+                )
+              : t(
+                  'This deletes used, disabled and expired codes in the selected category.'
+                )}
             <br />
             {t('This action cannot be undone.')}
           </>

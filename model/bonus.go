@@ -27,9 +27,10 @@ const (
 
 // Bonus grant sources.
 const (
-	BonusSourceAdmin  = "admin"
-	BonusSourceSignup = "signup"
-	BonusSourceAll    = "admin_all"
+	BonusSourceAdmin      = "admin"
+	BonusSourceSignup     = "signup"
+	BonusSourceAll        = "admin_all"
+	BonusSourceRedemption = "redemption"
 	// BonusSourceReferral marks quota granted by the referral program: the
 	// invitee's first top-up reward and the inviter's commission.
 	BonusSourceReferral = "referral"

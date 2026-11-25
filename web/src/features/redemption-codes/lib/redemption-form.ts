@@ -33,22 +33,34 @@ import type { RedemptionFormData, Redemption } from '../types'
 
 export function getRedemptionFormSchema(t: TFunction) {
   const msg = getRedemptionFormErrorMessages(t)
-  return z.object({
-    name: z
-      .string()
-      .min(REDEMPTION_VALIDATION.NAME_MIN_LENGTH, msg.NAME_LENGTH_INVALID)
-      .max(REDEMPTION_VALIDATION.NAME_MAX_LENGTH, msg.NAME_LENGTH_INVALID),
-    quota_dollars: z.number().min(0, t('Quota must be zero or greater')),
-    expired_time: z.date().optional(),
-    count: z
-      .number()
-      .min(REDEMPTION_VALIDATION.COUNT_MIN, msg.COUNT_INVALID)
-      .max(REDEMPTION_VALIDATION.COUNT_MAX, msg.COUNT_INVALID)
-      .optional(),
-  })
+  return z
+    .object({
+      category_id: z.number().int().nonnegative(),
+      name: z
+        .string()
+        .min(REDEMPTION_VALIDATION.NAME_MIN_LENGTH, msg.NAME_LENGTH_INVALID)
+        .max(REDEMPTION_VALIDATION.NAME_MAX_LENGTH, msg.NAME_LENGTH_INVALID),
+      quota_dollars: z.number(),
+      expired_time: z.date().optional(),
+      count: z
+        .number(msg.COUNT_INVALID)
+        .int(msg.COUNT_INVALID)
+        .min(REDEMPTION_VALIDATION.COUNT_MIN, msg.COUNT_INVALID)
+        .max(REDEMPTION_VALIDATION.COUNT_MAX, msg.COUNT_INVALID)
+        .optional(),
+    })
+    .refine(
+      (values) => {
+        if (values.category_id > 0) return true
+        const quota = parseQuotaFromDollars(values.quota_dollars)
+        return quota > 0 && quota <= REDEMPTION_VALIDATION.MAX_QUOTA
+      },
+      { path: ['quota_dollars'], message: t('Enter a valid face value') }
+    )
 }
 
 export type RedemptionFormValues = {
+  category_id: number
   name: string
   quota_dollars: number
   expired_time?: Date
@@ -60,6 +72,7 @@ export type RedemptionFormValues = {
 // ============================================================================
 
 export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
+  category_id: 0,
   name: '',
   quota_dollars: 10,
   expired_time: undefined,
@@ -77,6 +90,7 @@ export function transformFormDataToPayload(
   data: RedemptionFormValues
 ): RedemptionFormData {
   return {
+    category_id: data.category_id,
     name: data.name,
     quota: parseQuotaFromDollars(data.quota_dollars),
     expired_time: data.expired_time
@@ -93,6 +107,7 @@ export function transformRedemptionToFormDefaults(
   redemption: Redemption
 ): RedemptionFormValues {
   return {
+    category_id: redemption.category_id ?? 0,
     name: redemption.name,
     quota_dollars: quotaUnitsToEditableAmount(redemption.quota),
     expired_time:

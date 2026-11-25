@@ -316,7 +316,11 @@ func SetApiRouter(router *gin.Engine) {
 		redemptionRoute := apiRouter.Group("/redemption")
 		redemptionRoute.Use(middleware.AdminAuth())
 		{
-			redemptionRoute.GET("/", controller.GetAllRedemptions)
+			redemptionRoute.GET("/", controller.SearchRedemptions)
+			redemptionRoute.GET("/categories", controller.GetRedemptionCategories)
+			redemptionRoute.POST("/categories", controller.SaveRedemptionCategory)
+			redemptionRoute.PUT("/categories/:id", controller.SaveRedemptionCategory)
+			redemptionRoute.DELETE("/categories/:id", controller.DeleteRedemptionCategory)
 			redemptionRoute.GET("/search", controller.SearchRedemptions)
 			redemptionRoute.GET("/:id", controller.GetRedemption)
 			redemptionRoute.POST("/", controller.AddRedemption)

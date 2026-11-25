@@ -29,6 +29,8 @@ export const redemptionSchema = z.object({
   key: z.string(),
   status: z.number(), // 1: enabled, 2: disabled, 3: used
   quota: z.number(),
+  category_id: z.number().optional(),
+  bonus_quota: z.number().optional(),
   created_time: z.number(),
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
@@ -45,6 +47,13 @@ export interface ApiResponse<T = unknown> {
   success: boolean
   message?: string
   data?: T
+}
+
+export interface RedemptionCategory {
+  id: number
+  name: string
+  quota: number
+  bonus_rate_bps: number
 }
 
 export interface GetRedemptionsParams {
@@ -64,6 +73,7 @@ export interface GetRedemptionsResponse {
 }
 
 export interface SearchRedemptionsParams {
+  category_id?: number
   keyword?: string
   status?: string
   p?: number
@@ -75,6 +85,7 @@ export interface RedemptionFormData {
   name: string
   quota: number
   expired_time: number
+  category_id?: number
   count?: number // Only for create
   status?: number // Only for status update
 }

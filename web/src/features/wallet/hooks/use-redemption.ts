@@ -20,7 +20,6 @@ import i18next from 'i18next'
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 
-import { getSelf } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
 
 import { redeemTopupCode } from '../api'
@@ -45,11 +44,18 @@ export function useRedemption() {
       if (response.success && response.data) {
         const quotaAdded = response.data
         toast.success(
-          i18next.t('Redemption successful! Added: {{quota}}', {
-            quota: formatQuota(quotaAdded),
-          })
+          response.bonus_quota
+            ? i18next.t(
+                'Added {{quota}} to your balance and {{bonus}} in bonus credit.',
+                {
+                  quota: formatQuota(quotaAdded),
+                  bonus: formatQuota(response.bonus_quota),
+                }
+              )
+            : i18next.t('Redemption successful! Added: {{quota}}', {
+                quota: formatQuota(quotaAdded),
+              })
         )
-        await getSelf()
         return true
       }
 

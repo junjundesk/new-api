@@ -96,7 +96,7 @@ export function BonusBalanceCard(props: BonusBalanceCardProps) {
     return () => {
       cancelled = true
     }
-  }, [hasBonus])
+  }, [hasBonus, total])
 
   if (!hasBonus) {
     return null

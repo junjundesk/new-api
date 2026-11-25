@@ -34,9 +34,14 @@ import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import { useRedemptions } from './redemptions-provider'
 
 export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
   const { t } = useTranslation()
+  const { categories, categoryId } = useRedemptions()
+  const categoryNames = new Map(
+    categories.map((category) => [category.id, category.name])
+  )
   return [
     {
       id: 'select',
@@ -76,9 +81,20 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       accessorKey: 'name',
       header: t('Name'),
       meta: { mobileTitle: true },
-      cell: ({ row }) => (
-        <span className='font-medium'>{row.getValue('name')}</span>
-      ),
+      cell: ({ row }) => {
+        const categoryName =
+          categoryNames.get(row.original.category_id ?? 0) ?? t('Uncategorized')
+        return (
+          <div className='grid gap-0.5'>
+            <span className='font-medium'>{row.original.name}</span>
+            {categoryId === undefined && categoryName !== row.original.name && (
+              <span className='text-muted-foreground text-xs'>
+                {categoryName}
+              </span>
+            )}
+          </div>
+        )
+      },
       size: 180,
     },
     {
@@ -133,13 +149,28 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       size: 120,
     },
     {
+      accessorKey: 'quota',
+      header: t('Face value'),
+      cell: ({ row }) => (
+        <div className='grid gap-0.5 tabular-nums'>
+          <span className='font-medium'>{formatQuota(row.original.quota)}</span>
+          {!!row.original.bonus_quota && (
+            <span className='text-muted-foreground text-xs'>
+              {t('Bonus granted')} +{formatQuota(row.original.bonus_quota)}
+            </span>
+          )}
+        </div>
+      ),
+      size: 130,
+    },
+    {
       id: 'code',
       accessorKey: 'key',
       header: t('Code'),
       cell: function CodeCell({ row }) {
         const redemption = row.original
         const key = redemption.key
-        const maskedKey = `${key.slice(0, 8)}${'*'.repeat(16)}${key.slice(-8)}`
+        const maskedKey = `${key.slice(0, 8)}••••••${key.slice(-8)}`
 
         return (
           <MaskedValueDisplay
@@ -152,23 +183,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         )
       },
       enableSorting: false,
-      size: 320,
-    },
-    {
-      accessorKey: 'quota',
-      header: t('Quota'),
-      cell: ({ row }) => {
-        const quota = row.getValue('quota') as number
-        return (
-          <StatusBadge
-            label={formatQuota(quota)}
-            variant='neutral'
-            copyable={false}
-            className='-ml-1.5'
-          />
-        )
-      },
-      size: 120,
+      size: 220,
     },
     {
       accessorKey: 'created_time',

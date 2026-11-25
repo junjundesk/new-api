@@ -1,37 +1,106 @@
 package controller
 
 import (
-	"net/http"
+	"errors"
 	"strconv"
-	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
-
 	"github.com/gin-gonic/gin"
 )
 
-func GetAllRedemptions(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+func redemptionAdminError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, model.ErrRedemptionName):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionNameLength)
+	case errors.Is(err, model.ErrRedemptionQuota):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionQuotaInvalid)
+	case errors.Is(err, model.ErrRedemptionBonusRate):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionBonusRateInvalid)
+	case errors.Is(err, model.ErrRedemptionCategory):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryMissing)
+	case errors.Is(err, model.ErrRedemptionCategoryName):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryDuplicate)
+	case errors.Is(err, model.ErrRedemptionCategoryInUse):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryInUse)
+	case errors.Is(err, model.ErrRedemptionAlreadyUsed):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionUsed)
+	default:
+		common.ApiError(c, err)
+	}
+}
+
+func GetRedemptionCategories(c *gin.Context) {
+	categories, err := model.GetRedemptionCategories()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(redemptions)
-	common.ApiSuccess(c, pageInfo)
-	return
+	common.ApiSuccess(c, categories)
+}
+
+func SaveRedemptionCategory(c *gin.Context) {
+	var req struct {
+		Name         string `json:"name"`
+		Quota        int    `json:"quota"`
+		BonusRateBps int    `json:"bonus_rate_bps"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	category := model.RedemptionCategory{Name: req.Name, Quota: req.Quota, BonusRateBps: req.BonusRateBps}
+	if raw := c.Param("id"); raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 {
+			common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryMissing)
+			return
+		}
+		category.Id = id
+	}
+	if err := category.SaveSettings(); err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	common.ApiSuccess(c, category)
+}
+
+func DeleteRedemptionCategory(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryMissing)
+		return
+	}
+	if err := model.DeleteRedemptionCategory(id); err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func redemptionCategoryFilter(c *gin.Context) (*int, bool) {
+	raw, ok := c.GetQuery("category_id")
+	if !ok {
+		return nil, true
+	}
+	id, err := strconv.Atoi(raw)
+	if err != nil || id < 0 {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryMissing)
+		return nil, false
+	}
+	return &id, true
 }
 
 func SearchRedemptions(c *gin.Context) {
-	keyword := c.Query("keyword")
-	status := c.Query("status")
+	categoryId, ok := redemptionCategoryFilter(c)
+	if !ok {
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.SearchRedemptions(keyword, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	redemptions, total, err := model.SearchRedemptions(c.Query("keyword"), c.Query("status"), categoryId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -39,7 +108,6 @@ func SearchRedemptions(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(redemptions)
 	common.ApiSuccess(c, pageInfo)
-	return
 }
 
 func GetRedemption(c *gin.Context) {
@@ -53,12 +121,7 @@ func GetRedemption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    redemption,
-	})
-	return
+	common.ApiSuccess(c, redemption)
 }
 
 func AddRedemption(c *gin.Context) {
@@ -66,15 +129,9 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
 		return
 	}
-
-	redemption := model.Redemption{}
-	err := c.ShouldBindJSON(&redemption)
-	if err != nil {
+	var redemption model.Redemption
+	if err := c.ShouldBindJSON(&redemption); err != nil {
 		common.ApiError(c, err)
-		return
-	}
-	if utf8.RuneCountInString(redemption.Name) == 0 || utf8.RuneCountInString(redemption.Name) > 20 {
-		common.ApiErrorI18n(c, i18n.MsgRedemptionNameLength)
 		return
 	}
 	if redemption.Count <= 0 {
@@ -85,116 +142,68 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCountMax)
 		return
 	}
-	if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionExpireTimeInvalid)
 		return
 	}
-	var keys []string
-	for i := 0; i < redemption.Count; i++ {
-		key := common.GetUUID()
-		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
-		}
-		err = cleanRedemption.Insert()
-		if err != nil {
-			common.SysError("failed to insert redemption: " + err.Error())
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": i18n.T(c, i18n.MsgRedemptionCreateFailed),
-				"data":    keys,
-			})
-			return
-		}
-		keys = append(keys, key)
+	redemption.UserId = c.GetInt("id")
+	keys, err := redemption.IssueBatch()
+	if err != nil {
+		redemptionAdminError(c, err)
+		return
 	}
 	recordManageAudit(c, "redemption.create", map[string]interface{}{
-		"name":  redemption.Name,
-		"count": redemption.Count,
-		"quota": logger.LogQuota(redemption.Quota),
+		"name": redemption.Name, "count": len(keys), "quota": logger.LogQuota(redemption.Quota), "category_id": redemption.CategoryId,
 	})
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    keys,
-	})
-	return
+	common.ApiSuccess(c, keys)
 }
 
 func DeleteRedemption(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	err := model.DeleteRedemptionById(id)
-	if err != nil {
+	if err := model.DeleteRedemptionById(id); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-	})
-	return
+	common.ApiSuccess(c, nil)
 }
 
 func UpdateRedemption(c *gin.Context) {
-	statusOnly := c.Query("status_only")
-	redemption := model.Redemption{}
-	err := c.ShouldBindJSON(&redemption)
-	if err != nil {
+	var req struct {
+		Id          int    `json:"id"`
+		Name        string `json:"name"`
+		Quota       int    `json:"quota"`
+		CategoryId  *int   `json:"category_id"`
+		Status      int    `json:"status"`
+		ExpiredTime int64  `json:"expired_time"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	cleanRedemption, err := model.GetRedemptionById(redemption.Id)
-	if err != nil {
-		common.ApiError(c, err)
+	var status *int
+	if c.Query("status_only") != "" {
+		status = &req.Status
+	} else if req.ExpiredTime != 0 && req.ExpiredTime < common.GetTimestamp() {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionExpireTimeInvalid)
 		return
 	}
-	if statusOnly == "" {
-		if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
-			c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
-			return
-		}
-		// If you add more fields, please also update redemption.Update()
-		cleanRedemption.Name = redemption.Name
-		cleanRedemption.Quota = redemption.Quota
-		cleanRedemption.ExpiredTime = redemption.ExpiredTime
-	}
-	if statusOnly != "" {
-		cleanRedemption.Status = redemption.Status
-	}
-	err = cleanRedemption.Update()
+	redemption, err := model.UpdateRedemptionDetails(req.Id, req.CategoryId, req.Name, req.Quota, req.ExpiredTime, status)
 	if err != nil {
-		common.ApiError(c, err)
+		redemptionAdminError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    cleanRedemption,
-	})
-	return
+	common.ApiSuccess(c, redemption)
 }
 
 func DeleteInvalidRedemption(c *gin.Context) {
-	rows, err := model.DeleteInvalidRedemptions()
+	categoryId, ok := redemptionCategoryFilter(c)
+	if !ok {
+		return
+	}
+	rows, err := model.DeleteInvalidRedemptions(categoryId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    rows,
-	})
-	return
-}
-
-func validateExpiredTime(c *gin.Context, expired int64) (bool, string) {
-	if expired != 0 && expired < common.GetTimestamp() {
-		return false, i18n.T(c, i18n.MsgRedemptionExpireTimeInvalid)
-	}
-	return true, ""
+	common.ApiSuccess(c, rows)
 }
