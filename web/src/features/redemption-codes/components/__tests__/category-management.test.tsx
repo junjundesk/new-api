@@ -38,8 +38,9 @@ import { api } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { getRedemptionCategories } from '../../api'
+import { getRedemptionBonusRules, getRedemptionCategories } from '../../api'
 import type { RedemptionCategory } from '../../types'
+import { RedemptionBonusRulesDialog } from '../redemption-bonus-rules-dialog'
 import { RedemptionCategoryPanel } from '../redemption-category-panel'
 import { RedemptionsProvider } from '../redemptions-provider'
 
@@ -47,7 +48,7 @@ const i18n = createInstance()
 await i18n
   .use(initReactI18next)
   .init({ lng: 'en', resources: { en: { translation: {} } } })
-const tier = { id: 7, name: 'Standard', quota: 50000000, bonus_rate_bps: 200 }
+const tier = { id: 7, name: 'Standard', quota: 50000000 }
 const previousConfig = useSystemConfigStore.getState().config
 
 function CategoryNavigation() {
@@ -56,16 +57,45 @@ function CategoryNavigation() {
     queryKey: ['redemption-categories'],
     queryFn: getRedemptionCategories,
   })
+  const bonusRules = useQuery({
+    queryKey: ['redemption-bonus-rules'],
+    queryFn: getRedemptionBonusRules,
+  })
+  const [showRules, setShowRules] = useState(false)
   return (
-    <RedemptionsProvider categories={categories.data} categoryId={selected}>
+    <RedemptionsProvider
+      categories={categories.data}
+      bonusRules={bonusRules.data}
+      categoryId={selected}
+    >
       <RedemptionCategoryPanel
         isLoading={categories.isLoading}
         isError={categories.isError}
         retry={() => void categories.refetch()}
         onSelect={select}
       />
+      <button type='button' onClick={() => setShowRules(true)}>
+        Open bonus rules
+      </button>
+      {showRules && (
+        <RedemptionBonusRulesDialog onClose={() => setShowRules(false)} />
+      )}
     </RedemptionsProvider>
   )
+}
+
+function mockGet(data: {
+  categories: () => RedemptionCategory[]
+  rules?: () => unknown[]
+}) {
+  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: url.includes('bonus-rules')
+        ? (data.rules?.() ?? [])
+        : data.categories(),
+    },
+  }))
 }
 
 function renderCategories() {
@@ -98,11 +128,9 @@ afterEach(() => {
   useSystemConfigStore.setState({ config: previousConfig })
 })
 
-test('creating a tier previews its bonus and selects the saved category in both navigation controls', async () => {
+test('creating a category selects it in both navigation controls without asking for a bonus', async () => {
   let categories: RedemptionCategory[] = []
-  vi.spyOn(api, 'get').mockImplementation(async () => ({
-    data: { success: true, data: categories },
-  }))
+  mockGet({ categories: () => categories })
   const save = vi.spyOn(api, 'post').mockImplementation(async () => {
     categories = [tier]
     return { data: { success: true, data: tier } }
@@ -111,17 +139,14 @@ test('creating a tier previews its bonus and selects the saved category in both 
   await screen.findByText('No categories yet')
   await user.click(screen.getByRole('button', { name: 'New category' }))
   const dialog = within(screen.getByRole('dialog'))
+  expect(dialog.queryByLabelText(/Bonus/)).toBeNull()
   await user.type(dialog.getByLabelText('Category name'), 'Standard')
-  const percent = dialog.getByLabelText('Bonus rate (%)')
-  await user.clear(percent)
-  await user.type(percent, '2')
-  expect(dialog.getByRole('status').textContent).toBe(formatQuota(1000000))
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(save.mock.calls[0]?.[1]).toMatchObject({
+  expect(save.mock.calls[0]?.[1]).toEqual({
+    id: undefined,
     name: 'Standard',
     quota: 50000000,
-    bonus_rate_bps: 200,
   })
   expect(
     screen.getByRole('button', { name: /Standard/, pressed: true })
@@ -136,38 +161,69 @@ test('creating a tier previews its bonus and selects the saved category in both 
   ).toBeDefined()
 })
 
-test('a rejected rate change keeps the form open and a successful retry can turn the bonus off', async () => {
-  let saved = tier
-  vi.spyOn(api, 'get').mockImplementation(async () => ({
-    data: { success: true, data: [saved] },
-  }))
+test('bonus rules preview face value plus bonus and save the whole edited rule set', async () => {
+  const premium = { id: 8, name: 'Premium', quota: 100000000 }
+  let rules = [{ category_id: 7, bonus_rate_bps: 200 }]
+  mockGet({ categories: () => [tier, premium], rules: () => rules })
   const update = vi
     .spyOn(api, 'put')
     .mockResolvedValueOnce({
       data: { success: false, message: 'Please retry' },
     })
-    .mockImplementation(async () => {
-      saved = { ...tier, bonus_rate_bps: 0 }
-      return { data: { success: true, data: saved } }
+    .mockImplementation(async (_url, body) => {
+      rules = (body as { rules: typeof rules }).rules
+      return { data: { success: true, data: rules } }
     })
   const user = renderCategories()
-  await user.click(await screen.findByRole('button', { name: 'Edit Standard' }))
-  const dialog = within(screen.getByRole('dialog'))
   expect(
-    dialog.getByLabelText<HTMLInputElement>('Face value (USD)').readOnly
+    (await screen.findByRole('button', { name: /^Standard/ })).textContent
+  ).toContain('+2%')
+  await user.click(screen.getByRole('button', { name: 'Open bonus rules' }))
+  const dialog = within(screen.getByRole('dialog'))
+  const previews = () =>
+    dialog.getAllByRole('status').map((entry) => entry.textContent)
+  expect(previews()).toEqual([
+    `${formatQuota(50000000)}+${formatQuota(1000000)}=${formatQuota(51000000)}`,
+  ])
+
+  await user.click(dialog.getByRole('button', { name: 'Add rule' }))
+  expect(
+    dialog.getByRole<HTMLButtonElement>('button', { name: 'Add rule' }).disabled
   ).toBe(true)
-  await user.clear(dialog.getByLabelText('Bonus rate (%)'))
-  await user.type(dialog.getByLabelText('Bonus rate (%)'), '0')
+  const percents = dialog.getAllByLabelText('Bonus rate')
+  await user.clear(percents[1] as HTMLElement)
+  await user.type(percents[1] as HTMLElement, '12.5')
+  expect(previews()).toEqual([
+    `${formatQuota(50000000)}+${formatQuota(1000000)}=${formatQuota(51000000)}`,
+    `${formatQuota(100000000)}+${formatQuota(12500000)}=${formatQuota(112500000)}`,
+  ])
+
+  await user.selectOptions(
+    dialog.getAllByLabelText('Category')[1] as HTMLElement,
+    '7'
+  )
+  await user.click(dialog.getByRole('button', { name: 'Save' }))
+  expect(dialog.getByText('This category already has a rule')).toBeDefined()
+  expect(update).not.toHaveBeenCalled()
+
+  await user.click(
+    dialog.getAllByRole('button', { name: 'Delete rule' })[0] as HTMLElement
+  )
+  await user.selectOptions(dialog.getByLabelText('Category'), '8')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   expect((await dialog.findByRole('alert')).textContent).toBe('Please retry')
   await user.click(dialog.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(update.mock.lastCall?.[0]).toBe('/api/redemption/categories/7')
-  expect(update.mock.lastCall?.[1]).toMatchObject({
-    quota: 50000000,
-    bonus_rate_bps: 0,
+  expect(update.mock.lastCall?.[0]).toBe('/api/redemption/bonus-rules')
+  expect(update.mock.lastCall?.[1]).toEqual({
+    rules: [{ category_id: 8, bonus_rate_bps: 1250 }],
   })
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: /^Premium/ }).textContent
+    ).toContain('+12.5%')
+  )
   expect(
-    screen.getByRole('button', { name: /Standard/, pressed: true }).textContent
-  ).toContain('+0%')
+    screen.getByRole('button', { name: /^Standard/ }).textContent
+  ).not.toContain('%')
 })

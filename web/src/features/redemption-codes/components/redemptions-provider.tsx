@@ -22,12 +22,14 @@ import useDialogState from '@/hooks/use-dialog'
 
 import type {
   Redemption,
+  RedemptionBonusRule,
   RedemptionCategory,
   RedemptionsDialogType,
 } from '../types'
 
 type RedemptionsContextType = {
   categories: RedemptionCategory[]
+  bonusRules: RedemptionBonusRule[]
   categoryId?: number
   open: RedemptionsDialogType | null
   setOpen: (str: RedemptionsDialogType | null) => void
@@ -44,10 +46,12 @@ const RedemptionsContext = React.createContext<RedemptionsContextType | null>(
 export function RedemptionsProvider({
   children,
   categories = [],
+  bonusRules = [],
   categoryId,
 }: {
   children: React.ReactNode
   categories?: RedemptionCategory[]
+  bonusRules?: RedemptionBonusRule[]
   categoryId?: number
 }) {
   const [open, setOpen] = useDialogState<RedemptionsDialogType>(null)
@@ -60,6 +64,7 @@ export function RedemptionsProvider({
     <RedemptionsContext
       value={{
         categories,
+        bonusRules,
         categoryId,
         open,
         setOpen,

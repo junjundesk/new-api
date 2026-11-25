@@ -74,6 +74,7 @@ const (
 	MsgRedemptionNameLength        = "redemption.name_length"
 	MsgRedemptionQuotaInvalid      = "redemption.quota_invalid"
 	MsgRedemptionBonusRateInvalid  = "redemption.bonus_rate_invalid"
+	MsgRedemptionBonusRuleConflict = "redemption.bonus_rule_conflict"
 	MsgRedemptionCategoryMissing   = "redemption.category_missing"
 	MsgRedemptionCategoryDuplicate = "redemption.category_duplicate"
 	MsgRedemptionCategoryInUse     = "redemption.category_in_use"

@@ -138,9 +138,8 @@ function drawerTree(currentRow?: Redemption, categoryId?: number) {
     <I18nextProvider i18n={i18n}>
       <RedemptionsProvider
         categoryId={categoryId}
-        categories={[
-          { id: 7, name: 'Standard', quota: 50000000, bonus_rate_bps: 200 },
-        ]}
+        categories={[{ id: 7, name: 'Standard', quota: 50000000 }]}
+        bonusRules={[{ category_id: 7, bonus_rate_bps: 200 }]}
       >
         <RedemptionsMutateDrawer
           open

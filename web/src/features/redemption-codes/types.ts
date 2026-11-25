@@ -53,7 +53,11 @@ export interface RedemptionCategory {
   id: number
   name: string
   quota: number
-  bonus_rate_bps: number
+}
+
+export interface RedemptionBonusRule {
+  category_id: number
+  bonus_rate_bps: number // 100 basis points = 1%
 }
 
 export interface GetRedemptionsParams {

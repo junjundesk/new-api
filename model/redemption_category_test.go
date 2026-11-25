@@ -10,12 +10,13 @@ import (
 
 func TestCategoryBatchUsesLiveBonusAndKeepsPreviousGrants(t *testing.T) {
 	userId, _ := setupRedeemFixture(t, 100)
-	require.NoError(t, DB.AutoMigrate(&RedemptionCategory{}))
-	category := RedemptionCategory{Name: "100 元档", Quota: 10000, BonusRateBps: 200}
+	require.NoError(t, DB.AutoMigrate(&RedemptionCategory{}, &RedemptionBonusRule{}))
+	category := RedemptionCategory{Name: "100 元档", Quota: 10000}
 	require.NoError(t, category.SaveSettings())
 	categoryId := category.Id
 	t.Cleanup(func() {
 		require.NoError(t, DB.Delete(&RedemptionCategory{}, categoryId).Error)
+		require.NoError(t, DB.Where("category_id = ?", categoryId).Delete(&RedemptionBonusRule{}).Error)
 		require.NoError(t, DB.Where("user_id = ?", userId).Delete(&UserBonusGrant{}).Error)
 	})
 	issued := Redemption{UserId: userId, CategoryId: category.Id, Count: 3, Quota: 1}
@@ -35,8 +36,12 @@ func TestCategoryBatchUsesLiveBonusAndKeepsPreviousGrants(t *testing.T) {
 	assert.ErrorIs(t, DeleteRedemptionCategory(category.Id), ErrRedemptionCategoryInUse)
 
 	for i, scenario := range []struct{ rate, wantBonus int }{{200, 200}, {325, 325}, {0, 0}} {
-		category.BonusRateBps = scenario.rate
-		require.NoError(t, category.SaveSettings())
+		var rules []RedemptionBonusRule
+		if scenario.rate > 0 {
+			rules = append(rules, RedemptionBonusRule{CategoryId: category.Id, BonusRateBps: scenario.rate})
+		}
+		_, err := ReplaceRedemptionBonusRules(rules)
+		require.NoError(t, err)
 		receipt, err := Redeem(keys[i], userId)
 		require.NoError(t, err)
 		assert.Equal(t, scenario.wantBonus, receipt.BonusQuota)
@@ -67,7 +72,12 @@ func TestCategoryBatchUsesLiveBonusAndKeepsPreviousGrants(t *testing.T) {
 	deleted, err := DeleteInvalidRedemptions(&category.Id)
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, deleted)
+	_, err = ReplaceRedemptionBonusRules([]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 100}})
+	require.NoError(t, err)
 	require.NoError(t, DeleteRedemptionCategory(category.Id))
+	rules, err := GetRedemptionBonusRules()
+	require.NoError(t, err)
+	assert.Empty(t, rules)
 	_, total, err = SearchRedemptions("", "", &uncategorized, 0, 10)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, total)
@@ -75,14 +85,33 @@ func TestCategoryBatchUsesLiveBonusAndKeepsPreviousGrants(t *testing.T) {
 
 func TestRedemptionCategoryRejectsInvalidIssuanceAndRollsBackFailedCredit(t *testing.T) {
 	userId, legacyKey := setupRedeemFixture(t, 500)
-	require.NoError(t, DB.AutoMigrate(&RedemptionCategory{}))
-	category := RedemptionCategory{Name: "Trial", Quota: 10000, BonusRateBps: -1}
-	require.ErrorIs(t, category.SaveSettings(), ErrRedemptionBonusRate)
-	category.BonusRateBps = common.MaxQuota
-	require.ErrorIs(t, category.SaveSettings(), ErrRedemptionBonusRate)
-	category.BonusRateBps = 100
+	require.NoError(t, DB.AutoMigrate(&RedemptionCategory{}, &RedemptionBonusRule{}))
+	category := RedemptionCategory{Name: "Trial", Quota: 10000}
 	require.NoError(t, category.SaveSettings())
 	t.Cleanup(func() { require.NoError(t, DB.Delete(&category).Error) })
+	_, err := ReplaceRedemptionBonusRules([]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 100}})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := ReplaceRedemptionBonusRules(nil)
+		require.NoError(t, err)
+	})
+	for _, scenario := range []struct {
+		rules []RedemptionBonusRule
+		want  error
+	}{
+		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: -1}}, ErrRedemptionBonusRate},
+		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 0}}, ErrRedemptionBonusRate},
+		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: common.MaxQuota}}, ErrRedemptionBonusRate},
+		{[]RedemptionBonusRule{{CategoryId: category.Id, BonusRateBps: 100}, {CategoryId: category.Id, BonusRateBps: 200}}, ErrRedemptionBonusRuleConflict},
+		{[]RedemptionBonusRule{{CategoryId: category.Id + 1, BonusRateBps: 100}}, ErrRedemptionCategory},
+	} {
+		_, err = ReplaceRedemptionBonusRules(scenario.rules)
+		assert.ErrorIs(t, err, scenario.want)
+	}
+	rules, err := GetRedemptionBonusRules()
+	require.NoError(t, err)
+	require.Len(t, rules, 1)
+	assert.Equal(t, 100, rules[0].BonusRateBps)
 	batch := Redemption{Count: 100, CategoryId: category.Id + 1}
 	keys, err := batch.IssueBatch()
 	assert.ErrorIs(t, err, ErrRedemptionCategory)
@@ -102,4 +131,33 @@ func TestRedemptionCategoryRejectsInvalidIssuanceAndRollsBackFailedCredit(t *tes
 	bonus, err := GetActiveBonusRemaining(userId)
 	require.NoError(t, err)
 	assert.Zero(t, bonus)
+}
+
+func TestLegacyCategoryBonusRatesMigrateToRulesOnce(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&RedemptionCategory{}, &RedemptionBonusRule{}))
+	require.NoError(t, DB.Exec("ALTER TABLE redemption_categories ADD COLUMN bonus_rate_bps integer NOT NULL DEFAULT 0").Error)
+	legacy := RedemptionCategory{Name: "Legacy", Quota: 10000}
+	plain := RedemptionCategory{Name: "Plain", Quota: 20000}
+	require.NoError(t, legacy.SaveSettings())
+	require.NoError(t, plain.SaveSettings())
+	t.Cleanup(func() {
+		require.NoError(t, DeleteRedemptionCategory(legacy.Id))
+		require.NoError(t, DeleteRedemptionCategory(plain.Id))
+		require.NoError(t, DB.Exec("ALTER TABLE redemption_categories DROP COLUMN bonus_rate_bps").Error)
+	})
+	require.NoError(t, DB.Table("redemption_categories").Where("id = ?", legacy.Id).Update("bonus_rate_bps", 250).Error)
+
+	require.NoError(t, migrateRedemptionCategoryBonusRates())
+	rules, err := GetRedemptionBonusRules()
+	require.NoError(t, err)
+	require.Len(t, rules, 1)
+	assert.Equal(t, legacy.Id, rules[0].CategoryId)
+	assert.Equal(t, 250, rules[0].BonusRateBps)
+
+	_, err = ReplaceRedemptionBonusRules(nil)
+	require.NoError(t, err)
+	require.NoError(t, migrateRedemptionCategoryBonusRates())
+	rules, err = GetRedemptionBonusRules()
+	require.NoError(t, err)
+	assert.Empty(t, rules, "a rule deleted by an admin must not be restored on restart")
 }

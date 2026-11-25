@@ -60,7 +60,8 @@ channel_chain.playground_group_unsupported: "Model-based group chains do not sup
 
 # Redemption messages
 redemption.quota_invalid: "Enter a positive face value within the wallet limit."
-redemption.bonus_rate_invalid: "Enter a non-negative bonus rate that fits the supported quota range."
+redemption.bonus_rate_invalid: "Enter a bonus rate greater than zero that fits the supported quota range."
+redemption.bonus_rule_conflict: "Each category can have only one bonus rule."
 redemption.category_missing: "Redemption category not found."
 redemption.category_duplicate: "A category with this name already exists."
 redemption.category_in_use: "This category still contains redemption codes. Only empty categories can be deleted."

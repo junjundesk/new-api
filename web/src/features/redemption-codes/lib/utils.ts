@@ -20,6 +20,11 @@ For commercial licensing, please contact support@quantumnous.com
  * Utility functions for redemption codes
  */
 
+/** Mirrors the server: bonus = round(face value × rate in basis points / 10000). */
+export function getRedemptionBonusQuota(quota: number, bonusRateBps: number) {
+  return Math.round((quota * bonusRateBps) / 10000)
+}
+
 /**
  * Check if a Unix timestamp (in seconds) is expired
  * @param timestamp - Unix timestamp in seconds (0 means never expires)

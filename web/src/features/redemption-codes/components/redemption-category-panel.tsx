@@ -46,7 +46,11 @@ type CategoryPanelProps = {
 
 export function RedemptionCategoryPanel(props: CategoryPanelProps) {
   const { t } = useTranslation()
-  const { categories, categoryId } = useRedemptions()
+  const { categories, bonusRules, categoryId } = useRedemptions()
+  const bonusPercent = (id: number) => {
+    const rule = bonusRules.find((entry) => entry.category_id === id)
+    return rule ? ` · +${rule.bonus_rate_bps / 100}%` : ''
+  }
   const [editing, setEditing] = useState<RedemptionCategory | 'new' | null>(
     null
   )
@@ -94,8 +98,8 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
           </NativeSelectOption>
           {categories.map((category) => (
             <NativeSelectOption key={category.id} value={category.id}>
-              {category.name} · {formatQuota(category.quota)} · +
-              {category.bonus_rate_bps / 100}%
+              {category.name} · {formatQuota(category.quota)}
+              {bonusPercent(category.id)}
             </NativeSelectOption>
           ))}
         </NativeSelect>
@@ -159,8 +163,8 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
                   {category.name}
                 </span>
                 <span className='text-muted-foreground block text-xs tabular-nums'>
-                  {formatQuota(category.quota)} <span className='mx-1'>·</span>{' '}
-                  +{category.bonus_rate_bps / 100}%
+                  {formatQuota(category.quota)}
+                  {bonusPercent(category.id)}
                 </span>
               </span>
             </button>

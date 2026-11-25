@@ -20,6 +20,8 @@ func redemptionAdminError(c *gin.Context, err error) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionQuotaInvalid)
 	case errors.Is(err, model.ErrRedemptionBonusRate):
 		common.ApiErrorI18n(c, i18n.MsgRedemptionBonusRateInvalid)
+	case errors.Is(err, model.ErrRedemptionBonusRuleConflict):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionBonusRuleConflict)
 	case errors.Is(err, model.ErrRedemptionCategory):
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryMissing)
 	case errors.Is(err, model.ErrRedemptionCategoryName):
@@ -44,15 +46,14 @@ func GetRedemptionCategories(c *gin.Context) {
 
 func SaveRedemptionCategory(c *gin.Context) {
 	var req struct {
-		Name         string `json:"name"`
-		Quota        int    `json:"quota"`
-		BonusRateBps int    `json:"bonus_rate_bps"`
+		Name  string `json:"name"`
+		Quota int    `json:"quota"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	category := model.RedemptionCategory{Name: req.Name, Quota: req.Quota, BonusRateBps: req.BonusRateBps}
+	category := model.RedemptionCategory{Name: req.Name, Quota: req.Quota}
 	if raw := c.Param("id"); raw != "" {
 		id, err := strconv.Atoi(raw)
 		if err != nil || id <= 0 {
@@ -79,6 +80,31 @@ func DeleteRedemptionCategory(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+func GetRedemptionBonusRules(c *gin.Context) {
+	rules, err := model.GetRedemptionBonusRules()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rules)
+}
+
+func SaveRedemptionBonusRules(c *gin.Context) {
+	var req struct {
+		Rules []model.RedemptionBonusRule `json:"rules"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	rules, err := model.ReplaceRedemptionBonusRules(req.Rules)
+	if err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rules)
 }
 
 func redemptionCategoryFilter(c *gin.Context) (*int, bool) {

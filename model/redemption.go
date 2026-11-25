@@ -163,13 +163,15 @@ func Redeem(key string, userId int) (*Redemption, error) {
 		}
 		bonus := 0
 		if redemption.CategoryId != 0 {
-			category, err := getRedemptionCategoryForUpdate(tx, redemption.CategoryId)
-			if err != nil {
+			var rules []RedemptionBonusRule
+			if err := tx.Where("category_id = ?", redemption.CategoryId).Limit(1).Find(&rules).Error; err != nil {
 				return err
 			}
-			bonus, err = category.bonusQuota(redemption.Quota)
-			if err != nil {
-				return err
+			if len(rules) == 1 {
+				var err error
+				if bonus, err = rules[0].bonusQuota(redemption.Quota); err != nil {
+					return err
+				}
 			}
 		}
 		// Only the transaction that claims the code may credit either balance.

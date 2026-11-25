@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus, Trash2 } from 'lucide-react'
+import { Gift, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 
 import { deleteInvalidRedemptions } from '../api'
 import { ERROR_MESSAGES } from '../constants'
+import { RedemptionBonusRulesDialog } from './redemption-bonus-rules-dialog'
 import { useRedemptions } from './redemptions-provider'
 
 export function RedemptionsPrimaryButtons() {
@@ -34,6 +35,7 @@ export function RedemptionsPrimaryButtons() {
   const [showDeleteInvalidConfirm, setShowDeleteInvalidConfirm] =
     useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showBonusRules, setShowBonusRules] = useState(false)
 
   const handleDeleteInvalid = async () => {
     setIsDeleting(true)
@@ -70,11 +72,26 @@ export function RedemptionsPrimaryButtons() {
           <Trash2 className='text-destructive h-4 w-4' />
           <span className='hidden sm:inline'>{t('Delete Invalid')}</span>
         </Button>
+        <Button
+          size='sm'
+          variant='outline'
+          className='max-sm:size-8 max-sm:px-0'
+          aria-label={t('Bonus rules')}
+          title={t('Bonus rules')}
+          onClick={() => setShowBonusRules(true)}
+        >
+          <Gift className='h-4 w-4 text-amber-600 dark:text-amber-400' />
+          <span className='hidden sm:inline'>{t('Bonus rules')}</span>
+        </Button>
         <Button size='sm' onClick={() => setOpen('create')}>
           <Plus className='h-4 w-4' />
           {t('Generate codes')}
         </Button>
       </div>
+
+      {showBonusRules && (
+        <RedemptionBonusRulesDialog onClose={() => setShowBonusRules(false)} />
+      )}
 
       <ConfirmDialog
         destructive

@@ -327,6 +327,7 @@ func migrateDB() error {
 		&PasskeyCredential{},
 		&Option{},
 		&RedemptionCategory{},
+		&RedemptionBonusRule{},
 		&Redemption{},
 		&Ability{},
 		&Midjourney{},
@@ -368,6 +369,9 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if err := migrateRedemptionCategoryBonusRates(); err != nil {
+		return err
+	}
 	if err := InitializeUserAuthVersions(); err != nil {
 		return err
 	}
@@ -404,6 +408,7 @@ func migrateDBFast() error {
 		{&PasskeyCredential{}, "PasskeyCredential"},
 		{&Option{}, "Option"},
 		{&RedemptionCategory{}, "RedemptionCategory"},
+		{&RedemptionBonusRule{}, "RedemptionBonusRule"},
 		{&Redemption{}, "Redemption"},
 		{&Ability{}, "Ability"},
 		{&Midjourney{}, "Midjourney"},
@@ -463,6 +468,9 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := migrateRedemptionCategoryBonusRates(); err != nil {
+		return err
 	}
 	if err := InitializeUserAuthVersions(); err != nil {
 		return err

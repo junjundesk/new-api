@@ -114,7 +114,6 @@ function renderList(props?: {
                   id: 4,
                   name: 'Weekend tier',
                   quota: 500000,
-                  bonus_rate_bps: 0,
                 },
               ]}
             >

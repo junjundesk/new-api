@@ -24,12 +24,13 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { formatQuota } from '@/lib/format'
 
-import { getRedemptionCategories } from './api'
+import { getRedemptionBonusRules, getRedemptionCategories } from './api'
 import { RedemptionCategoryPanel } from './components/redemption-category-panel'
 import { RedemptionsDialogs } from './components/redemptions-dialogs'
 import { RedemptionsPrimaryButtons } from './components/redemptions-primary-buttons'
 import { RedemptionsProvider } from './components/redemptions-provider'
 import { RedemptionsTable } from './components/redemptions-table'
+import { getRedemptionBonusQuota } from './lib'
 
 const route = getRouteApi('/_authenticated/redemption-codes/')
 
@@ -41,18 +42,29 @@ export function Redemptions() {
     queryKey: ['redemption-categories'],
     queryFn: getRedemptionCategories,
   })
+  const bonusRules = useQuery({
+    queryKey: ['redemption-bonus-rules'],
+    queryFn: getRedemptionBonusRules,
+  })
   const selectCategory = (id?: number) => {
     void navigate({ search: (prev) => ({ ...prev, category_id: id, page: 1 }) })
   }
   const current = categories.data?.find(
     (category) => category.id === categoryId
   )
+  const currentRule = bonusRules.data?.find(
+    (rule) => rule.category_id === categoryId
+  )
   let title = t('All codes')
   if (categoryId === 0) title = t('Uncategorized')
   if (categoryId) title = current?.name ?? t('Category')
 
   return (
-    <RedemptionsProvider categories={categories.data} categoryId={categoryId}>
+    <RedemptionsProvider
+      categories={categories.data}
+      bonusRules={bonusRules.data}
+      categoryId={categoryId}
+    >
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>
           {t('Redemption Codes')}
@@ -74,14 +86,15 @@ export function Redemptions() {
             >
               <div className='hidden min-h-8 items-center justify-between gap-3 lg:flex'>
                 <h3 className='truncate text-base font-semibold'>{title}</h3>
-                {current && (
+                {current && currentRule && (
                   <div className='flex shrink-0 items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-800 dark:text-amber-300'>
                     <Gift aria-hidden className='size-3.5' />
-                    {t('Bonus per code')}
+                    {t('Bonus per code')} · {currentRule.bonus_rate_bps / 100}%
                     <strong className='tabular-nums'>
                       {formatQuota(
-                        Math.round(
-                          (current.quota * current.bonus_rate_bps) / 10000
+                        getRedemptionBonusQuota(
+                          current.quota,
+                          currentRule.bonus_rate_bps
                         )
                       )}
                     </strong>

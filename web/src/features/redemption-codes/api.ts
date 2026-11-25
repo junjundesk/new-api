@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 
 import type {
   Redemption,
+  RedemptionBonusRule,
   RedemptionCategory,
   ApiResponse,
   GetRedemptionsParams,
@@ -89,6 +90,26 @@ export async function deleteRedemptionCategory(id: number) {
     { skipBusinessError: true }
   )
   if (!res.data.success) throw new Error(res.data.message)
+}
+
+export async function getRedemptionBonusRules(): Promise<
+  RedemptionBonusRule[]
+> {
+  const res = await api.get<ApiResponse<RedemptionBonusRule[]>>(
+    '/api/redemption/bonus-rules'
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function saveRedemptionBonusRules(rules: RedemptionBonusRule[]) {
+  const res = await api.put<ApiResponse<RedemptionBonusRule[]>>(
+    '/api/redemption/bonus-rules',
+    { rules },
+    { skipBusinessError: true }
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
 }
 
 // Get single redemption code by ID

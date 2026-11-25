@@ -67,6 +67,7 @@ import { addTimeToDate } from '@/lib/time'
 import { createRedemption, updateRedemption, getRedemption } from '../api'
 import { SUCCESS_MESSAGES } from '../constants'
 import {
+  getRedemptionBonusQuota,
   getRedemptionFormSchema,
   type RedemptionFormValues,
   REDEMPTION_FORM_DEFAULT_VALUES,
@@ -90,7 +91,8 @@ export function RedemptionsMutateDrawer({
   const { t } = useTranslation()
   const isUpdate = !!currentRow
   const redemptionId = currentRow?.id
-  const { triggerRefresh, categories, categoryId } = useRedemptions()
+  const { triggerRefresh, categories, bonusRules, categoryId } =
+    useRedemptions()
   const [createdCodes, setCreatedCodes] = useState<string[]>([])
   const batchText = createdCodes.join('\n')
   const { copyToClipboard, copiedText } = useCopyToClipboard()
@@ -164,6 +166,9 @@ export function RedemptionsMutateDrawer({
 
   const selectedId = form.watch('category_id')
   const selected = categories.find((category) => category.id === selectedId)
+  const selectedBonusRateBps =
+    bonusRules.find((rule) => rule.category_id === selectedId)
+      ?.bonus_rate_bps ?? 0
 
   const isUpdateReady =
     !isUpdate ||
@@ -371,13 +376,13 @@ export function RedemptionsMutateDrawer({
                         <div>
                           <div className='text-muted-foreground flex items-center gap-1 text-xs'>
                             <Gift aria-hidden className='size-3' />
-                            {t('Bonus')} · {selected.bonus_rate_bps / 100}%
+                            {t('Bonus')} · {selectedBonusRateBps / 100}%
                           </div>
                           <strong className='font-mono tabular-nums'>
                             {formatQuota(
-                              Math.round(
-                                (selected.quota * selected.bonus_rate_bps) /
-                                  10000
+                              getRedemptionBonusQuota(
+                                selected.quota,
+                                selectedBonusRateBps
                               )
                             )}
                           </strong>
