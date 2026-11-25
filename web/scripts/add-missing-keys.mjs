@@ -219,7 +219,7 @@ const NEW_KEYS = {
   },
   Yesterday: {
     en: 'Yesterday',
-    zh: '昨天',
+    zh: '昨日',
   },
   'Last 7 Days': {
     en: 'Last 7 Days',
