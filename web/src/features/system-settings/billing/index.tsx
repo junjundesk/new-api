@@ -79,6 +79,7 @@ const defaultBillingSettings: BillingSettings = {
   MinTopUp: 1,
   CustomCallbackAddress: '',
   PayMethods: '',
+  'payment_setting.card_store': '{"enabled":false,"url":""}',
   'payment_setting.amount_options': '',
   'payment_setting.amount_discount': '',
   'payment_setting.compliance_confirmed': false,

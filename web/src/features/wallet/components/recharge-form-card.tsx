@@ -52,6 +52,7 @@ import type {
   WaffoPayMethod,
 } from '../types'
 import { CreemProductsSection } from './creem-products-section'
+import { WalletCardStoreSection } from './wallet-card-store-section'
 
 interface RechargeFormCardProps {
   topupInfo: TopupInfo | null
@@ -70,6 +71,7 @@ interface RechargeFormCardProps {
   redeeming: boolean
   topupLink?: string
   loading?: boolean
+  onRetry?: () => void
   priceRatio?: number
   usdExchangeRate?: number
   onOpenBilling?: () => void
@@ -100,6 +102,7 @@ export function RechargeFormCard({
   redeeming,
   topupLink,
   loading,
+  onRetry,
   priceRatio = 1,
   usdExchangeRate = 1,
   onOpenBilling,
@@ -130,12 +133,13 @@ export function RechargeFormCard({
     }
   }
 
+  const store = topupInfo?.card_store
   const hasConfigurableTopup =
     topupInfo?.enable_online_topup ||
     topupInfo?.enable_stripe_topup ||
     enableWaffoTopup ||
     enableWaffoPancakeTopup
-  const hasAnyTopup = hasConfigurableTopup || enableCreemTopup
+  const hasAnyTopup = !store && (hasConfigurableTopup || enableCreemTopup)
   const hasStandardPaymentMethods =
     Array.isArray(topupInfo?.pay_methods) && topupInfo.pay_methods.length > 0
   const hasWaffoPaymentMethods =
@@ -194,10 +198,27 @@ export function RechargeFormCard({
     )
   }
 
+  if (onRetry) {
+    return (
+      <Alert role='alert'>
+        <AlertDescription>
+          {t('Unable to load wallet recharge options.')}{' '}
+          <Button type='button' variant='outline' onClick={onRetry}>
+            {t('Retry')}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
   return (
     <TitledCard
       title={t('Add Funds')}
-      description={t('Choose an amount and payment method')}
+      description={
+        store
+          ? t('Buy a code in the card store, then redeem it below.')
+          : t('Choose an amount and payment method')
+      }
       icon={<WalletCards className='h-4 w-4' />}
       iconTone='success'
       disableHoverEffect
@@ -216,8 +237,9 @@ export function RechargeFormCard({
       }
       contentClassName='space-y-4 sm:space-y-6'
     >
+      {store && <WalletCardStoreSection store={store} />}
       {/* Online Topup Section */}
-      {hasAnyTopup ? (
+      {hasAnyTopup && (
         <div className='space-y-4 sm:space-y-6'>
           {hasConfigurableTopup && (
             <>
@@ -477,7 +499,8 @@ export function RechargeFormCard({
             </>
           )}
         </div>
-      ) : (
+      )}
+      {!store && !hasAnyTopup && (
         <Alert>
           <AlertDescription>
             {t(
@@ -488,7 +511,8 @@ export function RechargeFormCard({
       )}
 
       {/* Creem Products Section */}
-      {enableCreemTopup &&
+      {!store &&
+        enableCreemTopup &&
         Array.isArray(creemProducts) &&
         creemProducts.length > 0 &&
         onCreemProductSelect && (
@@ -535,7 +559,7 @@ export function RechargeFormCard({
               {t('Redeem')}
             </Button>
           </div>
-          {topupLink && (
+          {!store && topupLink && (
             <p className='text-muted-foreground text-xs'>
               {t('Need a redemption code?')}{' '}
               <a

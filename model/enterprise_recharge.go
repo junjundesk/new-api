@@ -41,7 +41,7 @@ type UserRechargeRecord struct {
 	Quota      int64   `json:"quota"`
 	Source     string  `json:"source" gorm:"type:varchar(32)"`
 	RefId      string  `json:"ref_id" gorm:"uniqueIndex;type:varchar(128)"`
-	CreateTime int64   `json:"create_time" gorm:"bigint"`
+	CreateTime int64   `json:"create_time" gorm:"bigint;index"`
 }
 
 const (

@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { decodeCardStoreSettings } from '@/lib/card-store'
 import { parseCurrencyDisplayType } from '@/lib/currency'
 
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
@@ -178,6 +179,7 @@ const BILLING_SECTIONS = [
     build: (settings: BillingSettings) => (
       <PaymentSettingsSection
         defaultValues={{
+          ...decodeCardStoreSettings(settings['payment_setting.card_store']),
           PayAddress: settings.PayAddress,
           EpayId: settings.EpayId,
           EpayKey: settings.EpayKey,

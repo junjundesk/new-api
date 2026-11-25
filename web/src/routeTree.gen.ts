@@ -52,6 +52,7 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedReferralManagementIndexRouteImport } from './routes/_authenticated/referral-management/index'
 import { Route as AuthenticatedReferralIndexRouteImport } from './routes/_authenticated/referral/index'
+import { Route as AuthenticatedRevenueIndexRouteImport } from './routes/_authenticated/revenue/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
@@ -306,6 +307,12 @@ const AuthenticatedReferralIndexRoute =
     path: '/referral/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRevenueIndexRoute =
+  AuthenticatedRevenueIndexRouteImport.update({
+    id: '/revenue/',
+    path: '/revenue/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
     id: '/subscriptions/',
@@ -492,6 +499,7 @@ export interface FileRoutesByFullPath {
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/referral-management/': typeof AuthenticatedReferralManagementIndexRoute
   '/referral/': typeof AuthenticatedReferralIndexRoute
+  '/revenue/': typeof AuthenticatedRevenueIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -558,6 +566,7 @@ export interface FileRoutesByTo {
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/referral-management': typeof AuthenticatedReferralManagementIndexRoute
   '/referral': typeof AuthenticatedReferralIndexRoute
+  '/revenue': typeof AuthenticatedRevenueIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -628,6 +637,7 @@ export interface FileRoutesById {
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/referral-management/': typeof AuthenticatedReferralManagementIndexRoute
   '/_authenticated/referral/': typeof AuthenticatedReferralIndexRoute
+  '/_authenticated/revenue/': typeof AuthenticatedRevenueIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -697,6 +707,7 @@ export interface FileRouteTypes {
     | '/redemption-codes/'
     | '/referral-management/'
     | '/referral/'
+    | '/revenue/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
@@ -763,6 +774,7 @@ export interface FileRouteTypes {
     | '/redemption-codes'
     | '/referral-management'
     | '/referral'
+    | '/revenue'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
@@ -832,6 +844,7 @@ export interface FileRouteTypes {
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/referral-management/'
     | '/_authenticated/referral/'
+    | '/_authenticated/revenue/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -1179,6 +1192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReferralIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/revenue/': {
+      id: '/_authenticated/revenue/'
+      path: '/revenue'
+      fullPath: '/revenue/'
+      preLoaderRoute: typeof AuthenticatedRevenueIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/subscriptions/': {
       id: '/_authenticated/subscriptions/'
       path: '/subscriptions'
@@ -1455,6 +1475,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedReferralManagementIndexRoute: typeof AuthenticatedReferralManagementIndexRoute
   AuthenticatedReferralIndexRoute: typeof AuthenticatedReferralIndexRoute
+  AuthenticatedRevenueIndexRoute: typeof AuthenticatedRevenueIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
@@ -1489,6 +1510,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedReferralManagementIndexRoute:
     AuthenticatedReferralManagementIndexRoute,
   AuthenticatedReferralIndexRoute: AuthenticatedReferralIndexRoute,
+  AuthenticatedRevenueIndexRoute: AuthenticatedRevenueIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,

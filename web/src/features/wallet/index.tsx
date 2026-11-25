@@ -84,7 +84,13 @@ export function Wallet(props: WalletProps) {
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
-  const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
+  const {
+    topupInfo,
+    presetAmounts,
+    loading: topupLoading,
+    failed: topupFailed,
+    refetch: retryTopup,
+  } = useTopupInfo()
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
@@ -142,7 +148,11 @@ export function Wallet(props: WalletProps) {
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)
   useEffect(() => {
-    if (topupInfo && !topupAmountInitializedRef.current) {
+    if (
+      topupInfo &&
+      !topupInfo.card_store &&
+      !topupAmountInitializedRef.current
+    ) {
       topupAmountInitializedRef.current = true
       const minTopup = getMinTopupAmount(topupInfo)
       setTopupAmount(minTopup)
@@ -325,6 +335,7 @@ export function Wallet(props: WalletProps) {
                   redeeming={redeeming}
                   topupLink={topupInfo?.topup_link}
                   loading={topupLoading}
+                  onRetry={topupFailed ? retryTopup : undefined}
                   priceRatio={(status?.price as number) || 1}
                   usdExchangeRate={effectiveUsdExchangeRate}
                   onOpenBilling={() => setBillingDialogOpen(true)}

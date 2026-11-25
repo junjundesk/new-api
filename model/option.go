@@ -207,6 +207,10 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == operation_setting.CardStoreOptionKey {
+		_, err := operation_setting.ParseCardStoreConfig(value)
+		return err
+	}
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}
@@ -217,6 +221,9 @@ func validateOptionValue(key string, value string) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == operation_setting.CardStoreOptionKey {
+		return UpdateOptionsBulk(map[string]string{key: value}) // Report write errors before publishing the new mode.
+	}
 	if err := validateOptionValue(key, value); err != nil {
 		return err
 	}
@@ -608,6 +615,14 @@ func updateOptionMap(key string, value string) (err error) {
 
 // handleConfigUpdate 处理分层配置更新，返回是否已处理
 func handleConfigUpdate(key, value string) bool {
+	if key == operation_setting.CardStoreOptionKey {
+		cfg, err := operation_setting.ParseCardStoreConfig(value)
+		if err != nil {
+			common.SysError("ignoring invalid card store settings")
+		}
+		operation_setting.GetPaymentSetting().CardStore = cfg // Invalid stored settings leave the store disabled.
+		return true
+	}
 	if key == operation_setting.ToolPriceOptionKey {
 		operation_setting.LoadToolPricesFromJSONString(value)
 		return true

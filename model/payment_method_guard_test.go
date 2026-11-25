@@ -209,6 +209,7 @@ func TestRechargeEpayCreditsQuotaExactlyOnce(t *testing.T) {
 	require.NotNil(t, reloaded)
 	assert.Equal(t, common.TopUpStatusSuccess, reloaded.Status)
 	assert.NotZero(t, reloaded.CompleteTime)
+	assert.EqualValues(t, 2*500000, reloaded.CreditedQuota)
 
 	alreadyDone, err = RechargeEpay(order.TradeNo, "alipay", "10.00", "127.0.0.1")
 	require.NoError(t, err)

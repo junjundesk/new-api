@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Code2, Eye, ShieldAlert } from 'lucide-react'
 import * as React from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
@@ -46,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { parseCardStoreUrl } from '@/lib/card-store'
 import { cn } from '@/lib/utils'
 
 import { confirmPaymentCompliance } from '../api'
@@ -94,7 +96,9 @@ function isHttpOriginUrl(value: string) {
   }
 }
 
-const paymentSchema = z.object({
+const gatewayFields = z.object({
+  CardStoreEnabled: z.boolean(),
+  CardStoreURL: z.string(),
   PayAddress: z.string().refine((value) => {
     const trimmed = value.trim()
     if (!trimmed) return true
@@ -176,6 +180,19 @@ const paymentSchema = z.object({
   WaffoPancakeMerchantID: z.string(),
   WaffoPancakePrivateKey: z.string(),
   WaffoPancakeReturnURL: z.string(),
+})
+
+const paymentSchema = gatewayFields.superRefine((values, ctx) => {
+  if (
+    (values.CardStoreEnabled || values.CardStoreURL.trim()) &&
+    !parseCardStoreUrl(values.CardStoreURL)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['CardStoreURL'],
+      message: 'Enter an absolute HTTP or HTTPS store URL without credentials.',
+    })
+  }
 })
 
 type PaymentFormValues = z.infer<typeof paymentSchema>
@@ -507,6 +524,19 @@ export function PaymentSettingsSection({
     }
 
     const updates: Array<{ key: string; value: string | number | boolean }> = []
+
+    if (
+      values.CardStoreEnabled !== initialRef.current.CardStoreEnabled ||
+      values.CardStoreURL.trim() !== initialRef.current.CardStoreURL
+    ) {
+      updates.push({
+        key: 'payment_setting.card_store',
+        value: JSON.stringify({
+          enabled: values.CardStoreEnabled,
+          url: values.CardStoreURL.trim(),
+        }),
+      })
+    }
 
     if (sanitized.PayAddress !== initial.PayAddress) {
       updates.push({ key: 'PayAddress', value: sanitized.PayAddress })
@@ -875,6 +905,79 @@ export function PaymentSettingsSection({
             isSaving={updateOption.isPending || isSubmitting}
             saveLabel='Save all settings'
           />
+          <fieldset
+            className='space-y-3 rounded-md border p-4'
+            disabled={!complianceConfirmed}
+          >
+            <legend className='px-1 font-medium'>
+              {t('Wallet recharge mode')}
+            </legend>
+            <FormField
+              control={form.control}
+              name='CardStoreEnabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Card store mode')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Replace wallet gateway checkout with redemption code purchases. Existing orders and subscriptions are unaffected.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      disabled={!complianceConfirmed}
+                      onCheckedChange={(enabled) => {
+                        field.onChange(enabled)
+                        if (
+                          !enabled &&
+                          !parseCardStoreUrl(form.getValues('CardStoreURL'))
+                        ) {
+                          form.setValue('CardStoreURL', '', {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                      }}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+            {currentFormValues.CardStoreEnabled && (
+              <FormField
+                control={form.control}
+                name='CardStoreURL'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Card store URL')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='url'
+                        placeholder='https://store.example.com/'
+                        maxLength={2048}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Use a public storefront URL, not a management or signed URL. HTTPS is recommended for embedded checkout.'
+                      )}{' '}
+                      <Link
+                        to='/redemption-codes'
+                        className='text-primary underline'
+                      >
+                        {t('Manage code tiers and bonuses')}
+                      </Link>
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </fieldset>
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
               <TabsList className='grid min-w-[44rem] grid-cols-6'>

@@ -171,6 +171,15 @@ func UpdateOption(c *gin.Context) {
 		option.Value = normalized
 	}
 	switch option.Key {
+	case operation_setting.CardStoreOptionKey:
+		cfg, err := operation_setting.ParseCardStoreConfig(option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if cfg.Enabled && !requirePaymentCompliance(c) {
+			return
+		}
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)

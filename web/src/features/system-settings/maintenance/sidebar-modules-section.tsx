@@ -134,6 +134,10 @@ export function SidebarModulesSection({
       },
     },
     admin: {
+      revenue: {
+        title: t('Revenue report'),
+        description: t('Wallet inflows and estimated profit on usage.'),
+      },
       channel: {
         title: t('Channels'),
         description: t('Configure upstream providers and routing.'),

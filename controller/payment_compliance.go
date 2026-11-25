@@ -27,6 +27,16 @@ func requirePaymentCompliance(c *gin.Context) bool {
 	return true
 }
 
+// Gateway checkout is replaced only for new wallet top-ups. Redemption,
+// subscription purchases and notifications for outstanding orders stay live.
+func RequireWalletGatewayMode(c *gin.Context) {
+	if operation_setting.GetCardStoreConfig().Enabled {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{"success": false, "message": "Wallet top-ups use the card store"})
+		return
+	}
+	c.Next()
+}
+
 func ConfirmPaymentCompliance(c *gin.Context) {
 	if c.GetBool("use_access_token") {
 		c.JSON(http.StatusForbidden, gin.H{

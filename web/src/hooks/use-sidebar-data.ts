@@ -20,6 +20,7 @@ import {
   Activity,
   Box,
   CreditCard,
+  ChartNoAxesCombined,
   FileText,
   FlaskConical,
   Gauge,
@@ -165,6 +166,12 @@ export function useSidebarData(): SidebarData {
             title: t('Admin Assistant'),
             url: '/assistant/admin',
             icon: ShieldCheck,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
+            title: t('Revenue report'),
+            url: '/revenue',
+            icon: ChartNoAxesCombined,
             requiredRole: ROLE.ADMIN,
           },
           {

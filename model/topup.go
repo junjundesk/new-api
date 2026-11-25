@@ -21,7 +21,8 @@ type TopUp struct {
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
 	CreateTime      int64   `json:"create_time"`
-	CompleteTime    int64   `json:"complete_time"`
+	CompleteTime    int64   `json:"complete_time" gorm:"index"`
+	CreditedQuota   int64   `json:"-" gorm:"type:bigint"` // Actual wallet credit. Older completed orders have no snapshot.
 	Status          string  `json:"status"`
 }
 
@@ -148,6 +149,13 @@ func creditTopUpQuotaFrom(tx *gorm.DB, userId int, creditedQuota int, updates ma
 
 	if source == nil {
 		return nil
+	}
+	if source.refKind == ReferralRefTopUp {
+		// Capture the actual credit (including manual order completions) in the
+		// same transaction as the wallet increment, without changing its amount.
+		if err := tx.Model(&TopUp{}).Where("id = ?", source.refId).UpdateColumn("credited_quota", creditedQuota).Error; err != nil {
+			return err
+		}
 	}
 	return RecordReferralTopUp(tx, userId, source.refKind, source.refId, int64(creditedQuota), source.countAsValid)
 }

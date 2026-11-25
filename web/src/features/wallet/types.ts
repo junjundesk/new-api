@@ -116,10 +116,17 @@ export interface WaffoPayMethod {
   payMethodName?: string
 }
 
+export interface WalletCardStore {
+  url: string
+  tiers: { id: number; name: string; quota: number; bonus_quota: number }[]
+}
+
 /**
  * Topup configuration information
  */
 export interface TopupInfo {
+  /** Only present when card store checkout is active and compliance is confirmed. */
+  card_store?: WalletCardStore
   /** Whether online topup is enabled */
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */

@@ -22,7 +22,7 @@ type Redemption struct {
 	CategoryId   int            `json:"category_id" gorm:"index;not null;default:0"` // 0 includes codes issued before categories existed.
 	BonusQuota   int            `json:"bonus_quota" gorm:"not null;default:0"`       // Actual grant at redemption time.
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
-	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
+	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint;index"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

@@ -120,6 +120,14 @@ func GetTopUpInfo(c *gin.Context) {
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,
 	}
+	if store := operation_setting.GetCardStoreConfig(); complianceConfirmed && store.Enabled {
+		tiers, err := model.GetWalletCardTiers(c.Request.Context())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		data["card_store"] = gin.H{"url": store.URL, "tiers": tiers}
+	}
 	common.ApiSuccess(c, data)
 }
 
