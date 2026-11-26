@@ -22,6 +22,8 @@ import type {
   Redemption,
   RedemptionBonusRule,
   RedemptionCategory,
+  RedemptionMigrationMode,
+  RedemptionMigrationResult,
   ApiResponse,
   GetRedemptionsParams,
   GetRedemptionsResponse,
@@ -106,6 +108,18 @@ export async function saveRedemptionBonusRules(rules: RedemptionBonusRule[]) {
   const res = await api.put<ApiResponse<RedemptionBonusRule[]>>(
     '/api/redemption/bonus-rules',
     { rules },
+    { skipBusinessError: true }
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function migrateUncategorizedRedemptions(
+  mode: RedemptionMigrationMode
+): Promise<RedemptionMigrationResult> {
+  const res = await api.post<ApiResponse<RedemptionMigrationResult>>(
+    '/api/redemption/migrate-uncategorized',
+    { mode },
     { skipBusinessError: true }
   )
   if (!res.data.success || !res.data.data) throw new Error(res.data.message)

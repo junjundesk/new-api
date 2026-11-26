@@ -525,6 +525,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   // Redemption codes
   'redemption.create':
     'Created {{count}} redemption codes named {{name}} ({{quota}} each)',
+  'redemption.migrate':
+    'Redemption code migration: {{migrated}} moved, {{unmatched}} unmatched',
   'redemption.update': 'Updated a redemption code',
   'redemption.delete': 'Deleted a redemption code',
   'redemption.delete_invalid': 'Deleted invalid redemption codes',

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Gift, Plus, Trash2 } from 'lucide-react'
+import { FolderInput, Gift, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { deleteInvalidRedemptions } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import { RedemptionBonusRulesDialog } from './redemption-bonus-rules-dialog'
+import { RedemptionMigrationDialog } from './redemption-migration-dialog'
 import { useRedemptions } from './redemptions-provider'
 
 export function RedemptionsPrimaryButtons() {
@@ -36,6 +37,7 @@ export function RedemptionsPrimaryButtons() {
     useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showBonusRules, setShowBonusRules] = useState(false)
+  const [showMigration, setShowMigration] = useState(false)
 
   const handleDeleteInvalid = async () => {
     setIsDeleting(true)
@@ -61,6 +63,19 @@ export function RedemptionsPrimaryButtons() {
   return (
     <>
       <div className='flex flex-wrap gap-2'>
+        {categoryId === 0 && (
+          <Button
+            size='sm'
+            variant='outline'
+            className='max-sm:size-8 max-sm:px-0'
+            aria-label={t('Migrate codes')}
+            title={t('Migrate codes')}
+            onClick={() => setShowMigration(true)}
+          >
+            <FolderInput aria-hidden />
+            <span className='hidden sm:inline'>{t('Migrate codes')}</span>
+          </Button>
+        )}
         <Button
           size='sm'
           variant='outline'
@@ -88,6 +103,10 @@ export function RedemptionsPrimaryButtons() {
           {t('Generate codes')}
         </Button>
       </div>
+
+      {categoryId === 0 && showMigration && (
+        <RedemptionMigrationDialog onClose={() => setShowMigration(false)} />
+      )}
 
       {showBonusRules && (
         <RedemptionBonusRulesDialog onClose={() => setShowBonusRules(false)} />

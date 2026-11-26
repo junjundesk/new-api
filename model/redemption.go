@@ -29,6 +29,11 @@ type Redemption struct {
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
 }
 
+func unusedRedemptions(query *gorm.DB) *gorm.DB {
+	return query.Where("status = ? AND (expired_time IS NULL OR expired_time = 0 OR expired_time >= ?)",
+		common.RedemptionCodeStatusEnabled, common.GetTimestamp())
+}
+
 func SearchRedemptions(keyword, status string, categoryId *int, startIdx, num int) (redemptions []*Redemption, total int64, err error) {
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		query := tx.Model(&Redemption{})
@@ -46,7 +51,7 @@ func SearchRedemptions(keyword, status string, categoryId *int, startIdx, num in
 		case "expired":
 			query = query.Where("status = ? AND expired_time != 0 AND expired_time < ?", common.RedemptionCodeStatusEnabled, common.GetTimestamp())
 		case strconv.Itoa(common.RedemptionCodeStatusEnabled):
-			query = query.Where("status = ? AND (expired_time = 0 OR expired_time >= ?)", common.RedemptionCodeStatusEnabled, common.GetTimestamp())
+			query = unusedRedemptions(query)
 		case strconv.Itoa(common.RedemptionCodeStatusDisabled), strconv.Itoa(common.RedemptionCodeStatusUsed):
 			query = query.Where("status = ?", status)
 		}

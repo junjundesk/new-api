@@ -55,6 +55,13 @@ export interface RedemptionCategory {
   quota: number
 }
 
+export type RedemptionMigrationMode = 'exact' | 'fuzzy'
+
+export interface RedemptionMigrationResult {
+  migrated: number
+  unmatched: number
+}
+
 export interface RedemptionBonusRule {
   category_id: number
   bonus_rate_bps: number // 100 basis points = 1%

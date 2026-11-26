@@ -14,6 +14,8 @@ import (
 
 func redemptionAdminError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, model.ErrRedemptionMigrationMode):
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 	case errors.Is(err, model.ErrRedemptionName):
 		common.ApiErrorI18n(c, i18n.MsgRedemptionNameLength)
 	case errors.Is(err, model.ErrRedemptionQuota):
@@ -219,6 +221,25 @@ func UpdateRedemption(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, redemption)
+}
+
+func MigrateUncategorizedRedemptions(c *gin.Context) {
+	var req struct {
+		Mode model.RedemptionMigrationMode `json:"mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	result, err := model.MigrateUncategorizedRedemptions(req.Mode)
+	if err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	recordManageAudit(c, "redemption.migrate", map[string]any{
+		"mode": req.Mode, "migrated": result.Migrated, "unmatched": result.Unmatched,
+	})
+	common.ApiSuccess(c, result)
 }
 
 func DeleteInvalidRedemption(c *gin.Context) {
