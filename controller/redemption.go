@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
@@ -13,7 +14,12 @@ import (
 )
 
 func redemptionAdminError(c *gin.Context, err error) {
+	var conflict *model.RedemptionCategoryConfigConflict
 	switch {
+	case errors.As(err, &conflict):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigConflict, map[string]any{"Name": conflict.Name})
+	case errors.Is(err, model.ErrRedemptionCategoryConfig):
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigInvalid)
 	case errors.Is(err, model.ErrRedemptionMigrationMode):
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 	case errors.Is(err, model.ErrRedemptionName):
@@ -44,6 +50,35 @@ func GetRedemptionCategories(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, categories)
+}
+
+func ExportRedemptionCategoryConfig(c *gin.Context) {
+	config, err := model.ExportRedemptionCategoryConfig(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, config)
+}
+
+func ImportRedemptionCategoryConfig(c *gin.Context) {
+	const maxConfigBytes = 1 << 20
+	var config model.RedemptionCategoryConfig
+	if err := common.DecodeJsonStrict(http.MaxBytesReader(c.Writer, c.Request.Body, maxConfigBytes), &config); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigTooLarge)
+			return
+		}
+		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigInvalid)
+		return
+	}
+	result, err := model.ImportRedemptionCategoryConfig(c.Request.Context(), config)
+	if err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	common.ApiSuccess(c, result)
 }
 
 func SaveRedemptionCategory(c *gin.Context) {

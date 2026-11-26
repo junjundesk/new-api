@@ -137,11 +137,18 @@ func getRedemptionCategoryForUpdate(tx *gorm.DB, id int) (*RedemptionCategory, e
 	return &category, err
 }
 
-func (category *RedemptionCategory) SaveSettings() error {
+func (category *RedemptionCategory) validateDenomination() error {
 	category.Name = strings.TrimSpace(category.Name)
 	if category.Name == "" || utf8.RuneCountInString(category.Name) > 20 {
 		return ErrRedemptionName
 	}
+	if category.Quota <= 0 || category.Quota >= common.MaxQuota {
+		return ErrRedemptionQuota
+	}
+	return nil
+}
+
+func (category *RedemptionCategory) SaveSettings() error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if category.Id != 0 {
 			stored, err := getRedemptionCategoryForUpdate(tx, category.Id)
@@ -150,8 +157,8 @@ func (category *RedemptionCategory) SaveSettings() error {
 			}
 			category.Quota = stored.Quota
 		}
-		if category.Quota <= 0 || category.Quota >= common.MaxQuota {
-			return ErrRedemptionQuota
+		if err := category.validateDenomination(); err != nil {
+			return err
 		}
 		var duplicates int64
 		if err := tx.Model(&RedemptionCategory{}).Where("name = ? AND id <> ?", category.Name, category.Id).Count(&duplicates).Error; err != nil {

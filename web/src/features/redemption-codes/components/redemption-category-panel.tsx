@@ -17,12 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  Download,
   Folder,
   FolderOpen,
   FolderPlus,
   Layers3,
   Pencil,
   Ticket,
+  Upload,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -34,6 +36,7 @@ import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { RedemptionCategory } from '../types'
+import { RedemptionCategoryConfigDialog } from './redemption-category-config-dialog'
 import { RedemptionCategoryDialog } from './redemption-category-dialog'
 import { useRedemptions } from './redemptions-provider'
 
@@ -54,6 +57,7 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
   const [editing, setEditing] = useState<RedemptionCategory | 'new' | null>(
     null
   )
+  const [configMode, setConfigMode] = useState<'export' | 'import' | null>(null)
   const current = categories.find((category) => category.id === categoryId)
   const categoryLabel = t('Code categories')
   const rowClass =
@@ -79,6 +83,24 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
           <FolderPlus />
           <span className='hidden lg:inline'>{t('New')}</span>
           <span className='lg:hidden'>{t('New category')}</span>
+        </Button>
+      </div>
+      <div className='grid grid-cols-2 gap-2'>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={() => setConfigMode('export')}
+        >
+          <Download aria-hidden />
+          {t('Export JSON')}
+        </Button>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={() => setConfigMode('import')}
+        >
+          <Upload aria-hidden />
+          {t('Import JSON')}
         </Button>
       </div>
       <div className='flex items-center gap-2 lg:hidden'>
@@ -190,6 +212,12 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
         <Button variant='outline' size='sm' onClick={props.retry}>
           {t('Reload categories')}
         </Button>
+      )}
+      {configMode && (
+        <RedemptionCategoryConfigDialog
+          mode={configMode}
+          onClose={() => setConfigMode(null)}
+        />
       )}
       {editing && (
         <RedemptionCategoryDialog

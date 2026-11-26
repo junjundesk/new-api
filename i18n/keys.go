@@ -87,6 +87,10 @@ const (
 	MsgRedemptionFailed            = "redemption.failed"
 	MsgRedemptionNotProvided       = "redemption.not_provided"
 	MsgRedemptionExpireTimeInvalid = "redemption.expire_time_invalid"
+
+	MsgRedemptionCategoryConfigConflict = "redemption.category_config_conflict"
+	MsgRedemptionCategoryConfigInvalid  = "redemption.category_config_invalid"
+	MsgRedemptionCategoryConfigTooLarge = "redemption.category_config_too_large"
 )
 
 // Activity code messages

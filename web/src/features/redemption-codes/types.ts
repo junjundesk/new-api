@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
+import { REDEMPTION_VALIDATION } from './constants'
+
 // ============================================================================
 // Redemption Schema & Types
 // ============================================================================
@@ -53,6 +55,32 @@ export interface RedemptionCategory {
   id: number
   name: string
   quota: number
+}
+
+export const redemptionCategoryConfigSchema = z.strictObject({
+  version: z.literal(1),
+  categories: z.array(
+    z.strictObject({
+      name: z
+        .string()
+        .trim()
+        .min(1)
+        .refine(
+          (value) => [...value].length <= REDEMPTION_VALIDATION.NAME_MAX_LENGTH
+        ),
+      quota: z.int().positive().max(REDEMPTION_VALIDATION.MAX_QUOTA),
+      bonus_rate_bps: z.int().min(0).max(100_000).nullish(),
+    })
+  ),
+})
+
+export type RedemptionCategoryConfig = z.infer<
+  typeof redemptionCategoryConfigSchema
+>
+
+export interface RedemptionCategoryImportResult {
+  created: number
+  skipped: number
 }
 
 export type RedemptionMigrationMode = 'exact' | 'fuzzy'

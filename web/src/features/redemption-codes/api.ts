@@ -22,6 +22,8 @@ import type {
   Redemption,
   RedemptionBonusRule,
   RedemptionCategory,
+  RedemptionCategoryConfig,
+  RedemptionCategoryImportResult,
   RedemptionMigrationMode,
   RedemptionMigrationResult,
   ApiResponse,
@@ -64,6 +66,27 @@ export async function searchRedemptions(
 export async function getRedemptionCategories(): Promise<RedemptionCategory[]> {
   const res = await api.get<ApiResponse<RedemptionCategory[]>>(
     '/api/redemption/categories'
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function exportRedemptionCategoryConfig(): Promise<RedemptionCategoryConfig> {
+  const res = await api.get<ApiResponse<RedemptionCategoryConfig>>(
+    '/api/redemption/categories/export',
+    { skipBusinessError: true }
+  )
+  if (!res.data.success || !res.data.data) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function importRedemptionCategoryConfig(
+  config: RedemptionCategoryConfig
+): Promise<RedemptionCategoryImportResult> {
+  const res = await api.post<ApiResponse<RedemptionCategoryImportResult>>(
+    '/api/redemption/categories/import',
+    config,
+    { skipBusinessError: true }
   )
   if (!res.data.success || !res.data.data) throw new Error(res.data.message)
   return res.data.data
