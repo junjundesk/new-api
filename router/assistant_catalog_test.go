@@ -110,6 +110,7 @@ func TestAssistantOperationCatalogCoversDashboardAPIRoutes(t *testing.T) {
 	// are never callable by the assistant.
 	for _, id := range []string{
 		"POST /api/token/batch/keys", "POST /api/token/:id/key", "POST /api/channel/:id/key",
+		"POST /api/channel/export", "POST /api/channel/import",
 		"GET /api/reset_password", "POST /api/verify", "DELETE /api/user/self", "GET /api/user/token",
 	} {
 		_, found := assistantops.Find(id)

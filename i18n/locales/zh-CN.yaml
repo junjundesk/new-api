@@ -220,6 +220,11 @@ topup.failed: "充值失败，请稍后重试"
 topup.invalid_quota: "无效的充值额度"
 
 # Channel messages
+channel.config_selection: "请选择 1 至 {{.Max}} 个不同且仍存在的渠道进行导出。"
+channel.config_invalid: "请使用版本 1 的渠道 JSON，每次包含 1 至 {{.Max}} 个渠道，不要包含 ID、用量或未知字段。"
+channel.config_too_large: "渠道 JSON 超过 8 MiB，请分批处理。"
+channel.config_entry_invalid: "第 {{.Index}} 个渠道的配置无效（{{.Detail}}）。"
+channel.config_import_failed: "无法保存渠道，本次未导入任何渠道。"
 channel.not_exists: "渠道不存在"
 channel.id_format_error: "渠道ID格式错误"
 channel.no_available_key: "没有可用的渠道密钥"

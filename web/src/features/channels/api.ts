@@ -25,6 +25,7 @@ import type {
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
+  ChannelConfig,
   ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
@@ -123,6 +124,32 @@ export async function createChannel(
 ): Promise<{ success: boolean; message?: string }> {
   const res = await api.post('/api/channel', data, channelActionConfig())
   return res.data
+}
+
+export async function exportChannelConfig(
+  ids: number[]
+): Promise<ChannelConfig> {
+  const { data } = await api.post<{
+    success: boolean
+    data?: ChannelConfig
+    message?: string
+  }>('/api/channel/export', { ids }, channelActionConfig())
+  if (!data.success || !data.data) throw new Error(data.message)
+  return data.data
+}
+
+export async function importChannelConfig(
+  config: ChannelConfig
+): Promise<number> {
+  const { data } = await api.post<{
+    success: boolean
+    data?: number
+    message?: string
+  }>('/api/channel/import', config, channelActionConfig())
+  if (!data.success || typeof data.data !== 'number') {
+    throw new Error(data.message)
+  }
+  return data.data
 }
 
 /**

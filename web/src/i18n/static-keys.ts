@@ -22,6 +22,8 @@ export const STATIC_I18N_KEYS = [
   'Enter a valid published model name',
   'Each model can only have one billing ratio',
   'Billing ratio must be a number between 0 and 1000',
+  'Exported {{count}} channels with credentials',
+  'Imported {{count}} channels',
   // Header navigation
   'Home',
   'Console',

@@ -508,6 +508,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'channel.update': 'Updated channel {{name}} (ID: {{id}})',
   'channel.delete': 'Deleted channel {{name}} (ID: {{id}})',
   'channel.delete_batch': 'Batch deleted {{count}} channels',
+  'channel.export': 'Exported {{count}} channels with credentials',
+  'channel.import': 'Imported {{count}} channels',
   'channel.delete_disabled': 'Deleted all disabled channels ({{count}})',
   'channel.key_view': 'Viewed channel key {{name}} (ID: {{id}})',
   'channel.tag_disable': 'Disabled channels with tag {{tag}}',

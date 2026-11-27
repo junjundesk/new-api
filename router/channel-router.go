@@ -28,6 +28,9 @@ func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 		controller.GetChannelKey,
 	)
 
+	// Full JSON exports disclose upstream credentials, just like /:id/key.
+	channelRoute.POST("/export", middleware.RootAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.ExportChannelConfig)
+
 	for _, route := range channelPermissionRoutes {
 		channelRoute.Handle(route.method, route.path,
 			middleware.RequirePermission(route.permission),
@@ -48,6 +51,7 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/update_balance", permission: authz.ChannelOperate, handler: controller.UpdateAllChannelsBalance},
 	{method: http.MethodGet, path: "/update_balance/:id", permission: authz.ChannelOperate, handler: controller.UpdateChannelBalance},
 	{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddChannel},
+	{method: http.MethodPost, path: "/import", permission: authz.ChannelSensitiveWrite, handler: controller.ImportChannelConfig},
 	{method: http.MethodPut, path: "/", permission: authz.ChannelWrite, handler: controller.UpdateChannel},
 	{method: http.MethodPost, path: "/status/batch", permission: authz.ChannelOperate, handler: controller.BatchUpdateChannelStatus},
 	{method: http.MethodPost, path: "/:id/status", permission: authz.ChannelOperate, handler: controller.UpdateChannelStatus},

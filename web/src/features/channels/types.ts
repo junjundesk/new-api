@@ -76,6 +76,25 @@ export const channelSchema = z.object({
 
 export type Channel = z.infer<typeof channelSchema>
 
+// Check the document and required fields before submitting. The server owns the
+// allowlist for provider-specific settings; pass these through without stripping them.
+export const channelConfigSchema = z.strictObject({
+  version: z.literal(1),
+  channels: z
+    .array(
+      z.looseObject({
+        name: z.string().min(1),
+        type: z.number().int().positive(),
+        key: z.string().min(1),
+        models: z.string().min(1),
+      })
+    )
+    .min(1)
+    .max(100),
+})
+
+export type ChannelConfig = z.infer<typeof channelConfigSchema>
+
 // ============================================================================
 // Channel Settings Types
 // ============================================================================

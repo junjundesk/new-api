@@ -91,6 +91,10 @@ func exclusionFor(method, path string) string {
 	if path == "/api/token/:id/key" || path == "/api/token/batch/keys" || path == "/api/channel/:id/key" {
 		return "secret-view"
 	}
+	if path == "/api/channel/export" || path == "/api/channel/import" {
+		// Portable channel documents contain plaintext upstream credentials.
+		return "secret-transfer"
+	}
 	if strings.Contains(path, "/ollama/pull/stream") || strings.Contains(path, "/performance/logs") ||
 		strings.Contains(path, "/deployments/:id/logs") {
 		return "stream-or-log-file"

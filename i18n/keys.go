@@ -248,6 +248,11 @@ const (
 
 // Channel related messages
 const (
+	MsgChannelConfigSelection    = "channel.config_selection"
+	MsgChannelConfigInvalid      = "channel.config_invalid"
+	MsgChannelConfigTooLarge     = "channel.config_too_large"
+	MsgChannelConfigEntryInvalid = "channel.config_entry_invalid"
+	MsgChannelConfigImportFailed = "channel.config_import_failed"
 	MsgChannelNotExists          = "channel.not_exists"
 	MsgChannelIdFormatError      = "channel.id_format_error"
 	MsgChannelNoAvailableKey     = "channel.no_available_key"

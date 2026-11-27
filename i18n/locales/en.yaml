@@ -219,6 +219,11 @@ topup.failed: "Top-up failed, please try again later"
 topup.invalid_quota: "Invalid top-up quota"
 
 # Channel messages
+channel.config_selection: "Select 1 to {{.Max}} distinct, existing channels to export."
+channel.config_invalid: "Use a version 1 channel export with 1 to {{.Max}} channels. Do not include IDs, usage or unknown fields."
+channel.config_too_large: "Channel JSON exceeds 8 MiB. Split the channels into smaller batches."
+channel.config_entry_invalid: "Invalid configuration for channel #{{.Index}} ({{.Detail}})."
+channel.config_import_failed: "Could not save the channels. Nothing was imported."
 channel.not_exists: "Channel does not exist"
 channel.id_format_error: "Channel ID format error"
 channel.no_available_key: "No available channel keys"
