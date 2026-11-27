@@ -10,9 +10,10 @@ import (
 )
 
 type RedemptionCategory struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name" gorm:"type:varchar(20);uniqueIndex;not null"`
-	Quota int    `json:"quota" gorm:"not null"`
+	Id            int    `json:"id"`
+	Name          string `json:"name" gorm:"type:varchar(20);uniqueIndex;not null"`
+	Quota         int    `json:"quota" gorm:"not null"`
+	WalletVisible bool   `json:"wallet_visible"` // Only explicitly published categories appear in the wallet.
 }
 
 // RedemptionBonusRule grants a percentage of the face value as bonus when a code of the category is redeemed.
@@ -156,6 +157,7 @@ func (category *RedemptionCategory) SaveSettings() error {
 				return err
 			}
 			category.Quota = stored.Quota
+			category.WalletVisible = stored.WalletVisible
 		}
 		if err := category.validateDenomination(); err != nil {
 			return err

@@ -18,6 +18,7 @@ func (e *RedemptionCategoryConfigConflict) Error() string {
 }
 
 // This portable format contains only category settings, never database IDs or redemption keys.
+// Wallet visibility is site-local: importing a new category never publishes it.
 // A missing bonus rule and an explicit 0% placeholder are distinct configurations.
 type RedemptionCategoryConfig struct {
 	Version    int                             `json:"version"`

@@ -84,7 +84,7 @@ func TestRedemptionCategoryConfigRoundTripWithoutCodes(t *testing.T) {
 	assert.JSONEq(t, `{"version":1,"categories":[]}`, string(empty))
 	assert.JSONEq(t, `{"created":0,"skipped":0}`, string(f.request(t, http.MethodPost, "import", f.admin, string(empty), http.StatusOK, true)))
 
-	standard := model.RedemptionCategory{Name: "Standard", Quota: 5000000}
+	standard := model.RedemptionCategory{Name: "Standard", Quota: 5000000, WalletVisible: true}
 	require.NoError(t, standard.SaveSettings())
 	rule := model.RedemptionBonusRule{CategoryId: standard.Id, BonusRateBps: 250}
 	require.NoError(t, model.DB.Create(&rule).Error)
@@ -100,6 +100,10 @@ func TestRedemptionCategoryConfigRoundTripWithoutCodes(t *testing.T) {
 	var actual []model.Redemption
 	require.NoError(t, model.DB.Unscoped().Order("id ASC").Find(&actual).Error)
 	assert.Equal(t, codes, actual, "import must not issue, delete or reassign any codes")
+	walletTiers, err := model.GetWalletCardTiers(t.Context())
+	require.NoError(t, err)
+	require.Len(t, walletTiers, 1, "imported categories must not publish themselves")
+	assert.Equal(t, standard.Id, walletTiers[0].ID)
 }
 
 func TestRedemptionCategoryConfigImportRejectsWholeBatch(t *testing.T) {

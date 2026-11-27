@@ -118,6 +118,8 @@ export interface WaffoPayMethod {
 
 export interface WalletCardStore {
   url: string
+  /** True when the server has returned explicitly published tiers. */
+  show_tiers?: boolean
   tiers: { id: number; name: string; quota: number; bonus_quota: number }[]
 }
 

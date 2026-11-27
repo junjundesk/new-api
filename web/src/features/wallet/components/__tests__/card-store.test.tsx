@@ -23,7 +23,10 @@ import { createInstance } from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { useSystemConfigStore } from '@/stores/system-config-store'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 import type { TopupInfo, WalletCardStore } from '../../types'
 import { RechargeFormCard } from '../recharge-form-card'
@@ -36,11 +39,20 @@ await i18n
 const original = useSystemConfigStore.getState().config
 const store: WalletCardStore = {
   url: 'https://shop.example.test/cards?shop=4',
+  show_tiers: true,
   tiers: [
     { id: 1, name: 'Standard', quota: 1000, bonus_quota: 250 },
     { id: 2, name: 'Basic', quota: 200, bonus_quota: 0 },
   ],
 }
+function cardStoreSection(config: WalletCardStore) {
+  return (
+    <I18nextProvider i18n={i18n}>
+      <WalletCardStoreSection store={config} />
+    </I18nextProvider>
+  )
+}
+
 const gateway: TopupInfo = {
   enable_online_topup: true,
   enable_stripe_topup: false,
@@ -61,12 +73,8 @@ afterEach(() => {
 test('card mode replaces gateway checkout, shows face value and bonus separately and keeps code redemption usable', async () => {
   useSystemConfigStore.getState().setConfig({
     currency: {
-      displayInCurrency: true,
-      quotaDisplayType: 'USD',
+      ...DEFAULT_CURRENCY_CONFIG,
       quotaPerUnit: 100,
-      usdExchangeRate: 1,
-      customCurrencySymbol: '¤',
-      customCurrencyExchangeRate: 1,
     },
   })
   const redeem = vi.fn(),
@@ -94,9 +102,11 @@ test('card mode replaces gateway checkout, shows face value and bonus separately
   )
   const { rerender } = render(page({ ...gateway, card_store: store }))
   const [standard, basic] = screen.getAllByRole('listitem')
-  expect(within(standard).getByText('Card face value: $10')).toBeVisible()
-  expect(within(standard).getByText('Bonus credit: $2.5')).toBeVisible()
-  expect(within(basic).getByText('Bonus credit: $0')).toBeVisible()
+  expect(within(standard).getByText('Standard')).toBeVisible()
+  expect(within(standard).getByText('$10')).toBeVisible()
+  expect(within(standard).getByText('$2.5 bonus')).toBeVisible()
+  expect(within(basic).getByText('$2')).toBeVisible()
+  expect(within(basic).queryByText(/bonus/i)).not.toBeInTheDocument()
   expect(screen.queryByLabelText('Custom Amount')).toBeNull()
   expect(screen.queryByRole('link', { name: 'Get one here' })).toBeNull()
   const frame = screen.getByTitle('Card store checkout')
@@ -111,6 +121,16 @@ test('card mode replaces gateway checkout, shows face value and bonus separately
     'rel',
     'noopener noreferrer'
   )
+  rerender(
+    page({ ...gateway, card_store: { ...store, show_tiers: false, tiers: [] } })
+  )
+  expect(
+    screen.queryByRole('heading', { name: 'Redemption code tiers' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByText('No redemption code tiers configured yet.')
+  ).not.toBeInTheDocument()
+  expect(screen.getByTitle('Card store checkout')).toBe(frame)
   await user.click(screen.getByRole('button', { name: 'Redeem' }))
   expect(redeem).toHaveBeenCalledOnce()
   rerender(page(gateway))
@@ -119,13 +139,77 @@ test('card mode replaces gateway checkout, shows face value and bonus separately
   expect(screen.getByRole('link', { name: 'Get one here' })).toBeVisible()
 })
 
+test('published tiers fit the recharge panel from two mobile columns to eight wide columns without selection controls', () => {
+  useSystemConfigStore
+    .getState()
+    .setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG, quotaPerUnit: 1 } })
+  const amounts = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
+  const tiers = amounts.map((amount) => ({
+    id: amount,
+    name: String(amount),
+    quota: amount,
+    bonus_quota: 0,
+  }))
+  render(
+    cardStoreSection({ url: window.location.origin, show_tiers: true, tiers })
+  )
+  const section = screen.getByRole('region', { name: 'Card store' })
+  const grid = within(section).getByRole('list', {
+    name: 'Redemption code tiers',
+  })
+  expect(section).toHaveClass('@container')
+  expect(grid).toHaveClass(
+    'grid-cols-2',
+    '@xs:grid-cols-3',
+    '@md:grid-cols-4',
+    '@4xl:grid-cols-8'
+  )
+  expect(within(grid).getAllByRole('listitem')).toHaveLength(11)
+  expect(within(grid).queryByRole('button')).not.toBeInTheDocument()
+  expect(within(grid).queryByRole('link')).not.toBeInTheDocument()
+})
+
+test('only names that repeat the displayed denomination are omitted, not distinct numerical tier names', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CNY',
+      quotaPerUnit: 100,
+      usdExchangeRate: 2,
+    },
+  })
+  const tiers = [
+    { id: 1, name: '20000', quota: 1000000, bonus_quota: 50000 },
+    { id: 2, name: '20', quota: 2000, bonus_quota: 210 },
+  ]
+  render(
+    cardStoreSection({ url: window.location.origin, show_tiers: true, tiers })
+  )
+  const [denomination, named] = screen.getAllByRole('listitem')
+  expect(within(denomination).getByText('¥20,000')).toBeVisible()
+  expect(within(denomination).queryByText('20000')).not.toBeInTheDocument()
+  expect(within(denomination).getByText('¥1,000 bonus')).toBeVisible()
+  expect(within(named).getByText('20')).toBeVisible()
+  expect(within(named).getByText('¥40')).toBeVisible()
+  expect(within(named).getByText('¥4.2 bonus')).toBeVisible()
+})
+
+test('older store data without explicit visibility does not publish tier details', () => {
+  const url = new URL('/shop', window.location.origin).href
+  render(cardStoreSection({ url, tiers: store.tiers }))
+  expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('heading', { name: 'Redemption code tiers' })
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open card store' })).toHaveAttribute(
+    'href',
+    url
+  )
+})
+
 test('switching to a wallet-origin store removes the scripted frame and keeps the standalone checkout link', () => {
   const origin = window.location.origin
-  const section = (url: string) => (
-    <I18nextProvider i18n={i18n}>
-      <WalletCardStoreSection store={{ url, tiers: [] }} />
-    </I18nextProvider>
-  )
+  const section = (url: string) => cardStoreSection({ url, tiers: [] })
   const { rerender } = render(section(store.url))
   expect(screen.getByTitle('Card store checkout')).toBeInTheDocument()
   const sameOrigin = new URL('/cards?shop=4', origin).href
@@ -149,15 +233,12 @@ test('an HTTP store on an HTTPS wallet offers an external checkout instead of mi
   }
   happyWindow.happyDOM.setURL('https://wallet.test/wallet')
   try {
-    const section = (url: string) => (
-      <I18nextProvider i18n={i18n}>
-        <WalletCardStoreSection store={{ url, tiers: [] }} />
-      </I18nextProvider>
-    )
+    const section = (url: string) =>
+      cardStoreSection({ url, show_tiers: true, tiers: [] })
     const { rerender } = render(section('http://shop.test/'))
     expect(
-      screen.getByText('No redemption code tiers configured yet.')
-    ).toBeVisible()
+      screen.queryByRole('heading', { name: 'Redemption code tiers' })
+    ).not.toBeInTheDocument()
     expect(screen.queryByTitle('Card store checkout')).toBeNull()
     expect(
       screen.getByRole('link', { name: 'Open card store' })

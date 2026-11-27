@@ -20,7 +20,7 @@ func redemptionAdminError(c *gin.Context, err error) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigConflict, map[string]any{"Name": conflict.Name})
 	case errors.Is(err, model.ErrRedemptionCategoryConfig):
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCategoryConfigInvalid)
-	case errors.Is(err, model.ErrRedemptionMigrationMode):
+	case errors.Is(err, model.ErrRedemptionMigrationMode), errors.Is(err, model.ErrWalletTierSelection):
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 	case errors.Is(err, model.ErrRedemptionName):
 		common.ApiErrorI18n(c, i18n.MsgRedemptionNameLength)
@@ -50,6 +50,22 @@ func GetRedemptionCategories(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, categories)
+}
+
+func UpdateWalletTierVisibility(c *gin.Context) {
+	var req struct {
+		Show []int `json:"show"`
+		Hide []int `json:"hide"`
+	}
+	if err := common.DecodeJsonStrict(http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20), &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if err := model.UpdateWalletTierVisibility(c.Request.Context(), req.Show, req.Hide); err != nil {
+		redemptionAdminError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func ExportRedemptionCategoryConfig(c *gin.Context) {

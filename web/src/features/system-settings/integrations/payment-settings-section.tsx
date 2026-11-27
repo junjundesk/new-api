@@ -47,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { WalletTierVisibilityDialog } from '@/features/redemption-codes/components/wallet-tier-visibility-dialog'
 import { parseCardStoreUrl } from '@/lib/card-store'
 import { cn } from '@/lib/utils'
 
@@ -947,35 +948,38 @@ export function PaymentSettingsSection({
               )}
             />
             {currentFormValues.CardStoreEnabled && (
-              <FormField
-                control={form.control}
-                name='CardStoreURL'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Card store URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='url'
-                        placeholder='https://store.example.com/'
-                        maxLength={2048}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Use a public storefront URL, not a management or signed URL. HTTPS is recommended for embedded checkout.'
-                      )}{' '}
-                      <Link
-                        to='/redemption-codes'
-                        className='text-primary underline'
-                      >
-                        {t('Manage code tiers and bonuses')}
-                      </Link>
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <>
+                <FormField
+                  control={form.control}
+                  name='CardStoreURL'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Card store URL')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='url'
+                          placeholder='https://store.example.com/'
+                          maxLength={2048}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Use a public storefront URL, not a management or signed URL. HTTPS is recommended for embedded checkout.'
+                        )}{' '}
+                        <Link
+                          to='/redemption-codes'
+                          className='text-primary underline'
+                        >
+                          {t('Manage code tiers and bonuses')}
+                        </Link>
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <WalletTierVisibilityDialog disabled={!complianceConfirmed} />
+              </>
             )}
           </fieldset>
           <Tabs defaultValue='general' className='min-w-0'>

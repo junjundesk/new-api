@@ -55,6 +55,7 @@ export interface RedemptionCategory {
   id: number
   name: string
   quota: number
+  wallet_visible?: boolean
 }
 
 export const redemptionCategoryConfigSchema = z.strictObject({

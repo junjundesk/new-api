@@ -16,12 +16,81 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { GiftIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 
 import { parseCardStoreUrl } from '@/lib/card-store'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 
 import type { WalletCardStore } from '../types'
+
+const tierAmountFormat = { abbreviate: false, digitsSmall: 6 }
+
+function CardStoreTiers(props: Pick<WalletCardStore, 'tiers'>) {
+  const { t } = useTranslation()
+  const title = t('Redemption code tiers')
+  return (
+    <div className='flex flex-col gap-2'>
+      <h3 className='font-medium'>{title}</h3>
+      <ul
+        aria-label={title}
+        className='grid grid-cols-2 gap-2 @xs:grid-cols-3 @md:grid-cols-4 @2xl:grid-cols-6 @4xl:grid-cols-8'
+      >
+        {props.tiers.map((tier) => {
+          const faceValue = formatQuotaWithCurrency(
+            tier.quota,
+            tierAmountFormat
+          )
+          const name = tier.name.trim()
+          let showName = name !== '' && name !== faceValue
+          if (showName && /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(name)) {
+            // Compare against the displayed denomination, not the raw quota units.
+            const denomination = formatQuotaWithCurrency(tier.quota, {
+              ...tierAmountFormat,
+              showSymbol: false,
+              locale: 'en-US',
+            })
+            showName =
+              Number(name.replaceAll(',', '')) !==
+              Number(denomination.replaceAll(',', ''))
+          }
+          return (
+            <li
+              key={tier.id}
+              className='bg-muted/20 flex min-h-12 min-w-0 flex-col justify-center gap-0.5 rounded-md border px-2.5 py-2 wrap-anywhere tabular-nums'
+            >
+              {showName && (
+                <span className='text-muted-foreground text-xs'>{name}</span>
+              )}
+              <strong className='text-base leading-tight font-semibold'>
+                <span className='sr-only'>{t('Face value')} </span>
+                {faceValue}
+              </strong>
+              {tier.bonus_quota > 0 && (
+                <span className='text-muted-foreground flex items-center gap-1 text-xs font-medium'>
+                  <HugeiconsIcon
+                    icon={GiftIcon}
+                    aria-hidden='true'
+                    className='text-warning size-3 shrink-0'
+                  />
+                  <span>
+                    {t('{{amount}} bonus', {
+                      amount: formatQuotaWithCurrency(
+                        tier.bonus_quota,
+                        tierAmountFormat
+                      ),
+                    })}
+                  </span>
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
 
 export function WalletCardStoreSection(props: { store: WalletCardStore }) {
   const { t } = useTranslation()
@@ -42,33 +111,13 @@ export function WalletCardStoreSection(props: { store: WalletCardStore }) {
       'This store shares the wallet origin. Open it in a new tab to keep checkout separate.'
     )
   }
-  const money = (quota: number) =>
-    formatQuotaWithCurrency(quota, { abbreviate: false, digitsSmall: 6 })
   return (
-    <section className='space-y-3' aria-label={t('Card store')}>
-      <h3 className='font-medium'>{t('Redemption code tiers')}</h3>
-      {props.store.tiers.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          {t('No redemption code tiers configured yet.')}
-        </p>
-      ) : (
-        <ul className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
-          {props.store.tiers.map((tier) => (
-            <li key={tier.id} className='min-w-0 rounded-md border p-3'>
-              <strong className='break-words'>{tier.name}</strong>
-              <div className='mt-1 text-sm'>
-                {t('Card face value: {{amount}}', {
-                  amount: money(tier.quota),
-                })}
-              </div>
-              <div className='text-muted-foreground text-sm'>
-                {t('Bonus credit: {{amount}}', {
-                  amount: money(tier.bonus_quota),
-                })}
-              </div>
-            </li>
-          ))}
-        </ul>
+    <section
+      className='@container flex flex-col gap-3'
+      aria-label={t('Card store')}
+    >
+      {props.store.show_tiers === true && props.store.tiers.length > 0 && (
+        <CardStoreTiers tiers={props.store.tiers} />
       )}
       {url ? (
         <>

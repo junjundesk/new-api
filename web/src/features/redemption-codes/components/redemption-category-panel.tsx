@@ -39,6 +39,7 @@ import type { RedemptionCategory } from '../types'
 import { RedemptionCategoryConfigDialog } from './redemption-category-config-dialog'
 import { RedemptionCategoryDialog } from './redemption-category-dialog'
 import { useRedemptions } from './redemptions-provider'
+import { WalletTierVisibilityDialog } from './wallet-tier-visibility-dialog'
 
 type CategoryPanelProps = {
   onSelect: (id?: number) => void
@@ -103,6 +104,7 @@ export function RedemptionCategoryPanel(props: CategoryPanelProps) {
           {t('Import JSON')}
         </Button>
       </div>
+      <WalletTierVisibilityDialog />
       <div className='flex items-center gap-2 lg:hidden'>
         <NativeSelect
           aria-label={categoryLabel}

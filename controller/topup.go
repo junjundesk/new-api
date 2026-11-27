@@ -126,7 +126,7 @@ func GetTopUpInfo(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
-		data["card_store"] = gin.H{"url": store.URL, "tiers": tiers}
+		data["card_store"] = gin.H{"url": store.URL, "show_tiers": len(tiers) > 0, "tiers": tiers}
 	}
 	common.ApiSuccess(c, data)
 }

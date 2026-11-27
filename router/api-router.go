@@ -324,6 +324,7 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.POST("/categories/import", controller.ImportRedemptionCategoryConfig)
 			redemptionRoute.PUT("/categories/:id", controller.SaveRedemptionCategory)
 			redemptionRoute.DELETE("/categories/:id", controller.DeleteRedemptionCategory)
+			redemptionRoute.PUT("/wallet-visibility", controller.UpdateWalletTierVisibility)
 			redemptionRoute.GET("/bonus-rules", controller.GetRedemptionBonusRules)
 			redemptionRoute.PUT("/bonus-rules", controller.SaveRedemptionBonusRules)
 			redemptionRoute.GET("/search", controller.SearchRedemptions)

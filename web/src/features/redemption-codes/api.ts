@@ -93,7 +93,7 @@ export async function importRedemptionCategoryConfig(
 }
 
 export async function saveRedemptionCategory(
-  category: Omit<RedemptionCategory, 'id'> & { id?: number }
+  category: Pick<RedemptionCategory, 'name' | 'quota'> & { id?: number }
 ) {
   const url = '/api/redemption/categories'
   const config = { skipBusinessError: true }
@@ -112,6 +112,18 @@ export async function saveRedemptionCategory(
 export async function deleteRedemptionCategory(id: number) {
   const res = await api.delete<ApiResponse>(
     `/api/redemption/categories/${id}`,
+    { skipBusinessError: true }
+  )
+  if (!res.data.success) throw new Error(res.data.message)
+}
+
+export async function updateWalletTierVisibility(changes: {
+  show: number[]
+  hide: number[]
+}): Promise<void> {
+  const res = await api.put<ApiResponse>(
+    '/api/redemption/wallet-visibility',
+    changes,
     { skipBusinessError: true }
   )
   if (!res.data.success) throw new Error(res.data.message)

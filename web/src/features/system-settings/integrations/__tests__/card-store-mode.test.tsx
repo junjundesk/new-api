@@ -31,6 +31,7 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { decodeCardStoreSettings } from '@/lib/card-store'
 
 import { SettingsPageProvider } from '../../components/settings-page-context'
 import { PaymentSettingsSection } from '../payment-settings-section'
@@ -91,8 +92,12 @@ function renderPayment(enabled: boolean, confirmed: boolean) {
         <PaymentSettingsSection
           defaultValues={{
             ...defaults,
-            CardStoreEnabled: enabled,
-            CardStoreURL: enabled ? 'http://shop.test/cards' : '',
+            ...decodeCardStoreSettings(
+              JSON.stringify({
+                enabled,
+                url: enabled ? 'http://shop.test/cards' : '',
+              })
+            ),
           }}
           waffoDefaultValues={waffo}
           waffoPancakeDefaultValues={{
@@ -130,7 +135,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('enabling card store mode requires a safe URL and saves both fields together without changing gateway credentials', async () => {
+test('enabling card store mode requires a safe URL and keeps wallet tiers hidden by default', async () => {
   const update = vi
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true } })
@@ -139,6 +144,9 @@ test('enabling card store mode requires a safe URL and saves both fields togethe
   expect(mode).not.toBeChecked()
   expect(screen.queryByLabelText('Card store URL')).toBeNull()
   await user.click(mode)
+  expect(
+    screen.getByRole('button', { name: 'Choose wallet tiers' })
+  ).toBeVisible()
   const url = screen.getByLabelText('Card store URL')
   await user.type(url, 'javascript:alert(1)')
   await user.click(screen.getByRole('button', { name: 'Save all settings' }))
@@ -174,7 +182,7 @@ test('without payment compliance the card store switch cannot activate checkout'
   expect(screen.queryByLabelText('Card store URL')).toBeNull()
 })
 
-test('disabling a saved card store preserves its address for the next switch', async () => {
+test('disabling a saved card store preserves its address without changing tier visibility', async () => {
   const update = vi
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true } })
@@ -187,7 +195,10 @@ test('disabling a saved card store preserves its address for the next switch', a
   await waitFor(() =>
     expect(update).toHaveBeenCalledWith('/api/option/', {
       key: 'payment_setting.card_store',
-      value: JSON.stringify({ enabled: false, url: 'http://shop.test/cards' }),
+      value: JSON.stringify({
+        enabled: false,
+        url: 'http://shop.test/cards',
+      }),
     })
   )
 })
