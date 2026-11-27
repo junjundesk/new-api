@@ -88,7 +88,21 @@ type relayAttemptResult struct {
 // runRelayAttempt executes one channel attempt: select channel, optionally
 // reprice for the new model/group, prepare billing, then dispatch the relay.
 func runRelayAttempt(c *gin.Context, relayFormat types.RelayFormat, relayInfo *relaycommon.RelayInfo,
-	retryParam *service.RetryParam, opts relayAttemptOptions) relayAttemptResult {
+	retryParam *service.RetryParam, opts relayAttemptOptions) (result relayAttemptResult) {
+	if constant.StreamTimingSamplePercent > 0 && relayInfo.IsStream {
+		if timing := relaycommon.BeginStreamAttempt(c, relayFormat); timing != nil {
+			defer func() {
+				channelID, status := 0, http.StatusOK
+				if result.channel != nil {
+					channelID = result.channel.Id
+				}
+				if result.err != nil {
+					status = result.err.StatusCode
+				}
+				logger.LogInfo(c, timing.Summary(channelID, status))
+			}()
+		}
+	}
 	channel, channelErr := getChannel(c, relayInfo, retryParam)
 	if channelErr != nil {
 		return relayAttemptResult{err: channelErr}
@@ -289,6 +303,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		attemptStart := time.Now()
 		result := runRelayAttempt(c, relayFormat, relayInfo, retryParam, relayAttemptOptions{})
 		if result.err == nil {
+			// A previous failed attempt must not make the outer error/refund
+			// defers run after a successful streamed retry.
+			newAPIError = nil
 			relayInfo.LastError = nil
 			if ttfb := relayInfo.FirstResponseTime.Sub(attemptStart); ttfb > 0 {
 				service.ReportBaseURLSuccess(relayInfo.ChannelId, relayInfo.ChannelBaseUrl, ttfb)
@@ -546,6 +563,9 @@ func tryFailoverChannelBaseURL(c *gin.Context, relayInfo *relaycommon.RelayInfo,
 		return false
 	}
 	service.ReportBaseURLFailure(channel.Id, current)
+	if relayAttemptProducedOutput(c, relayInfo) || (c.Request != nil && c.Request.Context().Err() != nil) {
+		return false
+	}
 	tried := relayInfo.TriedBaseURLs
 	alreadyTried := false
 	for _, item := range tried {

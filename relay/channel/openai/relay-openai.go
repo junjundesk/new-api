@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
@@ -18,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
@@ -101,6 +103,33 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 	return helper.ObjectData(c, lastStreamResponse)
 }
 
+// Only an unambiguous, single-choice text delta may bypass the lookahead.
+// Unknown delta extensions (audio, legacy function_call, etc.) stay buffered.
+func isPlainChatTextChunk(data string) bool {
+	chunk := gjson.Parse(data)
+	if chunk.Get("usage").Type != gjson.Null || chunk.Get("error").Exists() {
+		return false
+	}
+	choices := chunk.Get("choices")
+	if !choices.IsArray() || choices.Get("#").Int() != 1 {
+		return false
+	}
+	choice := choices.Get("0")
+	if choice.Get("finish_reason").Type != gjson.Null {
+		return false
+	}
+	delta := choice.Get("delta")
+	if delta.Get("content").Str == "" {
+		return false
+	}
+	plain := true
+	delta.ForEach(func(key, value gjson.Result) bool {
+		plain = key.Str == "content" || (key.Str == "role" && value.Str == "assistant")
+		return plain
+	})
+	return plain
+}
+
 func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		logger.LogError(c, "invalid response or response body")
@@ -124,9 +153,19 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
+	eagerText := info.ChannelSetting.EagerChatText && info.IsStream && !isAudioModel &&
+		info.RelayMode == relayconstant.RelayModeChatCompletions && info.RelayFormat == types.RelayFormatOpenAI &&
+		info.GetFinalRequestRelayFormat() == types.RelayFormatOpenAI &&
+		!info.ChannelSetting.ForceFormat && !info.ChannelSetting.ThinkingToContent
+	if req, ok := info.Request.(*dto.GeneralOpenAIRequest); ok {
+		// A provider may return SSE for a non-streaming client. Never opt
+		// that client or a multimodal request into eager writes.
+		eagerText = eagerText && req.Stream != nil && *req.Stream && len(req.Audio) == 0 && len(req.Modalities) == 0
+	}
+	lastAlreadySent := false
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
-		if lastStreamData != "" {
+		if lastStreamData != "" && !lastAlreadySent {
 			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
 				common.SysLog("error handling stream format: " + err.Error())
 				sr.Error(err)
@@ -139,10 +178,17 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
-			collectStreamFunctionCallNames(data, seenStreamToolCalls, &streamFunctionCallNames)
-			if err := processTokenData(info.RelayMode, data, &responseTextBuilder, &toolCount); err != nil {
+			lastAlreadySent = false
+			if err := accountStreamChunk(info.RelayMode, data, &responseTextBuilder, &toolCount, seenStreamToolCalls, &streamFunctionCallNames); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
+			} else if eagerText && isPlainChatTextChunk(data) {
+				// Keep the raw last frame for usage, ID and fingerprint even if it
+				// turns out to be the only frame. Never write an attempted frame twice.
+				lastAlreadySent = true
+				if err := HandleStreamFormat(c, info, data, false, false); err != nil {
+					sr.Error(err)
+				}
 			}
 		}
 	})
@@ -173,7 +219,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	if info.RelayFormat == types.RelayFormatOpenAI {
-		if shouldSendLastResp {
+		if shouldSendLastResp && !lastAlreadySent {
 			_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
 		}
 	}
@@ -270,11 +316,7 @@ func writeClaudeStreamError(c *gin.Context, message string) {
 	})
 }
 
-func collectStreamFunctionCallNames(data string, seen map[string]struct{}, names *[]string) {
-	var streamResponse dto.ChatCompletionsStreamResponse
-	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
-		return
-	}
+func collectStreamFunctionCallNames(streamResponse *dto.ChatCompletionsStreamResponse, seen map[string]struct{}, names *[]string) {
 	for _, choice := range streamResponse.Choices {
 		for i, tc := range choice.Delta.ToolCalls {
 			name := tc.Function.Name

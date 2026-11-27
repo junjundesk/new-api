@@ -72,7 +72,7 @@ func runFallbackAttempts(c *gin.Context, relayFormat types.RelayFormat, info *re
 
 		// Once a failed fallback has emitted output, trying another target would
 		// concatenate responses or bill for an invisible upstream response.
-		if c.Writer.Written() || info.SendResponseCount > 0 || (c.Request != nil && c.Request.Context().Err() != nil) {
+		if relayAttemptProducedOutput(c, info) || (c.Request != nil && c.Request.Context().Err() != nil) {
 			break
 		}
 

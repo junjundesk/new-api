@@ -160,8 +160,9 @@ func handleGeminiFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 	}
 
 	// send gemini format response
-	c.Render(-1, common.CustomEvent{Data: "data: " + string(geminiResponseStr)})
-	_ = helper.FlushWriter(c)
+	payload := string(geminiResponseStr)
+	c.Render(-1, common.CustomEvent{Data: "data: " + payload})
+	_ = helper.FlushStreamData(c, payload)
 	return nil
 }
 
@@ -182,14 +183,20 @@ func ProcessStreamResponse(streamResponse dto.ChatCompletionsStreamResponse, res
 	return nil
 }
 
-func processTokenData(relayMode int, data string, responseTextBuilder *strings.Builder, toolCount *int) error {
+func accountStreamChunk(relayMode int, data string, responseTextBuilder *strings.Builder, toolCount *int, seenTools map[string]struct{}, names *[]string) error {
+	// Tool-name deduplication and missing-usage estimation consume the same
+	// Chat DTO. Do not decode a second copy on the per-token hot path.
+	var chat dto.ChatCompletionsStreamResponse
+	chatErr := common.UnmarshalJsonStr(data, &chat)
+	if chatErr == nil {
+		collectStreamFunctionCallNames(&chat, seenTools, names)
+	}
 	switch relayMode {
 	case relayconstant.RelayModeChatCompletions:
-		var streamResponse dto.ChatCompletionsStreamResponse
-		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
-			return err
+		if chatErr != nil {
+			return chatErr
 		}
-		return ProcessStreamResponse(streamResponse, responseTextBuilder, toolCount)
+		return ProcessStreamResponse(chat, responseTextBuilder, toolCount)
 	case relayconstant.RelayModeCompletions:
 		var streamResponse dto.CompletionsStreamResponse
 		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
@@ -310,8 +317,9 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 		}
 
 		// 发送最终的 Gemini 响应
-		c.Render(-1, common.CustomEvent{Data: "data: " + string(geminiResponseStr)})
-		_ = helper.FlushWriter(c)
+		payload := string(geminiResponseStr)
+		c.Render(-1, common.CustomEvent{Data: "data: " + payload})
+		_ = helper.FlushStreamData(c, payload)
 	}
 }
 

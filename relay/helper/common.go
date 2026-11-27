@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
@@ -38,6 +39,17 @@ func FlushWriter(c *gin.Context) (err error) {
 	return nil
 }
 
+// FlushStreamData observes only completed payload flushes, never pings or headers.
+func FlushStreamData(c *gin.Context, data string) error {
+	if err := FlushWriter(c); err != nil {
+		return err
+	}
+	if timing := relaycommon.CurrentStreamAttempt(c); timing != nil {
+		timing.ObserveFlushed(data)
+	}
+	return nil
+}
+
 func requestContextDone(c *gin.Context) bool {
 	return c != nil && c.Request != nil && c.Request.Context().Err() != nil
 }
@@ -66,11 +78,13 @@ func ClaudeData(c *gin.Context, resp dto.ClaudeResponse) error {
 	jsonData, err := common.Marshal(resp)
 	if err != nil {
 		common.SysError("error marshalling stream response: " + err.Error())
+		_ = FlushWriter(c)
 	} else {
+		data := string(jsonData)
 		c.Render(-1, common.CustomEvent{Data: fmt.Sprintf("event: %s\n", resp.Type)})
-		c.Render(-1, common.CustomEvent{Data: "data: " + string(jsonData)})
+		c.Render(-1, common.CustomEvent{Data: "data: " + data})
+		_ = FlushStreamData(c, data)
 	}
-	_ = FlushWriter(c)
 	return nil
 }
 
@@ -81,7 +95,7 @@ func ClaudeChunkData(c *gin.Context, resp dto.ClaudeResponse, data string) {
 
 	c.Render(-1, common.CustomEvent{Data: fmt.Sprintf("event: %s\n", resp.Type)})
 	c.Render(-1, common.CustomEvent{Data: fmt.Sprintf("data: %s\n", data)})
-	_ = FlushWriter(c)
+	_ = FlushStreamData(c, data)
 }
 
 func ResponseChunkData(c *gin.Context, resp dto.ResponsesStreamResponse, data string) error {
@@ -91,7 +105,7 @@ func ResponseChunkData(c *gin.Context, resp dto.ResponsesStreamResponse, data st
 
 	c.Render(-1, common.CustomEvent{Data: fmt.Sprintf("event: %s\n", resp.Type)})
 	c.Render(-1, common.CustomEvent{Data: fmt.Sprintf("data: %s", data)})
-	return FlushWriter(c)
+	return FlushStreamData(c, data)
 }
 
 func StringData(c *gin.Context, str string) error {
@@ -104,7 +118,7 @@ func StringData(c *gin.Context, str string) error {
 	}
 
 	c.Render(-1, common.CustomEvent{Data: "data: " + str})
-	return FlushWriter(c)
+	return FlushStreamData(c, str)
 }
 
 func PingData(c *gin.Context) error {

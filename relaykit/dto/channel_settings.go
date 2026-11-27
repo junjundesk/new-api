@@ -33,6 +33,8 @@ type ChannelSettings struct {
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
+	// EagerChatText flushes plain native chat text without waiting for another SSE event.
+	EagerChatText bool `json:"eager_chat_text,omitempty"`
 }
 
 const (

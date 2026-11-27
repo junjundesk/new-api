@@ -196,6 +196,8 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		})
 	}
 
+	timing := relaycommon.CurrentStreamAttempt(c)
+	upstreamFormat := info.GetFinalRequestRelayFormat()
 	dataChan := make(chan string, 10)
 
 	wg.Add(1)
@@ -265,6 +267,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			if !strings.HasPrefix(data, "[DONE]") {
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
+				if timing != nil {
+					timing.ObserveReceived(upstreamFormat, data)
+				}
 
 				select {
 				case dataChan <- data:

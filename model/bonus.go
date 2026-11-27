@@ -125,7 +125,10 @@ func GetActiveBonusRemaining(userId int) (int64, error) {
 	if userId <= 0 {
 		return 0, nil
 	}
-	now := GetDBTimestamp()
+	// Evaluate expiry on the database clock in the aggregate itself (one
+	// round trip). Keep the app-clock fallback for a missing/invalid timestamp.
+	clock := dbUnixTimeSQL()
+	now := gorm.Expr("CASE WHEN "+clock+" > 0 THEN "+clock+" ELSE ? END", common.GetTimestamp())
 	var total int64
 	err := DB.Model(&UserBonusGrant{}).
 		Where("user_id = ? AND status = ? AND (expire_time = 0 OR expire_time > ?)",

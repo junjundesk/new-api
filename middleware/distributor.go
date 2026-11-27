@@ -260,15 +260,10 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	requestBody, err := storage.Bytes()
+	values, err := common.ReadBodyJSONFields(storage, "model", "group")
 	if err != nil {
 		return nil, err
 	}
-	if !gjson.ValidBytes(requestBody) {
-		return nil, errors.New("invalid JSON request body")
-	}
-
-	values := gjson.GetManyBytes(requestBody, "model", "group")
 	model, err := getJSONStringValue(values[0], "model")
 	if err != nil {
 		return nil, err

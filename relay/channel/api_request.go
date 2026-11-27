@@ -605,7 +605,14 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	}
 
+	timing := common.CurrentStreamAttempt(c)
+	if timing != nil {
+		req = timing.TraceDispatch(req)
+	}
 	resp, err := relayClient.Do(req)
+	if timing != nil && resp != nil {
+		timing.ResponseHeaders()
+	}
 	if err != nil {
 		if timeoutCancel != nil {
 			timeoutCancel()

@@ -8,6 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/edsrzf/mmap-go"
+	"github.com/tidwall/gjson"
 )
 
 // BodyStorage 请求体存储接口
@@ -280,6 +283,41 @@ func (d *diskStorage) Size() int64 {
 
 func (d *diskStorage) IsDisk() bool {
 	return true
+}
+
+// ReadBodyJSONFields validates the entire document, including any trailing
+// bytes, then extracts only the requested fields. A disk spool is immutable:
+// use a short-lived read-only mapping instead of copying it into the Go heap.
+// GetManyBytes returns owned results, safe after unmapping; neither path moves
+// the shared replay cursor. If mapping is unavailable keep the old read path.
+func ReadBodyJSONFields(storage BodyStorage, paths ...string) ([]gjson.Result, error) {
+	var data []byte
+	if d, ok := storage.(*diskStorage); ok && d.size > 0 {
+		d.mu.Lock()
+		if atomic.LoadInt32(&d.closed) != 0 {
+			d.mu.Unlock()
+			return nil, ErrStorageClosed
+		}
+		mapped, err := mmap.Map(d.file, mmap.RDONLY, 0)
+		if err == nil {
+			defer d.mu.Unlock()
+			defer mapped.Unmap()
+			data = mapped
+		} else {
+			d.mu.Unlock()
+		}
+	}
+	if data == nil {
+		var err error
+		data, err = storage.Bytes()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !gjson.ValidBytes(data) {
+		return nil, fmt.Errorf("invalid JSON request body")
+	}
+	return gjson.GetManyBytes(data, paths...), nil
 }
 
 // CreateBodyStorage 根据数据大小创建合适的存储
