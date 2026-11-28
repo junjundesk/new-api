@@ -48,6 +48,7 @@ export const STATIC_I18N_KEYS = [
   'Integrations',
   'Models',
   'Routing Reliability',
+  'Error Response Mapping',
   'Maintenance',
 
   // System info

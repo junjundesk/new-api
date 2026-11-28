@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -26,9 +27,13 @@ func setupProcessChannelErrorDB(t *testing.T) *gorm.DB {
 	previousLogDB := model.LOG_DB
 	previousEnabled := constant.ErrorLogEnabled
 	previousRedisEnabled := common.RedisEnabled
+	previousMainDBType := common.MainDatabaseType()
+	previousLogDBType := common.LogDatabaseType()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	model.InitDatabaseColumnNames()
 	require.NoError(t, db.AutoMigrate(&model.Log{}, &model.User{}, &model.Channel{}))
 	model.DB = db
 	model.LOG_DB = db
@@ -40,6 +45,8 @@ func setupProcessChannelErrorDB(t *testing.T) *gorm.DB {
 		model.LOG_DB = previousLogDB
 		constant.ErrorLogEnabled = previousEnabled
 		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDBType, previousLogDBType)
+		model.InitDatabaseColumnNames()
 		sqlDB, err := db.DB()
 		if err == nil {
 			_ = sqlDB.Close()
@@ -98,4 +105,35 @@ func TestProcessChannelErrorMarksSupersededAttemptsAdminOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, adminLogs, 2)
+}
+
+func TestProcessChannelErrorHidesMappedReasonFromUserLogs(t *testing.T) {
+	setupProcessChannelErrorDB(t)
+	restore := operation_setting.SetErrorMappingForTest(true, []operation_setting.ErrorMappingRule{
+		{
+			Enabled:       true,
+			StatusCode:    502,
+			TargetMessage: "上游不可用 请联系管理员",
+		},
+	})
+	t.Cleanup(restore)
+
+	const userId = 940002
+	ctx := newChannelErrorTestContext(userId, 21, "upstream-channel", "/v1/chat/completions")
+	upstreamErr := types.NewOpenAIError(fmt.Errorf("上游服务返回了无效响应或当前不可用。请重试。"), types.ErrorCodeBadResponseStatusCode, 502)
+	processChannelError(ctx, *types.NewChannelError(21, 1, "upstream-channel", false, "", true), upstreamErr, false)
+
+	userLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", false)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, userLogs, 1)
+	assert.Equal(t, "status_code=502, 上游不可用 请联系管理员", userLogs[0].Content)
+	assert.NotContains(t, userLogs[0].Content, "无效响应")
+	assert.NotContains(t, userLogs[0].Other, "mapped_error")
+
+	adminLogs, total, err := model.GetUserLogs(userId, model.LogTypeUnknown, "", 0, 0, "", "", 0, 20, "", "", "", true)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, adminLogs, 1)
+	assert.Contains(t, adminLogs[0].Content, "上游服务返回了无效响应或当前不可用")
 }

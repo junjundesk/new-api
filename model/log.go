@@ -148,6 +148,14 @@ func formatLogs(logs []*Log, startIdx int, includeAdminInfo bool) {
 			// legacy location and must not reach non-admin viewers either.
 			delete(otherMap, "is_model_mapped")
 			delete(otherMap, "upstream_model_name")
+			if mappedErr, ok := otherMap["mapped_error"].(string); ok && mappedErr != "" {
+				logs[i].Content = mappedErr
+				if mappedStatus, exists := otherMap["mapped_status_code"]; exists {
+					otherMap["status_code"] = mappedStatus
+				}
+			}
+			delete(otherMap, "mapped_error")
+			delete(otherMap, "mapped_status_code")
 			// delete(otherMap, "reject_reason")
 			// delete(otherMap, "stream_status")
 		}

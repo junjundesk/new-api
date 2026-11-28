@@ -178,6 +178,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	defer func() {
 		if newAPIError != nil {
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
+			service.ApplyErrorMapping(newAPIError)
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
@@ -639,6 +640,11 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 				service.AppendFallbackInfo(other, adminInfo, state)
 			}
 		}
+		if mappedStatus, mappedMessage, matched := operation_setting.MatchErrorMapping(err.StatusCode, err.Error()); matched {
+			other["mapped_error"] = fmt.Sprintf("status_code=%d, %s", mappedStatus, mappedMessage)
+			other["mapped_status_code"] = mappedStatus
+			adminInfo["error_mapped"] = true
+		}
 		other["admin_info"] = adminInfo
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 		if startTime.IsZero() {
@@ -695,13 +701,19 @@ func RelayMidjourney(c *gin.Context) {
 			mjErr.Result = "当前分组负载已饱和，请稍后再试，或升级账户以提升服务质量。"
 			statusCode = http.StatusTooManyRequests
 		}
-		c.JSON(statusCode, gin.H{
-			"description": fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result),
+		rawDescription := fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)
+		channelId := c.GetInt("channel_id")
+		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, rawDescription))
+		clientStatus, clientDescription, matched := operation_setting.MatchErrorMapping(statusCode, rawDescription)
+		if !matched {
+			clientStatus = statusCode
+			clientDescription = rawDescription
+		}
+		c.JSON(clientStatus, gin.H{
+			"description": clientDescription,
 			"type":        "upstream_error",
 			"code":        mjErr.Code,
 		})
-		channelId := c.GetInt("channel_id")
-		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)))
 	}
 }
 
@@ -893,11 +905,13 @@ func RelayTask(c *gin.Context) {
 	}
 }
 
-// respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
+// respondTaskError 统一输出 Task 错误响应（含错误码映射与 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
-	// 本地限流拒绝（活动 RPM/并发）说明的是额度而不是上游饱和，不改写文案。
-	if taskErr.StatusCode == http.StatusTooManyRequests && !taskErr.LocalError {
-		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
+	if !service.ApplyTaskErrorMapping(taskErr) {
+		// 本地限流拒绝（活动 RPM/并发）说明的是额度而不是上游饱和，不改写文案。
+		if taskErr.StatusCode == http.StatusTooManyRequests && !taskErr.LocalError {
+			taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
+		}
 	}
 	c.JSON(taskErr.StatusCode, taskErr)
 }

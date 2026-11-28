@@ -174,7 +174,42 @@ func (e *NewAPIError) MaskSensitiveErrorWithStatusCode() string {
 }
 
 func (e *NewAPIError) SetMessage(message string) {
+	if e == nil {
+		return
+	}
 	e.Err = errors.New(message)
+	switch relayErr := e.RelayError.(type) {
+	case OpenAIError:
+		relayErr.Message = message
+		e.RelayError = relayErr
+	case ClaudeError:
+		relayErr.Message = message
+		e.RelayError = relayErr
+	}
+}
+
+// ReplaceError replaces the client-facing status code (when statusCode > 0) and
+// message, clearing upstream metadata/param fields so raw upstream details do
+// not leak to clients across OpenAI, Claude, or other protocol serializers.
+func (e *NewAPIError) ReplaceError(statusCode int, message string) {
+	if e == nil {
+		return
+	}
+	if statusCode > 0 {
+		e.StatusCode = statusCode
+	}
+	e.Err = errors.New(message)
+	e.Metadata = nil
+	switch relayErr := e.RelayError.(type) {
+	case OpenAIError:
+		relayErr.Message = message
+		relayErr.Param = ""
+		relayErr.Metadata = nil
+		e.RelayError = relayErr
+	case ClaudeError:
+		relayErr.Message = message
+		e.RelayError = relayErr
+	}
 }
 
 func (e *NewAPIError) ToOpenAIError() OpenAIError {

@@ -21,6 +21,7 @@ import { IoNetDeploymentSettingsSection } from '../integrations/ionet-deployment
 import type { ModelSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { ClaudeSettingsCard } from './claude-settings-card'
+import { ErrorMappingSection } from './error-mapping-section'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
@@ -95,6 +96,20 @@ const MODELS_SECTIONS = [
             settings['monitor_setting.auto_test_channel_minutes'],
           'monitor_setting.channel_test_mode':
             settings['monitor_setting.channel_test_mode'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'error-mapping',
+    titleKey: 'Error Response Mapping',
+    build: (settings: ModelSettings) => (
+      <ErrorMappingSection
+        defaultValues={{
+          'error_mapping_setting.enabled':
+            settings['error_mapping_setting.enabled'],
+          'error_mapping_setting.rules':
+            settings['error_mapping_setting.rules'],
         }}
       />
     ),

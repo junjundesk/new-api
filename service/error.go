@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
 
 func MidjourneyErrorWrapper(code int, desc string) *taskdto.MidjourneyResponse {
@@ -213,6 +214,35 @@ func parseStatusCodeMappingValue(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// ApplyErrorMapping rewrites client-facing status code and error message when
+// the global error response mapping matches. Returns true if a rule matched.
+func ApplyErrorMapping(newApiErr *types.NewAPIError) bool {
+	if newApiErr == nil {
+		return false
+	}
+	mappedStatus, mappedMessage, matched := operation_setting.MatchErrorMapping(newApiErr.StatusCode, newApiErr.Error())
+	if !matched {
+		return false
+	}
+	newApiErr.ReplaceError(mappedStatus, mappedMessage)
+	return true
+}
+
+// ApplyTaskErrorMapping rewrites client-facing status code and message on a
+// TaskError when the global error response mapping matches.
+func ApplyTaskErrorMapping(taskErr *taskdto.TaskError) bool {
+	if taskErr == nil {
+		return false
+	}
+	mappedStatus, mappedMessage, matched := operation_setting.MatchErrorMapping(taskErr.StatusCode, taskErr.Message)
+	if !matched {
+		return false
+	}
+	taskErr.StatusCode = mappedStatus
+	taskErr.Message = mappedMessage
+	return true
 }
 
 func TaskErrorWrapperLocal(err error, code string, statusCode int) *taskdto.TaskError {

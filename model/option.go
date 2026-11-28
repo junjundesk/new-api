@@ -214,6 +214,9 @@ func validateOptionValue(key string, value string) error {
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}
+	if key == operation_setting.ErrorMappingRulesOptionKey {
+		return operation_setting.ValidateErrorMappingRulesJSON(value)
+	}
 	if key == "MaxTokenAutoGroups" {
 		return setting.ValidateMaxTokenAutoGroups(value)
 	}
@@ -625,6 +628,14 @@ func handleConfigUpdate(key, value string) bool {
 	}
 	if key == operation_setting.ToolPriceOptionKey {
 		operation_setting.LoadToolPricesFromJSONString(value)
+		return true
+	}
+	if key == operation_setting.ErrorMappingEnabledOptionKey {
+		operation_setting.SetErrorMappingEnabled(value == "true")
+		return true
+	}
+	if key == operation_setting.ErrorMappingRulesOptionKey {
+		operation_setting.LoadErrorMappingRulesFromJSONString(value)
 		return true
 	}
 

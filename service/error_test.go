@@ -10,8 +10,11 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -150,6 +153,66 @@ func TestRelayErrorHandlerKeepsInvalidJSONBodyInDebugLog(t *testing.T) {
 	require.NotNil(t, newAPIError)
 	require.NotContains(t, logBuffer.String(), "[truncated")
 	require.Contains(t, logBuffer.String(), body)
+}
+
+func TestApplyErrorMappingRewritesOpenAIAndClaudeErrors(t *testing.T) {
+	restore := operation_setting.SetErrorMappingForTest(true, []operation_setting.ErrorMappingRule{
+		{
+			Enabled:       true,
+			StatusCode:    http.StatusBadGateway,
+			TargetMessage: "上游不可用 请联系管理员",
+		},
+		{
+			Enabled:       true,
+			StatusCode:    http.StatusServiceUnavailable,
+			MatchMessage:  "overloaded",
+			TargetStatus:  http.StatusTooManyRequests,
+			TargetMessage: "当前服务繁忙 请稍后重试",
+		},
+	})
+	t.Cleanup(restore)
+
+	t.Run("openai protocol 502 keeps 502 and hides real reason", func(t *testing.T) {
+		apiErr := types.WithOpenAIError(types.OpenAIError{
+			Message: "上游服务返回了无效响应或当前不可用。请重试。",
+			Type:    "upstream_error",
+			Param:   "upstream_param",
+			Code:    "502",
+		}, http.StatusBadGateway)
+
+		require.True(t, ApplyErrorMapping(apiErr))
+		apiErr.SetMessage(common.MessageWithRequestId(apiErr.Error(), "req-502"))
+
+		assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+		oai := apiErr.ToOpenAIError()
+		assert.Equal(t, "上游不可用 请联系管理员 (request id: req-502)", oai.Message)
+		assert.Empty(t, oai.Param)
+		assert.NotContains(t, oai.Message, "无效响应")
+	})
+
+	t.Run("claude protocol remaps status and message", func(t *testing.T) {
+		apiErr := types.WithClaudeError(types.ClaudeError{
+			Type:    "overloaded_error",
+			Message: "Anthropic server overloaded",
+		}, http.StatusServiceUnavailable)
+
+		require.True(t, ApplyErrorMapping(apiErr))
+		assert.Equal(t, http.StatusTooManyRequests, apiErr.StatusCode)
+		claudeErr := apiErr.ToClaudeError()
+		assert.Equal(t, "当前服务繁忙 请稍后重试", claudeErr.Message)
+		assert.NotContains(t, claudeErr.Message, "Anthropic")
+	})
+
+	t.Run("task error is rewritten", func(t *testing.T) {
+		taskErr := &taskdto.TaskError{
+			Code:       "bad_response_status_code",
+			Message:    "上游服务返回了无效响应或当前不可用。请重试。",
+			StatusCode: http.StatusBadGateway,
+		}
+		require.True(t, ApplyTaskErrorMapping(taskErr))
+		assert.Equal(t, http.StatusBadGateway, taskErr.StatusCode)
+		assert.Equal(t, "上游不可用 请联系管理员", taskErr.Message)
+	})
 }
 
 func withDebugEnabled(t *testing.T, enabled bool) {
