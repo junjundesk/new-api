@@ -79,3 +79,49 @@ func TestStreamTimingSeparatesAttemptsAndVisibleText(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamTimingReportsIngressStages(t *testing.T) {
+	old := constant.StreamTimingSamplePercent
+	constant.StreamTimingSamplePercent = 100
+	t.Cleanup(func() { constant.StreamTimingSamplePercent = old })
+
+	router := gin.New()
+	router.Use(relaycommon.SampleStreamIngress(100))
+	router.POST("/v1/chat/completions", func(c *gin.Context) {
+		unmarked := relaycommon.BeginStreamAttempt(c, types.RelayFormatOpenAI)
+		require.NotNil(t, unmarked)
+		assert.Contains(t, unmarked.Summary(1, 200), "ingress_to_parsed_us=-1 parsed_to_tokens_us=-1 tokens_to_billed_us=-1")
+
+		relaycommon.MarkIngressStage(c, relaycommon.IngressStageParsed)
+		relaycommon.MarkIngressStage(c, relaycommon.IngressStageTokens)
+		relaycommon.MarkIngressStage(c, relaycommon.IngressStageBilled)
+		marked := relaycommon.BeginStreamAttempt(c, types.RelayFormatOpenAI)
+		require.NotNil(t, marked)
+		assert.Regexp(t, `ingress_to_parsed_us=\d+ parsed_to_tokens_us=\d+ tokens_to_billed_us=\d+`, marked.Summary(1, 200))
+	})
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
+}
+
+func TestStreamTimingReportsNonStreamCompletion(t *testing.T) {
+	old := constant.StreamTimingSamplePercent
+	constant.StreamTimingSamplePercent = 100
+	t.Cleanup(func() { constant.StreamTimingSamplePercent = old })
+
+	router := gin.New()
+	router.Use(relaycommon.SampleStreamIngress(100))
+	router.POST("/v1/chat/completions", func(c *gin.Context) {
+		timing := relaycommon.BeginStreamAttempt(c, types.RelayFormatOpenAI)
+		require.NotNil(t, timing)
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://upstream.test", nil)
+		require.NoError(t, err)
+		timing.TraceDispatch(req)
+		timing.ResponseHeaders()
+		assert.Contains(t, timing.Summary(1, 200), "headers_to_done_us=-1 dispatch_to_done_us=-1")
+
+		timing.Finish()
+		finished := timing.Summary(1, 200)
+		assert.Regexp(t, `headers_to_done_us=\d+ dispatch_to_done_us=\d+`, finished)
+		assert.Contains(t, finished, "dispatch_to_text_us=-1 text_to_flush_us=-1")
+	})
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
+}

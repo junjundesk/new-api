@@ -21,6 +21,13 @@
 | `dispatch_to_text_us` | 到公共 SSE 扫描器读到首个正文增量，包含网络、上游排队及生成。 |
 | `text_to_flush_us` | 从读到上游正文到本机完成首个下游正文 Flush。 |
 | `ingress_to_flush_us` | 网关内的总耗时；不含客户端到边缘的传输和客户端渲染。 |
+| `ingress_to_parsed_us` | 进入 relay 中间件到请求体解析、校验完成。大请求体看这一段。 |
+| `parsed_to_tokens_us` | 解析完成到 token 估算完成（含敏感词检测、媒体读取）。 |
+| `tokens_to_billed_us` | token 估算完成到价格计算和预扣费完成。 |
+| `headers_to_done_us` | 收到响应头到本次尝试结束。非流式请求里就是读响应体、解析、转换和写回的耗时；流式请求里是整个流的持续时间，不代表首字。 |
+| `dispatch_to_done_us` | 发上游到本次尝试结束。 |
+
+非流式请求同样会按 `RELAY_STREAM_TIMING_PERCENT` 采样并输出同一条 `relay_stream_timing` 日志，其中 `dispatch_to_text_us`、`text_to_flush_us`、`ingress_to_flush_us` 为 `-1`；请改看 `headers_to_done_us`。三个入口分段只记录首次到达的时间，重试不会重复计入。
 
 正文识别覆盖共享 SSE 路径上的 OpenAI Chat、Responses `output_text.delta`、Claude 文本块、Gemini 非 thought 的 text part。对只发终态而无正文增量的流、使用厂商专用传输的渠道，不推测缺失的首字。若配置把推理重写成正文，应按实际下游格式看，不能直接与原生正文样本混用。`status` 是该次 relay 尝试的结果状态，不是流内每个事件的状态。
 

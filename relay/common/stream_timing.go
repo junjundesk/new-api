@@ -16,6 +16,39 @@ import (
 
 const streamIngressKey = "relay_stream_ingress_time"
 const streamTimingKey = "relay_stream_attempt_timing"
+const streamStagesKey = "relay_stream_ingress_stages"
+
+// Pre-dispatch stages, measured from ingress and shared by every attempt.
+const (
+	IngressStageParsed = iota
+	IngressStageTokens
+	IngressStageBilled
+	ingressStageCount
+)
+
+type ingressStages [ingressStageCount]atomic.Int64
+
+// MarkIngressStage records the first time a sampled request reaches a stage.
+// Unsampled requests return immediately.
+func MarkIngressStage(c *gin.Context, stage int) {
+	if constant.StreamTimingSamplePercent == 0 || c == nil {
+		return
+	}
+	ingress := c.GetTime(streamIngressKey)
+	if ingress.IsZero() {
+		return
+	}
+	value, _ := c.Get(streamStagesKey)
+	stages, _ := value.(*ingressStages)
+	if stages == nil {
+		stages = &ingressStages{}
+		for i := range stages {
+			stages[i].Store(-1)
+		}
+		c.Set(streamStagesKey, stages)
+	}
+	stages[stage].CompareAndSwap(-1, int64(time.Since(ingress)))
+}
 
 // SampleStreamIngress runs before body decoding, auth and distribution. Do not
 // move the legacy request_start_time: it also feeds historical metrics/routing.
@@ -45,6 +78,8 @@ type StreamAttemptTiming struct {
 	reused     atomic.Int32
 	received   atomic.Int64
 	flushed    atomic.Int64
+	stages     *ingressStages
+	done       time.Duration
 }
 
 func BeginStreamAttempt(c *gin.Context, format types.RelayFormat) *StreamAttemptTiming {
@@ -56,11 +91,13 @@ func BeginStreamAttempt(c *gin.Context, format types.RelayFormat) *StreamAttempt
 	if prev := CurrentStreamAttempt(c); prev != nil {
 		attempt = prev.attempt + 1
 	}
-	t := &StreamAttemptTiming{ingress: ingress, attempt: attempt, downstream: format, start: time.Since(ingress), dispatch: -1, headers: -1}
+	t := &StreamAttemptTiming{ingress: ingress, attempt: attempt, downstream: format, start: time.Since(ingress), dispatch: -1, headers: -1, done: -1}
 	t.gotConn.Store(-1)
 	t.received.Store(-1)
 	t.flushed.Store(-1)
 	t.reused.Store(-1)
+	stagesValue, _ := c.Get(streamStagesKey)
+	t.stages, _ = stagesValue.(*ingressStages)
 	c.Set(streamTimingKey, t)
 	return t
 }
@@ -91,6 +128,10 @@ func (t *StreamAttemptTiming) TraceDispatch(req *http.Request) *http.Request {
 }
 
 func (t *StreamAttemptTiming) ResponseHeaders() { t.headers = time.Since(t.ingress) }
+
+// Finish marks the end of one relay attempt. For non-stream requests, the span
+// from response headers to here covers body read, parsing, conversion and write.
+func (t *StreamAttemptTiming) Finish() { t.done = time.Since(t.ingress) }
 
 func (t *StreamAttemptTiming) ObserveReceived(format types.RelayFormat, data string) {
 	t.observeText(&t.received, format, data)
@@ -155,8 +196,14 @@ func streamStageUS(start, end time.Duration) int64 {
 
 func (t *StreamAttemptTiming) Summary(channelID, status int) string {
 	received, flushed := time.Duration(t.received.Load()), time.Duration(t.flushed.Load())
-	return fmt.Sprintf("relay_stream_timing attempt=%d channel=%d format=%s status=%d ingress_to_dispatch_us=%d attempt_to_dispatch_us=%d dispatch_to_conn_us=%d conn_reused=%d dispatch_to_headers_us=%d dispatch_to_text_us=%d text_to_flush_us=%d ingress_to_flush_us=%d",
+	parsed, tokens, billed := int64(-1), int64(-1), int64(-1)
+	if s := t.stages; s != nil {
+		parsedAt, tokensAt, billedAt := time.Duration(s[IngressStageParsed].Load()), time.Duration(s[IngressStageTokens].Load()), time.Duration(s[IngressStageBilled].Load())
+		parsed, tokens, billed = streamStageUS(0, parsedAt), streamStageUS(parsedAt, tokensAt), streamStageUS(tokensAt, billedAt)
+	}
+	return fmt.Sprintf("relay_stream_timing attempt=%d channel=%d format=%s status=%d ingress_to_dispatch_us=%d attempt_to_dispatch_us=%d dispatch_to_conn_us=%d conn_reused=%d dispatch_to_headers_us=%d dispatch_to_text_us=%d text_to_flush_us=%d ingress_to_flush_us=%d ingress_to_parsed_us=%d parsed_to_tokens_us=%d tokens_to_billed_us=%d headers_to_done_us=%d dispatch_to_done_us=%d",
 		t.attempt, channelID, t.downstream, status, streamStageUS(0, t.dispatch), streamStageUS(t.start, t.dispatch),
 		streamStageUS(t.dispatch, time.Duration(t.gotConn.Load())), t.reused.Load(), streamStageUS(t.dispatch, t.headers),
-		streamStageUS(t.dispatch, received), streamStageUS(received, flushed), streamStageUS(0, flushed))
+		streamStageUS(t.dispatch, received), streamStageUS(received, flushed), streamStageUS(0, flushed),
+		parsed, tokens, billed, streamStageUS(t.headers, t.done), streamStageUS(t.dispatch, t.done))
 }

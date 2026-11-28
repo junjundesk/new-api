@@ -89,9 +89,10 @@ type relayAttemptResult struct {
 // reprice for the new model/group, prepare billing, then dispatch the relay.
 func runRelayAttempt(c *gin.Context, relayFormat types.RelayFormat, relayInfo *relaycommon.RelayInfo,
 	retryParam *service.RetryParam, opts relayAttemptOptions) (result relayAttemptResult) {
-	if constant.StreamTimingSamplePercent > 0 && relayInfo.IsStream {
+	if constant.StreamTimingSamplePercent > 0 {
 		if timing := relaycommon.BeginStreamAttempt(c, relayFormat); timing != nil {
 			defer func() {
+				timing.Finish()
 				channelID, status := 0, http.StatusOK
 				if result.channel != nil {
 					channelID = result.channel.Id
@@ -205,6 +206,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	relaycommon.MarkIngressStage(c, relaycommon.IngressStageParsed)
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
@@ -257,6 +260,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+	relaycommon.MarkIngressStage(c, relaycommon.IngressStageTokens)
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
@@ -274,6 +278,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			return
 		}
 	}
+
+	relaycommon.MarkIngressStage(c, relaycommon.IngressStageBilled)
 
 	defer func() {
 		// Only return quota if downstream failed and quota was actually pre-consumed
